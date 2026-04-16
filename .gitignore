@@ -1,0 +1,38 @@
+# deps
+node_modules/
+npm-debug.log*
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+
+# env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# OS
+.DS_Store
+*.swp
+
+# editors
+.vscode/
+.idea/
+
+# runtime data
+*.log
+arena/server/data/
+/tmp/
+
+# deploy artifacts
+.firebase/
+.firebaserc
+firebase-debug.log
+.gcloudignore
+
+# secrets
+service-account*.json
+*credentials*.json
+!arena.config.ts

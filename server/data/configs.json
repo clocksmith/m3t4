@@ -1,0 +1,257 @@
+{
+  "standby": {
+    "hash": "bf21a9e8fbc5",
+    "submittedAt": 1776342094517,
+    "config": {
+      "id": "standby",
+      "attributes": {}
+    },
+    "author": "system",
+    "elo": 1000,
+    "wins": 0,
+    "losses": 0,
+    "draws": 0
+  },
+  "blitz": {
+    "hash": "d72a102e04a6",
+    "submittedAt": 1776342094517,
+    "config": {
+      "id": "blitz",
+      "attributes": {
+        "burnRate": 1,
+        "moat": 20,
+        "shipRate": 0.5,
+        "foresight": 0.03,
+        "pivotSpeed": 0,
+        "leverage": 0,
+        "networking": 0,
+        "hallucination": 0
+      }
+    },
+    "author": "system",
+    "elo": 1000,
+    "wins": 0,
+    "losses": 0,
+    "draws": 0
+  },
+  "incumbent": {
+    "hash": "c3706f093934",
+    "submittedAt": 1776342094517,
+    "config": {
+      "id": "incumbent",
+      "attributes": {
+        "burnRate": 0.5,
+        "moat": 60,
+        "shipRate": 0.95,
+        "foresight": 0.04,
+        "pivotSpeed": 0.6,
+        "leverage": 0,
+        "networking": 0,
+        "hallucination": 5
+      }
+    },
+    "author": "system",
+    "elo": 1000,
+    "wins": 0,
+    "losses": 0,
+    "draws": 0
+  },
+  "pivot": {
+    "hash": "6b78f92f2914",
+    "submittedAt": 1776342094518,
+    "config": {
+      "id": "pivot",
+      "attributes": {
+        "burnRate": 0.4,
+        "moat": 110,
+        "shipRate": 0.95,
+        "foresight": 0.05,
+        "pivotSpeed": 0.7,
+        "leverage": 0,
+        "networking": 0,
+        "hallucination": 0
+      }
+    },
+    "author": "system",
+    "elo": 1000,
+    "wins": 0,
+    "losses": 0,
+    "draws": 0
+  },
+  "thesis": {
+    "hash": "81925d1243aa",
+    "submittedAt": 1776342094518,
+    "config": {
+      "id": "thesis",
+      "attributes": {
+        "burnRate": 0.7,
+        "moat": 95,
+        "shipRate": 0.7,
+        "foresight": 0.06,
+        "pivotSpeed": 0.8,
+        "leverage": 0,
+        "networking": 0,
+        "hallucination": 0
+      }
+    },
+    "author": "system",
+    "elo": 1000,
+    "wins": 0,
+    "losses": 0,
+    "draws": 0
+  },
+  "disruptor": {
+    "hash": "f6a110b1b97b",
+    "submittedAt": 1776342094518,
+    "config": {
+      "id": "disruptor",
+      "attributes": {
+        "burnRate": 0.7,
+        "moat": 50,
+        "shipRate": 0.6,
+        "foresight": 0.05,
+        "pivotSpeed": 0.5,
+        "leverage": -0.7,
+        "networking": 0.3,
+        "hallucination": 10
+      }
+    },
+    "author": "system",
+    "elo": 1000,
+    "wins": 0,
+    "losses": 0,
+    "draws": 0
+  },
+  "operator": {
+    "hash": "01d78567ec1f",
+    "submittedAt": 1776342094518,
+    "config": {
+      "id": "operator",
+      "attributes": {
+        "burnRate": 0.6,
+        "moat": 90,
+        "shipRate": 0.85,
+        "foresight": 0.08,
+        "pivotSpeed": 0.7,
+        "leverage": 0,
+        "networking": 0,
+        "hallucination": 5
+      }
+    },
+    "author": "system",
+    "elo": 1000,
+    "wins": 0,
+    "losses": 0,
+    "draws": 0
+  },
+  "oracle": {
+    "hash": "96132544baf8",
+    "submittedAt": 1776342094518,
+    "config": {
+      "id": "oracle",
+      "attributes": {
+        "burnRate": 0.8,
+        "moat": 80,
+        "shipRate": 0.7,
+        "foresight": 0.2,
+        "pivotSpeed": 0.7,
+        "leverage": 0,
+        "networking": 0,
+        "hallucination": 0
+      }
+    },
+    "author": "system",
+    "elo": 1000,
+    "wins": 0,
+    "losses": 0,
+    "draws": 0
+  },
+  "shipper": {
+    "hash": "fa00d346df7e",
+    "submittedAt": 1776342094518,
+    "config": {
+      "id": "shipper",
+      "attributes": {
+        "burnRate": 0.1,
+        "moat": 250,
+        "shipRate": 1,
+        "foresight": 0.02,
+        "pivotSpeed": 1,
+        "leverage": 0,
+        "networking": 0,
+        "hallucination": 0
+      }
+    },
+    "author": "system",
+    "elo": 1000,
+    "wins": 0,
+    "losses": 0,
+    "draws": 0
+  },
+  "moonshot": {
+    "hash": "10a73bb1c0f1",
+    "submittedAt": 1776342094518,
+    "config": {
+      "id": "moonshot",
+      "attributes": {
+        "burnRate": 1,
+        "moat": 0,
+        "shipRate": 0.5,
+        "foresight": 0.02,
+        "pivotSpeed": 0,
+        "leverage": -0.3,
+        "networking": 0.3,
+        "hallucination": 25
+      }
+    },
+    "author": "system",
+    "elo": 1000,
+    "wins": 0,
+    "losses": 0,
+    "draws": 0
+  },
+  "regulatory": {
+    "hash": "36836588058e",
+    "submittedAt": 1776342094518,
+    "config": {
+      "id": "regulatory",
+      "attributes": {
+        "burnRate": 0.6,
+        "moat": 120,
+        "shipRate": 0.7,
+        "foresight": 0.08,
+        "pivotSpeed": 0.9,
+        "leverage": 0,
+        "networking": 0,
+        "hallucination": 0
+      }
+    },
+    "author": "system",
+    "elo": 1000,
+    "wins": 0,
+    "losses": 0,
+    "draws": 0
+  },
+  "founder": {
+    "hash": "0af82c29c02d",
+    "submittedAt": 1776342094518,
+    "config": {
+      "id": "founder",
+      "attributes": {
+        "burnRate": 0.5,
+        "moat": 80,
+        "shipRate": 0.6,
+        "foresight": 0.05,
+        "pivotSpeed": 0.6,
+        "leverage": -0.5,
+        "networking": 0.9,
+        "hallucination": 15
+      }
+    },
+    "author": "system",
+    "elo": 1000,
+    "wins": 0,
+    "losses": 0,
+    "draws": 0
+  }
+}

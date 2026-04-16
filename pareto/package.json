@@ -1,0 +1,19 @@
+{
+  "name": "@selfplay/pareto",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "sweep": "tsc && node dist/sweep.js",
+    "evolve": "tsc && node dist/evolve.js"
+  },
+  "dependencies": {
+    "@selfplay/sim": "file:../sim",
+    "gifenc": "^1.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.4.0"
+  }
+}

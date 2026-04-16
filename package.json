@@ -1,0 +1,14 @@
+{
+  "name": "selfplay-arena",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SELF arena: deterministic fighter sim, server, client, pareto toolkit",
+  "workspaces": ["sim", "server", "pareto"],
+  "scripts": {
+    "build": "npm -w sim run build && npm -w server run build && npm -w pareto run build",
+    "sim": "npm -w sim run cli --",
+    "server": "npm -w server run start",
+    "pareto": "npm -w pareto run sweep --",
+    "test": "npm -w sim test"
+  }
+}

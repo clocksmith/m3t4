@@ -16,12 +16,12 @@
           "elo": 773,
           "wins": 572,
           "losses": 563,
-          "draws": 8742,
-          "lastPlayedAt": 1776373734372
+          "draws": 15764,
+          "lastPlayedAt": 1776381081763
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776373734372
+      "updatedAt": 1776381081763
     },
     "system:blitz": {
       "userId": "system:blitz",
@@ -52,12 +52,12 @@
           "elo": 829,
           "wins": 680,
           "losses": 757,
-          "draws": 8158,
-          "lastPlayedAt": 1776373734909
+          "draws": 15069,
+          "lastPlayedAt": 1776381081927
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776373734909
+      "updatedAt": 1776381081927
     },
     "system:incumbent": {
       "userId": "system:incumbent",
@@ -88,12 +88,12 @@
           "elo": 801,
           "wins": 926,
           "losses": 927,
-          "draws": 5150,
-          "lastPlayedAt": 1776373734690
+          "draws": 8593,
+          "lastPlayedAt": 1776381081383
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776373734690
+      "updatedAt": 1776381081383
     },
     "system:pivot": {
       "userId": "system:pivot",
@@ -124,12 +124,12 @@
           "elo": 772,
           "wins": 615,
           "losses": 600,
-          "draws": 8594,
-          "lastPlayedAt": 1776373734372
+          "draws": 15616,
+          "lastPlayedAt": 1776381081763
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776373734372
+      "updatedAt": 1776381081763
     },
     "system:thesis": {
       "userId": "system:thesis",
@@ -304,12 +304,12 @@
           "elo": 822,
           "wins": 52,
           "losses": 97,
-          "draws": 13215,
-          "lastPlayedAt": 1776373734909
+          "draws": 23569,
+          "lastPlayedAt": 1776381081927
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776373734909
+      "updatedAt": 1776381081927
     },
     "system:moonshot": {
       "userId": "system:moonshot",

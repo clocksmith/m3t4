@@ -133,12 +133,24 @@ export class FileStableStore implements StableStore {
 
   // Seed each of the 16 named strategies as its own virtual stable, so
   // each phantom is an independent participant in the matchmaking pool.
-  // Idempotent: preserves ELO/W-L on existing phantoms; adds any newly-
-  // added strategies.
+  // Idempotent: preserves ELO/W-L on existing phantoms, refreshes strategy
+  // configs after rebalance patches, and adds any newly-added strategies.
   private seedSystemPhantoms(): void {
     for (const [name, cfg] of Object.entries(STRATEGIES)) {
       const uid = `system:${name}`;
-      if (this.data.stables[uid]) continue; // preserve existing
+      const existing = this.data.stables[uid];
+      if (existing) {
+        const slot = existing.slots[0];
+        if (slot) {
+          slot.config = cfg;
+          slot.name = name;
+          slot.rateLockedUntil = 0;
+        }
+        existing.handle = `sys_${name}`;
+        existing.updatedAt = Date.now();
+        this.data.handles[`sys_${name}`] = uid;
+        continue;
+      }
       const now = Date.now();
       this.data.stables[uid] = {
         userId: uid,

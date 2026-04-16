@@ -17,7 +17,7 @@ export const STRATEGY_NAMES = [
   "moonshot",
   "regulatory",
   "founder",
-  "acolyte",    // outlier: max hallucination, embrace chaos
+  "acolyte",    // outlier: controlled hallucination, counter-intuitive spacing
   "cassandra",  // outlier: every attribute is a DSL trajectory
   "troll",      // outlier: positive leverage, bait from below
   "acquirer",   // close-pressure via mobility: low moat + high networking
@@ -116,13 +116,13 @@ export const STRATEGIES: Record<StrategyName, BrainConfig> = {
   },
   // ========== Outliers — fill unused mechanical niches ==========
   acolyte: {
-    // "Trust the vibes." Max hallucination makes smart-overrides ignored;
-    // attributes wobble constantly. Bursty + reckless via pacing + cunning.
+    // "Trust the vibes." Controlled hallucination keeps the satire without
+    // turning the bot into a free win under live per-tick noise.
     id: "acolyte",
     attributes: {
-      burnRate: 0.85, moat: 40, shipRate: 0.5, foresight: 0.02,
-      pivotSpeed: 0.2, leverage: 0.0, networking: 0.0, hallucination: 90,
-      spite: 0.0, greed: 0.5, pacing: 0.8, cunning: 0.0,
+      burnRate: 0.46, moat: 123, shipRate: 0.35, foresight: 0.0,
+      pivotSpeed: 0.39, leverage: -0.54, networking: 0.26, hallucination: 10,
+      spite: -0.12, greed: 0.36, pacing: 0.24, cunning: 0.55,
     },
   },
   cassandra: {

@@ -9,6 +9,7 @@
     "sim": "npm -w sim run cli --",
     "server": "npm -w server run start",
     "pareto": "npm -w pareto run sweep --",
+    "phantom:gate": "npm -w pareto run phantom-gate --",
     "test": "npm -w sim test"
   }
 }

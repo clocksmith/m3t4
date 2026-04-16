@@ -28,6 +28,8 @@ const KNOBS = [
 const state = {};
 for (const k of KNOBS) state[k.id] = k.init;
 
+let overBudgetNoticeArmed = true;
+
 function denormalize(k, ui) {
   const [lo, hi] = k.range;
   return lo + (hi - lo) * (Math.max(0, Math.min(100, ui)) / 100);
@@ -46,6 +48,7 @@ function currentSpent() {
 
 export function mount(root, { setStatus }) {
   setStatus("build");
+  overBudgetNoticeArmed = true;
   root.innerHTML = `
     <div class="page">
       <div class="page-header">
@@ -82,8 +85,15 @@ export function mount(root, { setStatus }) {
           <div id="build-msg" class="tight"></div>
         </section>
       </div>
+      <dialog id="hallucination-dialog" style="background:#0a0a14; border:1px solid #ef4444; color:#f8fafc; padding:18px; max-width:360px;">
+        <div style="font-weight:700; margin-bottom:8px;">you can't see more than 360 deg in reality</div>
+        <div class="tight" style="margin-bottom:14px;">hallucination kicking in</div>
+        <button id="close-hallucination-dialog" class="primary">ok</button>
+      </dialog>
     </div>`;
 
+  const warningDialog = root.querySelector("#hallucination-dialog");
+  root.querySelector("#close-hallucination-dialog").addEventListener("click", () => warningDialog.close());
   renderKnobs();
   update();
 
@@ -121,7 +131,9 @@ export function mount(root, { setStatus }) {
   });
 }
 
-export function unmount() { /* no timers to clean up */ }
+export function unmount() {
+  overBudgetNoticeArmed = true;
+}
 
 function renderKnobs() {
   const container = document.getElementById("knobs");
@@ -154,6 +166,13 @@ function update() {
   const spent = currentSpent();
   const hallucination = computedHallucinationForSpend(spent);
   const over = Math.max(0, spent - BUDGET);
+  if (over === 0) overBudgetNoticeArmed = true;
+  else if (overBudgetNoticeArmed) {
+    overBudgetNoticeArmed = false;
+    const dialog = document.getElementById("hallucination-dialog");
+    if (dialog?.showModal && !dialog.open) dialog.showModal();
+    else document.getElementById("build-msg").textContent = "you can't see more than 360 deg in reality; hallucination kicking in";
+  }
   const spentEl = document.getElementById("budget-spent");
   spentEl.textContent = spent;
   spentEl.style.color = over > 0 ? "#ef4444" : "#6ee7b7";

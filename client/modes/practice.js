@@ -33,7 +33,17 @@ let acc = 0;
 let running = false;
 
 let controllers = ["ai", "ai"];
-let presets = ["blitz", "shipper"];
+// On localhost, pick two distinct random presets on every mode entry so
+// practice feels varied across refreshes. In prod, keep the stable defaults.
+const isLocal = typeof location !== "undefined" &&
+  (location.hostname === "localhost" || location.hostname === "127.0.0.1");
+let presets = (() => {
+  if (!isLocal) return ["blitz", "shipper"];
+  const pool = [...STRATEGY_NAMES];
+  const a = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+  const b = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+  return [a, b];
+})();
 let compiled = [null, null];
 
 function recompileBrains() {
@@ -93,13 +103,13 @@ export function mount(root, { setStatus }) {
             <option value="human">Human (WASD+F)</option>
             <option value="ai" selected>AI Brain</option>
           </select></label>
-          <select id="p1preset">${STRATEGY_NAMES.map((n) => `<option ${n === "blitz" ? "selected" : ""}>${n}</option>`).join("")}</select>
+          <select id="p1preset">${STRATEGY_NAMES.map((n) => `<option ${n === presets[0] ? "selected" : ""}>${n}</option>`).join("")}</select>
           <span class="tight">vs</span>
           <label>P2 <select id="p2ctrl">
             <option value="human">Human (PL;'+[)</option>
             <option value="ai" selected>AI Brain</option>
           </select></label>
-          <select id="p2preset">${STRATEGY_NAMES.map((n) => `<option ${n === "shipper" ? "selected" : ""}>${n}</option>`).join("")}</select>
+          <select id="p2preset">${STRATEGY_NAMES.map((n) => `<option ${n === presets[1] ? "selected" : ""}>${n}</option>`).join("")}</select>
           <button id="reset-btn">Reset match</button>
           <span class="tight" id="tick-hud"></span>
         </div>

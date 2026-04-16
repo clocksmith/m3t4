@@ -2,7 +2,7 @@ import { DEFAULT_PARAMS } from "./types.js";
 // User submissions spend UI-space points across these knobs. Hallucination is
 // derived from overspend, not directly budgeted.
 export const USER_BUDGET = 360;
-export const HALLUCINATION_PER_OVERAGE = 3;
+export const HALLUCINATION_PER_OVERAGE = 10;
 export const MAX_DERIVED_HALLUCINATION = 300;
 export const USER_SUBMISSION_EPSILON = 1e-6;
 export const USER_KNOBS = [

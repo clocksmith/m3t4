@@ -15,7 +15,7 @@ private by default. Keep it that way.
 - **11 are user-budgeted** (everything except `hallucination`)
 - `hallucination` is reserved for:
   - The satire ("trust the vibes") baked into `acolyte`
-  - User overspend penalty: `clamp(3 × (spent - 360), 0, 300)`
+  - User overspend penalty: `clamp(10 × (spent - 360), 0, 300)`
   - Evolutionary search, which can freely explore high-hallucination space
 
 ### 1.2 Why these 11
@@ -126,7 +126,7 @@ attribute space, not to be optimal. Their role:
 | `moonshot`   | chaotic all-in       | max burn + no pivot + pacing burst |
 | `regulatory` | patient counter      | max cunning + pivotSpeed, waits to punish |
 | `founder`    | wall specialist      | max networking + negative leverage |
-| `acolyte`    | max hallucination    | only h=90 bot — tests the noise mechanic |
+| `acolyte`    | controlled chaos counter | h=10 bot; counters denial-spacer budget champs |
 | `cassandra`  | DSL trajectory-first | the only pure-DSL bot, all ramps/triggers |
 | `troll`      | bait-from-below      | only positive-leverage bot (0.8) |
 | `acquirer`   | close-pressure mobility | low moat + high networking |
@@ -140,12 +140,12 @@ attribute space, not to be optimal. Their role:
 | `moonshot`  | anything patient | chaos rarely connects |
 | `oracle`    | unpredictable opponents (acolyte) | high foresight hurts vs noise |
 | `troll`     | anyone not in the air | niche bot, loses in current meta (~28% WR) |
-| `acolyte`   | structured strategies | chaos is mostly self-destructive |
+| `acolyte`   | acquirer / pivot / shipper / troll | controlled chaos has clear counters |
 
 These weaknesses are **intentional** — they make the meta
-non-transitive. `acolyte` loses most matchups but WINS vs `oracle`
-(chaos defeats prediction). That creates a cycle that prevents any
-strategy from being "best."
+non-transitive. `acolyte` now exists mainly to counter frontier
+denial-spacers, while still losing to mobility, delivery, and bait
+archetypes. That creates cycles that prevent any strategy from being "best."
 
 ### 2.2 Sanity: each strategy should win SOME matchups
 
@@ -195,7 +195,7 @@ nominal 300 budget, with hallucination=50). Going over was *better*
 than respecting. At the time, the live sim only had override-blindness,
 which saturated at h=100; there was no live per-tick param noise.
 
-Current: users may overspend, but `hallucination = clamp(3 × overage, 0, 300)`
+Current: users may overspend, but `hallucination = clamp(10 × overage, 0, 300)`
 is enforced by builder and submit validation. Per-tick param noise is live, so
 h=300 is severe instead of just "override disabled."
 
@@ -276,8 +276,9 @@ If any of those produce:
 
 - `shipper` is the most obvious exploit candidate. Always test nerfs
   against it.
-- `acolyte` is underpowered (~34% WR) but fills the chaos niche —
-  don't buff it unless you want the meta to be noisier.
+- `acolyte` was retuned after live hallucination noise made h=90 unusable.
+  It now uses h=10 controlled chaos and should remain counterable by
+  `acquirer`, `pivot`, `shipper`, and `troll`.
 - `troll` is near-unviable (~28% WR). It's a "research bot" that
   exists to fill the positive-leverage axis. Users who pick it are
   self-imposing a handicap. Fine.

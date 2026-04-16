@@ -16,12 +16,12 @@
           "elo": 773,
           "wins": 572,
           "losses": 563,
-          "draws": 8707,
-          "lastPlayedAt": 1776373689586
+          "draws": 8742,
+          "lastPlayedAt": 1776373734372
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776373689586
+      "updatedAt": 1776373734372
     },
     "system:blitz": {
       "userId": "system:blitz",
@@ -52,12 +52,12 @@
           "elo": 829,
           "wins": 680,
           "losses": 757,
-          "draws": 8112,
-          "lastPlayedAt": 1776373689798
+          "draws": 8158,
+          "lastPlayedAt": 1776373734909
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776373689798
+      "updatedAt": 1776373734909
     },
     "system:incumbent": {
       "userId": "system:incumbent",
@@ -88,12 +88,12 @@
           "elo": 801,
           "wins": 926,
           "losses": 927,
-          "draws": 5131,
-          "lastPlayedAt": 1776373688100
+          "draws": 5150,
+          "lastPlayedAt": 1776373734690
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776373688100
+      "updatedAt": 1776373734690
     },
     "system:pivot": {
       "userId": "system:pivot",
@@ -124,12 +124,12 @@
           "elo": 772,
           "wins": 615,
           "losses": 600,
-          "draws": 8559,
-          "lastPlayedAt": 1776373689586
+          "draws": 8594,
+          "lastPlayedAt": 1776373734372
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776373689586
+      "updatedAt": 1776373734372
     },
     "system:thesis": {
       "userId": "system:thesis",
@@ -304,12 +304,12 @@
           "elo": 822,
           "wins": 52,
           "losses": 97,
-          "draws": 13150,
-          "lastPlayedAt": 1776373689798
+          "draws": 13215,
+          "lastPlayedAt": 1776373734909
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776373689798
+      "updatedAt": 1776373734909
     },
     "system:moonshot": {
       "userId": "system:moonshot",

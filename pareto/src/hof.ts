@@ -4,7 +4,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import type { BrainConfig } from "@selfplay/sim";
+import type { BrainConfig } from "@m3t4/sim";
 
 export interface HOFEntry {
   id: string;

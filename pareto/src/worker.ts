@@ -2,7 +2,7 @@
 // emits results. Spawned by ../src/parallel.ts.
 
 import { parentPort, workerData } from "node:worker_threads";
-import { simulate, STAGES, type BrainConfig } from "@selfplay/sim";
+import { simulate, STAGES, type BrainConfig } from "@m3t4/sim";
 
 interface MatchTask {
   id: number;

@@ -4,8 +4,8 @@
 // A config's novelty = mean distance to its k nearest neighbors in archive.
 // This is the classic Lehman-Stanley novelty search metric.
 
-import type { BrainConfig, ParamKey } from "@selfplay/sim";
-import { DEFAULT_PARAMS, PARAM_KEYS } from "@selfplay/sim";
+import type { BrainConfig, ParamKey } from "@m3t4/sim";
+import { DEFAULT_PARAMS, PARAM_KEYS } from "@m3t4/sim";
 
 export interface NoveltyConfig {
   k?: number;              // neighbors used in distance average

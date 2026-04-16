@@ -22,8 +22,10 @@ import {
   WALL_SLIDE,
 } from "./constants.js";
 import { runParamBrain } from "./brain.js";
+import { RANGES } from "./budget.js";
 import { compileBrain, evaluateParams, type CompiledBrain } from "./dsl.js";
 import { makeRng, type Rng, rngRange } from "./rng.js";
+import { PARAM_KEYS } from "./types.js";
 import type {
   Action,
   BrainConfig,
@@ -32,6 +34,8 @@ import type {
   Gold,
   MatchResult,
   Observation,
+  ParamKey,
+  Params,
   Stage,
   World,
 } from "./types.js";
@@ -75,6 +79,50 @@ function makeFighter(id: 0 | 1, ch: Character, spawn: { x: number; y: number }, 
 
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
+}
+
+function mix32(x: number): number {
+  x >>>= 0;
+  x ^= x >>> 16;
+  x = Math.imul(x, 0x7feb352d) >>> 0;
+  x ^= x >>> 15;
+  x = Math.imul(x, 0x846ca68b) >>> 0;
+  x ^= x >>> 16;
+  return x >>> 0;
+}
+
+function noiseSeedFromMatchSeed(seed: number): number {
+  return mix32((seed >>> 0) ^ 0xa511e9b3);
+}
+
+function noiseUnit(seed: number, tick: number, fighterId: 0 | 1, paramIndex: number): number {
+  let x = seed >>> 0;
+  x ^= Math.imul(tick + 1, 0x9e3779b9) >>> 0;
+  x ^= Math.imul(fighterId + 1, 0x85ebca6b) >>> 0;
+  x ^= Math.imul(paramIndex + 1, 0xc2b2ae35) >>> 0;
+  return mix32(x) / 0x100000000;
+}
+
+const NOISE_KEYS = PARAM_KEYS.filter((k): k is Exclude<ParamKey, "hallucination"> => k !== "hallucination");
+
+export function applyHallucinationNoise(
+  params: Params,
+  tick: number,
+  fighterId: 0 | 1,
+  noiseSeed: number,
+): Params {
+  const hallucination = Math.max(0, Number.isFinite(params.hallucination) ? params.hallucination : 0);
+  if (hallucination <= 0) return params;
+
+  const jitterScale = (hallucination / 100) * 0.5;
+  const out: Params = { ...params };
+  for (let i = 0; i < NOISE_KEYS.length; i++) {
+    const k = NOISE_KEYS[i];
+    const [lo, hi] = RANGES[k];
+    const delta = (noiseUnit(noiseSeed, tick, fighterId, i) * 2 - 1) * jitterScale * (hi - lo);
+    out[k] = clamp(params[k] + delta, lo, hi);
+  }
+  return out;
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -544,6 +592,7 @@ export function simulate(opts: SimulateOptions): MatchResult {
   const maxTicks = opts.maxTicks ?? ROUND_TIMER_MAX_TICKS * ROUNDS_TO_WIN_MATCH * 2;
 
   const rng = makeRng(opts.seed);
+  const noiseSeed = noiseSeedFromMatchSeed(opts.seed);
   const w: World = {
     tick: 0,
     stage,
@@ -559,6 +608,7 @@ export function simulate(opts: SimulateOptions): MatchResult {
     matchWinner: -1,
     freeze: 0,
     rng,
+    noiseSeed,
   };
 
   const brainA = compileBrain(opts.brainA);
@@ -602,8 +652,8 @@ export function simulate(opts: SimulateOptions): MatchResult {
 
     const obsA = makeObs(w.fighters[0], w.fighters[1], w);
     const obsB = makeObs(w.fighters[1], w.fighters[0], w);
-    const paramsA = evaluateParams(brainA, obsA);
-    const paramsB = evaluateParams(brainB, obsB);
+    const paramsA = applyHallucinationNoise(evaluateParams(brainA, obsA), w.tick, 0, w.noiseSeed);
+    const paramsB = applyHallucinationNoise(evaluateParams(brainB, obsB), w.tick, 1, w.noiseSeed);
     const actA = runParamBrain(obsA, paramsA);
     const actB = runParamBrain(obsB, paramsB);
 
@@ -646,6 +696,137 @@ export function simulate(opts: SimulateOptions): MatchResult {
 
 export { unpackAction, packAction };
 
+// ========== Interactive stepper API ==========
+//
+// For clients (practice mode, local play) that want to drive the engine
+// tick-by-tick with mixed human + AI input — not via the all-or-nothing
+// simulate() function.
+//
+//   const w = createStepperWorld({ stage, seed });
+//   while (w.matchWinner === -1) {
+//     const obs = worldObservation(w, 0);
+//     const actA = humanInputFromKeyboard();           // or runBrainForWorld(w, brain, 0)
+//     const actB = runBrainForWorld(w, brain, 1);
+//     stepWorld(w, actA, actB);
+//     render(w);
+//     await nextFrame();
+//   }
+
+export function createStepperWorld(opts: {
+  stage: Stage;
+  seed: number;
+  chars?: [Character, Character];
+}): World {
+  const chars = opts.chars ?? DEFAULT_CHARS;
+  const rng = makeRng(opts.seed);
+  return {
+    tick: 0,
+    stage: opts.stage,
+    fighters: [
+      makeFighter(0, chars[0], opts.stage.spawnL, 1),
+      makeFighter(1, chars[1], opts.stage.spawnR, -1),
+    ],
+    gold: null,
+    goal: null,
+    lastGoalIdx: -1,
+    roundPause: 0,
+    roundWinner: -1,
+    matchWinner: -1,
+    freeze: 0,
+    rng,
+    noiseSeed: noiseSeedFromMatchSeed(opts.seed),
+  };
+}
+
+export function worldObservation(w: World, selfIdx: 0 | 1): Observation {
+  return makeObs(w.fighters[selfIdx], w.fighters[1 - selfIdx], w);
+}
+
+export function runBrainForWorld(w: World, brain: CompiledBrain, selfIdx: 0 | 1): Action {
+  const obs = worldObservation(w, selfIdx);
+  const params = applyHallucinationNoise(evaluateParams(brain, obs), w.tick, selfIdx, w.noiseSeed);
+  return runParamBrain(obs, params);
+}
+
+export interface StepResult {
+  matchWinner: -1 | 0 | 1;
+  tick: number;
+}
+
+export function stepWorld(w: World, actA: Action, actB: Action): StepResult {
+  if (w.matchWinner !== -1) return { matchWinner: w.matchWinner, tick: w.tick };
+  if (w.freeze > 0) {
+    w.freeze -= STEP;
+    w.tick++;
+    return { matchWinner: w.matchWinner, tick: w.tick };
+  }
+  if (w.roundPause > 0) {
+    w.roundPause -= STEP;
+    if (w.roundPause <= 0 && w.matchWinner === -1) {
+      const chars: [Character, Character] = [w.fighters[0].ch, w.fighters[1].ch];
+      if (w.roundWinner !== -1) {
+        const r0 = w.fighters[0].rounds;
+        const r1 = w.fighters[1].rounds;
+        resetDuel(w, chars);
+        w.fighters[0].score = 0;
+        w.fighters[1].score = 0;
+        w.fighters[0].rounds = r0;
+        w.fighters[1].rounds = r1;
+        w.roundWinner = -1;
+      } else {
+        resetDuel(w, chars);
+      }
+    }
+    for (const p of w.fighters) {
+      if (p.dead && p.respawnT > 0) {
+        p.respawnT -= STEP;
+        if (p.respawnT <= 0) respawn(p, w);
+      }
+    }
+    w.tick++;
+    return { matchWinner: w.matchWinner, tick: w.tick };
+  }
+  tickFighter(w.fighters[0], w.fighters[1], actA, w);
+  tickFighter(w.fighters[1], w.fighters[0], actB, w);
+  resolveCombat(w);
+  updateGold(w);
+  w.tick++;
+  return { matchWinner: w.matchWinner, tick: w.tick };
+}
+
+/** Pull the current world state into a TraceFrame (for renderers). */
+export function worldToFrame(w: World): TraceFrame {
+  return {
+    tick: w.tick,
+    p0: {
+      x: w.fighters[0].x,
+      y: w.fighters[0].y,
+      facing: w.fighters[0].facing,
+      swipeT: w.fighters[0].swipeT,
+      diveT: w.fighters[0].diveT,
+      dead: w.fighters[0].dead,
+    },
+    p1: {
+      x: w.fighters[1].x,
+      y: w.fighters[1].y,
+      facing: w.fighters[1].facing,
+      swipeT: w.fighters[1].swipeT,
+      diveT: w.fighters[1].diveT,
+      dead: w.fighters[1].dead,
+    },
+    token: w.gold
+      ? { exists: true, x: w.gold.x, y: w.gold.y, carrier: w.gold.carrier }
+      : { exists: false, x: 0, y: 0, carrier: -1 },
+    goal: w.goal
+      ? { exists: true, x: w.goal.x, y: w.goal.y, label: w.goal.label }
+      : { exists: false, x: 0, y: 0, label: "" },
+    scoreboard: [w.fighters[0].score, w.fighters[1].score],
+    rounds: [w.fighters[0].rounds, w.fighters[1].rounds],
+  };
+}
+
+export { STATS } from "./constants.js";
+
 // ---------- simulateTrace: same as simulate but returns per-tick snapshots ----------
 
 export interface TraceFrame {
@@ -669,12 +850,13 @@ export function simulateTrace(opts: SimulateOptions): TraceResult {
   const chars = opts.chars ?? DEFAULT_CHARS;
   const maxTicks = opts.maxTicks ?? ROUND_TIMER_MAX_TICKS * ROUNDS_TO_WIN_MATCH * 2;
   const rng = makeRng(opts.seed);
+  const noiseSeed = noiseSeedFromMatchSeed(opts.seed);
   const w: World = {
     tick: 0,
     stage,
     fighters: [makeFighter(0, chars[0], stage.spawnL, 1), makeFighter(1, chars[1], stage.spawnR, -1)],
     gold: null, goal: null, lastGoalIdx: -1,
-    roundPause: 0, roundWinner: -1, matchWinner: -1, freeze: 0, rng,
+    roundPause: 0, roundWinner: -1, matchWinner: -1, freeze: 0, rng, noiseSeed,
   };
   const brainA = compileBrain(opts.brainA);
   const brainB = compileBrain(opts.brainB);
@@ -712,8 +894,8 @@ export function simulateTrace(opts: SimulateOptions): TraceResult {
     }
     const obsA = makeObs(w.fighters[0], w.fighters[1], w);
     const obsB = makeObs(w.fighters[1], w.fighters[0], w);
-    const paramsA = evaluateParams(brainA, obsA);
-    const paramsB = evaluateParams(brainB, obsB);
+    const paramsA = applyHallucinationNoise(evaluateParams(brainA, obsA), w.tick, 0, w.noiseSeed);
+    const paramsB = applyHallucinationNoise(evaluateParams(brainB, obsB), w.tick, 1, w.noiseSeed);
     const actA = runParamBrain(obsA, paramsA);
     const actB = runParamBrain(obsB, paramsB);
     const pa = packAction(actA), pb = packAction(actB);

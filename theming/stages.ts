@@ -1,4 +1,4 @@
-// Stage visual kits. Game-logic layout lives in @selfplay/sim/stage.ts;
+// Stage visual kits. Game-logic layout lives in @m3t4/sim/stage.ts;
 // this file declares only backgrounds, palettes, parallax layers, and
 // ambient visuals. Launch ships one playable stage; the others are marked
 // preview so the UI can render coming-soon thumbnails.

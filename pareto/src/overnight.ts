@@ -24,7 +24,7 @@ import os from "node:os";
 import {
   STAGES, STRATEGIES, STRATEGY_NAMES,
   type BrainConfig,
-} from "@selfplay/sim";
+} from "@m3t4/sim";
 import { scoreBatch, type ScoreRecord } from "./score.js";
 import { paretoFrontier } from "./frontier.js";
 import {

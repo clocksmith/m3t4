@@ -1,0 +1,100 @@
+import { DEFAULT_PARAMS } from "./types.js";
+// User submissions spend UI-space points across these knobs. Hallucination is
+// derived from overspend, not directly budgeted.
+export const USER_BUDGET = 360;
+export const HALLUCINATION_PER_OVERAGE = 3;
+export const MAX_DERIVED_HALLUCINATION = 300;
+export const USER_SUBMISSION_EPSILON = 1e-6;
+export const USER_KNOBS = [
+    "burnRate",
+    "moat",
+    "shipRate",
+    "foresight",
+    "pivotSpeed",
+    "leverage",
+    "networking",
+    "spite",
+    "greed",
+    "pacing",
+    "cunning",
+];
+export const RANGES = {
+    burnRate: [0, 1],
+    moat: [0, 300],
+    shipRate: [0, 1],
+    foresight: [0, 0.25],
+    pivotSpeed: [0, 1],
+    leverage: [-1, 1],
+    networking: [0, 1],
+    spite: [-1, 1],
+    greed: [0, 1],
+    pacing: [0, 1],
+    cunning: [0, 1],
+    hallucination: [0, MAX_DERIVED_HALLUCINATION],
+};
+function clamp(v, lo, hi) {
+    return v < lo ? lo : v > hi ? hi : v;
+}
+function scalarBase(k, spec) {
+    if (typeof spec === "number")
+        return spec;
+    if (spec && typeof spec === "object" && "base" in spec && typeof spec.base === "number")
+        return spec.base;
+    return DEFAULT_PARAMS[k];
+}
+export function nativeToUI(k, nativeVal) {
+    const [lo, hi] = RANGES[k];
+    if (hi === lo)
+        return 0;
+    return clamp(((nativeVal - lo) / (hi - lo)) * 100, 0, 100);
+}
+export function uiToNative(k, ui) {
+    const [lo, hi] = RANGES[k];
+    return lo + (hi - lo) * (clamp(ui, 0, 100) / 100);
+}
+export function budgetSpent(cfg) {
+    let spent = 0;
+    for (const k of USER_KNOBS)
+        spent += nativeToUI(k, scalarBase(k, cfg.attributes[k]));
+    return Math.round(spent);
+}
+export function computedHallucinationForSpend(spent) {
+    const overage = Math.max(0, Math.round(spent) - USER_BUDGET);
+    return Math.min(MAX_DERIVED_HALLUCINATION, overage * HALLUCINATION_PER_OVERAGE);
+}
+export function computedHallucination(cfg) {
+    return computedHallucinationForSpend(budgetSpent(cfg));
+}
+export function validateUserSubmission(cfg) {
+    const errors = [];
+    const attrs = {};
+    for (const k of USER_KNOBS) {
+        const raw = cfg.attributes?.[k];
+        if (typeof raw !== "number" || !Number.isFinite(raw)) {
+            errors.push(`${k} must be a finite numeric scalar`);
+            continue;
+        }
+        const [lo, hi] = RANGES[k];
+        attrs[k] = clamp(raw, lo, hi);
+    }
+    const spent = errors.length === 0 ? budgetSpent({ attributes: attrs }) : 0;
+    const hallucination = computedHallucinationForSpend(spent);
+    const rawHallucination = cfg.attributes?.hallucination;
+    if (typeof rawHallucination !== "number" || !Number.isFinite(rawHallucination)) {
+        errors.push(`hallucination must be the computed numeric scalar ${hallucination}`);
+    }
+    else if (errors.length === 0 && Math.abs(rawHallucination - hallucination) > USER_SUBMISSION_EPSILON) {
+        errors.push(`hallucination must equal ${hallucination} for spent=${spent}`);
+    }
+    attrs.hallucination = hallucination;
+    return {
+        ok: errors.length === 0,
+        errors,
+        spent,
+        hallucination,
+        config: errors.length === 0 ? { id: cfg.id, author: cfg.author, seed: cfg.seed, attributes: attrs } : undefined,
+    };
+}
+export function isWithinBudget(cfg) {
+    return computedHallucination(cfg) === 0;
+}

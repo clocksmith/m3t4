@@ -3,33 +3,33 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SELF Arena — live spectator</title>
+<title>m3t4 — arena</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text x=%2250%22 y=%2260%22 text-anchor=%22middle%22 font-size=%2270%22>&#9876;</text></svg>">
-<link rel="stylesheet" href="viewer.css">
+<link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <div id="wrap">
-    <header>
-      <h1>SELF Arena <small id="status">— connecting…</small></h1>
-      <div id="cycle"></div>
-    </header>
-    <canvas id="c" tabindex="0" width="1280" height="720"></canvas>
-    <div id="bracket"></div>
-    <div id="panels">
-      <section class="panel">
-        <h3>Now playing</h3>
-        <div id="now"></div>
-      </section>
-      <section class="panel">
-        <h3>Leaderboard</h3>
-        <div id="leaderboard">loading…</div>
-      </section>
-      <section class="panel">
-        <h3>Spec</h3>
-        <p>Spectator view of <code>selfplay-arena</code>. A new bracket starts every minute. Eight configs compete single-elim; frames streamed via WebSocket, rendered locally.</p>
-      </section>
+  <header id="topnav">
+    <div class="brand">
+      <a href="#spectate" class="logo">m3t4<span class="logo-caret">.ai</span></a>
+      <span class="tagline">parody AI-CEO arena</span>
     </div>
-  </div>
-  <script type="module" src="viewer.js"></script>
+    <nav>
+      <a href="#spectate" data-route="spectate">live</a>
+      <a href="#practice" data-route="practice">practice</a>
+      <a href="#build" data-route="build">build</a>
+      <a href="#submit" data-route="submit">submit</a>
+    </nav>
+    <div id="whoami" class="whoami"></div>
+  </header>
+
+  <main id="app"></main>
+
+  <footer id="bottom">
+    <span id="status">—</span>
+    <span class="spacer"></span>
+    <a href="https://github.com/m3t4-ai" target="_blank" rel="noreferrer">github</a>
+  </footer>
+
+  <script type="module" src="app.js"></script>
 </body>
 </html>

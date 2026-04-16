@@ -43,7 +43,7 @@ import { fileURLToPath } from "node:url";
 import {
   STAGES, STRATEGIES, STRATEGY_NAMES,
   type BrainConfig,
-} from "@selfplay/sim";
+} from "@m3t4/sim";
 import { scoreBatch, type ScoreRecord } from "./score.js";
 import { randomConfig, promoteToTrajectory } from "./generate.js";
 import { HallOfFame } from "./hof.js";

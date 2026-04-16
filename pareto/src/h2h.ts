@@ -18,7 +18,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   STAGES, STRATEGIES, STRATEGY_NAMES, type BrainConfig,
-} from "@selfplay/sim";
+} from "@m3t4/sim";
 import { runMatches, type MatchSpec } from "./parallel.js";
 
 function parseArgs(argv: string[]): Record<string, string> {

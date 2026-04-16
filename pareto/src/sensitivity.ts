@@ -15,7 +15,7 @@ import path from "node:path";
 import {
   DEFAULT_PARAMS, PARAM_KEYS, STAGES, STRATEGIES, STRATEGY_NAMES,
   type BrainConfig, type ParamKey,
-} from "@selfplay/sim";
+} from "@m3t4/sim";
 import { scoreBatch } from "./score.js";
 
 function parseArgs(argv: string[]): Record<string, string> {

@@ -12,7 +12,7 @@ import path from "node:path";
 import {
   STAGES, STRATEGIES, STRATEGY_NAMES, DEFAULT_PARAMS, PARAM_KEYS,
   type BrainConfig, type ParamKey,
-} from "@selfplay/sim";
+} from "@m3t4/sim";
 import { cmaInit, cmaSample, cmaTell, cmaIncumbent } from "./cmaes.js";
 import { scoreBatch } from "./score.js";
 

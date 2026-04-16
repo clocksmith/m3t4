@@ -2,7 +2,7 @@
 // match specs (both sides × all stages × all seeds), dispatch via the
 // worker pool, then compute a ScoreRecord from the outcomes.
 
-import type { BrainConfig, Stage } from "@selfplay/sim";
+import type { BrainConfig, Stage } from "@m3t4/sim";
 import { runMatches, type MatchOutcome, type MatchSpec } from "./parallel.js";
 
 export interface ScoreRecord {

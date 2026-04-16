@@ -1,0 +1,191 @@
+import type { Rng } from "./rng.js";
+export declare const PARAM_KEYS: readonly ["burnRate", "moat", "shipRate", "foresight", "pivotSpeed", "leverage", "networking", "spite", "greed", "pacing", "cunning", "hallucination"];
+export type ParamKey = (typeof PARAM_KEYS)[number];
+export type Params = Record<ParamKey, number>;
+export declare const DEFAULT_PARAMS: Params;
+export type AttributeSpec = number | string | {
+    base?: number;
+    ramp?: {
+        to: number;
+        overTicks: number;
+    };
+    oscillate?: {
+        amp: number;
+        period: number;
+        phase?: number;
+    };
+    triggers?: Array<{
+        when: string;
+        value: number;
+    }>;
+};
+export interface BrainConfig {
+    id: string;
+    author?: string;
+    seed?: number;
+    attributes: Partial<Record<ParamKey, AttributeSpec>>;
+}
+export type FighterStateLabel = "idle" | "walk" | "jump" | "fall" | "wallSlide" | "swipe" | "dive" | "stun" | "dead";
+export interface Character {
+    name: string;
+    label: string;
+    col: string;
+    trim: string;
+    shadow: string;
+}
+export interface Fighter {
+    id: 0 | 1;
+    ch: Character;
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    facing: -1 | 1;
+    onGround: boolean;
+    wall: -1 | 0 | 1;
+    coyote: number;
+    jumpBuf: number;
+    swipeT: number;
+    swipeCD: number;
+    diveT: number;
+    diveCD: number;
+    stun: number;
+    invuln: number;
+    respawnT: number;
+    dead: boolean;
+    score: number;
+    rounds: number;
+    giant: number;
+    hp: number;
+}
+export interface Platform {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    solid: boolean;
+}
+export interface GoalSpawn {
+    x: number;
+    y: number;
+    sx: number;
+    sy: number;
+    label: string;
+}
+export interface Stage {
+    id: string;
+    name: string;
+    platforms: Platform[];
+    goals: GoalSpawn[];
+    spawnL: {
+        x: number;
+        y: number;
+    };
+    spawnR: {
+        x: number;
+        y: number;
+    };
+}
+export interface Goal {
+    x: number;
+    y: number;
+    sx: number;
+    sy: number;
+    label: string;
+    timer: number;
+}
+export interface Gold {
+    carrier: 0 | 1;
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    dwellT: number;
+}
+export interface World {
+    tick: number;
+    stage: Stage;
+    fighters: [Fighter, Fighter];
+    gold: Gold | null;
+    goal: Goal | null;
+    lastGoalIdx: number;
+    roundPause: number;
+    roundWinner: -1 | 0 | 1;
+    matchWinner: -1 | 0 | 1;
+    freeze: number;
+    rng: Rng;
+    noiseSeed: number;
+}
+export interface Observation {
+    self: {
+        x: number;
+        y: number;
+        vx: number;
+        vy: number;
+        facing: -1 | 1;
+        hp: number;
+        onGround: boolean;
+        wall: -1 | 0 | 1;
+        stun: number;
+        dead: boolean;
+        swipeT: number;
+        swipeCD: number;
+        diveT: number;
+        diveCD: number;
+        hasToken: boolean;
+    };
+    opp: {
+        x: number;
+        y: number;
+        vx: number;
+        vy: number;
+        facing: -1 | 1;
+        hp: number;
+        onGround: boolean;
+        stun: number;
+        dead: boolean;
+        swipeT: number;
+        diveT: number;
+        hasToken: boolean;
+    };
+    token: {
+        exists: boolean;
+        x: number;
+        y: number;
+        carrier: 0 | 1 | -1;
+    };
+    goal: {
+        exists: boolean;
+        x: number;
+        y: number;
+        label: string;
+        timer: number;
+    };
+    platforms: Platform[];
+    arena: {
+        left: number;
+        right: number;
+        top: number;
+        floor: number;
+    };
+    dx: number;
+    absDx: number;
+    dy: number;
+    tick: number;
+}
+export interface Action {
+    left?: boolean;
+    right?: boolean;
+    up?: boolean;
+    down?: boolean;
+    action?: boolean;
+}
+export interface MatchResult {
+    winner: 0 | 1 | -1;
+    finalScore: [number, number];
+    finalRounds: [number, number];
+    ticks: number;
+    seed: number;
+    logHash: string;
+    frameLog: Uint8Array;
+}

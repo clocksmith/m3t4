@@ -161,6 +161,7 @@ export interface World {
   matchWinner: -1 | 0 | 1;
   freeze: number;
   rng: Rng;
+  noiseSeed: number;
 }
 
 // ============ Observation (passed to brains) ============

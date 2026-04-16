@@ -15,7 +15,7 @@ private by default. Keep it that way.
 - **11 are user-budgeted** (everything except `hallucination`)
 - `hallucination` is reserved for:
   - The satire ("trust the vibes") baked into `acolyte`
-  - A future optional mode where users opt into chaos
+  - User overspend penalty: `clamp(3 × (spent - 360), 0, 300)`
   - Evolutionary search, which can freely explore high-hallucination space
 
 ### 1.2 Why these 11
@@ -91,8 +91,8 @@ and destroys the objective loop.
 Two things derived from `hallucination ∈ [0, 100+]`:
 
 1. **Param noise**: each tick, perturb each knob by `±(hallucination/100 × 0.5 × range)`.
-   At h=100 that's ±50% of each knob's native range. Reroll cadence scales
-   inversely with h.
+   At h=100 that's ±50% of each knob's native range; at h=300 that's ±150%.
+   Noise is deterministic per match seed/tick/fighter/parameter.
 2. **Anti-stall override blindness**: the "must fight" override that kicks
    in when the bot has no tokens is *weakened* by hallucination. At h=100
    the override is fully disabled — the bot trusts its raw personality
@@ -185,19 +185,19 @@ over 85%, the game has become TOO SOLVABLE.** Roll back.
 
 ## 4. Tuning journey (what we tried, what failed)
 
-### 4.1 Soft hallucination penalty on overbudget — REJECTED
+### 4.1 Soft hallucination penalty on overbudget — RESTORED, STEEPER
 
-Tried: `hallucination = clamp(2 × (spent − budget), 0, 300)` as a soft
-penalty instead of hard-capping the spend.
+Earlier attempt: `hallucination = clamp(2 × (spent − budget), 0, 300)` as a
+soft penalty instead of hard-capping the spend.
 
 Why rejected: the test showed peak WR at spent=350 (50 *over* the
 nominal 300 budget, with hallucination=50). Going over was *better*
-than respecting. The soft penalty is fundamentally unbalanceable —
-you'd have to tune the penalty curve per-strategy, and a dominant
-bot finds the sweet spot regardless.
+than respecting. At the time, the live sim only had override-blindness,
+which saturated at h=100; there was no live per-tick param noise.
 
-Replaced with: hard cap at 360, hallucination stays at 0 for
-budget-compliant bots. Simple, balanced by construction.
+Current: users may overspend, but `hallucination = clamp(3 × overage, 0, 300)`
+is enforced by builder and submit validation. Per-tick param noise is live, so
+h=300 is severe instead of just "override disabled."
 
 ### 4.2 Budget progression
 
@@ -227,13 +227,14 @@ budget-compliant bots. Simple, balanced by construction.
 
 ### 5.1 Files that encode the tuning
 
-- `arena/sim/src/types.ts` — `PARAM_KEYS`, `DEFAULT_PARAMS`
-- `arena/sim/src/brain.ts` — `runParamBrain` (all 11 attributes applied)
-- `arena/sim/src/strategies.ts` — the 16 named configs
-- `arena/sim/src/constants.ts` — `STATS`, `GOAL_DWELL_S = 0.5`
-- `arena/pareto/src/budget-util.ts` — `USER_BUDGET = 360`, `USER_KNOBS`
-- `public/labs/self/builder.html` — UI budget + slider config
-- `public/labs/self/game.js` — dwell logic mirror for interactive SELF lab
+- `sim/src/types.ts` — `PARAM_KEYS`, `DEFAULT_PARAMS`
+- `sim/src/brain.ts` — `runParamBrain` (all 11 attributes applied)
+- `sim/src/simulate.ts` — hallucination param noise
+- `sim/src/budget.ts` — `USER_BUDGET`, `USER_KNOBS`, derived hallucination, submit validation
+- `sim/src/strategies.ts` — the 16 named configs
+- `sim/src/constants.ts` — `STATS`, `GOAL_DWELL_S = 0.5`
+- `pareto/src/budget-util.ts` — analysis helpers that import canonical budget math
+- `client/modes/build.js` — UI budget, overage, and exported hallucination
 
 ### 5.2 When to re-test
 
@@ -253,7 +254,8 @@ cd arena/pareto
 node dist/nphard-large.js 150 3          # sweep + H2H + roughness
 node dist/evolve-budget.js --gens 8 \
   --pop 24 --seeds 2                      # best-in-budget ceiling
-node dist/budget-test.js 25 2             # budget curve
+node dist/budget-test.js --gens 8 \
+  --pop 24 --seeds 2                      # fixed-spend exploit search
 ```
 
 If any of those produce:

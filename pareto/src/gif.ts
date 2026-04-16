@@ -11,7 +11,7 @@ import path from "node:path";
 import {
   STAGES, STRATEGIES, STRATEGY_NAMES,
   simulateTrace, type BrainConfig, type Stage, type TraceFrame,
-} from "@selfplay/sim";
+} from "@m3t4/sim";
 import { createRequire } from "node:module";
 const req = createRequire(import.meta.url);
 // gifenc is CJS; use Node's require() from ESM to get the named exports.

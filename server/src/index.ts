@@ -1,90 +1,92 @@
-// Arena server: HTTP + WebSocket on one port. REST for submit / leaderboard,
-// WebSocket for spectating live brackets.
+// m3t4 Arena server — Phase 1.
+//
+// - Auth-gated submit API (dev mode accepts any bearer token as UID)
+// - 3-5 slot stables with 24h per-slot rate limits
+// - Close-ELO firehose matchmaker, continuous
+// - Server-authoritative sim, WebSocket frame streaming
+// - File-backed StableStore for local dev (swap for Firestore in prod)
 
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
-import { ConfigStore } from "./configStore.js";
-import { Matchmaker } from "./matchmaker.js";
+import { CONFIG } from "./config.js";
+import { FileStableStore, stablePublic } from "./stable.js";
+import { Firehose } from "./firehose.js";
+import { handleClaimHandle, handleSubmit } from "./submit.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = parseInt(process.env.PORT ?? "7777", 10);
-const STORE_PATH = process.env.STORE ?? path.join(__dirname, "..", "data", "configs.json");
-const CYCLE_MS = parseInt(process.env.CYCLE_MS ?? "60000", 10);
+const STORE_PATH = process.env.STORE_PATH ?? path.join(__dirname, "..", "data", "m3t4.json");
 
-const store = new ConfigStore(STORE_PATH);
-const mm = new Matchmaker(store);
+const store = new FileStableStore(STORE_PATH);
+const firehose = new Firehose(store);
+
+function json(res: http.ServerResponse, code: number, body: unknown): void {
+  res.writeHead(code, { "content-type": "application/json", "access-control-allow-origin": "*" });
+  res.end(JSON.stringify(body));
+}
 
 const server = http.createServer(async (req, res) => {
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET,POST,OPTIONS",
+      "access-control-allow-headers": "content-type,authorization",
+    });
+    res.end(); return;
+  }
   const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
-  if (req.method === "POST" && url.pathname === "/api/configs") {
-    let buf = "";
-    for await (const chunk of req) buf += chunk;
-    try {
-      const body = JSON.parse(buf || "{}");
-      const stored = store.submit(body.config, { author: body.author });
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ id: stored.config.id, hash: stored.hash }));
-    } catch (e) {
-      res.writeHead(400, { "content-type": "application/json" });
-      res.end(JSON.stringify({ error: String((e as Error).message) }));
-    }
-    return;
-  }
-  if (req.method === "GET" && url.pathname === "/api/leaderboard") {
-    const lb = store.leaderboard(parseInt(url.searchParams.get("limit") ?? "25", 10));
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify(lb.map((s) => ({ id: s.config.id, elo: s.elo, wins: s.wins, losses: s.losses, draws: s.draws, author: s.author }))));
-    return;
-  }
-  if (req.method === "GET" && url.pathname === "/api/configs") {
-    const id = url.searchParams.get("id");
-    if (id) {
-      const c = store.get(id);
-      if (!c) { res.writeHead(404); res.end(); return; }
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify(c));
-      return;
-    }
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify(store.list().map((c) => ({ id: c.config.id, author: c.author, elo: c.elo }))));
-    return;
-  }
+
   if (req.method === "GET" && url.pathname === "/api/status") {
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ ok: true, configs: store.list().length, cycleMs: CYCLE_MS }));
-    return;
+    return json(res, 200, {
+      ok: true,
+      cycleMs: CONFIG.cycleMs,
+      maxSlots: CONFIG.maxSlots,
+      authProviders: CONFIG.authProviders,
+    });
   }
-  res.writeHead(404);
-  res.end("not found");
+
+  if (req.method === "GET" && url.pathname === "/api/leaderboard") {
+    const active = await store.listActive(CONFIG.activePoolMs);
+    const rows = active
+      .map((st) => stablePublic(st))
+      .sort((a, b) => b.eloAggregate - a.eloAggregate);
+    return json(res, 200, rows.slice(0, 50));
+  }
+
+  if (req.method === "GET" && url.pathname.startsWith("/api/stables/")) {
+    const uid = url.pathname.slice("/api/stables/".length);
+    const st = await store.getStable(uid);
+    if (!st) return json(res, 404, { error: "not found" });
+    return json(res, 200, stablePublic(st));
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/ranked/submit") {
+    return handleSubmit(req, res, store);
+  }
+  if (req.method === "POST" && url.pathname === "/api/handle") {
+    return handleClaimHandle(req, res, store);
+  }
+
+  if (req.method === "POST" && url.pathname === "/internal/elo-decay") {
+    const count = await store.applyDecay();
+    return json(res, 200, { ok: true, decayed: count });
+  }
+
+  json(res, 404, { error: "not found" });
 });
 
 const wss = new WebSocketServer({ server, path: "/ws" });
 wss.on("connection", (ws) => {
-  const client = mm.addClient(ws);
-  ws.on("close", () => mm.removeClient(client));
-  ws.on("error", () => mm.removeClient(client));
+  const client = firehose.addClient(ws);
+  ws.on("close", () => firehose.removeClient(client));
+  ws.on("error", () => firehose.removeClient(client));
 });
 
-server.listen(PORT, () => {
-  console.log(`arena server listening on :${PORT}  (store=${STORE_PATH}, cycle=${CYCLE_MS}ms)`);
+server.listen(CONFIG.port, () => {
+  console.log(`m3t4 server on :${CONFIG.port}  (store=${STORE_PATH})`);
+  console.log(`  firehose: close-ELO ±${CONFIG.eloTolerance}, active pool ${CONFIG.activePoolMs / 86400000}d`);
+  firehose.start().catch((e) => console.error("firehose crashed:", e));
 });
-
-// Scheduler: kick off a cycle every CYCLE_MS, but skip if one is mid-flight.
-let running = false;
-async function tickCycle(): Promise<void> {
-  if (running) return;
-  running = true;
-  try {
-    await mm.startCycle();
-  } catch (e) {
-    console.error("cycle error:", e);
-  } finally {
-    running = false;
-  }
-}
-setInterval(tickCycle, CYCLE_MS);
-setTimeout(tickCycle, 1000);

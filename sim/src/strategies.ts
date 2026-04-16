@@ -94,7 +94,7 @@ export const STRATEGIES: Record<StrategyName, BrainConfig> = {
     id: "moonshot",
     attributes: {
       burnRate: 1.0, moat: 0, shipRate: 0.5, foresight: 0.02,
-      pivotSpeed: 0.0, leverage: -0.3, networking: 0.3, hallucination: 25,
+      pivotSpeed: 0.0, leverage: -0.3, networking: 0.3, hallucination: 10,
       spite: 0.0, greed: 0.8, pacing: 0.6, cunning: 0.0,
     },
   },
@@ -110,7 +110,7 @@ export const STRATEGIES: Record<StrategyName, BrainConfig> = {
     id: "founder",
     attributes: {
       burnRate: 0.5, moat: 80, shipRate: 0.6, foresight: 0.05,
-      pivotSpeed: 0.6, leverage: -0.5, networking: 0.9, hallucination: 15,
+      pivotSpeed: 0.6, leverage: -0.5, networking: 0.9, hallucination: 0,
       spite: 0.0, greed: 0.5, pacing: 0.3, cunning: 0.4,
     },
   },

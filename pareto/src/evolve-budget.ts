@@ -1,4 +1,4 @@
-// Budget-constrained evolution. Every candidate respects USER_BUDGET=400.
+// Budget-constrained evolution. Every candidate respects USER_BUDGET.
 // Uses the named 15 as the meta. Answers the question:
 //   "What's the best win rate achievable within the budget constraint?"
 
@@ -6,7 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import {
   STAGES, STRATEGIES, STRATEGY_NAMES, type BrainConfig,
-} from "@selfplay/sim";
+} from "@m3t4/sim";
 import { scoreBatch, type ScoreRecord } from "./score.js";
 import { paretoFrontier } from "./frontier.js";
 import {
@@ -35,14 +35,13 @@ const SEEDS = parseInt(args.seeds ?? "2", 10);
 const WORKERS = parseInt(args.workers ?? `${os.cpus().length}`, 10);
 const OUT = args.out ?? "./budget-evolve-best.json";
 
-// Refs: all 15 named. Note: many named configs EXCEED budget=400 (shipper=351,
-// thesis=326, etc), so the meta's members are above our constraint. That's
-// intentional — users face opponents with more attribute juice than they have.
+// Refs: all named strategies. Their footprints are printed below; several
+// intentionally exceed the user budget.
 const refs = STRATEGY_NAMES.map((n) => STRATEGIES[n]);
 const stages = Object.values(STAGES);
 
 console.error(`[budget-evolve] budget=${USER_BUDGET}, gens=${GENS}, pop=${POP}, seeds=${SEEDS}`);
-console.error(`[budget-evolve] refs: ${refs.length} named (meta uses 219-351 pts; we're at ≤${USER_BUDGET})`);
+console.error(`[budget-evolve] refs: ${refs.length} named; users are at ≤${USER_BUDGET}`);
 
 // Named footprint summary
 const footprints = refs.map((r) => ({ id: r.id, spent: budgetSpent(r) })).sort((a, b) => a.spent - b.spent);

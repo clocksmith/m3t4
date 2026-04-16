@@ -1,8 +1,8 @@
 // Candidate generators: random, mutate, crossover — now with DSL-aware
 // operators that can promote scalars into trajectories and add triggers.
 
-import type { AttributeSpec, BrainConfig, ParamKey } from "@selfplay/sim";
-import { DEFAULT_PARAMS, PARAM_KEYS } from "@selfplay/sim";
+import type { AttributeSpec, BrainConfig, ParamKey } from "@m3t4/sim";
+import { DEFAULT_PARAMS, PARAM_KEYS } from "@m3t4/sim";
 
 // ---------- Ranges ----------
 

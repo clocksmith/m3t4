@@ -7,8 +7,8 @@
 // — full rank-μ update omitted to keep this short. For our purposes the
 // diagonal version converges fine.
 
-import type { BrainConfig, ParamKey } from "@selfplay/sim";
-import { PARAM_KEYS } from "@selfplay/sim";
+import type { BrainConfig, ParamKey } from "@m3t4/sim";
+import { PARAM_KEYS } from "@m3t4/sim";
 import { featureVector } from "./novelty.js";
 
 const RANGES: Record<ParamKey, [number, number]> = {

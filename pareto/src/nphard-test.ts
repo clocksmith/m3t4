@@ -22,7 +22,7 @@ import os from "node:os";
 import {
   STAGES, STRATEGIES, STRATEGY_NAMES,
   type BrainConfig, type ParamKey,
-} from "@selfplay/sim";
+} from "@m3t4/sim";
 import { runMatches, type MatchSpec } from "./parallel.js";
 import { scoreBatch } from "./score.js";
 import { randomConfig, mutateConfig } from "./generate.js";

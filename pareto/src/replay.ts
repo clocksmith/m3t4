@@ -9,7 +9,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { STAGES, STRATEGY_NAMES, STRATEGIES, type BrainConfig } from "@selfplay/sim";
+import { STAGES, STRATEGY_NAMES, STRATEGIES, type BrainConfig } from "@m3t4/sim";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -115,7 +115,7 @@ const html = `<!DOCTYPE html>
   <button id="speed">1×</button>
 </div>
 <script>
-// ==== Inlined @selfplay/sim ====
+// ==== Inlined @m3t4/sim ====
 ${simSource}
 window.SIM = { simulate, STAGES, packAction, unpackAction, compileBrain, runParamBrain, DEFAULT_PARAMS, DEFAULT_CHARS };
 </script>

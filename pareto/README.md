@@ -1,4 +1,4 @@
-# @selfplay/pareto — local strategy search toolkit
+# @m3t4/pareto — local strategy search toolkit
 
 Everything you need to search the SELF strategy space offline. No Firebase,
 no server, no accounts — just `node`.

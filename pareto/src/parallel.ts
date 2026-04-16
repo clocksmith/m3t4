@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
-import { STAGES, type BrainConfig } from "@selfplay/sim";
+import { STAGES, type BrainConfig } from "@m3t4/sim";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -80,8 +80,8 @@ export async function runMatches(matches: MatchSpec[], opts: PoolOptions = {}): 
 }
 
 async function runMatchesSerial(matches: MatchSpec[], opts: PoolOptions): Promise<MatchOutcome[]> {
-  const { simulate } = await import("@selfplay/sim");
-  const { STAGES: S } = await import("@selfplay/sim");
+  const { simulate } = await import("@m3t4/sim");
+  const { STAGES: S } = await import("@m3t4/sim");
   const out: MatchOutcome[] = [];
   for (let i = 0; i < matches.length; i++) {
     const m = matches[i];

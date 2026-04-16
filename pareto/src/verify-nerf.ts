@@ -4,7 +4,7 @@
 
 import fs from "node:fs";
 import os from "node:os";
-import { STAGES, STRATEGIES, STRATEGY_NAMES, type BrainConfig } from "@selfplay/sim";
+import { STAGES, STRATEGIES, STRATEGY_NAMES, type BrainConfig } from "@m3t4/sim";
 import { scoreBatch } from "./score.js";
 
 const PRE_PATH = process.argv[2] ?? "/tmp/budget-best.json";

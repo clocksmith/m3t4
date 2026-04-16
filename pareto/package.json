@@ -1,5 +1,5 @@
 {
-  "name": "@selfplay/pareto",
+  "name": "@m3t4/pareto",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
@@ -9,7 +9,7 @@
     "evolve": "tsc && node dist/evolve.js"
   },
   "dependencies": {
-    "@selfplay/sim": "file:../sim",
+    "@m3t4/sim": "file:../sim",
     "gifenc": "^1.0.3"
   },
   "devDependencies": {

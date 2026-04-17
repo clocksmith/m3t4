@@ -16,12 +16,12 @@
           "elo": 776,
           "wins": 572,
           "losses": 563,
-          "draws": 15826,
-          "lastPlayedAt": 1776426742738
+          "draws": 15827,
+          "lastPlayedAt": 1776428362667
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776426742738
+      "updatedAt": 1776428362667
     },
     "system:blitz": {
       "userId": "system:blitz",
@@ -49,15 +49,15 @@
           "name": "blitz",
           "submittedAt": 1776357923139,
           "rateLockedUntil": 0,
-          "elo": 810,
+          "elo": 803,
           "wins": 685,
-          "losses": 766,
+          "losses": 767,
           "draws": 15109,
-          "lastPlayedAt": 1776427633563
+          "lastPlayedAt": 1776428107908
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776427633563
+      "updatedAt": 1776428107908
     },
     "system:incumbent": {
       "userId": "system:incumbent",
@@ -85,15 +85,15 @@
           "name": "incumbent",
           "submittedAt": 1776357923139,
           "rateLockedUntil": 0,
-          "elo": 856,
-          "wins": 938,
+          "elo": 872,
+          "wins": 940,
           "losses": 934,
           "draws": 8616,
-          "lastPlayedAt": 1776427888591
+          "lastPlayedAt": 1776428617547
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776427888591
+      "updatedAt": 1776428617547
     },
     "system:pivot": {
       "userId": "system:pivot",
@@ -124,12 +124,12 @@
           "elo": 772,
           "wins": 615,
           "losses": 600,
-          "draws": 15666,
-          "lastPlayedAt": 1776426742738
+          "draws": 15667,
+          "lastPlayedAt": 1776428362667
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776426742738
+      "updatedAt": 1776428362667
     },
     "system:thesis": {
       "userId": "system:thesis",
@@ -157,15 +157,15 @@
           "name": "thesis",
           "submittedAt": 1776357923139,
           "rateLockedUntil": 0,
-          "elo": 916,
+          "elo": 907,
           "wins": 915,
-          "losses": 1051,
+          "losses": 1052,
           "draws": 1637,
-          "lastPlayedAt": 1776427888591
+          "lastPlayedAt": 1776428617547
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776427888591
+      "updatedAt": 1776428617547
     },
     "system:disruptor": {
       "userId": "system:disruptor",

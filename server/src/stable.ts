@@ -118,21 +118,34 @@ interface StoreData {
   version: number;
 }
 
+export interface FileStableStoreOptions {
+  // When true: skip phantom seeding and suppress all disk writes. Used by
+  // inspect tooling so `new FileStableStore(path, { readOnly: true })` is
+  // a pure read of the on-disk archive.
+  readOnly?: boolean;
+}
+
 export class FileStableStore implements StableStore {
   private path: string;
   private data: StoreData;
+  private readOnly: boolean;
 
-  constructor(storePath: string) {
+  constructor(storePath: string, options: FileStableStoreOptions = {}) {
     this.path = storePath;
+    this.readOnly = !!options.readOnly;
     if (fs.existsSync(storePath)) {
       this.data = JSON.parse(fs.readFileSync(storePath, "utf8"));
       this.data.replays ??= {};
+    } else if (this.readOnly) {
+      throw new Error(`readOnly FileStableStore requires existing file: ${storePath}`);
     } else {
       fs.mkdirSync(path.dirname(storePath), { recursive: true });
       this.data = { stables: {}, handles: {}, replays: {}, version: 1 };
     }
-    this.seedSystemPhantoms();
-    this.flush();
+    if (!this.readOnly) {
+      this.seedSystemPhantoms();
+      this.flush();
+    }
   }
 
   // Seed each of the 16 named strategies as its own virtual stable, so
@@ -181,6 +194,7 @@ export class FileStableStore implements StableStore {
   }
 
   private flush(): void {
+    if (this.readOnly) return;
     fs.writeFileSync(this.path, JSON.stringify(this.data, null, 2));
   }
 

@@ -41,11 +41,54 @@ function defaultStorePath(): string {
 }
 
 function printUsage(): never {
-  console.error("Usage: node server/dist/inspect-replay.js <matchId> [--store path] [--json] [--no-verify]");
+  console.error("Usage: node server/dist/inspect-replay.js <matchId> [--store path] [--json] [--no-verify] [--redact]");
+  console.error("  --no-verify    skip decode/replay (still runs integrity check)");
+  console.error("  --redact       omit players[i].config from --json output (safe to share)");
   process.exit(2);
 }
 
-function summarizeReplay(artifact: ReplayArtifactV1, verified: ReturnType<typeof replayArtifactToResultV1> | null): object {
+interface ReplayInspectionSummary {
+  matchId: string;
+  mode: string;
+  stageId: string;
+  seed: number;
+  createdAt: string;
+  startedAt?: string;
+  sim: ReplayArtifactV1["sim"];
+  players: Array<{
+    side: 0 | 1;
+    kind: string;
+    tier?: string;
+    label: string;
+    handle?: string;
+    userId?: string;
+    slotId?: string;
+    slotName?: string;
+    configHash?: string;
+    hasConfig: boolean;
+  }>;
+  actions: {
+    encoding: string;
+    byteLength: number;
+    decisionTicks: number;
+    hash: string;
+  };
+  result: ReplayArtifactV1["result"];
+  warnings: string[];
+  integrity: "ok" | "failed" | "skipped";
+  integrityError?: string;
+  verified:
+    | false
+    | { consumedBytes: number; consumedDecisionTicks: number; result: ReplayArtifactV1["result"] };
+  verifyError?: string;
+}
+
+function summarizeReplay(
+  artifact: ReplayArtifactV1,
+  integrity: { status: "ok" | "failed" | "skipped"; error?: string },
+  verified: ReturnType<typeof replayArtifactToResultV1> | null,
+  verifyError?: string,
+): ReplayInspectionSummary {
   return {
     matchId: artifact.match.matchId,
     mode: artifact.match.mode,
@@ -74,6 +117,8 @@ function summarizeReplay(artifact: ReplayArtifactV1, verified: ReturnType<typeof
     },
     result: artifact.result,
     warnings: replayArtifactWarningsV1(artifact),
+    integrity: integrity.status,
+    integrityError: integrity.error,
     verified: verified
       ? {
           consumedBytes: verified.consumedBytes,
@@ -81,23 +126,11 @@ function summarizeReplay(artifact: ReplayArtifactV1, verified: ReturnType<typeof
           result: verified.result,
         }
       : false,
+    verifyError,
   };
 }
 
-function printSummary(summary: ReturnType<typeof summarizeReplay>): void {
-  const s = summary as {
-    matchId: string;
-    mode: string;
-    stageId: string;
-    seed: number;
-    createdAt: string;
-    startedAt?: string;
-    players: Array<{ side: number; label: string; handle?: string; configHash?: string; hasConfig: boolean }>;
-    actions: { byteLength: number; decisionTicks: number; hash: string };
-    result: { winner: 0 | 1 | -1; finalScore: [number, number]; finalRounds: [number, number]; ticks: number; logHash: string };
-    warnings: string[];
-    verified: false | { consumedBytes: number; consumedDecisionTicks: number };
-  };
+function printSummary(s: ReplayInspectionSummary): void {
   console.log(`match ${s.matchId}`);
   console.log(`mode=${s.mode} stage=${s.stageId} seed=${s.seed}`);
   console.log(`created=${s.createdAt}${s.startedAt ? ` started=${s.startedAt}` : ""}`);
@@ -106,7 +139,10 @@ function printSummary(summary: ReturnType<typeof summarizeReplay>): void {
   }
   console.log(`actions bytes=${s.actions.byteLength} decisionTicks=${s.actions.decisionTicks} hash=${s.actions.hash}`);
   console.log(`result winner=${s.result.winner} score=${s.result.finalScore.join("-")} rounds=${s.result.finalRounds.join("-")} ticks=${s.result.ticks} logHash=${s.result.logHash}`);
-  console.log(`verify=${s.verified ? `ok bytes=${s.verified.consumedBytes}` : "skipped"}`);
+  console.log(`integrity=${s.integrity}${s.integrityError ? ` (${s.integrityError})` : ""}`);
+  if (s.verified) console.log(`verify=ok bytes=${s.verified.consumedBytes}`);
+  else if (s.verifyError) console.log(`verify=failed (${s.verifyError})`);
+  else console.log(`verify=skipped`);
   if (s.warnings.length) console.log(`warnings=${s.warnings.join("; ")}`);
 }
 
@@ -115,21 +151,54 @@ const matchId = args.matchId;
 if (!matchId) printUsage();
 
 const storePath = args.store ?? CONFIG.storePath ?? defaultStorePath();
-const store = new FileStableStore(storePath);
+const store = new FileStableStore(storePath, { readOnly: true });
 const artifact = await store.getReplay(matchId);
 if (!artifact) {
   console.error(`Replay not found: ${matchId}`);
   process.exit(1);
 }
 
-verifyReplayIntegrityV1(artifact);
-const verified = args["no-verify"] ? null : replayArtifactToResultV1(artifact);
+// Integrity + decode run independently so a failure in one doesn't hide the
+// other context. Forensic intent: always print what we have, then surface
+// specific failures at the end.
+let integrity: { status: "ok" | "failed" | "skipped"; error?: string };
+try {
+  verifyReplayIntegrityV1(artifact);
+  integrity = { status: "ok" };
+} catch (err) {
+  integrity = { status: "failed", error: err instanceof Error ? err.message : String(err) };
+}
+
+let verified: ReturnType<typeof replayArtifactToResultV1> | null = null;
+let verifyError: string | undefined;
+if (args["no-verify"]) {
+  // Left as null; summary reports "skipped".
+} else if (integrity.status === "failed") {
+  verifyError = "skipped: integrity failed";
+} else {
+  try {
+    verified = replayArtifactToResultV1(artifact);
+  } catch (err) {
+    verifyError = err instanceof Error ? err.message : String(err);
+  }
+}
+
+const summary = summarizeReplay(artifact, integrity, verified, verifyError);
 
 if (args.json) {
-  console.log(JSON.stringify({
-    artifact,
-    summary: summarizeReplay(artifact, verified),
-  }, null, 2));
+  const exported: ReplayArtifactV1 = args.redact
+    ? {
+        ...artifact,
+        players: [
+          { ...artifact.players[0], config: undefined } as ReplayArtifactV1["players"][0],
+          { ...artifact.players[1], config: undefined } as ReplayArtifactV1["players"][1],
+        ] as ReplayArtifactV1["players"],
+      }
+    : artifact;
+  console.log(JSON.stringify({ artifact: exported, summary }, null, 2));
 } else {
-  printSummary(summarizeReplay(artifact, verified));
+  printSummary(summary);
 }
+
+// Exit non-zero on failures so CI/scripts can detect tampered artifacts.
+if (integrity.status === "failed" || verifyError) process.exit(1);

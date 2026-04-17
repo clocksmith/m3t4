@@ -13,15 +13,15 @@
           "name": "standby",
           "submittedAt": 1776357923139,
           "rateLockedUntil": 0,
-          "elo": 773,
+          "elo": 776,
           "wins": 572,
           "losses": 563,
-          "draws": 15764,
-          "lastPlayedAt": 1776381081763
+          "draws": 15822,
+          "lastPlayedAt": 1776421001959
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776381081763
+      "updatedAt": 1776421001959
     },
     "system:blitz": {
       "userId": "system:blitz",
@@ -49,15 +49,15 @@
           "name": "blitz",
           "submittedAt": 1776357923139,
           "rateLockedUntil": 0,
-          "elo": 829,
-          "wins": 680,
-          "losses": 757,
-          "draws": 15069,
-          "lastPlayedAt": 1776381081927
+          "elo": 808,
+          "wins": 684,
+          "losses": 765,
+          "draws": 15099,
+          "lastPlayedAt": 1776422121859
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776381081927
+      "updatedAt": 1776422121859
     },
     "system:incumbent": {
       "userId": "system:incumbent",
@@ -85,15 +85,15 @@
           "name": "incumbent",
           "submittedAt": 1776357923139,
           "rateLockedUntil": 0,
-          "elo": 801,
-          "wins": 926,
-          "losses": 927,
-          "draws": 8593,
-          "lastPlayedAt": 1776381081383
+          "elo": 850,
+          "wins": 936,
+          "losses": 932,
+          "draws": 8611,
+          "lastPlayedAt": 1776422121859
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776381081383
+      "updatedAt": 1776422121859
     },
     "system:pivot": {
       "userId": "system:pivot",
@@ -124,12 +124,12 @@
           "elo": 772,
           "wins": 615,
           "losses": 600,
-          "draws": 15616,
-          "lastPlayedAt": 1776381081763
+          "draws": 15662,
+          "lastPlayedAt": 1776421001959
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776381081763
+      "updatedAt": 1776421001959
     },
     "system:thesis": {
       "userId": "system:thesis",
@@ -157,15 +157,15 @@
           "name": "thesis",
           "submittedAt": 1776357923139,
           "rateLockedUntil": 0,
-          "elo": 930,
-          "wins": 910,
-          "losses": 1048,
-          "draws": 1627,
-          "lastPlayedAt": 1776368839066
+          "elo": 925,
+          "wins": 914,
+          "losses": 1050,
+          "draws": 1633,
+          "lastPlayedAt": 1776421565814
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776368839066
+      "updatedAt": 1776421565814
     },
     "system:disruptor": {
       "userId": "system:disruptor",
@@ -176,18 +176,18 @@
           "config": {
             "id": "disruptor",
             "attributes": {
-              "burnRate": 0.7,
-              "moat": 50,
-              "shipRate": 0.6,
-              "foresight": 0.05,
-              "pivotSpeed": 0.5,
-              "leverage": -0.7,
-              "networking": 0.3,
-              "hallucination": 10,
-              "spite": -0.3,
-              "greed": 0.4,
-              "pacing": 0.4,
-              "cunning": 0.3
+              "burnRate": 0.8078011283201723,
+              "moat": 47.987622765985044,
+              "shipRate": 0.5569477823316895,
+              "foresight": 0.08605310278346567,
+              "pivotSpeed": 0.2800457215910702,
+              "leverage": -0.6140981321512707,
+              "networking": 0.5286224612934147,
+              "hallucination": 4.994374118169511,
+              "spite": -0.08549967855271828,
+              "greed": 0.35712889418455684,
+              "pacing": 0.42786659937719135,
+              "cunning": 0.33290232325414926
             }
           },
           "name": "disruptor",
@@ -201,7 +201,7 @@
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776367991970
+      "updatedAt": 1776391832594
     },
     "system:operator": {
       "userId": "system:operator",
@@ -237,7 +237,7 @@
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776368800793
+      "updatedAt": 1776391832594
     },
     "system:oracle": {
       "userId": "system:oracle",
@@ -273,7 +273,7 @@
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776368283766
+      "updatedAt": 1776391832594
     },
     "system:shipper": {
       "userId": "system:shipper",
@@ -301,15 +301,15 @@
           "name": "shipper",
           "submittedAt": 1776357923139,
           "rateLockedUntil": 0,
-          "elo": 822,
+          "elo": 796,
           "wins": 52,
-          "losses": 97,
-          "draws": 23569,
-          "lastPlayedAt": 1776381081927
+          "losses": 100,
+          "draws": 23607,
+          "lastPlayedAt": 1776421826431
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776381081927
+      "updatedAt": 1776421826431
     },
     "system:moonshot": {
       "userId": "system:moonshot",
@@ -327,7 +327,7 @@
               "pivotSpeed": 0,
               "leverage": -0.3,
               "networking": 0.3,
-              "hallucination": 25,
+              "hallucination": 10,
               "spite": 0,
               "greed": 0.8,
               "pacing": 0.6,
@@ -345,7 +345,7 @@
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776368797678
+      "updatedAt": 1776391832594
     },
     "system:regulatory": {
       "userId": "system:regulatory",
@@ -381,7 +381,7 @@
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776368302979
+      "updatedAt": 1776391832594
     },
     "system:founder": {
       "userId": "system:founder",
@@ -399,7 +399,7 @@
               "pivotSpeed": 0.6,
               "leverage": -0.5,
               "networking": 0.9,
-              "hallucination": 15,
+              "hallucination": 0,
               "spite": 0,
               "greed": 0.5,
               "pacing": 0.3,
@@ -417,7 +417,7 @@
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776368797947
+      "updatedAt": 1776391832594
     },
     "system:acolyte": {
       "userId": "system:acolyte",
@@ -428,18 +428,18 @@
           "config": {
             "id": "acolyte",
             "attributes": {
-              "burnRate": 0.85,
-              "moat": 40,
-              "shipRate": 0.5,
-              "foresight": 0.02,
-              "pivotSpeed": 0.2,
-              "leverage": 0,
-              "networking": 0,
-              "hallucination": 90,
-              "spite": 0,
-              "greed": 0.5,
-              "pacing": 0.8,
-              "cunning": 0
+              "burnRate": 0.46,
+              "moat": 123,
+              "shipRate": 0.35,
+              "foresight": 0,
+              "pivotSpeed": 0.39,
+              "leverage": -0.54,
+              "networking": 0.26,
+              "hallucination": 10,
+              "spite": -0.12,
+              "greed": 0.36,
+              "pacing": 0.24,
+              "cunning": 0.55
             }
           },
           "name": "acolyte",
@@ -453,7 +453,7 @@
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776368182295
+      "updatedAt": 1776391832594
     },
     "system:cassandra": {
       "userId": "system:cassandra",
@@ -489,7 +489,7 @@
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776368848185
+      "updatedAt": 1776391832594
     },
     "system:troll": {
       "userId": "system:troll",
@@ -525,7 +525,7 @@
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776368221855
+      "updatedAt": 1776391832594
     },
     "system:acquirer": {
       "userId": "system:acquirer",
@@ -561,7 +561,7 @@
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776368795749
+      "updatedAt": 1776391832594
     }
   },
   "handles": {

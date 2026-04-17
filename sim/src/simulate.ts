@@ -74,6 +74,9 @@ function makeFighter(id: 0 | 1, ch: Character, spawn: { x: number; y: number }, 
     rounds: 0,
     giant: 0,
     hp: 100,
+    lastClashTick: -9999,
+    lastAttackStartTick: -9999,
+    lastKillTick: -9999,
   };
 }
 
@@ -204,6 +207,9 @@ function makeObs(self: Fighter, opp: Fighter, w: World): Observation {
       onGround: self.onGround, wall: self.wall, stun: self.stun, dead: self.dead,
       swipeT: self.swipeT, swipeCD: self.swipeCD, diveT: self.diveT, diveCD: self.diveCD,
       hasToken: !!(w.gold && w.gold.carrier === self.id),
+      lastClashTick: self.lastClashTick,
+      lastAttackStartTick: self.lastAttackStartTick,
+      lastKillTick: self.lastKillTick,
     },
     opp: {
       x: opp.x, y: opp.y, vx: opp.vx, vy: opp.vy,
@@ -211,6 +217,7 @@ function makeObs(self: Fighter, opp: Fighter, w: World): Observation {
       onGround: opp.onGround, stun: opp.stun, dead: opp.dead,
       swipeT: opp.swipeT, diveT: opp.diveT,
       hasToken: !!(w.gold && w.gold.carrier === opp.id),
+      lastAttackStartTick: opp.lastAttackStartTick,
     },
     token: w.gold
       ? { exists: true, x: w.gold.x, y: w.gold.y, carrier: w.gold.carrier }
@@ -229,7 +236,8 @@ function makeObs(self: Fighter, opp: Fighter, w: World): Observation {
 
 // ---------- Fighter physics step ----------
 
-function startAttack(f: Fighter, type: "swipe" | "dive"): void {
+function startAttack(f: Fighter, type: "swipe" | "dive", tick: number): void {
+  f.lastAttackStartTick = tick;
   if (type === "dive") {
     f.diveT = 0.28;
     f.diveCD = 0.55;
@@ -302,8 +310,8 @@ function tickFighter(f: Fighter, opp: Fighter, input: Action, w: World): void {
   }
 
   if (input.action && f.stun <= 0) {
-    if (!f.onGround && f.diveCD <= 0) startAttack(f, "dive");
-    else if (f.swipeCD <= 0) startAttack(f, "swipe");
+    if (!f.onGround && f.diveCD <= 0) startAttack(f, "dive", w.tick);
+    else if (f.swipeCD <= 0) startAttack(f, "swipe", w.tick);
   }
 
   if (!f.onGround && input.down) f.vy += 1200 * STEP;
@@ -392,6 +400,8 @@ function resolveCombat(w: World): void {
     b.stun = 0.09;
     a.swipeT = 0;
     b.swipeT = 0;
+    a.lastClashTick = w.tick;
+    b.lastClashTick = w.tick;
     w.freeze = Math.max(w.freeze, CLASH_FREEZE);
     return;
   }
@@ -454,6 +464,7 @@ function killPlayer(w: World, vid: 0 | 1, kid: 0 | 1): void {
   v.swipeT = 0;
   v.diveT = 0;
   v.hp = 0;
+  k.lastKillTick = w.tick;
   w.freeze = Math.max(w.freeze, HIT_FREEZE);
 
   if (!w.goal) pickGoal(w);

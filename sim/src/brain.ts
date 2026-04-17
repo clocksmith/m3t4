@@ -113,7 +113,45 @@ export function runParamBrain(obs: Observation, params: Params): Action {
   let down = false;
   const stillRising = !obs.self.onGround && obs.self.vy < -150;
 
-  // Wall-jump assist
+  // Memory-driven tactics. All three use recent-world-tick stamps from
+  // simulate.ts — no user-visible attribute, but enables reactive play.
+  const ticksSinceClash = obs.tick - obs.self.lastClashTick;
+  const ticksSinceOppAttack = obs.tick - obs.opp.lastAttackStartTick;
+  const recentClash = ticksSinceClash < 36; // ~0.3s — avoid immediate re-clash
+  const oppCommitted = ticksSinceOppAttack < 10 && oppActive; // opp just swung
+  const cun = params.cunning ?? 0.5;
+
+  // Counter-punish: opp just swung. Cunning bots close the gap so we're in
+  // striking range when their swipe ends — they can't parry a recovering
+  // blade. Low cunning bots can't read this and miss the window.
+  if (oppCommitted && cun > 0.5 && dist < 160 && obs.self.swipeCD <= 0) {
+    return {
+      left: dir < 0,
+      right: dir > 0,
+      action: dist < 90,
+    };
+  }
+
+  // Wall-flank: networking specialists actively seek the far wall for an
+  // altitude advantage when opp holds the token. Complements the existing
+  // reactive wall-jump assist below.
+  if (
+    obs.opp.hasToken && E.networking > 0.5 && obs.self.onGround
+    && altitudeOff > 40 && obs.self.wall === 0
+  ) {
+    const oppSide = obs.opp.x > obs.self.x ? 1 : -1;
+    const targetWallX = oppSide > 0 ? obs.arena.right : obs.arena.left;
+    const distToWall = Math.abs(obs.self.x - targetWallX);
+    if (distToWall > 60) {
+      return {
+        left: targetWallX < obs.self.x,
+        right: targetWallX > obs.self.x,
+        up: true,
+      };
+    }
+  }
+
+  // Wall-jump assist (reactive: we're already on a wall)
   if (E.networking > 0.4 && obs.self.wall !== 0 && altitudeOff > 60) {
     return { left: obs.self.wall < 0, right: obs.self.wall > 0, up: true };
   }
@@ -128,7 +166,12 @@ export function runParamBrain(obs: Observation, params: Params): Action {
     return { down: true, action: true };
   }
 
-  if (danger && E.pivotSpeed > 0.5) {
+  if (recentClash && dist < 110) {
+    // Just clashed — both fighters stunned and bounced back. Don't walk
+    // straight back in; give blades a beat to reset. Pivot-high bots
+    // recover faster (they were already retreating).
+    move = -dir;
+  } else if (danger && E.pivotSpeed > 0.5) {
     move = -dir;
     jump = obs.self.onGround || stillRising;
   } else if (altitudeOff > 60) {
@@ -156,7 +199,7 @@ export function runParamBrain(obs: Observation, params: Params): Action {
   // Cunning: how patient about swing timing.
   //   Low cunning (~0):  swing reflexively when in reach (even if opp is ready)
   //   High cunning (~1): wait for opp to be recovering/stunned/committed
-  const cun = params.cunning ?? 0.5;
+  // (`cun` declared earlier for the counter-punish check.)
   const reckless = cun < 0.3;
   const patient = cun > 0.7;
   let safeStrike = inSwingReach && (!oppActive || dist < 70);

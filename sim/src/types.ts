@@ -104,6 +104,12 @@ export interface Fighter {
   rounds: number;
   giant: number;
   hp: number; // present for API symmetry; mirrors respawn/dead semantics
+  // Short-term memory — all store world tick values, -9999 sentinel for "never".
+  // Enables reactive tactics (post-clash backoff, counter-punish, etc.)
+  // without adding user-visible attributes.
+  lastClashTick: number;
+  lastAttackStartTick: number;
+  lastKillTick: number;
 }
 
 export interface Platform {
@@ -183,6 +189,9 @@ export interface Observation {
     diveT: number;
     diveCD: number;
     hasToken: boolean;
+    lastClashTick: number;
+    lastAttackStartTick: number;
+    lastKillTick: number;
   };
   opp: {
     x: number;
@@ -197,6 +206,7 @@ export interface Observation {
     swipeT: number;
     diveT: number;
     hasToken: boolean;
+    lastAttackStartTick: number;
   };
   token: { exists: boolean; x: number; y: number; carrier: 0 | 1 | -1 };
   goal: { exists: boolean; x: number; y: number; label: string; timer: number };

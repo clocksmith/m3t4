@@ -57,6 +57,9 @@ export interface Fighter {
     rounds: number;
     giant: number;
     hp: number;
+    lastClashTick: number;
+    lastAttackStartTick: number;
+    lastKillTick: number;
 }
 export interface Platform {
     x: number;
@@ -133,6 +136,9 @@ export interface Observation {
         diveT: number;
         diveCD: number;
         hasToken: boolean;
+        lastClashTick: number;
+        lastAttackStartTick: number;
+        lastKillTick: number;
     };
     opp: {
         x: number;
@@ -147,6 +153,7 @@ export interface Observation {
         swipeT: number;
         diveT: number;
         hasToken: boolean;
+        lastAttackStartTick: number;
     };
     token: {
         exists: boolean;

@@ -75,6 +75,22 @@ export function runParamBrain(obs: Observation, params: Params): Action {
     // Push through rather than abort — this fixes the goal-loop where
     // opp respawn-on-path re-triggered abort every cycle.
     const oppDangerous = !obs.opp.dead && (obs.tick - obs.opp.lastAttackStartTick) > 5;
+    // Dwell defense: if we're already at the goal, the analyzer showed
+    // that aborting-to-fight loses matches — opp approaches, carrier
+    // abandons dwell, opp kills carrier and grabs token. Instead, stay
+    // at goal and face opp (passive foil holds them off). Dwell clock
+    // keeps ticking as long as we're within 32px of goal.
+    const atGoal = Math.hypot(obs.self.x - obs.goal.x, obs.self.y - obs.goal.y) < 30;
+    if (atGoal && oppClose) {
+      // Face opp without leaving goal. If opp is inside the 32px dwell
+      // radius, we can't avoid contact — swing instead of walking.
+      const dxOpp = obs.opp.x - obs.self.x;
+      return {
+        left: dxOpp < -5,
+        right: dxOpp > 5,
+        action: obs.absDx < 80 && obs.self.swipeCD <= 0,
+      };
+    }
     const abortThreshold = 1 - (params.greed ?? 0.5); // low greed = early abort
     if (oppInPath && oppClose && oppDangerous && abortThreshold > 0.6) {
       // Opp blocks the delivery corridor — fight first.
@@ -166,6 +182,30 @@ export function runParamBrain(obs: Observation, params: Params): Action {
       right: dir > 0,
       action: dist < 90,
     };
+  }
+
+  // Mutual-contact preemption: both bots approaching head-on at same Y
+  // with passive foils is the classic walk-into-each-other setup. Bots
+  // with foresight sometimes hop to break Y-symmetry — but not every
+  // tick, or mirror matches hop-stalemate forever (observed intern-v-
+  // intern: 0 kills in 4 min). Phase-gated so it fires ~15% of opportunity
+  // windows; the other 85% the bot commits through (now safe after the
+  // passive-mutual-clash fix in simulate.ts).
+  const approachSpeed = Math.abs(obs.self.vx) + Math.abs(obs.opp.vx);
+  const mutualImminent =
+    dist < 150 &&
+    Math.abs(obs.dy) < 30 &&
+    approachSpeed > 280 &&
+    obs.self.swipeT <= 0 &&
+    obs.opp.swipeT <= 0 &&
+    obs.self.onGround;
+  if (mutualImminent && E.foresight > 0.08) {
+    // Phase + id-offset: P0 juke chance peaks at different tick than P1.
+    const phase = (obs.tick + obs.self.id * 37) % 120;
+    if (phase < 18) {
+      const flip = obs.self.id === 0 ? 1 : -1;
+      return { left: -dir * flip < 0, right: -dir * flip > 0, up: true };
+    }
   }
 
   // Wall-flank: networking specialists actively seek the far wall for an

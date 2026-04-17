@@ -30,6 +30,11 @@
     <a href="https://github.com/m3t4-ai" target="_blank" rel="noreferrer">github</a>
   </footer>
 
+  <script>
+    if (!window.__M3T4_API_ORIGIN__ && !["localhost", "127.0.0.1"].includes(location.hostname)) {
+      window.__M3T4_API_ORIGIN__ = "https://api.m3t4.ai";
+    }
+  </script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

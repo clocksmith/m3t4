@@ -431,6 +431,25 @@ function resolveCombat(w: World): void {
   const hitB = swordHits(sb, a);
 
   if (hitA && hitB) {
+    // Both passive foils hit bodies at the same tick — classic Foiled
+    // head-on walk-in. The clash check missed it because parallel
+    // collinear segments don't intersect. Resolve as a mutual parry,
+    // not a double KO. True double-KO is reserved for committed trades
+    // (both mid-swipe/dive — they can't parry during the commit).
+    const aCommitted = a.swipeT > 0 || a.diveT > 0;
+    const bCommitted = b.swipeT > 0 || b.diveT > 0;
+    if (!aCommitted && !bCommitted) {
+      a.vx = -a.facing * 260 / STATS.resistance;
+      b.vx = -b.facing * 260 / STATS.resistance;
+      a.vy = Math.min(a.vy, -150);
+      b.vy = Math.min(b.vy, -150);
+      a.stun = 0.09;
+      b.stun = 0.09;
+      a.lastClashTick = w.tick;
+      b.lastClashTick = w.tick;
+      w.freeze = Math.max(w.freeze, CLASH_FREEZE);
+      return;
+    }
     doubleKO(w);
     return;
   }

@@ -215,6 +215,8 @@ function makeObs(self: Fighter, opp: Fighter, w: World): Observation {
       lastAttackStartTick: self.lastAttackStartTick,
       lastKillTick: self.lastKillTick,
       lastMoveTick: self.lastMoveTick,
+      score: self.score,
+      rounds: self.rounds,
     },
     opp: {
       x: opp.x, y: opp.y, vx: opp.vx, vy: opp.vy,
@@ -223,6 +225,8 @@ function makeObs(self: Fighter, opp: Fighter, w: World): Observation {
       swipeT: opp.swipeT, diveT: opp.diveT,
       hasToken: !!(w.gold && w.gold.carrier === opp.id),
       lastAttackStartTick: opp.lastAttackStartTick,
+      score: opp.score,
+      rounds: opp.rounds,
     },
     token: w.gold
       ? { exists: true, x: w.gold.x, y: w.gold.y, carrier: w.gold.carrier }

@@ -144,6 +144,8 @@ export interface Observation {
         lastAttackStartTick: number;
         lastKillTick: number;
         lastMoveTick: number;
+        score: number;
+        rounds: number;
     };
     opp: {
         x: number;
@@ -159,6 +161,8 @@ export interface Observation {
         diveT: number;
         hasToken: boolean;
         lastAttackStartTick: number;
+        score: number;
+        rounds: number;
     };
     token: {
         exists: boolean;

@@ -60,29 +60,28 @@ function navigateTo(obs, tx, ty) {
 export function runParamBrain(obs, params) {
     if (obs.self.dead)
         return {};
-    // 1. Carrying tokens → deliver — but greed modulates whether danger aborts it.
-    //    Abort only if opp is *between me and the goal*. That check is stable
-    //    tick-to-tick. Checking opp.swipeT/diveT flickers as animations cycle
-    //    and causes sub-second deliver/fight oscillation at the goal.
+    // Score-state: losing bots commit harder; winning bots play safer.
+    const losing = obs.self.rounds < obs.opp.rounds ||
+        (obs.self.rounds === obs.opp.rounds && obs.self.score < obs.opp.score);
+    const winning = obs.self.rounds > obs.opp.rounds ||
+        (obs.self.rounds === obs.opp.rounds && obs.self.score > obs.opp.score);
+    // 1. Carrying tokens → deliver.
+    //    Abort only if opp is *between me and the goal*. Multiple escape
+    //    hatches: (a) dwell defense if already at goal, (b) jump-over if
+    //    opp blocks path on the ground, (c) skip abort entirely if goal
+    //    timer is running out, (d) skip abort if losing (must commit).
     if (obs.self.hasToken && obs.goal.exists && params.shipRate > 0.3) {
         const toGoal = obs.goal.x - obs.self.x;
         const toOpp = obs.opp.x - obs.self.x;
         const oppInPath = Math.sign(toGoal) === Math.sign(toOpp)
             && Math.abs(toOpp) < Math.abs(toGoal);
         const oppClose = obs.absDx < 150;
-        // Opp just respawned = can't hurt us during our dwell window.
-        // Push through rather than abort — this fixes the goal-loop where
-        // opp respawn-on-path re-triggered abort every cycle.
         const oppDangerous = !obs.opp.dead && (obs.tick - obs.opp.lastAttackStartTick) > 5;
-        // Dwell defense: if we're already at the goal, the analyzer showed
-        // that aborting-to-fight loses matches — opp approaches, carrier
-        // abandons dwell, opp kills carrier and grabs token. Instead, stay
-        // at goal and face opp (passive foil holds them off). Dwell clock
-        // keeps ticking as long as we're within 32px of goal.
+        const goalTimerUrgent = obs.goal.timer < 3; // goal about to disappear
+        const mustCommit = goalTimerUrgent || losing;
         const atGoal = Math.hypot(obs.self.x - obs.goal.x, obs.self.y - obs.goal.y) < 30;
         if (atGoal && oppClose) {
-            // Face opp without leaving goal. If opp is inside the 32px dwell
-            // radius, we can't avoid contact — swing instead of walking.
+            // Dwell defense: stay in the goal circle and face opp with foil.
             const dxOpp = obs.opp.x - obs.self.x;
             return {
                 left: dxOpp < -5,
@@ -90,9 +89,20 @@ export function runParamBrain(obs, params) {
                 action: obs.absDx < 80 && obs.self.swipeCD <= 0,
             };
         }
-        const abortThreshold = 1 - (params.greed ?? 0.5); // low greed = early abort
-        if (oppInPath && oppClose && oppDangerous && abortThreshold > 0.6) {
-            // Opp blocks the delivery corridor — fight first.
+        // Jump-over: opp blocks the direct path on the ground. Instead of
+        // aborting, use the vertical axis — leap over opp, keep committing
+        // toward the goal. Fixes the "carrier dies en route" pattern where
+        // carriers abandon delivery at 50% completion and lose their token.
+        if (oppInPath && oppClose && obs.self.onGround && obs.absDx < 120) {
+            const toGoalSign = Math.sign(toGoal) || 1;
+            return {
+                left: toGoalSign < 0, right: toGoalSign > 0,
+                up: true,
+            };
+        }
+        const abortThreshold = 1 - (params.greed ?? 0.5);
+        if (oppInPath && oppClose && oppDangerous && abortThreshold > 0.6 && !mustCommit) {
+            // Opp blocks, we're not desperate — fight first.
         }
         else {
             return navigateTo(obs, obs.goal.x, obs.goal.y);
@@ -122,6 +132,18 @@ export function runParamBrain(obs, params) {
         E.moat += (0 - E.moat) * overrideStr;
         E.burnRate += (1.0 - E.burnRate) * overrideStr;
         E.pivotSpeed += (0 - E.pivotSpeed) * overrideStr;
+    }
+    // Score-state adjustments: losing bots push harder, winning bots camp
+    // harder. Scales the effective aggression without changing the base
+    // attributes — so the behavior shifts naturally without breaking the
+    // attribute-orthogonality invariant.
+    if (losing) {
+        E.burnRate = Math.min(1, E.burnRate * 1.25);
+        E.moat = Math.max(20, E.moat * 0.8);
+    }
+    else if (winning) {
+        E.moat = Math.min(240, E.moat * 1.2);
+        E.burnRate = Math.max(0.2, E.burnRate * 0.9);
     }
     // Pacing: rhythmic burst on burnRate. Low pacing = steady; high = burst+rest.
     if ((params.pacing ?? 0) > 0.05) {

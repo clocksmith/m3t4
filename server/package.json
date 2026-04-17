@@ -5,7 +5,8 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "tsc && node dist/index.js"
+    "start": "tsc && node dist/index.js",
+    "inspect-replay": "tsc && node dist/inspect-replay.js"
   },
   "dependencies": {
     "@m3t4/sim": "file:../sim",

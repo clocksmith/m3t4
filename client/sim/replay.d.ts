@@ -4,6 +4,7 @@ export declare const REPLAY_SCHEMA_VERSION = 1;
 export declare const REPLAY_ACTION_ENCODING = "decision-action-pairs-v1";
 export declare const REPLAY_FRAME_ENCODING = "trace-frames-v1";
 export declare const REPLAY_RULESET = "m3t4-sim-v1";
+export declare const REPLAY_CONSTANTS_HASH: string;
 export type ReplayMode = "ranked" | "practice" | "generated" | "test";
 export type ReplayPlayerKind = "human" | "brain" | "scripted";
 export type ReplayPlayerTier = "user" | "system" | "local" | "tool";

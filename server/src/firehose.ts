@@ -6,11 +6,9 @@ import {
   DEFAULT_CHARS,
   createReplayArtifactV1,
   replayArtifactToResultV1,
-  replayHashJson,
+  REPLAY_CONSTANTS_HASH as SIM_CONSTANTS_HASH,
   simulateTrace,
   STAGES,
-  STEP,
-  STATS,
 } from "@m3t4/sim";
 import type { WebSocket } from "ws";
 import { CONFIG } from "./config.js";
@@ -26,8 +24,6 @@ export interface ServerEvent {
   type: string;
   [k: string]: unknown;
 }
-
-const SIM_CONSTANTS_HASH = replayHashJson({ step: STEP, stats: STATS });
 
 export class Firehose {
   private clients = new Set<Client>();
@@ -172,7 +168,10 @@ export class Firehose {
         constantsHash: SIM_CONSTANTS_HASH,
       },
     });
-    replayArtifactToResultV1(replay);
+    // Decode-verify doubles per-match sim cost. On by default for dev/CI
+    // because it catches encoder/decoder drift; disable in throughput-
+    // sensitive production runs via REPLAY_VERIFY=0.
+    if (process.env.REPLAY_VERIFY !== "0") replayArtifactToResultV1(replay);
 
     // Stream trace frames at ~real-time pacing. FAST_PLAYBACK=1 strips
     // the delays — useful for dev iteration, never enable in production.

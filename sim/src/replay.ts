@@ -1,4 +1,9 @@
-import { STEP } from "./constants.js";
+import {
+  ARENA_L, ARENA_R, ARENA_T,
+  CLASH_FREEZE, COYOTE_TIME, FLOOR_Y, GOAL_DWELL_S, GOAL_TIMER_START,
+  GRAVITY, HIT_FREEZE, JUMP_BUFFER_TIME, POINTS_TO_WIN_ROUND,
+  ROUNDS_TO_WIN_MATCH, ROUND_TIMER_MAX_TICKS, STATS, STEP, WALL_SLIDE,
+} from "./constants.js";
 import type { BrainConfig, Character, MatchResult, Stage } from "./types.js";
 import { createStepperWorld, stepWorld, unpackAction } from "./simulate.js";
 
@@ -7,6 +12,28 @@ export const REPLAY_SCHEMA_VERSION = 1;
 export const REPLAY_ACTION_ENCODING = "decision-action-pairs-v1";
 export const REPLAY_FRAME_ENCODING = "trace-frames-v1";
 export const REPLAY_RULESET = "m3t4-sim-v1";
+
+// Canonical hash over every sim constant that affects match outcomes. Any
+// change to this table must bump the hash automatically so replays made by
+// one build won't silently validate against a different build. The exported
+// hash is what server/firehose binds into `sim.constantsHash`.
+export const REPLAY_CONSTANTS_HASH = (() => {
+  const table = {
+    STEP, GRAVITY, WALL_SLIDE, COYOTE_TIME, JUMP_BUFFER_TIME,
+    HIT_FREEZE, CLASH_FREEZE,
+    STATS,
+    POINTS_TO_WIN_ROUND, ROUNDS_TO_WIN_MATCH, GOAL_TIMER_START,
+    ROUND_TIMER_MAX_TICKS, GOAL_DWELL_S,
+    ARENA_L, ARENA_R, ARENA_T, FLOOR_Y,
+  };
+  let h = 2166136261 >>> 0;
+  const json = JSON.stringify(table, Object.keys(table).sort());
+  for (let i = 0; i < json.length; i++) {
+    h ^= json.charCodeAt(i) & 0xff;
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+})();
 
 export type ReplayMode = "ranked" | "practice" | "generated" | "test";
 export type ReplayPlayerKind = "human" | "brain" | "scripted";

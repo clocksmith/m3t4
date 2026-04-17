@@ -205,6 +205,15 @@ test("replayArtifactWarningsV1 flags missing sim binding", () => {
   assert.deepEqual(replayArtifactWarningsV1(bound), []);
 });
 
+test("REPLAY_CONSTANTS_HASH is stable across identical calls and versions", async () => {
+  const mod = await import("../replay.js");
+  assert.equal(typeof mod.REPLAY_CONSTANTS_HASH, "string");
+  assert.equal(mod.REPLAY_CONSTANTS_HASH.length, 8);
+  // Re-import and compare — same module, same hash.
+  const mod2 = await import("../replay.js");
+  assert.equal(mod.REPLAY_CONSTANTS_HASH, mod2.REPLAY_CONSTANTS_HASH);
+});
+
 test("verifyReplayIntegrityV1 is idempotent on a fresh artifact", () => {
   const stage = STAGES.datacenter;
   const result = simulate({

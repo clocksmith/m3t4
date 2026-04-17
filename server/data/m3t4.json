@@ -16,12 +16,12 @@
           "elo": 776,
           "wins": 572,
           "losses": 563,
-          "draws": 15827,
-          "lastPlayedAt": 1776428362667
+          "draws": 15830,
+          "lastPlayedAt": 1776434286405
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776428362667
+      "updatedAt": 1776434286405
     },
     "system:blitz": {
       "userId": "system:blitz",
@@ -49,15 +49,15 @@
           "name": "blitz",
           "submittedAt": 1776357923139,
           "rateLockedUntil": 0,
-          "elo": 803,
+          "elo": 796,
           "wins": 685,
-          "losses": 767,
-          "draws": 15109,
-          "lastPlayedAt": 1776428107908
+          "losses": 768,
+          "draws": 15115,
+          "lastPlayedAt": 1776434025205
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776428107908
+      "updatedAt": 1776434025205
     },
     "system:incumbent": {
       "userId": "system:incumbent",
@@ -85,15 +85,15 @@
           "name": "incumbent",
           "submittedAt": 1776357923139,
           "rateLockedUntil": 0,
-          "elo": 867,
-          "wins": 940,
-          "losses": 935,
-          "draws": 8618,
-          "lastPlayedAt": 1776429381883
+          "elo": 885,
+          "wins": 943,
+          "losses": 936,
+          "draws": 8619,
+          "lastPlayedAt": 1776433770088
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776429381883
+      "updatedAt": 1776433770088
     },
     "system:pivot": {
       "userId": "system:pivot",
@@ -124,12 +124,12 @@
           "elo": 772,
           "wins": 615,
           "losses": 600,
-          "draws": 15667,
-          "lastPlayedAt": 1776428362667
+          "draws": 15670,
+          "lastPlayedAt": 1776434286405
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776428362667
+      "updatedAt": 1776434286405
     },
     "system:thesis": {
       "userId": "system:thesis",
@@ -157,15 +157,15 @@
           "name": "thesis",
           "submittedAt": 1776357923139,
           "rateLockedUntil": 0,
-          "elo": 912,
-          "wins": 916,
-          "losses": 1052,
-          "draws": 1639,
-          "lastPlayedAt": 1776429381883
+          "elo": 901,
+          "wins": 917,
+          "losses": 1054,
+          "draws": 1640,
+          "lastPlayedAt": 1776433770088
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776429381883
+      "updatedAt": 1776433770088
     },
     "system:disruptor": {
       "userId": "system:disruptor",
@@ -304,12 +304,12 @@
           "elo": 797,
           "wins": 52,
           "losses": 100,
-          "draws": 23616,
-          "lastPlayedAt": 1776427633563
+          "draws": 23622,
+          "lastPlayedAt": 1776434025205
         }
       ],
       "createdAt": 1776357923139,
-      "updatedAt": 1776427633563
+      "updatedAt": 1776434025205
     },
     "system:moonshot": {
       "userId": "system:moonshot",

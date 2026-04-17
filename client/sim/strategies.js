@@ -7,7 +7,7 @@ export const STRATEGY_NAMES = [
     "blitz",
     "incumbent",
     "pivot",
-    "thesis",
+    "unicorn",
     "disruptor",
     "operator",
     "oracle",
@@ -16,7 +16,7 @@ export const STRATEGY_NAMES = [
     "regulatory",
     "founder",
     "acolyte",
-    "unicorn",
+    "intern",
     "troll",
     "acquirer",
 ];
@@ -57,9 +57,9 @@ export const STRATEGIES = {
             spite: 0.0339, greed: 0.41, pacing: 0.1872, cunning: 0.4162,
         },
     },
-    // evolved id=thesis spent=254 counters=3 internalWr=67.3% vsOldMeta=66.0%
-    thesis: {
-        id: "thesis",
+    // evolved id=unicorn spent=254 counters=3 internalWr=67.3% vsOldMeta=66.0%
+    unicorn: {
+        id: "unicorn",
         attributes: {
             burnRate: 0.4286, moat: 75.1079, shipRate: 0.32, foresight: 0,
             pivotSpeed: 0, leverage: -1, networking: 0.278, hallucination: 0,
@@ -138,9 +138,9 @@ export const STRATEGIES = {
             spite: 0.0314, greed: 0.4379, pacing: 0.3358, cunning: 0.3129,
         },
     },
-    // evolved id=unicorn spent=208 counters=1 internalWr=73.7% vsOldMeta=64.2%
-    unicorn: {
-        id: "unicorn",
+    // evolved id=intern spent=208 counters=1 internalWr=73.7% vsOldMeta=64.2%
+    intern: {
+        id: "intern",
         attributes: {
             burnRate: 0.1494, moat: 44.2485, shipRate: 0.3298, foresight: 0,
             pivotSpeed: 0.2655, leverage: -1, networking: 0.14, hallucination: 0,

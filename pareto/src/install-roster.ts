@@ -15,9 +15,9 @@ const STRATEGIES_PATH = path.resolve(process.cwd(), "sim/src/strategies.ts");
 // which persona label.
 const DEFAULT_NAMES = [
   "standby", "blitz", "incumbent", "pivot",
-  "thesis", "disruptor", "operator", "oracle",
+  "unicorn", "disruptor", "operator", "oracle",
   "shipper", "moonshot", "regulatory", "founder",
-  "acolyte", "unicorn", "troll", "acquirer",
+  "acolyte", "intern", "troll", "acquirer",
 ];
 
 interface RosterJSON {

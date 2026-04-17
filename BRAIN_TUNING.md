@@ -127,7 +127,6 @@ evolved config, not an imposed identity.
 | `blitz`      | pure aggression      | low moat + high burn + greed — leanest build |
 | `incumbent`  | defend objective     | high shipRate + cunning, camps goals |
 | `pivot`      | adaptable all-rounder| balanced mid-range |
-| `thesis`     | predictive spacer    | high foresight + cunning, methodical |
 | `disruptor`  | aerial pressure      | negative leverage + pacing, deny-leaning |
 | `operator`   | balanced utility     | "sane defaults" across the board |
 | `oracle`     | deep lookahead       | max foresight (0.20) — prediction specialist |
@@ -136,7 +135,8 @@ evolved config, not an imposed identity.
 | `regulatory` | patient counter      | max cunning + pivotSpeed, waits to punish |
 | `founder`    | wall specialist      | max networking + negative leverage |
 | `acolyte`    | controlled chaos counter | h=10 bot; counters denial-spacer budget champs |
-| `unicorn`    | rare + dominant      | minimalist low-spend top-WR — wins by not engaging |
+| `unicorn`    | rare + valuable      | high-cunning aggressive closer, top-half performer |
+| `intern`     | minimalist joker     | lowest spend, disengages — somehow top-WR anyway |
 | `troll`      | bait-from-below      | only positive-leverage bot (0.8) |
 | `acquirer`   | close-pressure mobility | low moat + high networking |
 

@@ -110,6 +110,12 @@ export interface Fighter {
   lastClashTick: number;
   lastAttackStartTick: number;
   lastKillTick: number;
+  // Stuck detector — updated every 30 ticks by physics. If the fighter
+  // hasn't displaced >40px in that window, lastMoveTick stays stale and
+  // the brain forces a mixup. Breaks camp/stalemate loops.
+  lastSignificantX: number;
+  lastSignificantY: number;
+  lastMoveTick: number;
 }
 
 export interface Platform {
@@ -174,6 +180,7 @@ export interface World {
 
 export interface Observation {
   self: {
+    id: 0 | 1;
     x: number;
     y: number;
     vx: number;
@@ -192,6 +199,7 @@ export interface Observation {
     lastClashTick: number;
     lastAttackStartTick: number;
     lastKillTick: number;
+    lastMoveTick: number;
   };
   opp: {
     x: number;

@@ -77,6 +77,9 @@ function makeFighter(id: 0 | 1, ch: Character, spawn: { x: number; y: number }, 
     lastClashTick: -9999,
     lastAttackStartTick: -9999,
     lastKillTick: -9999,
+    lastSignificantX: spawn.x,
+    lastSignificantY: spawn.y,
+    lastMoveTick: 0,
   };
 }
 
@@ -202,6 +205,7 @@ function swordHits(s: SwordSeg, t: Fighter): boolean {
 function makeObs(self: Fighter, opp: Fighter, w: World): Observation {
   return {
     self: {
+      id: self.id,
       x: self.x, y: self.y, vx: self.vx, vy: self.vy,
       facing: self.facing, hp: self.hp,
       onGround: self.onGround, wall: self.wall, stun: self.stun, dead: self.dead,
@@ -210,6 +214,7 @@ function makeObs(self: Fighter, opp: Fighter, w: World): Observation {
       lastClashTick: self.lastClashTick,
       lastAttackStartTick: self.lastAttackStartTick,
       lastKillTick: self.lastKillTick,
+      lastMoveTick: self.lastMoveTick,
     },
     opp: {
       x: opp.x, y: opp.y, vx: opp.vx, vy: opp.vy,
@@ -309,8 +314,12 @@ function tickFighter(f: Fighter, opp: Fighter, input: Action, w: World): void {
     f.vy = -STATS.jump * STATS.jumpCut;
   }
 
-  if (input.action && f.stun <= 0) {
-    if (!f.onGround && f.diveCD <= 0) startAttack(f, "dive", w.tick);
+  // Attack state machine: committed animations finish before a new one
+  // can start. No mid-dive cancel via swipe, no re-swipe during swipe.
+  // Dive requires an explicit down-press while airborne — otherwise an
+  // airborne attack is the upward aerial swipe.
+  if (input.action && f.stun <= 0 && f.diveT <= 0 && f.swipeT <= 0) {
+    if (!f.onGround && input.down && f.diveCD <= 0) startAttack(f, "dive", w.tick);
     else if (f.swipeCD <= 0) startAttack(f, "swipe", w.tick);
   }
 
@@ -372,6 +381,18 @@ function tickFighter(f: Fighter, opp: Fighter, input: Action, w: World): void {
   }
 
   if (f.onGround) f.diveT = 0;
+
+  // Stuck detector — sample position every 30 ticks. If displacement
+  // since the last sample is meaningful, advance lastMoveTick; otherwise
+  // the brain sees a stale value and knows to force a mixup.
+  if (w.tick % 30 === 0) {
+    const moved = Math.hypot(f.x - f.lastSignificantX, f.y - f.lastSignificantY);
+    if (moved > 40) {
+      f.lastSignificantX = f.x;
+      f.lastSignificantY = f.y;
+      f.lastMoveTick = w.tick;
+    }
+  }
 }
 
 // ---------- Combat resolution ----------

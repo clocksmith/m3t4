@@ -60,6 +60,9 @@ export interface Fighter {
     lastClashTick: number;
     lastAttackStartTick: number;
     lastKillTick: number;
+    lastSignificantX: number;
+    lastSignificantY: number;
+    lastMoveTick: number;
 }
 export interface Platform {
     x: number;
@@ -121,6 +124,7 @@ export interface World {
 }
 export interface Observation {
     self: {
+        id: 0 | 1;
         x: number;
         y: number;
         vx: number;
@@ -139,6 +143,7 @@ export interface Observation {
         lastClashTick: number;
         lastAttackStartTick: number;
         lastKillTick: number;
+        lastMoveTick: number;
     };
     opp: {
         x: number;

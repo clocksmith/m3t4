@@ -30,7 +30,7 @@ export const STATS = {
   sword: 52,
   bodyW: 26,
   bodyH: 52,
-  swipeTime: 0.1,
+  swipeTime: 0.12,
   diveSpeed: 900,
   diveDrift: 0.78,
   hitPush: 380,

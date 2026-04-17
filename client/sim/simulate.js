@@ -5,7 +5,7 @@ import { ARENA_L, ARENA_R, ARENA_T, CLASH_FREEZE, COYOTE_TIME, FLOOR_Y, GOAL_DWE
 import { runParamBrain } from "./brain.js";
 import { RANGES } from "./budget.js";
 import { compileBrain, evaluateParams } from "./dsl.js";
-import { makeRng, rngRange } from "./rng.js";
+import { makeRng } from "./rng.js";
 import { PARAM_KEYS } from "./types.js";
 // ---------- Characters (visual only; stats identical) ----------
 export const DEFAULT_CHARS = [
@@ -109,7 +109,10 @@ function swordSeg(f) {
         angle = Math.PI * 0.46;
     else if (f.swipeT > 0) {
         const t = 1 - f.swipeT / STATS.swipeTime;
-        angle = lerp(0.5, -0.5, ease3(t));
+        // Upward anti-air slash (Foiled!-faithful): flick up from the passive
+        // horizontal-forward pose to ~57° above horizontal. 57° sweep is brisk
+        // and defensive, tip reaches ~28px above head to catch divers.
+        angle = lerp(0.0, -1.0, ease3(t));
     }
     const dx = Math.cos(angle) * f.facing;
     const dy = Math.sin(angle);
@@ -229,7 +232,7 @@ function tickFighter(f, opp, input, w) {
         f.vy = -STATS.jump * STATS.jumpCut;
     }
     if (input.action && f.stun <= 0) {
-        if (!f.onGround && input.down && f.diveCD <= 0)
+        if (!f.onGround && f.diveCD <= 0)
             startAttack(f, "dive");
         else if (f.swipeCD <= 0)
             startAttack(f, "swipe");
@@ -299,30 +302,28 @@ function resolveCombat(w) {
     const b = w.fighters[1];
     if (a.dead || b.dead || a.invuln > 0 || b.invuln > 0)
         return;
-    const aActive = a.swipeT > 0 || a.diveT > 0;
-    const bActive = b.swipeT > 0 || b.diveT > 0;
-    if (!aActive && !bActive)
-        return;
+    // Foiled-faithful combat: the foil is ALWAYS extended (at angle=0 when
+    // idle, swiping arc during swipe, angled-down during dive). Weapons-on-
+    // weapon clash (deflect); weapon-on-body kill. No "active" gating —
+    // positioning is the attack.
     const sa = swordSeg(a);
     const sb = swordSeg(b);
-    if (aActive && bActive) {
-        const clash = segIntersect(sa.bx, sa.by, sa.tx, sa.ty, sb.bx, sb.by, sb.tx, sb.ty) ||
-            Math.hypot(sa.tx - sb.tx, sa.ty - sb.ty) < 10;
-        if (clash) {
-            a.vx = -a.facing * 260 / STATS.resistance;
-            b.vx = -b.facing * 260 / STATS.resistance;
-            a.vy = Math.min(a.vy, -150);
-            b.vy = Math.min(b.vy, -150);
-            a.stun = 0.09;
-            b.stun = 0.09;
-            a.swipeT = 0;
-            b.swipeT = 0;
-            w.freeze = Math.max(w.freeze, CLASH_FREEZE);
-            return;
-        }
+    const clash = segIntersect(sa.bx, sa.by, sa.tx, sa.ty, sb.bx, sb.by, sb.tx, sb.ty) ||
+        Math.hypot(sa.tx - sb.tx, sa.ty - sb.ty) < 10;
+    if (clash) {
+        a.vx = -a.facing * 260 / STATS.resistance;
+        b.vx = -b.facing * 260 / STATS.resistance;
+        a.vy = Math.min(a.vy, -150);
+        b.vy = Math.min(b.vy, -150);
+        a.stun = 0.09;
+        b.stun = 0.09;
+        a.swipeT = 0;
+        b.swipeT = 0;
+        w.freeze = Math.max(w.freeze, CLASH_FREEZE);
+        return;
     }
-    const hitA = aActive && swordHits(sa, b);
-    const hitB = bActive && swordHits(sb, a);
+    const hitA = swordHits(sa, b);
+    const hitB = swordHits(sb, a);
     if (hitA && hitB) {
         doubleKO(w);
         return;
@@ -339,15 +340,13 @@ function resolveCombat(w) {
     }
 }
 function respawn(f, w) {
-    if (w.goal) {
-        f.x = w.goal.sx + rngRange(w.rng, -18, 18);
-        f.y = w.goal.sy;
-    }
-    else {
-        const sp = f.id === 0 ? w.stage.spawnL : w.stage.spawnR;
-        f.x = sp.x;
-        f.y = sp.y;
-    }
+    // Always home-side. Spawning on the goal when gold is in play drops the
+    // victim on top of the carrier's delivery zone, creating an endless
+    // contest loop and robbing the defender of the chance to intercept
+    // mid-field. Home-side respawns let the carrier earn delivery.
+    const sp = f.id === 0 ? w.stage.spawnL : w.stage.spawnR;
+    f.x = sp.x;
+    f.y = sp.y;
     f.vx = 0;
     f.vy = 0;
     f.dead = false;

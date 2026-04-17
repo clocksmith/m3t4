@@ -3,6 +3,7 @@ export * from "./types.js";
 export * from "./constants.js";
 export * from "./stage.js";
 export * from "./budget.js";
+export * from "./replay.js";
 export { compileBrain, evaluateParams, compileAttribute } from "./dsl.js";
 export { runParamBrain } from "./brain.js";
 export { simulate, simulateTrace, DEFAULT_CHARS, packAction, unpackAction, applyHallucinationNoise, createStepperWorld, runBrainForWorld, stepWorld, worldObservation, worldToFrame, } from "./simulate.js";

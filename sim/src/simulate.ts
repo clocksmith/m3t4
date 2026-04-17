@@ -172,7 +172,10 @@ function swordSeg(f: Fighter): SwordSeg {
   if (f.diveT > 0) angle = Math.PI * 0.46;
   else if (f.swipeT > 0) {
     const t = 1 - f.swipeT / STATS.swipeTime;
-    angle = lerp(0.5, -0.5, ease3(t));
+    // Upward anti-air slash (Foiled!-faithful): flick up from the passive
+    // horizontal-forward pose to ~57° above horizontal. 57° sweep is brisk
+    // and defensive, tip reaches ~28px above head to catch divers.
+    angle = lerp(0.0, -1.0, ease3(t));
   }
   const dx = Math.cos(angle) * f.facing;
   const dy = Math.sin(angle);
@@ -299,7 +302,7 @@ function tickFighter(f: Fighter, opp: Fighter, input: Action, w: World): void {
   }
 
   if (input.action && f.stun <= 0) {
-    if (!f.onGround && input.down && f.diveCD <= 0) startAttack(f, "dive");
+    if (!f.onGround && f.diveCD <= 0) startAttack(f, "dive");
     else if (f.swipeCD <= 0) startAttack(f, "swipe");
   }
 
@@ -370,33 +373,31 @@ function resolveCombat(w: World): void {
   const b = w.fighters[1];
   if (a.dead || b.dead || a.invuln > 0 || b.invuln > 0) return;
 
-  const aActive = a.swipeT > 0 || a.diveT > 0;
-  const bActive = b.swipeT > 0 || b.diveT > 0;
-  if (!aActive && !bActive) return;
-
+  // Foiled-faithful combat: the foil is ALWAYS extended (at angle=0 when
+  // idle, swiping arc during swipe, angled-down during dive). Weapons-on-
+  // weapon clash (deflect); weapon-on-body kill. No "active" gating —
+  // positioning is the attack.
   const sa = swordSeg(a);
   const sb = swordSeg(b);
 
-  if (aActive && bActive) {
-    const clash =
-      segIntersect(sa.bx, sa.by, sa.tx, sa.ty, sb.bx, sb.by, sb.tx, sb.ty) ||
-      Math.hypot(sa.tx - sb.tx, sa.ty - sb.ty) < 10;
-    if (clash) {
-      a.vx = -a.facing * 260 / STATS.resistance;
-      b.vx = -b.facing * 260 / STATS.resistance;
-      a.vy = Math.min(a.vy, -150);
-      b.vy = Math.min(b.vy, -150);
-      a.stun = 0.09;
-      b.stun = 0.09;
-      a.swipeT = 0;
-      b.swipeT = 0;
-      w.freeze = Math.max(w.freeze, CLASH_FREEZE);
-      return;
-    }
+  const clash =
+    segIntersect(sa.bx, sa.by, sa.tx, sa.ty, sb.bx, sb.by, sb.tx, sb.ty) ||
+    Math.hypot(sa.tx - sb.tx, sa.ty - sb.ty) < 10;
+  if (clash) {
+    a.vx = -a.facing * 260 / STATS.resistance;
+    b.vx = -b.facing * 260 / STATS.resistance;
+    a.vy = Math.min(a.vy, -150);
+    b.vy = Math.min(b.vy, -150);
+    a.stun = 0.09;
+    b.stun = 0.09;
+    a.swipeT = 0;
+    b.swipeT = 0;
+    w.freeze = Math.max(w.freeze, CLASH_FREEZE);
+    return;
   }
 
-  const hitA = aActive && swordHits(sa, b);
-  const hitB = bActive && swordHits(sb, a);
+  const hitA = swordHits(sa, b);
+  const hitB = swordHits(sb, a);
 
   if (hitA && hitB) {
     doubleKO(w);

@@ -7,7 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { compileBrain, STRATEGIES, type BrainConfig } from "@m3t4/sim";
+import { compileBrain, STRATEGIES, type BrainConfig, type ReplayArtifactV1 } from "@m3t4/sim";
 import { CONFIG } from "./config.js";
 
 // System user — owner of phantom seed bots (the 16 named strategies).
@@ -90,6 +90,8 @@ export interface StableStore {
   submitToSlot(userId: string, slotIdx: number, config: BrainConfig, name?: string): Promise<{ slotId: string }>;
   listActive(sinceMs: number): Promise<Stable[]>;
   updateAfterMatch(res: MatchUpdate): Promise<void>;
+  archiveReplay(artifact: ReplayArtifactV1): Promise<void>;
+  getReplay(matchId: string): Promise<ReplayArtifactV1 | null>;
   applyDecay(): Promise<number>; // returns number of slots decayed
   handleTaken(handle: string, excludeUid?: string): Promise<boolean>;
 }
@@ -112,6 +114,7 @@ export interface MatchUpdate {
 interface StoreData {
   stables: Record<string, Stable>; // keyed by userId
   handles: Record<string, string>; // handle → userId
+  replays: Record<string, ReplayArtifactV1>; // PRIVATE — includes configs
   version: number;
 }
 
@@ -123,9 +126,10 @@ export class FileStableStore implements StableStore {
     this.path = storePath;
     if (fs.existsSync(storePath)) {
       this.data = JSON.parse(fs.readFileSync(storePath, "utf8"));
+      this.data.replays ??= {};
     } else {
       fs.mkdirSync(path.dirname(storePath), { recursive: true });
-      this.data = { stables: {}, handles: {}, version: 1 };
+      this.data = { stables: {}, handles: {}, replays: {}, version: 1 };
     }
     this.seedSystemPhantoms();
     this.flush();
@@ -276,6 +280,16 @@ export class FileStableStore implements StableStore {
     this.flush();
   }
 
+  async archiveReplay(artifact: ReplayArtifactV1): Promise<void> {
+    this.data.replays[artifact.match.matchId] = artifact;
+    this.trimReplayArchive();
+    this.flush();
+  }
+
+  async getReplay(matchId: string): Promise<ReplayArtifactV1 | null> {
+    return this.data.replays[matchId] ?? null;
+  }
+
   async applyDecay(): Promise<number> {
     let count = 0;
     const alpha = 1 - CONFIG.eloDecayPerWeek;
@@ -287,5 +301,15 @@ export class FileStableStore implements StableStore {
     }
     this.flush();
     return count;
+  }
+
+  private trimReplayArchive(): void {
+    const limit = Math.max(0, CONFIG.replayArchiveLimit);
+    const entries = Object.entries(this.data.replays);
+    if (entries.length <= limit) return;
+    entries
+      .sort(([, a], [, b]) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+      .slice(limit)
+      .forEach(([matchId]) => { delete this.data.replays[matchId]; });
   }
 }

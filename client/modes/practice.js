@@ -118,7 +118,7 @@ export function mount(root, { setStatus }) {
       <div class="panel tight">
         <h3>Controls</h3>
         P1: W/A/S/D move, F attack &nbsp;·&nbsp; P2: P/L/;/' move, [ attack<br>
-        Down-while-airborne + attack = dive. Hold up for full jump.
+        Airborne attack = dive. Hold down to fast-fall. Hold up for full jump.
       </div>
     </div>`;
 

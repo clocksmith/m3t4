@@ -1,0 +1,353 @@
+import { STEP } from "./constants.js";
+import { createStepperWorld, stepWorld, unpackAction } from "./simulate.js";
+export const REPLAY_SCHEMA_ID = "m3t4.replay";
+export const REPLAY_SCHEMA_VERSION = 1;
+export const REPLAY_ACTION_ENCODING = "decision-action-pairs-v1";
+export const REPLAY_FRAME_ENCODING = "trace-frames-v1";
+export const REPLAY_RULESET = "m3t4-sim-v1";
+const BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+export function replayBytesToBase64(bytes) {
+    let out = "";
+    let i = 0;
+    for (; i + 2 < bytes.length; i += 3) {
+        const n = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2];
+        out += BASE64[(n >>> 18) & 63] + BASE64[(n >>> 12) & 63] + BASE64[(n >>> 6) & 63] + BASE64[n & 63];
+    }
+    if (i < bytes.length) {
+        const a = bytes[i];
+        const b = i + 1 < bytes.length ? bytes[i + 1] : 0;
+        const n = (a << 16) | (b << 8);
+        out += BASE64[(n >>> 18) & 63] + BASE64[(n >>> 12) & 63];
+        out += i + 1 < bytes.length ? BASE64[(n >>> 6) & 63] + "=" : "==";
+    }
+    return out;
+}
+export function replayBase64ToBytes(encoded) {
+    const clean = encoded.replace(/\s+/g, "");
+    if (clean.length === 0)
+        return new Uint8Array();
+    if (clean.length % 4 !== 0)
+        throw new Error("invalid replay base64 length");
+    const pad = clean.endsWith("==") ? 2 : clean.endsWith("=") ? 1 : 0;
+    const out = new Uint8Array((clean.length / 4) * 3 - pad);
+    let o = 0;
+    for (let i = 0; i < clean.length; i += 4) {
+        const n = (base64Value(clean[i]) << 18) |
+            (base64Value(clean[i + 1]) << 12) |
+            (base64Value(clean[i + 2]) << 6) |
+            base64Value(clean[i + 3]);
+        if (o < out.length)
+            out[o++] = (n >>> 16) & 255;
+        if (o < out.length)
+            out[o++] = (n >>> 8) & 255;
+        if (o < out.length)
+            out[o++] = n & 255;
+    }
+    return out;
+}
+// FNV-1a is used here only for deterministic corruption detection and cache
+// identity. It is not authenticated integrity and must not be used as an
+// anti-cheat or replay-forgery boundary.
+export function replayHashBytes(bytes) {
+    let h = 2166136261 >>> 0;
+    for (const b of bytes) {
+        h ^= b;
+        h = Math.imul(h, 16777619) >>> 0;
+    }
+    return h.toString(16).padStart(8, "0");
+}
+export function stableReplayJson(value) {
+    if (value === undefined)
+        return "null";
+    if (value === null || typeof value !== "object") {
+        if (typeof value === "number" && !Number.isFinite(value))
+            return "null";
+        return JSON.stringify(value);
+    }
+    if (ArrayBuffer.isView(value)) {
+        throw new Error("stableReplayJson does not accept binary views; encode bytes explicitly");
+    }
+    if (Array.isArray(value))
+        return `[${value.map((v) => stableReplayJson(v)).join(",")}]`;
+    const obj = value;
+    const keys = Object.keys(obj).filter((k) => obj[k] !== undefined).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${stableReplayJson(obj[k])}`).join(",")}}`;
+}
+export function replayHashJson(value) {
+    const json = stableReplayJson(value);
+    let h = 2166136261 >>> 0;
+    for (const ch of json) {
+        h = fnvUtf8CodePoint(h, ch.codePointAt(0) ?? 0);
+    }
+    return h.toString(16).padStart(8, "0");
+}
+export function createReplayArtifactV1(opts) {
+    if (opts.actionLog.length % 2 !== 0) {
+        throw new Error("replay action log must contain paired P1/P2 bytes");
+    }
+    const sim = {
+        ...opts.sim,
+        packageName: "@m3t4/sim",
+        ruleset: REPLAY_RULESET,
+        stepHz: Math.round(1 / STEP),
+    };
+    assertReplaySimInfo(opts.mode, sim);
+    const players = [
+        normalizePlayer({ ...opts.players[0], side: 0 }),
+        normalizePlayer({ ...opts.players[1], side: 1 }),
+    ];
+    const frames = opts.frames
+        ? createReplayFrameLog(opts.frames, opts.frameStride ?? 1)
+        : undefined;
+    const actionHash = replayHashBytes(opts.actionLog);
+    const result = replayResultFrom(opts.result);
+    return {
+        schema: REPLAY_SCHEMA_ID,
+        version: REPLAY_SCHEMA_VERSION,
+        createdAt: opts.createdAt ?? new Date().toISOString(),
+        sim,
+        match: {
+            matchId: opts.matchId,
+            mode: opts.mode,
+            seed: opts.seed >>> 0,
+            stageId: opts.stage.id,
+            startedAt: opts.startedAt,
+        },
+        players,
+        initial: {
+            stage: opts.stage,
+            chars: opts.chars,
+        },
+        actions: {
+            encoding: REPLAY_ACTION_ENCODING,
+            bytesBase64: replayBytesToBase64(opts.actionLog),
+            byteLength: opts.actionLog.length,
+            decisionTicks: opts.actionLog.length / 2,
+            hash: actionHash,
+        },
+        result,
+        integrity: {
+            stageHash: replayHashJson(opts.stage),
+            charsHash: replayHashJson(opts.chars),
+            playerHashes: [replayHashJson(players[0]), replayHashJson(players[1])],
+            actionLogHash: actionHash,
+            frameLogHash: frames?.hash,
+        },
+        frames,
+        notes: opts.notes,
+    };
+}
+export function decodeReplayActions(log) {
+    if (log.encoding !== REPLAY_ACTION_ENCODING) {
+        throw new Error(`unsupported replay action encoding: ${log.encoding}`);
+    }
+    const bytes = replayBase64ToBytes(log.bytesBase64);
+    if (bytes.length !== log.byteLength) {
+        throw new Error(`replay action byteLength mismatch: ${bytes.length} !== ${log.byteLength}`);
+    }
+    if (!Number.isInteger(log.decisionTicks) || log.decisionTicks * 2 !== log.byteLength) {
+        throw new Error("replay action decisionTicks must match paired byteLength");
+    }
+    const hash = replayHashBytes(bytes);
+    if (hash !== log.hash) {
+        throw new Error(`replay action hash mismatch: ${hash} !== ${log.hash}`);
+    }
+    return bytes;
+}
+// Recomputes each integrity hash from the stored payload and throws on
+// mismatch. Catches accidental mutation or corruption after creation.
+// Not a trust boundary — FNV-1a is not collision-resistant — but closes
+// the silent-divergence gap where e.g. a mutated initial.stage would
+// quietly produce a different replay result.
+export function verifyReplayIntegrityV1(artifact) {
+    const i = artifact.integrity;
+    const stageHash = replayHashJson(artifact.initial.stage);
+    if (stageHash !== i.stageHash) {
+        throw new Error(`replay stageHash mismatch: ${stageHash} !== ${i.stageHash}`);
+    }
+    const charsHash = replayHashJson(artifact.initial.chars);
+    if (charsHash !== i.charsHash) {
+        throw new Error(`replay charsHash mismatch: ${charsHash} !== ${i.charsHash}`);
+    }
+    const p0 = replayHashJson(artifact.players[0]);
+    const p1 = replayHashJson(artifact.players[1]);
+    if (p0 !== i.playerHashes[0] || p1 !== i.playerHashes[1]) {
+        throw new Error(`replay playerHashes mismatch: [${p0},${p1}] !== [${i.playerHashes.join(",")}]`);
+    }
+    if (i.actionLogHash !== artifact.actions.hash) {
+        throw new Error(`replay integrity.actionLogHash !== actions.hash`);
+    }
+    if (artifact.frames) {
+        const want = artifact.frames.hash;
+        const got = replayHashJson(artifact.frames.frames ?? []);
+        if (want !== undefined && want !== got) {
+            throw new Error(`replay frameLogHash mismatch: ${got} !== ${want}`);
+        }
+        if (i.frameLogHash !== undefined && i.frameLogHash !== want) {
+            throw new Error(`replay integrity.frameLogHash !== frames.hash`);
+        }
+    }
+}
+export function replayArtifactWarningsV1(artifact) {
+    const warnings = [];
+    if (!artifact.sim.sourceHash && !artifact.sim.constantsHash) {
+        warnings.push("replay artifact has no sim sourceHash/constantsHash binding");
+    }
+    if (artifact.frames && artifact.frames.encoding !== REPLAY_FRAME_ENCODING) {
+        warnings.push(`unsupported replay frame encoding: ${artifact.frames.encoding}`);
+    }
+    return warnings;
+}
+export function replayArtifactToResultV1(artifact, opts = {}) {
+    if (!isReplayArtifactV1(artifact))
+        throw new Error("not a replay artifact v1");
+    assertReplaySimInfo(artifact.match.mode, artifact.sim);
+    verifyReplayIntegrityV1(artifact);
+    const bytes = decodeReplayActions(artifact.actions);
+    const world = createStepperWorld({
+        stage: artifact.initial.stage,
+        seed: artifact.match.seed,
+        chars: artifact.initial.chars,
+    });
+    let offset = 0;
+    let hashAcc = 2166136261 >>> 0;
+    const empty = {};
+    while (world.tick < artifact.result.ticks && world.matchWinner === -1) {
+        if (world.freeze > 0 || world.roundPause > 0) {
+            stepWorld(world, empty, empty);
+            continue;
+        }
+        if (offset + 1 >= bytes.length) {
+            throw new Error(`replay action log ended early at tick ${world.tick}`);
+        }
+        const pa = bytes[offset++];
+        const pb = bytes[offset++];
+        hashAcc = fnvByte(hashAcc, pa);
+        hashAcc = fnvByte(hashAcc, pb);
+        stepWorld(world, unpackAction(pa), unpackAction(pb));
+    }
+    if (offset !== bytes.length) {
+        throw new Error(`replay action log has ${bytes.length - offset} trailing bytes`);
+    }
+    const result = replayResultFromWorld(world, hashAcc.toString(16).padStart(8, "0"));
+    if (opts.verifyExpected !== false)
+        verifyReplayResult(artifact.result, result);
+    return {
+        result,
+        consumedBytes: offset,
+        consumedDecisionTicks: offset / 2,
+    };
+}
+export function isReplayArtifactV1(value) {
+    const v = value;
+    return !!v &&
+        v.schema === REPLAY_SCHEMA_ID &&
+        v.version === REPLAY_SCHEMA_VERSION &&
+        v.actions?.encoding === REPLAY_ACTION_ENCODING &&
+        typeof v.match?.stageId === "string" &&
+        typeof v.match?.seed === "number" &&
+        Array.isArray(v.players) &&
+        v.players.length === 2;
+}
+function createReplayFrameLog(frames, stride) {
+    return {
+        encoding: REPLAY_FRAME_ENCODING,
+        stride,
+        frameCount: frames.length,
+        hash: replayHashJson(frames),
+        frames,
+    };
+}
+function normalizePlayer(player) {
+    return {
+        ...player,
+        configHash: player.configHash ?? (player.config ? replayHashJson(player.config) : undefined),
+    };
+}
+function replayResultFrom(result) {
+    return {
+        winner: result.winner,
+        finalScore: result.finalScore,
+        finalRounds: result.finalRounds,
+        ticks: result.ticks,
+        logHash: result.logHash,
+    };
+}
+function replayResultFromWorld(world, logHash) {
+    let winner = world.matchWinner;
+    if (winner === -1) {
+        const [a, b] = world.fighters;
+        if (a.rounds > b.rounds)
+            winner = 0;
+        else if (b.rounds > a.rounds)
+            winner = 1;
+        else if (a.score > b.score)
+            winner = 0;
+        else if (b.score > a.score)
+            winner = 1;
+    }
+    return {
+        winner,
+        finalScore: [world.fighters[0].score, world.fighters[1].score],
+        finalRounds: [world.fighters[0].rounds, world.fighters[1].rounds],
+        ticks: world.tick,
+        logHash,
+    };
+}
+function verifyReplayResult(expected, actual) {
+    const fields = ["winner", "ticks", "logHash"];
+    for (const k of fields) {
+        if (expected[k] !== actual[k]) {
+            throw new Error(`replay ${k} mismatch: ${actual[k]} !== ${expected[k]}`);
+        }
+    }
+    if (expected.finalScore[0] !== actual.finalScore[0] || expected.finalScore[1] !== actual.finalScore[1]) {
+        throw new Error(`replay finalScore mismatch: ${actual.finalScore.join(",")} !== ${expected.finalScore.join(",")}`);
+    }
+    if (expected.finalRounds[0] !== actual.finalRounds[0] || expected.finalRounds[1] !== actual.finalRounds[1]) {
+        throw new Error(`replay finalRounds mismatch: ${actual.finalRounds.join(",")} !== ${expected.finalRounds.join(",")}`);
+    }
+}
+function assertReplaySimInfo(mode, sim) {
+    if (sim.packageName !== "@m3t4/sim") {
+        throw new Error(`unsupported replay packageName: ${sim.packageName}`);
+    }
+    if (sim.ruleset !== REPLAY_RULESET) {
+        throw new Error(`unsupported replay ruleset: ${sim.ruleset}`);
+    }
+    if (sim.stepHz !== Math.round(1 / STEP)) {
+        throw new Error(`unsupported replay stepHz: ${sim.stepHz}`);
+    }
+    if (mode === "ranked" && !sim.sourceHash && !sim.constantsHash) {
+        throw new Error("ranked replay artifacts require sim.sourceHash or sim.constantsHash");
+    }
+}
+function base64Value(ch) {
+    if (ch === "=")
+        return 0;
+    const n = BASE64.indexOf(ch);
+    if (n === -1)
+        throw new Error(`invalid replay base64 character: ${ch}`);
+    return n;
+}
+function fnvByte(hash, byte) {
+    hash ^= byte & 255;
+    return Math.imul(hash, 16777619) >>> 0;
+}
+function fnvUtf8CodePoint(hash, cp) {
+    if (cp <= 0x7f)
+        return fnvByte(hash, cp);
+    if (cp <= 0x7ff) {
+        hash = fnvByte(hash, 0xc0 | (cp >>> 6));
+        return fnvByte(hash, 0x80 | (cp & 0x3f));
+    }
+    if (cp <= 0xffff) {
+        hash = fnvByte(hash, 0xe0 | (cp >>> 12));
+        hash = fnvByte(hash, 0x80 | ((cp >>> 6) & 0x3f));
+        return fnvByte(hash, 0x80 | (cp & 0x3f));
+    }
+    hash = fnvByte(hash, 0xf0 | (cp >>> 18));
+    hash = fnvByte(hash, 0x80 | ((cp >>> 12) & 0x3f));
+    hash = fnvByte(hash, 0x80 | ((cp >>> 6) & 0x3f));
+    return fnvByte(hash, 0x80 | (cp & 0x3f));
+}

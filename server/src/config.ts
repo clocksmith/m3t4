@@ -31,4 +31,6 @@ export const CONFIG = {
 
   // Storage
   storePath: process.env.STORE_PATH ?? "./data/m3t4.json",
+  replayArchiveLimit: parseInt(process.env.REPLAY_ARCHIVE_LIMIT ?? "100", 10),
+  simSourceHash: process.env.SIM_SOURCE_HASH,
 } as const;

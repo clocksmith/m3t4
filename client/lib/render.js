@@ -114,27 +114,26 @@ function drawFighter(ctx, f, col, trim, shadow) {
   if (f.diveT > 0) angle = Math.PI * 0.46;
   else if (f.swipeT > 0) {
     const t = 1 - f.swipeT / STATS.swipeTime;
-    angle = 0.5 + (-0.5 - 0.5) * (1 - (1 - t) ** 3);
+    // Upward anti-air slash: horizontal-forward → ~57° up (must match sim/swordSeg).
+    const ease = 1 - (1 - t) ** 3;
+    angle = 0.0 + (-1.0 - 0.0) * ease;
   }
   const dx = Math.cos(angle) * f.facing;
   const dy = Math.sin(angle);
   const len = STATS.sword;
   const tx = bx + dx * len;
   const ty = by + dy * len;
+  // Foil is ALWAYS extended. Active (swipe/dive) = bright + glow; idle = softer.
   if (active) {
     ctx.strokeStyle = "rgba(255,255,255,0.18)";
     ctx.lineWidth = 12;
     ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(tx, ty); ctx.stroke();
-    ctx.strokeStyle = f.diveT > 0 ? "#ffe8c0" : "#fffaf0";
-    ctx.lineWidth = f.diveT > 0 ? 7 : 6;
-    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(tx, ty); ctx.stroke();
-    ctx.fillStyle = "#fffaf0";
-    ctx.beginPath(); ctx.arc(tx, ty, 4, 0, Math.PI * 2); ctx.fill();
-  } else {
-    ctx.strokeStyle = "rgba(200,205,215,0.32)";
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + f.facing * 12, by + 8); ctx.stroke();
   }
+  ctx.strokeStyle = active ? (f.diveT > 0 ? "#ffe8c0" : "#fffaf0") : "#d8dae0";
+  ctx.lineWidth = active ? (f.diveT > 0 ? 7 : 6) : 4;
+  ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(tx, ty); ctx.stroke();
+  ctx.fillStyle = active ? "#fffaf0" : "#aab";
+  ctx.beginPath(); ctx.arc(tx, ty, active ? 4 : 3, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = shadow;
   ctx.beginPath(); ctx.arc(bx, by, 4, 0, Math.PI * 2); ctx.fill();
 }

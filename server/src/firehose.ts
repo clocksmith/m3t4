@@ -2,7 +2,16 @@
 // by ELO proximity; never idle. Plays matches sequentially on a single
 // sim worker; broadcasts frames via WebSocket.
 
-import { simulateTrace, STAGES, STEP } from "@m3t4/sim";
+import {
+  DEFAULT_CHARS,
+  createReplayArtifactV1,
+  replayArtifactToResultV1,
+  replayHashJson,
+  simulateTrace,
+  STAGES,
+  STEP,
+  STATS,
+} from "@m3t4/sim";
 import type { WebSocket } from "ws";
 import { CONFIG } from "./config.js";
 import type { StableStore, Stable, Slot } from "./stable.js";
@@ -17,6 +26,8 @@ export interface ServerEvent {
   type: string;
   [k: string]: unknown;
 }
+
+const SIM_CONSTANTS_HASH = replayHashJson({ step: STEP, stats: STATS });
 
 export class Firehose {
   private clients = new Set<Client>();
@@ -106,6 +117,7 @@ export class Firehose {
   private async runMatch(p: {
     a: Stable; aSlot: Slot; b: Stable; bSlot: Slot; stageId: string;
   }): Promise<void> {
+    const startedAt = new Date();
     const matchId = `${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
     const stage = STAGES[p.stageId as keyof typeof STAGES];
     const seed = (Date.now() ^ (p.aSlot.elo << 3) ^ p.bSlot.elo) >>> 0;
@@ -124,6 +136,43 @@ export class Firehose {
 
     // Simulate (server-authoritative)
     const trace = simulateTrace({ stage, brainA: p.aSlot.config, brainB: p.bSlot.config, seed });
+    const replay = createReplayArtifactV1({
+      matchId,
+      mode: "ranked",
+      stage,
+      seed,
+      startedAt: startedAt.toISOString(),
+      players: [
+        {
+          kind: "brain",
+          tier: p.a.userId.startsWith("system:") ? "system" : "user",
+          label: p.aSlot.name,
+          handle: p.a.handle,
+          userId: p.a.userId,
+          slotId: p.aSlot.slotId,
+          slotName: p.aSlot.name,
+          config: p.aSlot.config,
+        },
+        {
+          kind: "brain",
+          tier: p.b.userId.startsWith("system:") ? "system" : "user",
+          label: p.bSlot.name,
+          handle: p.b.handle,
+          userId: p.b.userId,
+          slotId: p.bSlot.slotId,
+          slotName: p.bSlot.name,
+          config: p.bSlot.config,
+        },
+      ],
+      chars: DEFAULT_CHARS,
+      actionLog: trace.result.frameLog,
+      result: trace.result,
+      sim: {
+        sourceHash: CONFIG.simSourceHash,
+        constantsHash: SIM_CONSTANTS_HASH,
+      },
+    });
+    replayArtifactToResultV1(replay);
 
     // Stream trace frames at ~real-time pacing. FAST_PLAYBACK=1 strips
     // the delays — useful for dev iteration, never enable in production.
@@ -138,6 +187,7 @@ export class Firehose {
     // ELO + score update
     const { a: newA, b: newB } = updatePair(p.aSlot.elo, p.bSlot.elo, trace.result.winner);
     const now = Date.now();
+    await this.store.archiveReplay(replay);
     await this.store.updateAfterMatch({
       aUserId: p.a.userId, aSlotId: p.aSlot.slotId, aEloBefore: p.aSlot.elo, aEloAfter: newA,
       bUserId: p.b.userId, bSlotId: p.bSlot.slotId, bEloBefore: p.bSlot.elo, bEloAfter: newB,
@@ -152,6 +202,7 @@ export class Firehose {
       finalScore: trace.result.finalScore,
       finalRounds: trace.result.finalRounds,
       logHash: trace.result.logHash,
+      replayArchived: true,
       eloBefore: [p.aSlot.elo, p.bSlot.elo],
       eloAfter: [newA, newB],
     });

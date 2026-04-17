@@ -47,14 +47,18 @@ export function runParamBrain(obs: Observation, params: Params): Action {
   if (obs.self.dead) return {};
 
   // 1. Carrying tokens → deliver — but greed modulates whether danger aborts it.
-  //    Low greed: back off toward opp if opp is close (don't get caught at goal).
-  //    High greed: push through regardless.
+  //    Abort only if opp is *between me and the goal*. That check is stable
+  //    tick-to-tick. Checking opp.swipeT/diveT flickers as animations cycle
+  //    and causes sub-second deliver/fight oscillation at the goal.
   if (obs.self.hasToken && obs.goal.exists && params.shipRate > 0.3) {
-    const oppClose = obs.absDx < 120;
-    const oppActiveHere = obs.opp.swipeT > 0 || obs.opp.diveT > 0;
+    const toGoal = obs.goal.x - obs.self.x;
+    const toOpp = obs.opp.x - obs.self.x;
+    const oppInPath = Math.sign(toGoal) === Math.sign(toOpp)
+      && Math.abs(toOpp) < Math.abs(toGoal);
+    const oppClose = obs.absDx < 150;
     const abortThreshold = 1 - (params.greed ?? 0.5); // low greed = early abort
-    if (oppClose && oppActiveHere && abortThreshold > 0.6) {
-      // Don't commit to the delivery; fight instead
+    if (oppInPath && oppClose && abortThreshold > 0.6) {
+      // Opp blocks the delivery corridor — fight first.
     } else {
       return navigateTo(obs, obs.goal.x, obs.goal.y);
     }

@@ -414,14 +414,13 @@ function resolveCombat(w: World): void {
 }
 
 function respawn(f: Fighter, w: World): void {
-  if (w.goal) {
-    f.x = w.goal.sx + rngRange(w.rng, -18, 18);
-    f.y = w.goal.sy;
-  } else {
-    const sp = f.id === 0 ? w.stage.spawnL : w.stage.spawnR;
-    f.x = sp.x;
-    f.y = sp.y;
-  }
+  // Always home-side. Spawning on the goal when gold is in play drops the
+  // victim on top of the carrier's delivery zone, creating an endless
+  // contest loop and robbing the defender of the chance to intercept
+  // mid-field. Home-side respawns let the carrier earn delivery.
+  const sp = f.id === 0 ? w.stage.spawnL : w.stage.spawnR;
+  f.x = sp.x;
+  f.y = sp.y;
   f.vx = 0;
   f.vy = 0;
   f.dead = false;

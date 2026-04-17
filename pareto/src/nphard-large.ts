@@ -1,10 +1,15 @@
-// Large-scale NP-hardness evidence.
+// Large-scale NP-hardness evidence — BUDGET-LEGAL edition.
 //
-// 1. Large random sweep: 200 configs × 3 seeds. Report max WR vs meta.
+// Prior versions used randomConfig/mutateConfig, which treat hallucination
+// as a free knob in [0, 100]. That produced "exploits" (e.g. 90% WR spacer
+// with h=10 and 500-point spend) that cannot survive server-side validation.
+// The legal ceiling — what a real user can actually submit — is the number
+// we care about.
+//
+// 1. Large budget-legal random sweep. Max WR of any legal config.
 //    If any single bot breaks 85%, the game is "solved" easily.
-// 2. Full 15×15 H2H with 5 seeds for statistical power. Count cycles.
-// 3. Mutation-jitter test on the best-of-sweep: small perturbations
-//    confirm/deny landscape roughness.
+// 2. Full named H2H with 5 seeds for statistical power. Count cycles.
+// 3. Mutation-jitter test on the best-of-sweep (budget-preserving).
 
 import fs from "node:fs";
 import os from "node:os";
@@ -14,7 +19,7 @@ import {
 } from "@m3t4/sim";
 import { runMatches, type MatchSpec } from "./parallel.js";
 import { scoreBatch } from "./score.js";
-import { randomConfig, mutateConfig, promoteToTrajectory } from "./generate.js";
+import { randomBudgeted, mutateBudgeted, budgetSpent, USER_BUDGET } from "./budget-util.js";
 
 const N_SWEEP = parseInt(process.argv[2] ?? "200", 10);
 const SEEDS_SWEEP = parseInt(process.argv[3] ?? "3", 10);
@@ -30,14 +35,10 @@ console.log(`- Workers: ${WORKERS}\n`);
 
 // -------------------- 1. Sweep --------------------
 
-console.log(`## 1. Large random sweep — is any bot >85% WR?\n`);
+console.log(`## 1. Large BUDGET-LEGAL random sweep — is any legal bot >85% WR?\n`);
+console.log(`(every candidate respects USER_BUDGET=${USER_BUDGET}; h is derived)\n`);
 const candidates: BrainConfig[] = [];
-for (let i = 0; i < N_SWEEP; i++) {
-  const cfg = Math.random() < 0.3
-    ? promoteToTrajectory(randomConfig(`sw-${i}`), `sw-${i}`, 0.4)
-    : randomConfig(`sw-${i}`);
-  candidates.push(cfg);
-}
+for (let i = 0; i < N_SWEEP; i++) candidates.push(randomBudgeted(`sw-${i}`));
 process.stderr.write(`[sweep] scoring...\n`);
 const sweepT0 = Date.now();
 let lastPrint = 0;
@@ -150,8 +151,10 @@ console.log(`## 3. Landscape roughness — mutation sensitivity of top bot\n`);
 const topSweepCfg = candidates.find((c) => c.id === max.id)!;
 const mutants: BrainConfig[] = [];
 for (let i = 0; i < 30; i++) {
-  mutants.push(mutateConfig(topSweepCfg, `${topSweepCfg.id}-m${i}`, 0.3, 0.15));
+  mutants.push(mutateBudgeted(topSweepCfg, `${topSweepCfg.id}-m${i}`, 0.3, 0.15));
 }
+const overbudgetMutants = mutants.filter((m) => budgetSpent(m) > USER_BUDGET + 1).length;
+if (overbudgetMutants > 0) console.error(`⚠ ${overbudgetMutants}/30 mutants are overbudget — generator bug`);
 process.stderr.write(`[mut] scoring 30 mutants of top bot...\n`);
 const mutRecs = await scoreBatch({
   candidates: mutants, references: refs, stages,
@@ -160,7 +163,8 @@ const mutRecs = await scoreBatch({
 const mutWrs = mutRecs.map((r) => r.winRate);
 const meanMut = mutWrs.reduce((s, x) => s + x, 0) / mutWrs.length;
 const stdMut = Math.sqrt(mutWrs.reduce((s, x) => s + (x - meanMut) ** 2, 0) / mutWrs.length);
-const maxMut = Math.max(...mutWrs);
+const maxMutIdx = mutWrs.indexOf(Math.max(...mutWrs));
+const maxMut = mutWrs[maxMutIdx];
 const minMut = Math.min(...mutWrs);
 console.log(`Parent (top of sweep): wr=${(max.winRate * 100).toFixed(1)}%`);
 console.log(`30 small mutations:`);
@@ -190,5 +194,7 @@ fs.writeFileSync("/tmp/nphard-large.json", JSON.stringify({
   cycles: cycles.slice(0, 30),
   globalWr: sortedIds,
   mutStd: stdMut, mutMean: meanMut, mutMax: maxMut, mutMin: minMut,
+  mutMaxId: mutants[maxMutIdx]?.id,
+  mutMaxCfg: mutants[maxMutIdx],
 }, null, 2));
 console.error(`Wrote /tmp/nphard-large.json`);

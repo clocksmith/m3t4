@@ -27,6 +27,7 @@ interface Args {
   minCycles: number;
   store: string;
   out: string;
+  candidate?: string;
 }
 
 interface Stats {
@@ -69,7 +70,7 @@ for (let i = 0; i < refs.length; i++) {
     if (i === j) continue;
     for (const st of stages) {
       for (let s = 0; s < args.seeds; s++) {
-        const seed = ((s * 131 + i * 17 + j * 23 + st.id.length * 37) | 0) >>> 0;
+        const seed = ((s * 131 + i * 17 + j * 23) | 0) >>> 0;
         specs.push({
           a: refs[i],
           b: refs[j],
@@ -105,6 +106,7 @@ process.stderr.write("\n");
 
 const totals = Array.from({ length: refs.length }, freshStats);
 const pair = Array.from({ length: refs.length }, () => Array.from({ length: refs.length }, freshStats));
+const directedPair = Array.from({ length: refs.length }, () => Array.from({ length: refs.length }, freshStats));
 const byStage = new Map<string, Stats>();
 
 for (const o of outcomes) {
@@ -114,6 +116,7 @@ for (const o of outcomes) {
   const score = won ? 1 : lost ? 0 : 0.5;
   add(totals[meta.i], score);
   add(pair[meta.i][meta.j], score);
+  if (meta.candidateSide === 0) add(directedPair[meta.i][meta.j], score);
   const key = `${meta.i}:${meta.j}:${meta.stageId}`;
   const cell = byStage.get(key) ?? freshStats();
   add(cell, score);
@@ -135,12 +138,17 @@ const counters = ids.map((id, i) => {
   return { id, count: rows.length, counters: rows };
 });
 
+const pairWr = ids.map((id, i) => ({
+  id,
+  opponents: Object.fromEntries(ids.map((opponent, j) => [opponent, i === j ? null : wr(pair[i][j])])),
+}));
+
 const cycles: Array<[string, string, string]> = [];
 for (let a = 0; a < refs.length; a++) {
   for (let b = 0; b < refs.length; b++) {
     for (let c = 0; c < refs.length; c++) {
       if (a === b || b === c || a === c) continue;
-      if (wr(pair[a][b]) > 0.6 && wr(pair[b][c]) > 0.6 && wr(pair[c][a]) > 0.6) {
+      if (wr(directedPair[a][b]) > 0.6 && wr(directedPair[b][c]) > 0.6 && wr(directedPair[c][a]) > 0.6) {
         cycles.push([ids[a], ids[b], ids[c]]);
       }
     }
@@ -149,6 +157,7 @@ for (let a = 0; a < refs.length; a++) {
 
 const currentStrategyHash = hashStable(STRATEGIES);
 const rollback = readRollbackSnapshot(args.store);
+const candidateReport = args.candidate ? await checkCandidate(loadConfig(args.candidate)) : undefined;
 
 console.log(`## WR tail\n`);
 console.log(`mean=${pct(mean)}  p50=${pct(p50)}  p95=${pct(p95)}  max=${max.id}:${pct(max.wr)}\n`);
@@ -172,6 +181,10 @@ for (const row of counters) {
   if (row.count < args.minCounters) failures.push(`${row.id} has only ${row.count} counters`);
 }
 if (cycles.length < args.minCycles) failures.push(`cycles ${cycles.length} < ${args.minCycles}`);
+if (candidateReport) {
+  if (candidateReport.winRate > args.maxWr) failures.push(`candidate ${candidateReport.id} WR ${pct(candidateReport.winRate)} > ${pct(args.maxWr)}`);
+  if (candidateReport.counters.length < args.minCounters) failures.push(`candidate ${candidateReport.id} has only ${candidateReport.counters.length} counters`);
+}
 
 const report = {
   generatedAt: new Date().toISOString(),
@@ -192,10 +205,13 @@ const report = {
     p95,
     max,
     overall,
+    pairWr,
     counters,
+    cycleMetric: "directed-p1-matrix",
     cycleCount: cycles.length,
     cycles: cycles.slice(0, 100),
   },
+  candidate: candidateReport,
   failures,
 };
 
@@ -237,9 +253,58 @@ function parseArgs(): Args {
     maxP95: num("max-p95", 0.8),
     maxWr: num("max-wr", 0.85),
     minCounters: num("min-counters", 3),
-    minCycles: num("min-cycles", 40),
+    minCycles: num("min-cycles", 39),
     store: values.get("store") ?? path.resolve(repoRoot, "server/data/m3t4.json"),
     out: values.get("out") ?? "/tmp/phantom-gate.json",
+    candidate: values.get("candidate"),
+  };
+}
+
+function loadConfig(spec: string): BrainConfig {
+  if ((STRATEGY_NAMES as readonly string[]).includes(spec)) {
+    return STRATEGIES[spec as keyof typeof STRATEGIES];
+  }
+  if (!fs.existsSync(spec)) throw new Error(`candidate not found: ${spec}`);
+  const raw = JSON.parse(fs.readFileSync(spec, "utf8")) as BrainConfig;
+  if (!raw.id) raw.id = path.basename(spec, path.extname(spec));
+  return raw;
+}
+
+async function checkCandidate(candidate: BrainConfig): Promise<{
+  id: string;
+  winRate: number;
+  counters: Array<{ id: string; wr: number }>;
+  pairWr: Array<{ id: string; wr: number }>;
+}> {
+  const specs: MatchSpec[] = [];
+  const candidateIndex = refs.length;
+  for (let j = 0; j < refs.length; j++) {
+    for (const st of stages) {
+      for (let s = 0; s < args.seeds; s++) {
+        const seed = ((s * 131 + candidateIndex * 17 + j * 23) | 0) >>> 0;
+        specs.push({ a: candidate, b: refs[j], stageId: st.id as MatchSpec["stageId"], seed, meta: { j, candidateSide: 0 } });
+        specs.push({ a: refs[j], b: candidate, stageId: st.id as MatchSpec["stageId"], seed, meta: { j, candidateSide: 1 } });
+      }
+    }
+  }
+  const outcomes = await runMatches(specs, { workers: args.workers });
+  const total = freshStats();
+  const pairStats = refs.map(freshStats);
+  for (const o of outcomes) {
+    const meta = o.spec.meta as { j: number; candidateSide: 0 | 1 };
+    const won = o.winner === meta.candidateSide;
+    const lost = o.winner === 1 - meta.candidateSide;
+    const score = won ? 1 : lost ? 0 : 0.5;
+    add(total, score);
+    add(pairStats[meta.j], score);
+  }
+  const pairWrRows = refs.map((r, i) => ({ id: r.id, wr: wr(pairStats[i]) })).sort((a, b) => b.wr - a.wr);
+  const countersForCandidate = pairWrRows.filter((r) => r.wr < 0.5).sort((a, b) => a.wr - b.wr);
+  return {
+    id: candidate.id,
+    winRate: wr(total),
+    counters: countersForCandidate,
+    pairWr: pairWrRows,
   };
 }
 

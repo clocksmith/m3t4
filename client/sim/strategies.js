@@ -56,9 +56,12 @@ export const STRATEGIES = {
     disruptor: {
         id: "disruptor",
         attributes: {
-            burnRate: 0.7, moat: 50, shipRate: 0.6, foresight: 0.05,
-            pivotSpeed: 0.5, leverage: -0.7, networking: 0.3, hallucination: 10,
-            spite: -0.3, greed: 0.4, pacing: 0.4, cunning: 0.3,
+            burnRate: 0.8078011283201723, moat: 47.987622765985044,
+            shipRate: 0.5569477823316895, foresight: 0.08605310278346567,
+            pivotSpeed: 0.2800457215910702, leverage: -0.6140981321512707,
+            networking: 0.5286224612934147, hallucination: 4.994374118169511,
+            spite: -0.08549967855271828, greed: 0.35712889418455684,
+            pacing: 0.42786659937719135, cunning: 0.33290232325414926,
         },
     },
     operator: {

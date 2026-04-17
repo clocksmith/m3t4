@@ -10,11 +10,14 @@ import path from "node:path";
 const ROSTER_PATH = process.argv[2] ?? "/tmp/new-roster-fixed.json";
 const STRATEGIES_PATH = path.resolve(process.cwd(), "sim/src/strategies.ts");
 
-const NAMES = [
+// The default name list. Callers can override via a `_names` field in
+// the roster JSON — useful when remapping which evolved config gets
+// which persona label.
+const DEFAULT_NAMES = [
   "standby", "blitz", "incumbent", "pivot",
   "thesis", "disruptor", "operator", "oracle",
   "shipper", "moonshot", "regulatory", "founder",
-  "acolyte", "cassandra", "troll", "acquirer",
+  "acolyte", "unicorn", "troll", "acquirer",
 ];
 
 interface RosterJSON {
@@ -25,10 +28,13 @@ interface RosterJSON {
     internalWr: number;
     counters: number;
     vsOldMeta: number;
+    origIdx?: number;
   }>;
+  _names?: string[];
 }
 
 const data: RosterJSON = JSON.parse(fs.readFileSync(ROSTER_PATH, "utf8"));
+const NAMES = data._names ?? DEFAULT_NAMES;
 if (data.roster.length < NAMES.length) {
   console.error(`Roster has ${data.roster.length} configs, need ${NAMES.length}`);
   process.exit(1);

@@ -19,14 +19,14 @@ export const STRATEGY_NAMES = [
   "regulatory",
   "founder",
   "acolyte",
-  "cassandra",
+  "unicorn",
   "troll",
   "acquirer",
 ] as const;
 export type StrategyName = (typeof STRATEGY_NAMES)[number];
 
 export const STRATEGIES: Record<StrategyName, BrainConfig> = {
-  // evolved id=r0 spent=252 counters=1 internalWr=71.8% vsOldMeta=64.9%
+  // evolved id=standby spent=252 counters=1 internalWr=71.8% vsOldMeta=64.9%
   standby: {
     id: "standby",
     attributes: {
@@ -35,25 +35,25 @@ export const STRATEGIES: Record<StrategyName, BrainConfig> = {
       spite: 0.1413, greed: 0.0735, pacing: 0.1217, cunning: 0.3854,
     },
   },
-  // evolved id=r1 spent=360 counters=12 internalWr=32.3% vsOldMeta=60.1%
+  // evolved id=blitz spent=360 counters=9 internalWr=45.8% vsOldMeta=62.2%
   blitz: {
     id: "blitz",
     attributes: {
-      burnRate: 0.2183, moat: 88.3338, shipRate: 0.4819, foresight: 0.0058,
-      pivotSpeed: 0.2846, leverage: -0.2219, networking: 0.2594, hallucination: 0,
-      spite: 0.1385, greed: 0.4515, pacing: 0.4888, cunning: 0.1397,
+      burnRate: 0.5702, moat: 57.3195, shipRate: 0.4067, foresight: 0.0457,
+      pivotSpeed: 0.174, leverage: -0.3925, networking: 0.1309, hallucination: 0,
+      spite: 0.1186, greed: 0.411, pacing: 0.3197, cunning: 0.3506,
     },
   },
-  // evolved id=r2 spent=282 counters=5 internalWr=53.7% vsOldMeta=66.3%
+  // evolved id=incumbent spent=358 counters=11 internalWr=32.8% vsOldMeta=62.8%
   incumbent: {
     id: "incumbent",
     attributes: {
-      burnRate: 0.19, moat: 147, shipRate: 0.32, foresight: 0.0058,
-      pivotSpeed: 0.1376, leverage: -0.9608, networking: 0.14, hallucination: 0,
-      spite: 0.1413, greed: 0.5599, pacing: 0.0601, cunning: 0.3122,
+      burnRate: 0.3446, moat: 154.8401, shipRate: 0.3784, foresight: 0.0281,
+      pivotSpeed: 0.2853, leverage: -0.9608, networking: 0.1574, hallucination: 0,
+      spite: 0.1413, greed: 0.4526, pacing: 0.3358, cunning: 0.4105,
     },
   },
-  // evolved id=r3 spent=356 counters=9 internalWr=38.2% vsOldMeta=57.3%
+  // evolved id=pivot spent=356 counters=9 internalWr=38.2% vsOldMeta=57.3%
   pivot: {
     id: "pivot",
     attributes: {
@@ -62,16 +62,16 @@ export const STRATEGIES: Record<StrategyName, BrainConfig> = {
       spite: 0.0339, greed: 0.41, pacing: 0.1872, cunning: 0.4162,
     },
   },
-  // evolved id=r4 spent=360 counters=9 internalWr=45.8% vsOldMeta=62.2%
+  // evolved id=thesis spent=254 counters=3 internalWr=67.3% vsOldMeta=66.0%
   thesis: {
     id: "thesis",
     attributes: {
-      burnRate: 0.5702, moat: 57.3195, shipRate: 0.4067, foresight: 0.0457,
-      pivotSpeed: 0.174, leverage: -0.3925, networking: 0.1309, hallucination: 0,
-      spite: 0.1186, greed: 0.411, pacing: 0.3197, cunning: 0.3506,
+      burnRate: 0.4286, moat: 75.1079, shipRate: 0.32, foresight: 0,
+      pivotSpeed: 0, leverage: -1, networking: 0.278, hallucination: 0,
+      spite: 0.0949, greed: 0.0735, pacing: 0.1139, cunning: 0.5298,
     },
   },
-  // evolved id=r5 spent=227 counters=2 internalWr=65.9% vsOldMeta=61.8%
+  // evolved id=disruptor spent=227 counters=2 internalWr=65.9% vsOldMeta=61.8%
   disruptor: {
     id: "disruptor",
     attributes: {
@@ -80,7 +80,7 @@ export const STRATEGIES: Record<StrategyName, BrainConfig> = {
       spite: 0.0949, greed: 0.0735, pacing: 0, cunning: 0.5298,
     },
   },
-  // evolved id=r6 spent=316 counters=9 internalWr=44.7% vsOldMeta=66.0%
+  // evolved id=operator spent=316 counters=9 internalWr=44.7% vsOldMeta=66.0%
   operator: {
     id: "operator",
     attributes: {
@@ -89,34 +89,34 @@ export const STRATEGIES: Record<StrategyName, BrainConfig> = {
       spite: 0.0314, greed: 0.4379, pacing: 0.0551, cunning: 0.3122,
     },
   },
-  // evolved id=r7 spent=243 counters=4 internalWr=49.1% vsOldMeta=64.2%
+  // evolved id=oracle spent=261 counters=5 internalWr=55.0% vsOldMeta=62.5%
   oracle: {
     id: "oracle",
     attributes: {
-      burnRate: 0.1494, moat: 78.8671, shipRate: 0.3918, foresight: 0.0058,
-      pivotSpeed: 0.4716, leverage: -1, networking: 0.129, hallucination: 0,
-      spite: 0.1413, greed: 0.0732, pacing: 0, cunning: 0.354,
+      burnRate: 0.1494, moat: 142.9835, shipRate: 0.4711, foresight: 0.0058,
+      pivotSpeed: 0, leverage: -1, networking: 0.3645, hallucination: 0,
+      spite: 0.1413, greed: 0.0735, pacing: 0.17, cunning: 0.3122,
     },
   },
-  // evolved id=r8 spent=254 counters=3 internalWr=67.3% vsOldMeta=66.0%
+  // evolved id=shipper spent=282 counters=5 internalWr=53.7% vsOldMeta=66.3%
   shipper: {
     id: "shipper",
     attributes: {
-      burnRate: 0.4286, moat: 75.1079, shipRate: 0.32, foresight: 0,
-      pivotSpeed: 0, leverage: -1, networking: 0.278, hallucination: 0,
-      spite: 0.0949, greed: 0.0735, pacing: 0.1139, cunning: 0.5298,
+      burnRate: 0.19, moat: 147, shipRate: 0.32, foresight: 0.0058,
+      pivotSpeed: 0.1376, leverage: -0.9608, networking: 0.14, hallucination: 0,
+      spite: 0.1413, greed: 0.5599, pacing: 0.0601, cunning: 0.3122,
     },
   },
-  // evolved id=r9 spent=358 counters=11 internalWr=32.8% vsOldMeta=62.8%
+  // evolved id=moonshot spent=360 counters=12 internalWr=32.3% vsOldMeta=60.1%
   moonshot: {
     id: "moonshot",
     attributes: {
-      burnRate: 0.3446, moat: 154.8401, shipRate: 0.3784, foresight: 0.0281,
-      pivotSpeed: 0.2853, leverage: -0.9608, networking: 0.1574, hallucination: 0,
-      spite: 0.1413, greed: 0.4526, pacing: 0.3358, cunning: 0.4105,
+      burnRate: 0.2183, moat: 88.3338, shipRate: 0.4819, foresight: 0.0058,
+      pivotSpeed: 0.2846, leverage: -0.2219, networking: 0.2594, hallucination: 0,
+      spite: 0.1385, greed: 0.4515, pacing: 0.4888, cunning: 0.1397,
     },
   },
-  // evolved id=r10 spent=248 counters=7 internalWr=51.6% vsOldMeta=65.6%
+  // evolved id=regulatory spent=248 counters=7 internalWr=51.6% vsOldMeta=65.6%
   regulatory: {
     id: "regulatory",
     attributes: {
@@ -125,7 +125,7 @@ export const STRATEGIES: Record<StrategyName, BrainConfig> = {
       spite: 0.1413, greed: 0.0439, pacing: 0.0889, cunning: 0.3122,
     },
   },
-  // evolved id=r11 spent=335 counters=14 internalWr=24.8% vsOldMeta=53.5%
+  // evolved id=founder spent=335 counters=14 internalWr=24.8% vsOldMeta=53.5%
   founder: {
     id: "founder",
     attributes: {
@@ -134,25 +134,25 @@ export const STRATEGIES: Record<StrategyName, BrainConfig> = {
       spite: 0.1199, greed: 0.5104, pacing: 0.21, cunning: 0.4244,
     },
   },
-  // evolved id=r12 spent=261 counters=5 internalWr=55.0% vsOldMeta=62.5%
+  // evolved id=acolyte spent=345 counters=10 internalWr=35.8% vsOldMeta=62.2%
   acolyte: {
     id: "acolyte",
     attributes: {
-      burnRate: 0.1494, moat: 142.9835, shipRate: 0.4711, foresight: 0.0058,
-      pivotSpeed: 0, leverage: -1, networking: 0.3645, hallucination: 0,
-      spite: 0.1413, greed: 0.0735, pacing: 0.17, cunning: 0.3122,
+      burnRate: 0.3984, moat: 90, shipRate: 0.4231, foresight: 0.0281,
+      pivotSpeed: 0.2898, leverage: -1, networking: 0.3237, hallucination: 0,
+      spite: 0.0314, greed: 0.4379, pacing: 0.3358, cunning: 0.3129,
     },
   },
-  // evolved id=r13 spent=208 counters=1 internalWr=73.7% vsOldMeta=64.2%
-  cassandra: {
-    id: "cassandra",
+  // evolved id=unicorn spent=208 counters=1 internalWr=73.7% vsOldMeta=64.2%
+  unicorn: {
+    id: "unicorn",
     attributes: {
       burnRate: 0.1494, moat: 44.2485, shipRate: 0.3298, foresight: 0,
       pivotSpeed: 0.2655, leverage: -1, networking: 0.14, hallucination: 0,
       spite: 0.1413, greed: 0.0735, pacing: 0.1051, cunning: 0.302,
     },
   },
-  // evolved id=r14 spent=298 counters=4 internalWr=57.7% vsOldMeta=61.8%
+  // evolved id=troll spent=298 counters=4 internalWr=57.7% vsOldMeta=61.8%
   troll: {
     id: "troll",
     attributes: {
@@ -161,23 +161,24 @@ export const STRATEGIES: Record<StrategyName, BrainConfig> = {
       spite: 0.1413, greed: 0.4, pacing: 0.17, cunning: 0.3122,
     },
   },
-  // evolved id=r15 spent=345 counters=10 internalWr=35.8% vsOldMeta=62.2%
+  // evolved id=acquirer spent=243 counters=4 internalWr=49.1% vsOldMeta=64.2%
   acquirer: {
     id: "acquirer",
     attributes: {
-      burnRate: 0.3984, moat: 90, shipRate: 0.4231, foresight: 0.0281,
-      pivotSpeed: 0.2898, leverage: -1, networking: 0.3237, hallucination: 0,
-      spite: 0.0314, greed: 0.4379, pacing: 0.3358, cunning: 0.3129,
+      burnRate: 0.1494, moat: 78.8671, shipRate: 0.3918, foresight: 0.0058,
+      pivotSpeed: 0.4716, leverage: -1, networking: 0.129, hallucination: 0,
+      spite: 0.1413, greed: 0.0732, pacing: 0, cunning: 0.354,
     },
   },
 };
+
+// A few illustrative DSL-based trajectories users can copy & tweak.
 export const SAMPLE_TRAJECTORIES: BrainConfig[] = [
   {
     id: "ramp-aggro",
     attributes: {
       burnRate: "0.3 + 0.6 * clamp(tick / 1200, 0, 1)",
-      moat: 90,
-      shipRate: 0.9,
+      moat: 90, shipRate: 0.9,
       pivotSpeed: "self.hp < 40 ? 0.9 : 0.2",
     },
   },
@@ -186,8 +187,7 @@ export const SAMPLE_TRAJECTORIES: BrainConfig[] = [
     attributes: {
       burnRate: 0.6,
       moat: "90 + 30 * sin(tick * 0.013)",
-      shipRate: 0.9,
-      pivotSpeed: 0.6,
+      shipRate: 0.9, pivotSpeed: 0.6,
     },
   },
   {

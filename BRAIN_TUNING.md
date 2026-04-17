@@ -105,12 +105,21 @@ The mechanism ensures higher hallucination is strictly worse. No
 
 ## 2. Named strategies (design intent)
 
-The 16 named strategies are **seed meta**. They're designed to cover the
-attribute space, not to be optimal. Their role:
-- Provide a reference opponent pool for scoring
-- Validate that attribute interactions work
-- Give the satire its characters
-- Ensure the meta has cycles (rock-paper-scissors structure)
+The 16 named strategies are the **evolved roster**. They were derived by
+budget-aware diversity-first evolution (`pareto/src/roster-evolve.ts`)
+against a co-evolving opponent pool, not hand-authored archetypes. Each
+persona label was chosen after the fact to match the dominant attribute
+behavior of the evolved config. `founder` is intentionally the weakest
+(~25% internal WR) as a running joke.
+
+On the bug-fixed sim, this roster achieves:
+- Max preset WR: 73.4% (`unicorn`)
+- Best legal-config WR from 50-gen directed search: 75.3% (gap: 1.9%)
+- Random-search ceiling: 38.9%
+- 16×16 H2H cycles: 273
+
+The archetype descriptions below capture the observed behavior of each
+evolved config, not an imposed identity.
 
 | Name | Archetype | Designed to test |
 |---|---|---|
@@ -127,7 +136,7 @@ attribute space, not to be optimal. Their role:
 | `regulatory` | patient counter      | max cunning + pivotSpeed, waits to punish |
 | `founder`    | wall specialist      | max networking + negative leverage |
 | `acolyte`    | controlled chaos counter | h=10 bot; counters denial-spacer budget champs |
-| `cassandra`  | DSL trajectory-first | the only pure-DSL bot, all ramps/triggers |
+| `unicorn`    | rare + dominant      | minimalist low-spend top-WR — wins by not engaging |
 | `troll`      | bait-from-below      | only positive-leverage bot (0.8) |
 | `acquirer`   | close-pressure mobility | low moat + high networking |
 

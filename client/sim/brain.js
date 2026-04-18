@@ -1,5 +1,18 @@
 // Parameterized brain: single function that reads the per-tick params and
 // emits an Action. The DSL layer produces those params from the raw config.
+// Manual behavior version. Bump this integer every time the trait-to-
+// policy mapping changes — new thresholds, new decision branches,
+// modified heuristics, etc. Physics-only changes (constants in
+// constants.ts) don't need a bump; those flow through REPLAY_CONSTANTS_HASH
+// already. This version is folded into the constants hash so replays
+// and exploit archives bind to a specific brain edition.
+//
+// Bump reasoning should be recorded in CHANGELOG.md or commit message.
+// v1: initial frozen baseline at commit 0708505 (v5-annealed roster).
+//     Passive-foil physics + memory-driven brain (counter-punish,
+//     anti-air, dwell defense, stuck detector, post-kill momentum,
+//     target-aware climb, wall-flank, foresight preemption, etc.).
+export const BEHAVIOR_VERSION = 1;
 const REACH_UP = 260;
 function climbStep(obs, targetY) {
     // Pick the platform within jump range that's closest to the target y.

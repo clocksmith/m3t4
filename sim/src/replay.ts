@@ -4,6 +4,7 @@ import {
   GRAVITY, HIT_FREEZE, JUMP_BUFFER_TIME, POINTS_TO_WIN_ROUND,
   ROUNDS_TO_WIN_MATCH, ROUND_TIMER_MAX_TICKS, STATS, STEP, WALL_SLIDE,
 } from "./constants.js";
+import { BEHAVIOR_VERSION } from "./brain.js";
 import type { BrainConfig, Character, MatchResult, Stage } from "./types.js";
 import { createStepperWorld, stepWorld, unpackAction } from "./simulate.js";
 
@@ -25,10 +26,13 @@ export const REPLAY_CONSTANTS_HASH = (() => {
     POINTS_TO_WIN_ROUND, ROUNDS_TO_WIN_MATCH, GOAL_TIMER_START,
     ROUND_TIMER_MAX_TICKS, GOAL_DWELL_S,
     ARENA_L, ARENA_R, ARENA_T, FLOOR_Y,
+    // BEHAVIOR_VERSION is folded in so trait-to-policy changes invalidate
+    // the constants hash in the same way physics changes do. Without
+    // this, a ranked artifact stamped under brain v1 would silently
+    // decode under brain v2 and produce different semantics even though
+    // the physics constants match.
+    BEHAVIOR_VERSION,
   };
-  // Recursive canonical stringify so nested STATS fields (swipeTime, sword,
-  // etc.) ARE part of the hash. Earlier JSON.stringify(table, keysArray)
-  // misused the array as a key filter and silently dropped inner keys.
   return replayHashJson(table);
 })();
 

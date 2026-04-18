@@ -245,6 +245,18 @@ test("REPLAY_CONSTANTS_HASH is stable across identical calls and versions", asyn
   assert.equal(mod.REPLAY_CONSTANTS_HASH, mod2.REPLAY_CONSTANTS_HASH);
 });
 
+test("REPLAY_CONSTANTS_HASH includes BEHAVIOR_VERSION", async () => {
+  // Regression: brain edits must bump the constants hash so replays
+  // made under brain v1 do not silently decode under brain v2. Simulate
+  // by hashing the constants table with two different BEHAVIOR_VERSION
+  // values and verifying they differ.
+  const { replayHashJson } = await import("../replay.js");
+  const { STEP, STATS } = await import("../constants.js");
+  const v1 = replayHashJson({ STEP, STATS, BEHAVIOR_VERSION: 1 });
+  const v2 = replayHashJson({ STEP, STATS, BEHAVIOR_VERSION: 2 });
+  assert.notEqual(v1, v2, "bumping BEHAVIOR_VERSION must change the constants hash");
+});
+
 test("REPLAY_CONSTANTS_HASH includes nested STATS fields", async () => {
   // Regression: earlier impl used JSON.stringify(table, keysArray) which
   // treats the array as a key *filter* rather than sort order, so nested

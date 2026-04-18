@@ -12,7 +12,19 @@
 //     Passive-foil physics + memory-driven brain (counter-punish,
 //     anti-air, dwell defense, stuck detector, post-kill momentum,
 //     target-aware climb, wall-flank, foresight preemption, etc.).
-export const BEHAVIOR_VERSION = 1;
+// v2: A.3 structural fix — split predicted distance (predDist/predDir)
+//     from actual physical distance (absDist/absDir). Movement and
+//     positioning still use prediction (foresight helps you be where
+//     opp will be). Hit decisions, safety gates, physical contact
+//     (danger, counter-punish gate, mutual-imminent, swing reach,
+//     safe-strike inner, post-clash recovery, stuck close check)
+//     now use actual distance — a sword strikes at real positions,
+//     not predicted ones. Target: eliminate the g24-x38 "high-foresight
+//     spacer" universal counter family by removing foresight's free
+//     amplification of physical hit decisions. Gate inventory:
+//     BRAIN_AUDIT_v1.md. The old v5-annealed roster HOF is semantically
+//     invalid under v2; re-evolve from scratch before any selection.
+export const BEHAVIOR_VERSION = 2;
 const REACH_UP = 260;
 function climbStep(obs, targetY) {
     // Pick the platform within jump range that's closest to the target y.
@@ -164,12 +176,23 @@ export function runParamBrain(obs, params) {
         const pacingMul = 1 + (params.pacing ?? 0) * 0.5 * Math.sin(obs.tick * 0.02);
         E.burnRate *= pacingMul;
     }
+    // A.3 structural fix (BEHAVIOR_VERSION 2): split predicted distance
+    // from actual physical distance. Movement/positioning may use prediction
+    // (look ahead to where opp will be); physical contact & strike safety
+    // must use actual distance, because the sword strikes at the real
+    // position — not the predicted one. See BRAIN_AUDIT_v1.md gate inventory.
     const predX = obs.opp.x + obs.opp.vx * E.foresight;
-    const dx = predX - obs.self.x;
-    const dist = Math.abs(dx);
-    const dir = Math.sign(dx) || 1;
+    const predDx = predX - obs.self.x;
+    const predDist = Math.abs(predDx);
+    const predDir = Math.sign(predDx) || 1;
+    // Actual physical distance/direction — never inherits foresight.
+    const absDist = obs.absDx;
+    const absDir = Math.sign(obs.dx) || 1;
     const oppActive = obs.opp.swipeT > 0 || obs.opp.diveT > 0;
-    const danger = oppActive && dist < 100;
+    // Danger = a physical threat. Use actual distance; foresight shouldn't
+    // let a bot "feel safe" when opp is actually right there, nor panic
+    // about opp's projected future position.
+    const danger = oppActive && absDist < 100;
     const desiredY = obs.opp.y + E.leverage * 150;
     const altitudeOff = obs.self.y - desiredY;
     let move = 0;
@@ -202,11 +225,16 @@ export function runParamBrain(obs, params) {
     // Counter-punish: opp just swung. Cunning bots close the gap so we're in
     // striking range when their swipe ends — they can't parry a recovering
     // blade. Low cunning bots can't read this and miss the window.
-    if (oppCommitted && cun > 0.5 && dist < 160 && obs.self.swipeCD <= 0) {
+    //
+    // A.3: gate threshold uses actual distance (real range to the recovering
+    // target); closing direction uses predicted (move toward where opp will
+    // be during its recovery); strike threshold uses actual (must physically
+    // connect).
+    if (oppCommitted && cun > 0.5 && absDist < 160 && obs.self.swipeCD <= 0) {
         return {
-            left: dir < 0,
-            right: dir > 0,
-            action: dist < 90,
+            left: predDir < 0,
+            right: predDir > 0,
+            action: absDist < 90,
         };
     }
     // Mutual-contact preemption: both bots approaching head-on at same Y
@@ -217,7 +245,9 @@ export function runParamBrain(obs, params) {
     // windows; the other 85% the bot commits through (now safe after the
     // passive-mutual-clash fix in simulate.ts).
     const approachSpeed = Math.abs(obs.self.vx) + Math.abs(obs.opp.vx);
-    const mutualImminent = dist < 150 &&
+    // A.3: mutual-imminent is a physical-collision setup, not a
+    // positioning decision. Use actual distance and actual direction.
+    const mutualImminent = absDist < 150 &&
         Math.abs(obs.dy) < 30 &&
         approachSpeed > 280 &&
         obs.self.swipeT <= 0 &&
@@ -228,7 +258,7 @@ export function runParamBrain(obs, params) {
         const phase = (obs.tick + obs.self.id * 37) % 120;
         if (phase < 18) {
             const flip = obs.self.id === 0 ? 1 : -1;
-            return { left: -dir * flip < 0, right: -dir * flip > 0, up: true };
+            return { left: -absDir * flip < 0, right: -absDir * flip > 0, up: true };
         }
     }
     // Wall-flank: networking specialists actively seek the far wall for an
@@ -269,20 +299,25 @@ export function runParamBrain(obs, params) {
     const ticksSinceMove = obs.tick - obs.self.lastMoveTick;
     const stuck = ticksSinceMove > 90;
     if (stuck) {
-        if (obs.self.onGround && dist < 200) {
+        // A.3: "close" test uses actual distance (real proximity); movement
+        // direction when far uses predicted (head toward where opp will be).
+        if (obs.self.onGround && absDist < 200) {
             // Mirror-image clash loop. Commit: jump toward opp (setup for dive).
-            return { left: dir < 0, right: dir > 0, up: true };
+            return { left: absDir < 0, right: absDir > 0, up: true };
         }
         if (obs.self.onGround) {
             // Platform camp with opp elsewhere. Drop through (if possible) or
-            // hop off and head toward opp's x.
-            return { left: dir < 0, right: dir > 0, down: true };
+            // hop off and head toward opp's (predicted) x.
+            return { left: predDir < 0, right: predDir > 0, down: true };
         }
         // Airborne and stuck — commit a dive if we have altitude.
         if (obs.self.y < obs.opp.y - 20)
             return { down: true, action: true };
     }
-    if (recentClash && dist < 110) {
+    // A.3: post-clash is an aftermath of physical contact. Distance gate
+    // and movement directions both use actual — foresight has no bearing
+    // on recovering from a real clash.
+    if (recentClash && absDist < 110) {
         // Post-clash: response branches on attributes so bots with different
         // profiles don't mirror each other. Per-fighter id offset desyncs
         // even identical attribute sets — without it, mirror-match bots
@@ -291,18 +326,18 @@ export function runParamBrain(obs, params) {
         const evasive = (params.pivotSpeed ?? 0) > 0.6;
         const phase = (ticksSinceClash + obs.self.id * 13) % 40;
         if (phase < 12) {
-            move = -dir; // both retreat briefly during stun
+            move = -absDir; // both retreat briefly during stun
         }
         else if (aggressive && obs.self.onGround) {
-            move = dir;
+            move = absDir;
             jump = true; // commit jump-over
         }
         else if (evasive) {
             // Retreat further + optional defensive swing. Upward slash covers
             // above; opp chasing high gets clipped.
             return {
-                left: -dir < 0,
-                right: -dir > 0,
+                left: -absDir < 0,
+                right: -absDir > 0,
                 action: (params.cunning ?? 0) > 0.5,
             };
         }
@@ -311,16 +346,17 @@ export function runParamBrain(obs, params) {
             // just lets opp reset the loop. Phase-gated jump-over breaks
             // horizontal stalemate by adding vertical axis.
             if (phase < 24) {
-                move = -dir; // extended retreat
+                move = -absDir; // extended retreat
             }
             else {
-                move = dir;
+                move = absDir;
                 jump = obs.self.onGround; // commit forward over opp
             }
         }
     }
     else if (danger && E.pivotSpeed > 0.5) {
-        move = -dir;
+        // A.3: retreat from physical threat uses actual direction.
+        move = -absDir;
         jump = obs.self.onGround || stillRising;
     }
     else if (altitudeOff > 60) {
@@ -334,20 +370,27 @@ export function runParamBrain(obs, params) {
         }
     }
     else if (altitudeOff < -80) {
+        // Descending to opp's level — use actual horizontal alignment, not
+        // predicted (predicting lateral motion while dropping vertically
+        // would make bots drift to an empty space).
         down = true;
-        if (dx > 10)
+        if (obs.dx > 10)
             move = 1;
-        else if (dx < -10)
+        else if (obs.dx < -10)
             move = -1;
     }
     else {
-        if (dist > E.moat + 15)
-            move = dir;
-        else if (dist < E.moat - 15)
-            move = -dir;
+        // A.3: moat management is spacing policy — predicted distance and
+        // direction are appropriate ("stay N ahead of where opp will be").
+        if (predDist > E.moat + 15)
+            move = predDir;
+        else if (predDist < E.moat - 15)
+            move = -predDir;
     }
+    // A.3: swing reach is a hit decision. Must use actual distance —
+    // the sword strikes at the physical position, not the predicted one.
     const swingRange = 50 + E.burnRate * 80;
-    const inSwingReach = dist < swingRange && Math.abs(obs.dy) < 80;
+    const inSwingReach = absDist < swingRange && Math.abs(obs.dy) < 80;
     const oppOpen = obs.opp.stun > 0 || (!oppActive && Math.abs(obs.opp.vx) < 120);
     // Anti-air priority: opp diving at us. Upward slash catches their arc.
     const oppDivingAtUs = obs.opp.diveT > 0 && obs.absDx < 110 && obs.opp.y < obs.self.y + 20;
@@ -361,7 +404,10 @@ export function runParamBrain(obs, params) {
     // (`cun` declared earlier for the counter-punish check.)
     const reckless = cun < 0.3;
     const patient = cun > 0.7;
-    let safeStrike = inSwingReach && (!oppActive || dist < 70);
+    // A.3: safe-strike inner gate is a hit safety check. Must use actual
+    // distance — prediction would let foresight bots convince themselves
+    // they're safely outside reach when opp is physically adjacent.
+    let safeStrike = inSwingReach && (!oppActive || absDist < 70);
     if (patient)
         safeStrike = safeStrike && oppOpen;
     else if (reckless)

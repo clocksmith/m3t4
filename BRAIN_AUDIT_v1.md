@@ -1,142 +1,225 @@
-# Brain-mapping audit — BEHAVIOR_VERSION 1
+# Brain-mapping audit - BEHAVIOR_VERSION 1
 
-Diagnostic output from Phase 4a adversarial attack against v5-annealed
-roster (baseline commit `0708505`). Attack run: `pareto/exploits/v5a/`.
+Diagnostic output from Phase 4a adversarial attack against the v5-annealed
+roster. The intended baseline is commit `0708505`; the archive currently lives
+at `pareto/exploits/v5a/`.
+
+Important provenance note: the v5a archive was generated before provenance was
+fixed, so individual records have mixed `baselineCommit` values even though the
+`simConstantsHash` is consistent for the run. Treat this document as the
+decision record for the measurements, not as proof that the old archive metadata
+is clean. Future attack runs must pass `--baseline-commit 0708505` when measuring
+this baseline, or otherwise resolve the baseline once at process start.
+
+No behavior mapping patch has been applied in this audit. `BEHAVIOR_VERSION`
+remains `1`.
 
 ## Evidence summary
 
+Final reporter output from the completed 16-target archive:
+
 | signal | value | read |
-|---|---|---|
-| mean validatedWr (15 of 16 targets) | 78.2% | roster broadly exploitable |
+|---|---:|---|
+| mean validatedWr vs worst counter | 76.9% | roster broadly exploitable |
 | max validatedWr | 93.3% (unicorn) | single preset fully defeated |
-| g24-family share | 11 / 15 | one dominant basin |
-| transferable (>55%) | 12 / 15 | counter rolls most of the roster |
-| cheap counters (top3 < 250) | 14 / 15 | user can find cheaply |
-| defenders (valWR < 65%) | 3 / 15 (regulatory 57%, intern 68%, operator 68%, founder 45%) | narrow defender set |
+| g24-family share | 11 / 16 | dominant basin, but below the reporter's 70% branch |
+| transferable counters (>55% mean) | 12 / 16 | counters roll most of the roster |
+| stable exploit basins (frag < 4%) | 7 / 16 | several basins are not one-off noise |
+| cheap counters (top3 < 250) | 15 / 16 | search does not require exotic budget geometry |
+| strict over-budget counters | 6 / 16 | rounded pressure and strict legality must be reported separately |
+| true defenders (valWR < 60%) | 3 / 16 | regulatory 56.7%, acquirer 56.7%, founder 45.0% |
+
+Intern and operator are partial resistors, not defenders under the strict
+predicate: both land at 68.3% validatedWr against their worst archived counter.
+
+## Final reporter branch
+
+The report decision tree currently falls through to:
+
+> Multiple exploit families exist with broad transferability. Hardening =
+> adversarial-fitness in selection.
+
+That branch is technically correct because g24-family is 11/16, just below the
+70% threshold. It should not be read as "no brain mapping issue." The full data
+still shows broad pressure from a high-foresight spacer basin:
+
+- Exact or near-exact g24-family counters are the worst archived counters for
+  11 of 16 targets.
+- Transferability is high for 12 of 16 targets.
+- The non-g24 worst counters are concentrated in the targets that already resist
+  or partially resist the spacer family.
+- The three true defenders are regulatory, acquirer, and founder; they lean more
+  on delivery/alternative policy than on the same spacing/prediction loop.
+
+The brain-path recommendation below is therefore a hypothesis about knob
+orthogonality, not a claim that the archive is purely one exploit family.
 
 ## g24-x38 attribute profile
 
+The original ceiling winner is a high-foresight, moderate-everything-else
+spacer. Representative profile:
+
 | knob | native | UI | role |
-|---|---|---|---|
-| foresight | 0.190 | 76 | peak — drives prediction |
-| leverage | 0.151 | 58 | slightly below opp |
+|---|---:|---:|---|
+| foresight | 0.190 | 76 | dominant planning axis |
+| leverage | 0.151 | 58 | slightly upward engagement |
 | burnRate | 0.520 | 52 | moderate swing reach |
-| greed | 0.501 | 50 | will commit to delivery |
-| shipRate | 0.336 | 34 | not ship-focused |
+| greed | 0.501 | 50 | still commits to delivery |
+| shipRate | 0.336 | 34 | not primarily ship-focused |
 | pacing | 0.167 | 17 | steady |
-| cunning | 0.095 | 10 | near-zero — reflexive |
+| cunning | 0.095 | 10 | mostly reflexive |
 | moat | 0.000 | 0 | stays close |
 | networking | 0.039 | 4 | ignores walls |
 | spite | -0.028 | 49 | neutral |
 
-Spent 360/360. **Foresight is the dominant axis.**
+Spent 360/360 in the ceiling run. The important signal is not exact allocation;
+it is that foresight behaves like a tactical multiplier rather than a local
+style knob.
 
-## Where g24 exploits `brain.ts`
+`hallucination` is not one of the 11 user-budgeted knobs; it is derived from
+overspend. Exact legal counters should have hallucination 0. Some archived
+near-g24 rows show UI-vector `spent=362` and hallucination 20 because the report
+uses rounded UI vectors; keep strict-budget and rounded-report pressure separate
+when presenting product claims.
 
-Foresight appears in only **two** places in brain code, but its effects propagate through **every** tactical decision via `dist`:
+## Where foresight propagates
+
+Foresight appears directly in only two places in `brain.ts`, but the first one
+feeds many decisions:
 
 ```ts
-// brain.ts:176
 const predX = obs.opp.x + obs.opp.vx * E.foresight;
 const dx = predX - obs.self.x;
 const dist = Math.abs(dx);
-
-// brain.ts:243
-if (mutualImminent && E.foresight > 0.08) { /* preempt hop */ }
+const dir = Math.sign(dx) || 1;
 ```
 
-`dist` — the *predicted* distance — then drives:
+`dist` is predicted distance, not physical distance. It currently influences:
 
-- danger detection (`dist < 100`)
-- counter-punish trigger (`dist < 160`)
-- mutual-imminent check (`dist < 150`)
-- stuck-detector close check (`dist < 200`)
-- post-clash mixup range (`dist < 110`)
-- moat management (`dist > moat + 15`)
-- swing reach (`dist < swingRange`)
-- safe-strike gate (`dist < 70` inner safety)
+| branch | current effect |
+|---|---|
+| danger detection | `oppActive && dist < 100` |
+| counter-punish | trigger at `dist < 160`, action at `dist < 90` |
+| mutual-imminent | preemptive hop at `dist < 150` plus foresight threshold |
+| stuck detector | close-loop break at `dist < 200` |
+| post-clash mixup | close response at `dist < 110` |
+| moat management | advance/retreat around preferred distance |
+| swing reach | `dist < swingRange` |
+| safe-strike inner gate | allows strike if opponent active and `dist < 70` |
 
-**Every positioning and swing decision uses predicted distance, not actual distance.** With g24's `foresight = 0.190` and opp at typical `vx = 300–600 px/s`, predicted distance can differ from actual distance by **60–150 px** — more than a full sword reach.
-
-Meanwhile the sword HIT at the actual physical moment happens at the actual position. So high-foresight bots:
-- pre-position themselves to where opp *will be*
-- arrive just as opp arrives → swing lands
-- retreat before they actually need to (danger detected one foresight-interval early)
-- enter/exit swing range based on predicted crossing
+With high foresight and normal opponent speeds, predicted distance can differ
+from physical distance by more than a sword reach. That means one knob improves
+positioning, retreat timing, preemption, swing initiation, and safety checks at
+once.
 
 ## Structural gap
 
-**Foresight has no opportunity cost in the mapping.** It:
-- costs 76 UI points (31% of 360 budget — material but not prohibitive)
-- linearly improves prediction accuracy
-- automatically improves 8 downstream tactical gates
-- requires no tradeoff in another axis
+Foresight has insufficient opportunity cost in the mapping:
 
-A user maxing foresight pays 31% of budget and gets a free-everywhere prediction system. Every other knob has clear local effect (burnRate → swing reach, moat → preferred distance, etc.) — foresight multiplies across the whole policy.
+- It costs a material but affordable amount of the 360-point budget.
+- It linearly improves prediction.
+- It silently improves multiple downstream tactical gates.
+- It does not force a corresponding delay, commitment cost, or loss of physical
+  timing accuracy.
 
-This matches the audit question from the plan: *"Does high foresight create too much free anti-head-on behavior?"* Yes.
-
-## Why regulatory and moonshot resist
-
-Both are delivery-forward configs. Their strategic axis is orthogonal to foresight:
-- Regulatory (shipRate 0.47, pacing 0.17): focuses on getting to goal, not positioning vs opp
-- Moonshot (shipRate 0.47, pacing 0.43, leverage 0.5): high-pacing delivery rush
-
-High-foresight bots predict opp position to land swings. Delivery-committed bots don't care where opp is going to be — they're committing to the goal path. Foresight doesn't help against a bot that isn't trying to fence with you.
-
-This is consistent with the pattern: **the defender template is delivery-rush**, not spacing/prediction.
+Other knobs are more local: burnRate expands strike reach, moat changes preferred
+range, shipRate changes delivery priority, networking changes wall use, and so
+on. Foresight currently multiplies too much of the policy.
 
 ## Intervention options
 
-Two paths, one per cycle.
+Two paths remain valid. Pick one per cycle.
 
-### Brain-path (A) — structural fix
+### Brain-path A - structural mapping fix
 
-Make foresight have an opportunity cost inside the mapping. Three candidate shapes:
+Goal: foresight should help planning and pre-positioning, but should not make
+physical hit decisions more accurate for free.
 
-**A.1 — Saturating curve (below-identity)**:
+Candidate shapes:
+
+**A.1 - Saturating curve**
+
+Cap effective foresight below the native value. This is easy to tune but less
+legible because it changes the value curve without clarifying which behaviors
+foresight owns.
+
+**A.2 - Foresight-action tradeoff**
+
+High foresight delays swing initiation. This is semantically clean but larger:
+it needs additional state and timing tests.
+
+**A.3 - Prediction only in planning, physical distance in hit decisions**
+
+Split predicted and physical distance:
+
 ```ts
-const MAX_FS = 0.25;
-const x = Math.max(0, Math.min(1, E.foresight / MAX_FS));
-const effFs = MAX_FS * (x / (1 + 1.5 * x));
-const predX = obs.opp.x + obs.opp.vx * effFs;
+const predX = obs.opp.x + obs.opp.vx * E.foresight;
+const predDx = predX - obs.self.x;
+const predDist = Math.abs(predDx);
+const predDir = Math.sign(predDx) || 1;
+
+const absDx = obs.opp.x - obs.self.x;
+const absDist = Math.abs(absDx);
+const absDir = Math.sign(absDx) || 1;
 ```
-At native 0.25, effFs = 0.10 (60% nerf at max). Linear nerf across range.
 
-**A.2 — Foresight-action tradeoff**:
-High foresight delays swing initiation. Structural: better read, slower commit. Requires adding a small state field (`swingPending` ticks) — more complex but truer to the "real tradeoff" principle.
+Then wire each gate deliberately. This is still the recommended brain path, but
+it is not just "replace `dist` in 3-4 lines." The gate inventory below is part of
+the intervention spec.
 
-**A.3 — Prediction-only in positioning, not in hit-decisions**:
-Split `dist` into `predDist` (for moat/positioning) and `absDist` (for swingRange/danger). Foresight keeps helping strategy, doesn't help the actual strike check. Cleanest surgical fix.
+### Roster-path B - adversarial reference hardening
 
-All three preserve knob legibility. A.3 is the most structurally honest — it disentangles "planning" from "striking."
+Keep brain v1 fixed. Add g24-x38 and close variants to the selector opponent
+pool, reselect the roster, install it, and rerun Phase 4. This is cheaper and
+keeps old behavior evidence valid, but it treats the exploit basin as something
+to survive rather than fixing the user-facing knob contract.
 
-### Roster-path (B) — add g24 as adversarial reference
+## A.3 gate inventory
 
-Keep brain as-is. Inject g24-x38 + 3 budget-transfer variants into the selector's opponent pool for the next roster-evolve run. Force selection to include configs that beat this family. Delivery-forward configs (regulatory/moonshot template) should become more represented.
+Policy rule: movement may use predicted position; physical contact and strike
+safety must use actual distance. Direction follows the same split: predicted
+direction for navigation, actual direction for contact-resolution branches.
 
-No brain change, no BEHAVIOR_VERSION bump. Prior evidence stays valid; new roster measured against same brain v1.
+| gate or branch | A.3 distance source | A.3 direction source | rationale |
+|---|---|---|---|
+| altitude navigation toward desired Y | predicted | predicted | movement can aim at where the opponent will be |
+| moat management | predicted | predicted | moat is spacing policy, not hit validation |
+| delivery navigation | unchanged | unchanged | already targets token/goal, not opponent prediction |
+| danger detection | actual for first patch | actual | defensive dodge should react to physical threat; add a hybrid later only if pivot defense collapses |
+| counter-punish trigger | actual | predicted for closing, actual for strike threshold | recovery punish should require real range; movement can still close toward projected position |
+| mutual-imminent preempt hop | actual | actual | this is a physical collision/clash setup, not long-horizon positioning |
+| stuck close-loop test | actual | actual when close; predicted when heading toward distant opponent | loop detection should be based on real proximity |
+| post-clash close mixup | actual | actual | clash aftermath is a physical contact state |
+| dive from air | unchanged actual | unchanged | already uses `obs.absDx` |
+| swing reach | actual | n/a | hit decision must not inherit prediction reach |
+| safe-strike inner gate | actual | n/a | safety check must be physical |
+| anti-air / behind / vertical advantage | unchanged actual | unchanged | already uses `obs.absDx` and physical geometry |
+| freeSwing composition | unchanged actual | n/a | depends on the actual sub-gates above |
+
+Measurement checks required after any A.3 patch:
+
+1. Bump `BEHAVIOR_VERSION` to `2`; verify `REPLAY_CONSTANTS_HASH` changes.
+2. Run `npm test` and a full build.
+3. Spot-check fixed-seed g24-family matchups against current v5-annealed only
+   for qualitative regression; do not treat old roster conclusions as final.
+4. Re-run roster evolution from scratch under brain v2.
+5. Run Phase 4 attack against the newly installed brain-v2 roster.
+6. Compare v5a brain-v1 archive to the new archive: did the g24-family collapse,
+   and did pressure move to another knob family?
 
 ## Recommended decision
 
-**Brain-path A.3 (split dist).** Reasons:
+Brain-path A.3 remains the current recommendation because the exploit evidence
+points at a user-facing mapping defect: foresight is not just a style knob; it
+acts as a broad tactical amplifier.
 
-1. The diagnosis clearly shows a brain-mapping defect — foresight is universal without tradeoff. Fixing it structurally is cleaner than roster-level whack-a-mole.
-2. A.3 is a surgical change (3–4 lines), preserves all other tactical branches, doesn't silently change other knobs' effective value.
-3. Post-fix, the exact same Phase 4 attacker will reveal whether the g24 basin disappears (good) or migrates to a different axis (informative — then we know what's really strong).
-4. Failed-path cost is cheap: bump BEHAVIOR_VERSION to 2, run roster-evolve + attack cycle (~1 day), if worse we can revert.
+This is not approval for blind automation. The next intervention should be an
+explicit one-cycle decision:
 
-If Brain-path loses, we commit to Roster-path on the next cycle.
+- If choosing brain path: implement the A.3 inventory above, bump
+  `BEHAVIOR_VERSION` to `2`, rebuild, rerun selection from scratch, then rerun
+  Phase 4.
+- If choosing roster path: keep brain v1 fixed, inject g24 and close variants as
+  adversarial references, reselect/install, then rerun Phase 4.
 
-## Next-cycle checklist
-
-1. Let current attack finish (acquirer still in flight).
-2. Regenerate full 16-target exploit report.
-3. Apply Brain-path A.3 patch to brain.ts.
-4. Bump `BEHAVIOR_VERSION = 2` with changelog comment.
-5. Rebuild + sync + full test suite.
-6. Re-run roster-evolve from scratch under brain v2.
-7. Run Phase 4 attack against the new installed roster.
-8. Compare exploit archives v5a (brain v1) vs v5b or next version (brain v2): did g24-family collapse? What replaced it?
-
-One intervention per cycle. No roster changes AND brain changes in the same commit.
+Do not combine roster hardening and brain mapping changes in the same cycle.

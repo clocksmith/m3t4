@@ -32,7 +32,8 @@ interface Candidate {
   id: string;
   config: BrainConfig;
   wr: number; // external WR vs reference pool
-  signature?: Signature;
+  externalSignature?: Signature; // row vs named meta (for strength cross-checks)
+  internalSignature?: Signature; // row vs OTHER pool members (for counter/cycle metrics)
 }
 
 interface RosterEval {
@@ -93,15 +94,19 @@ function attributeCoverage(roster: Candidate[]): number {
 }
 
 function signatureDiversity(roster: Candidate[]): { mean: number; min: number; clonePairs: number } {
+  // Uses externalSignature (row vs named meta) — the playstyle fingerprint
+  // against a fixed reference pool. Internal signatures would measure
+  // "how do they play against each other" which is already captured in
+  // counterCoverage/cycleDensity; we want a different diversity signal.
   let sum = 0;
   let min = Infinity;
   let clonePairs = 0;
   let n = 0;
   for (let i = 0; i < roster.length; i++) {
-    if (!roster[i].signature) continue;
+    if (!roster[i].externalSignature) continue;
     for (let j = i + 1; j < roster.length; j++) {
-      if (!roster[j].signature) continue;
-      const d = signatureDistance(roster[i].signature!, roster[j].signature!);
+      if (!roster[j].externalSignature) continue;
+      const d = signatureDistance(roster[i].externalSignature!, roster[j].externalSignature!);
       sum += d;
       if (d < min) min = d;
       if (d < 0.10) clonePairs++;
@@ -111,11 +116,14 @@ function signatureDiversity(roster: Candidate[]): { mean: number; min: number; c
   return n > 0 ? { mean: sum / n, min, clonePairs } : { mean: 0, min: 0, clonePairs: 0 };
 }
 
-// Uses signatures to infer internal H2H. Symmetric-WR: A's row[B] minus
-// 0.5 gives A's advantage over B; reverse is 1 - B's row[A].
+// Uses the pool-vs-pool internal signatures. internalSignature.row[b.id]
+// is a's WR vs b from actual simulation. Previously this used the
+// (named-meta) external signatures which never contained candidate IDs,
+// so internalWr always returned 0.5 — counterCoverage/cycleDensity/
+// dominancePenalty were inert.
 function internalWr(a: Candidate, b: Candidate): number {
-  const fromA = a.signature?.row.get(b.id);
-  const fromB = b.signature?.row.get(a.id);
+  const fromA = a.internalSignature?.row.get(b.id);
+  const fromB = b.internalSignature?.row.get(a.id);
   if (fromA !== undefined && fromB !== undefined) return (fromA + (1 - fromB)) / 2;
   if (fromA !== undefined) return fromA;
   if (fromB !== undefined) return 1 - fromB;
@@ -254,29 +262,51 @@ async function main(): Promise<void> {
 
   const bankPath = args.bank ?? "/tmp/new-roster-v4.json";
   const iterations = parseInt(args.iterations ?? "2000", 10);
+  const poolCap = parseInt(args.poolCap ?? "80", 10);
   const outPath = args.out ?? "/tmp/roster-selected.json";
   const raw = JSON.parse(fs.readFileSync(bankPath, "utf8"));
   const source: Array<{ id?: string; config?: BrainConfig; attributes?: BrainConfig["attributes"]; internalWr?: number; wr?: number }> =
     raw.roster ?? raw.hof ?? raw;
 
-  const pool: Candidate[] = source.map((r, i) => ({
+  let pool: Candidate[] = source.map((r, i) => ({
     id: r.id ?? `c${i}`,
     config: r.config ?? { id: r.id ?? `c${i}`, attributes: r.attributes! },
     wr: r.internalWr ?? r.wr ?? 0.5,
   }));
 
-  console.error(`Pool: ${pool.length} candidates. Computing signatures...`);
+  // Truncate to top-K by external WR if pool exceeds cap — otherwise the
+  // N×N internal H2H becomes prohibitively expensive (N=200 → 240k matches).
+  if (pool.length > poolCap) {
+    const before = pool.length;
+    pool = pool.slice().sort((a, b) => b.wr - a.wr).slice(0, poolCap);
+    console.error(`Pool truncated ${before} → ${pool.length} by external WR (--poolCap ${poolCap})`);
+  }
+
   const refs = STRATEGY_NAMES.map((n) => STRATEGIES[n as keyof typeof STRATEGIES]);
   const stages = Object.values(STAGES);
-  const signatures = await computeSignatures({
+  const workers = os.cpus().length;
+
+  console.error(`Pool: ${pool.length} candidates. Computing external signatures (vs named meta)...`);
+  const extSigs = await computeSignatures({
     candidates: pool.map((p) => p.config),
     references: refs,
     stages,
     seedsPerMatchup: 2,
-    workers: os.cpus().length,
+    workers,
   });
-  const sigMap = new Map(signatures.map((s) => [s.id, s]));
-  for (const p of pool) p.signature = sigMap.get(p.config.id);
+  const extMap = new Map(extSigs.map((s) => [s.id, s]));
+  for (const p of pool) p.externalSignature = extMap.get(p.config.id);
+
+  console.error(`Computing internal signatures (pool × pool, ~${pool.length * (pool.length - 1)} matchups)...`);
+  const intSigs = await computeSignatures({
+    candidates: pool.map((p) => p.config),
+    references: pool.map((p) => p.config),
+    stages,
+    seedsPerMatchup: 2,
+    workers,
+  });
+  const intMap = new Map(intSigs.map((s) => [s.id, s]));
+  for (const p of pool) p.internalSignature = intMap.get(p.config.id);
 
   console.error(`Starting annealing: ${iterations} iterations over ${pool.length}C16 subsets...`);
   const result = selectAnnealing(pool, iterations, null);

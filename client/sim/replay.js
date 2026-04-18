@@ -18,13 +18,10 @@ export const REPLAY_CONSTANTS_HASH = (() => {
         ROUND_TIMER_MAX_TICKS, GOAL_DWELL_S,
         ARENA_L, ARENA_R, ARENA_T, FLOOR_Y,
     };
-    let h = 2166136261 >>> 0;
-    const json = JSON.stringify(table, Object.keys(table).sort());
-    for (let i = 0; i < json.length; i++) {
-        h ^= json.charCodeAt(i) & 0xff;
-        h = Math.imul(h, 16777619) >>> 0;
-    }
-    return h.toString(16).padStart(8, "0");
+    // Recursive canonical stringify so nested STATS fields (swipeTime, sword,
+    // etc.) ARE part of the hash. Earlier JSON.stringify(table, keysArray)
+    // misused the array as a key filter and silently dropped inner keys.
+    return replayHashJson(table);
 })();
 const BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 export function replayBytesToBase64(bytes) {
@@ -194,6 +191,14 @@ export function verifyReplayIntegrityV1(artifact) {
     const p1 = replayHashJson(artifact.players[1]);
     if (p0 !== i.playerHashes[0] || p1 !== i.playerHashes[1]) {
         throw new Error(`replay playerHashes mismatch: [${p0},${p1}] !== [${i.playerHashes.join(",")}]`);
+    }
+    // Recompute actionLog hash from the stored bytes. Previous version only
+    // compared two stored fields, so a tampered byte-stream that also had
+    // its .hash updated would pass integrity (only failing later at decode).
+    const actionBytes = replayBase64ToBytes(artifact.actions.bytesBase64);
+    const recomputedActionHash = replayHashBytes(actionBytes);
+    if (recomputedActionHash !== artifact.actions.hash) {
+        throw new Error(`replay actions.hash mismatch vs bytes: ${recomputedActionHash} !== ${artifact.actions.hash}`);
     }
     if (i.actionLogHash !== artifact.actions.hash) {
         throw new Error(`replay integrity.actionLogHash !== actions.hash`);

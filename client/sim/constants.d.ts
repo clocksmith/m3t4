@@ -25,7 +25,7 @@ export declare const STATS: {
     readonly sword: 52;
     readonly bodyW: 26;
     readonly bodyH: 52;
-    readonly swipeTime: 0.1;
+    readonly swipeTime: 0.12;
     readonly diveSpeed: 900;
     readonly diveDrift: 0.78;
     readonly hitPush: 380;

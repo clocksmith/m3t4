@@ -81,11 +81,12 @@ export function runParamBrain(obs, params) {
         const mustCommit = goalTimerUrgent || losing;
         const atGoal = Math.hypot(obs.self.x - obs.goal.x, obs.self.y - obs.goal.y) < 30;
         if (atGoal && oppClose) {
-            // Dwell defense: stay in the goal circle and face opp with foil.
-            const dxOpp = obs.opp.x - obs.self.x;
+            // Dwell defense: stay PUT inside the 32px scoring radius. The sim
+            // auto-faces opp when no horizontal input (simulate.ts:289), so
+            // pressing left/right toward opp is both unnecessary AND harmful —
+            // it can push the body out of the dwell circle and reset progress.
+            // Only swing when opp is actually in reach.
             return {
-                left: dxOpp < -5,
-                right: dxOpp > 5,
                 action: obs.absDx < 80 && obs.self.swipeCD <= 0,
             };
         }

@@ -14,6 +14,15 @@ import { CONFIG } from "./config.js";
 import { FileStableStore, stablePublic } from "./stable.js";
 import { Firehose } from "./firehose.js";
 import { handleClaimHandle, handleSubmit } from "./submit.js";
+import {
+  handleCommunityAttest,
+  handleDuelAccept,
+  handleDuelChallenge,
+  handleDuelRendezvous,
+  handleDuelSubmit,
+  handleSpectateTuple,
+  handleVerifyReplay,
+} from "./verify.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -73,6 +82,33 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && url.pathname === "/internal/elo-decay") {
     const count = await store.applyDecay();
     return json(res, 200, { ok: true, decayed: count });
+  }
+
+  // --- ARCHITECTURE.md surface ---
+
+  if (req.method === "POST" && url.pathname === "/api/verify/replay") {
+    return handleVerifyReplay(req, res);
+  }
+  if (req.method === "GET" && url.pathname.startsWith("/api/spectate/tuple/")) {
+    const matchId = url.pathname.slice("/api/spectate/tuple/".length);
+    if (!matchId) return json(res, 400, { error: "matchId required" });
+    return handleSpectateTuple(store, matchId, req, res);
+  }
+  if (req.method === "POST" && url.pathname === "/api/duel/challenge") {
+    return handleDuelChallenge(req, res);
+  }
+  if (req.method === "POST" && url.pathname === "/api/duel/accept") {
+    return handleDuelAccept(req, res);
+  }
+  if (req.method === "POST" && url.pathname === "/api/duel/submit") {
+    return handleDuelSubmit(store, req, res);
+  }
+  if (req.method === "GET" && url.pathname.startsWith("/api/duel/rendezvous/")) {
+    const challengeId = url.pathname.slice("/api/duel/rendezvous/".length);
+    return handleDuelRendezvous(challengeId, req, res);
+  }
+  if (req.method === "POST" && url.pathname === "/api/community/attest") {
+    return handleCommunityAttest(store, req, res);
   }
 
   json(res, 404, { error: "not found" });

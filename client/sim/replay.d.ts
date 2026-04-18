@@ -115,6 +115,7 @@ export interface CreateReplayArtifactV1Options {
 }
 export interface ReplayDecodeOptionsV1 {
     verifyExpected?: boolean;
+    allowConstantsMismatch?: boolean;
 }
 export interface ReplayDecodeResultV1 {
     result: ReplayResultV1;

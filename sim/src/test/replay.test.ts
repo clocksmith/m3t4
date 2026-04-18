@@ -8,6 +8,7 @@ import {
   replayArtifactToResultV1,
   replayArtifactWarningsV1,
   replayHashJson,
+  REPLAY_CONSTANTS_HASH,
   stableReplayJson,
   verifyReplayIntegrityV1,
 } from "../replay.js";
@@ -118,6 +119,8 @@ test("ranked replay artifacts require a sim binding", () => {
     result,
   }), /sourceHash or sim\.constantsHash/);
 
+  // Use the REAL current hash — previously "test-constants" passed because
+  // the check was presence-only. Now ranked decode value-matches the hash.
   const artifact = createReplayArtifactV1({
     matchId: "ranked-bound",
     mode: "ranked",
@@ -130,9 +133,36 @@ test("ranked replay artifacts require a sim binding", () => {
     ],
     actionLog: result.frameLog,
     result,
-    sim: { constantsHash: "test-constants" },
+    sim: { constantsHash: REPLAY_CONSTANTS_HASH },
   });
   assert.equal(replayArtifactToResultV1(artifact).result.logHash, result.logHash);
+});
+
+test("ranked replay decode rejects mismatched constantsHash (cross-build drift)", () => {
+  const stage = STAGES.datacenter;
+  const result = simulate({
+    stage, brainA: STRATEGIES.blitz, brainB: STRATEGIES.shipper,
+    seed: 1, maxTicks: 120,
+  });
+  const artifact = createReplayArtifactV1({
+    matchId: "ranked-drift",
+    mode: "ranked", stage, seed: 1, chars: DEFAULT_CHARS,
+    players: [
+      { kind: "brain", tier: "system", label: "blitz", config: STRATEGIES.blitz },
+      { kind: "brain", tier: "system", label: "shipper", config: STRATEGIES.shipper },
+    ],
+    actionLog: result.frameLog, result,
+    sim: { constantsHash: "00000000" }, // obviously wrong
+  });
+  // Without opt-in: rejects on physics drift.
+  assert.throws(
+    () => replayArtifactToResultV1(artifact),
+    /constantsHash mismatch/,
+  );
+  // With explicit opt-in: decodes anyway (archival inspection path).
+  assert.doesNotThrow(
+    () => replayArtifactToResultV1(artifact, { allowConstantsMismatch: true }),
+  );
 });
 
 test("stableReplayJson rejects implicit binary views", () => {

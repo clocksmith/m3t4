@@ -41,9 +41,11 @@ function defaultStorePath(): string {
 }
 
 function printUsage(): never {
-  console.error("Usage: node server/dist/inspect-replay.js <matchId> [--store path] [--json] [--no-verify] [--redact]");
-  console.error("  --no-verify    skip decode/replay (still runs integrity check)");
-  console.error("  --redact       omit players[i].config from --json output (safe to share)");
+  console.error("Usage: node server/dist/inspect-replay.js <matchId> [--store path] [--json] [--no-verify] [--redact] [--allow-constants-mismatch]");
+  console.error("  --no-verify                  skip decode/replay (still runs integrity check)");
+  console.error("  --redact                     omit players[i].config from --json output (safe to share)");
+  console.error("  --allow-constants-mismatch   decode ranked artifacts whose constantsHash disagrees with the");
+  console.error("                               current build (archival inspection; results are NOT faithful)");
   process.exit(2);
 }
 
@@ -177,7 +179,9 @@ if (args["no-verify"]) {
   verifyError = "skipped: integrity failed";
 } else {
   try {
-    verified = replayArtifactToResultV1(artifact);
+    verified = replayArtifactToResultV1(artifact, {
+      allowConstantsMismatch: !!args["allow-constants-mismatch"],
+    });
   } catch (err) {
     verifyError = err instanceof Error ? err.message : String(err);
   }

@@ -228,6 +228,7 @@ export function replayArtifactToResultV1(artifact, opts = {}) {
     if (!isReplayArtifactV1(artifact))
         throw new Error("not a replay artifact v1");
     assertReplaySimInfo(artifact.match.mode, artifact.sim);
+    assertConstantsHashMatch(artifact.match.mode, artifact.sim, !!opts.allowConstantsMismatch);
     verifyReplayIntegrityV1(artifact);
     const bytes = decodeReplayActions(artifact.actions);
     const world = createStepperWorld({
@@ -334,6 +335,11 @@ function verifyReplayResult(expected, actual) {
         throw new Error(`replay finalRounds mismatch: ${actual.finalRounds.join(",")} !== ${expected.finalRounds.join(",")}`);
     }
 }
+// Structural checks that always fire (presence + ruleset + stepHz +
+// ranked-requires-binding). Value-match against current build's
+// REPLAY_CONSTANTS_HASH is NOT done here — that's a decode-time
+// concern, because test/archival code may legitimately construct
+// artifacts with "wrong" hashes to exercise rejection paths.
 function assertReplaySimInfo(mode, sim) {
     if (sim.packageName !== "@m3t4/sim") {
         throw new Error(`unsupported replay packageName: ${sim.packageName}`);
@@ -347,6 +353,21 @@ function assertReplaySimInfo(mode, sim) {
     if (mode === "ranked" && !sim.sourceHash && !sim.constantsHash) {
         throw new Error("ranked replay artifacts require sim.sourceHash or sim.constantsHash");
     }
+}
+// Decode-time only: ranked artifacts stamped with a constantsHash that
+// disagrees with the current build indicate cross-build physics drift.
+// Decoding anyway produces results that don't faithfully reflect the
+// original match. Require explicit opt-in for archival inspection.
+function assertConstantsHashMatch(mode, sim, allowConstantsMismatch) {
+    if (mode !== "ranked")
+        return;
+    if (!sim.constantsHash)
+        return;
+    if (sim.constantsHash === REPLAY_CONSTANTS_HASH)
+        return;
+    if (allowConstantsMismatch)
+        return;
+    throw new Error(`ranked replay constantsHash mismatch: artifact=${sim.constantsHash} current=${REPLAY_CONSTANTS_HASH} (physics diverged; pass allowConstantsMismatch for archival inspection)`);
 }
 function base64Value(ch) {
     if (ch === "=")

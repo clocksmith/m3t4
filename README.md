@@ -31,6 +31,22 @@ The success test is whether a determined-but-bounded user search can
 meaningfully out-play the curated meta. If they can, the knobs or the
 roster have a structural gap — not a tuning error.
 
+### Terms
+
+- **meta**: the set of strategies that actually works against strong
+  opposition.
+- **self-play**: evolving candidates against the current roster and
+  Hall of Fame so the roster learns from its own counters.
+- **exploit**: a legal config or family that beats too much of the
+  roster for one simple reason.
+
+m3t4 maintains its meta with an adversarial loop: evolve a diverse
+roster, attack it with legal search, archive the counters, then change
+exactly one thing when a universal exploit appears. Sometimes the fix
+is roster selection; sometimes it is the trait-to-brain mapping. The
+goal is not to eliminate counters, but to make counters specific,
+costly, and understandable.
+
 ## Packages
 
 ```

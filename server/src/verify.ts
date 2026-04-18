@@ -364,34 +364,334 @@ export async function handleDuelSubmit(
   return json(res, 200, { ok: true, matchId: t.matchId, trust });
 }
 
-// GET /api/duel/rendezvous/:challengeId
+// ---------------------------- WebRTC rendezvous ----------------------------
 //
-// Scaffold: poll-based rendezvous. Real implementation should use WebRTC
-// SDP exchange — peers POST SDP offers/answers to the server, the other
-// peer polls this endpoint. Full implementation deferred.
-export async function handleDuelRendezvous(
-  _challengeId: string, _req: http.IncomingMessage, res: http.ServerResponse,
+// Peers use the server as a minimal signaling relay: each peer posts its
+// SDP offer/answer and ICE candidates keyed by matchId + role. The other
+// peer polls for the counterpart. Once the WebRTC data channel is open,
+// the server is out of the match. If WebRTC setup fails, peers can fall
+// back to posting action bytes via the same signal channel, but that's
+// slower and not the primary path.
+//
+// State is in-memory for this scaffold. Production should use a short-
+// TTL KV (Redis) since signaling exchanges are small and ephemeral.
+
+type SdpRole = "offer" | "answer";
+
+interface SignalSlot {
+  matchId: string;
+  offer?: { sdp: string; fromPlayerId: string; postedAt: string };
+  answer?: { sdp: string; fromPlayerId: string; postedAt: string };
+  iceCandidates: Array<{ fromPlayerId: string; candidate: any; postedAt: string }>;
+  createdAt: string;
+}
+
+const signalSlots = new Map<string, SignalSlot>();
+const SIGNAL_TTL_MS = 10 * 60 * 1000; // 10 min, matches token expiry
+
+function ensureSignalSlot(matchId: string): SignalSlot {
+  const existing = signalSlots.get(matchId);
+  if (existing) return existing;
+  const slot: SignalSlot = {
+    matchId,
+    iceCandidates: [],
+    createdAt: new Date().toISOString(),
+  };
+  signalSlots.set(matchId, slot);
+  return slot;
+}
+
+function sweepSignalSlots(): void {
+  const cutoff = Date.now() - SIGNAL_TTL_MS;
+  for (const [id, slot] of signalSlots) {
+    if (new Date(slot.createdAt).getTime() < cutoff) signalSlots.delete(id);
+  }
+}
+
+// POST /api/duel/signal/:matchId
+// Body: { role: "offer" | "answer", sdp: string, fromPlayerId: string }
+//       OR { ice: RTCIceCandidate, fromPlayerId: string }
+//
+// A peer posts its SDP offer, its SDP answer, or an ICE candidate. The
+// other peer polls the GET variant to retrieve. No auth in this
+// scaffold — production should require a valid MatchToken header.
+export async function handleDuelSignalPost(
+  matchId: string, req: http.IncomingMessage, res: http.ServerResponse,
 ): Promise<void> {
-  return json(res, 501, {
-    ok: false,
-    reason: "WebRTC rendezvous not implemented in this scaffold. See ARCHITECTURE.md.",
+  if (!matchId) return json(res, 400, { ok: false, reason: "matchId required" });
+  sweepSignalSlots();
+
+  let body: any;
+  try { body = await readJsonBody(req); }
+  catch { return json(res, 400, { ok: false, reason: "invalid json body" }); }
+
+  const slot = ensureSignalSlot(matchId);
+  const { role, sdp, ice, fromPlayerId } = body ?? {};
+  if (typeof fromPlayerId !== "string" || !fromPlayerId) {
+    return json(res, 400, { ok: false, reason: "fromPlayerId required" });
+  }
+
+  // ICE candidate deposit
+  if (ice !== undefined) {
+    slot.iceCandidates.push({
+      fromPlayerId, candidate: ice,
+      postedAt: new Date().toISOString(),
+    });
+    return json(res, 200, { ok: true, count: slot.iceCandidates.length });
+  }
+
+  // SDP deposit
+  if (typeof sdp !== "string" || !sdp) {
+    return json(res, 400, { ok: false, reason: "sdp or ice required" });
+  }
+  if (role !== "offer" && role !== "answer") {
+    return json(res, 400, { ok: false, reason: "role must be offer|answer" });
+  }
+  (slot as any)[role as SdpRole] = {
+    sdp, fromPlayerId,
+    postedAt: new Date().toISOString(),
+  };
+  return json(res, 200, { ok: true, role });
+}
+
+// GET /api/duel/signal/:matchId?role=offer|answer&sinceIce=<ISO>
+//
+// Pull the counterpart SDP and any ICE candidates posted since the given
+// timestamp. Poll-based; a production impl might upgrade to SSE.
+export async function handleDuelSignalGet(
+  matchId: string, req: http.IncomingMessage, res: http.ServerResponse,
+): Promise<void> {
+  if (!matchId) return json(res, 400, { ok: false, reason: "matchId required" });
+  sweepSignalSlots();
+  const slot = signalSlots.get(matchId);
+  if (!slot) return json(res, 404, { ok: false, reason: "signal slot not found" });
+
+  const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
+  const wantRole = url.searchParams.get("role") as SdpRole | null;
+  const sinceIce = url.searchParams.get("sinceIce");
+
+  const ice = sinceIce
+    ? slot.iceCandidates.filter((c) => c.postedAt > sinceIce)
+    : slot.iceCandidates;
+
+  const sdp = wantRole ? (slot as any)[wantRole] : undefined;
+
+  return json(res, 200, { matchId, sdp, ice });
+}
+
+// ---------------------------- community verification pool ----------------------------
+//
+// Real implementation of the quorum-based exhibition-match verification
+// pool described in ARCHITECTURE.md.
+//
+// Flow:
+//   1. Worker registers (gets workerId + sharedSecret).
+//   2. Worker picks up a match (matchId known via client-side discovery).
+//   3. Worker replays the action log locally using the shipped sim.
+//   4. Worker signs (matchId + computed logHash) with its sharedSecret.
+//   5. Worker POSTs attestation to /api/community/attest.
+//   6. Server verifies signature, compares hash to the server's
+//      authoritative replay result, records agree/disagree.
+//   7. When N agreeing attestations arrive from distinct workers, the
+//      replay's trust label is upgraded to "community-verified" with
+//      the quorum fields populated.
+//
+// In-memory state for the scaffold. Production should persist worker
+// registry and attestation records.
+
+const COMMUNITY_QUORUM_TOTAL = 3; // M — minimum pool required
+const COMMUNITY_QUORUM_REQUIRED = 2; // N — agreeing workers required
+
+interface CommunityWorker {
+  workerId: string;
+  label?: string;                // optional human-readable
+  sharedSecret: string;          // HMAC key (scaffold — use public keys in prod)
+  registeredAt: string;
+  delisted?: boolean;            // repeated disagreements flag a worker
+  disagreementCount: number;
+}
+
+interface CommunityAttestation {
+  matchId: string;
+  workerId: string;
+  computedLogHash: string;
+  agreed: boolean;               // true if computedLogHash === server's
+  postedAt: string;
+}
+
+const communityWorkers = new Map<string, CommunityWorker>();
+const communityAttestations = new Map<string, CommunityAttestation[]>();
+
+function communityKey(matchId: string): string {
+  return matchId;
+}
+
+// POST /api/community/workers/register
+// Body: { label?: string }
+// Returns: { workerId, sharedSecret }
+//
+// The secret is returned ONCE at registration. Workers store it and
+// sign attestations with it. Losing the secret requires re-registration.
+export async function handleCommunityRegister(
+  req: http.IncomingMessage, res: http.ServerResponse,
+): Promise<void> {
+  let body: any;
+  try { body = await readJsonBody(req); } catch { body = {}; }
+  const workerId = crypto.randomBytes(12).toString("hex");
+  const sharedSecret = crypto.randomBytes(32).toString("hex");
+  const worker: CommunityWorker = {
+    workerId,
+    label: typeof body?.label === "string" ? body.label : undefined,
+    sharedSecret,
+    registeredAt: new Date().toISOString(),
+    disagreementCount: 0,
+  };
+  communityWorkers.set(workerId, worker);
+  return json(res, 200, { workerId, sharedSecret, quorum: {
+    total: COMMUNITY_QUORUM_TOTAL, required: COMMUNITY_QUORUM_REQUIRED,
+  } });
+}
+
+// POST /api/community/attest
+// Body: {
+//   matchId: string,
+//   workerId: string,
+//   computedLogHash: string,
+//   signature: string,   // HMAC-SHA256 over `${matchId}:${computedLogHash}`
+// }
+//
+// Server flow:
+//  - Look up worker; reject if missing or delisted.
+//  - Verify HMAC signature.
+//  - Load replay; compare computedLogHash to replay.result.logHash.
+//  - Record attestation.
+//  - If agreeing attestations from >= N distinct workers exist, upgrade
+//    replay.trust.tier to "community-verified".
+//  - On disagreement, increment worker.disagreementCount; delist at 3.
+export async function handleCommunityAttest(
+  store: StableStore, req: http.IncomingMessage, res: http.ServerResponse,
+): Promise<void> {
+  let body: any;
+  try { body = await readJsonBody(req); }
+  catch { return json(res, 400, { ok: false, reason: "invalid json body" }); }
+
+  const { matchId, workerId, computedLogHash, signature } = body ?? {};
+  if (typeof matchId !== "string" || !matchId) {
+    return json(res, 400, { ok: false, reason: "matchId required" });
+  }
+  if (typeof workerId !== "string" || !workerId) {
+    return json(res, 400, { ok: false, reason: "workerId required" });
+  }
+  if (typeof computedLogHash !== "string" || !computedLogHash) {
+    return json(res, 400, { ok: false, reason: "computedLogHash required" });
+  }
+  if (typeof signature !== "string" || !signature) {
+    return json(res, 400, { ok: false, reason: "signature required" });
+  }
+
+  const worker = communityWorkers.get(workerId);
+  if (!worker) {
+    return json(res, 403, { ok: false, reason: "worker not registered" });
+  }
+  if (worker.delisted) {
+    return json(res, 403, { ok: false, reason: "worker delisted due to repeated disagreements" });
+  }
+
+  const payload = `${matchId}:${computedLogHash}`;
+  const expectedSig = crypto.createHmac("sha256", worker.sharedSecret).update(payload).digest("hex");
+  try {
+    const sigBuf = Buffer.from(signature, "hex");
+    const expBuf = Buffer.from(expectedSig, "hex");
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      return json(res, 403, { ok: false, reason: "signature mismatch" });
+    }
+  } catch {
+    return json(res, 400, { ok: false, reason: "signature malformed" });
+  }
+
+  const replay = await store.getReplay(matchId);
+  if (!replay) return json(res, 404, { ok: false, reason: "replay not found" });
+
+  const agreed = replay.result.logHash === computedLogHash;
+  const attestation: CommunityAttestation = {
+    matchId, workerId, computedLogHash, agreed,
+    postedAt: new Date().toISOString(),
+  };
+  const key = communityKey(matchId);
+  const list = communityAttestations.get(key) ?? [];
+  // De-dup per worker: a worker can only attest once per match (overwrite).
+  const existingIdx = list.findIndex((a) => a.workerId === workerId);
+  if (existingIdx >= 0) list[existingIdx] = attestation;
+  else list.push(attestation);
+  communityAttestations.set(key, list);
+
+  if (!agreed) {
+    worker.disagreementCount += 1;
+    if (worker.disagreementCount >= 3) worker.delisted = true;
+  }
+
+  // Quorum evaluation
+  const agreeingWorkers = new Set(list.filter((a) => a.agreed).map((a) => a.workerId));
+  const totalDistinctWorkers = new Set(list.map((a) => a.workerId)).size;
+  const quorumMet =
+    agreeingWorkers.size >= COMMUNITY_QUORUM_REQUIRED &&
+    totalDistinctWorkers >= Math.min(COMMUNITY_QUORUM_TOTAL, agreeingWorkers.size + 1);
+
+  if (quorumMet && replay.trust && replay.trust.tier !== "community-verified") {
+    // Upgrade the replay's trust label. Production should atomically
+    // replace the stored artifact; this scaffold mutates in memory and
+    // writes back via the same archive API.
+    replay.trust.tier = "community-verified";
+    replay.trust.proofIssuer = "community-quorum";
+    replay.trust.proofIssuedAt = new Date().toISOString();
+    replay.trust.verification = {
+      ...(replay.trust.verification ?? {}),
+      quorum: {
+        required: COMMUNITY_QUORUM_REQUIRED,
+        total: totalDistinctWorkers,
+        agreed: agreeingWorkers.size,
+      },
+      verifierIds: Array.from(agreeingWorkers),
+      actionLogHash: replay.result.logHash,
+    };
+    await store.archiveReplay(replay);
+  }
+
+  return json(res, 200, {
+    ok: true,
+    agreed,
+    quorum: {
+      required: COMMUNITY_QUORUM_REQUIRED,
+      total: totalDistinctWorkers,
+      agreed: agreeingWorkers.size,
+      reached: quorumMet,
+    },
+    workerStatus: {
+      disagreementCount: worker.disagreementCount,
+      delisted: !!worker.delisted,
+    },
   });
 }
 
-// ---------------------------- community verification stub ----------------------------
-//
-// Community workers post attestations: "I replayed action log X and got
-// logHash Y". Server aggregates per (matchId, actionLogHash) and
-// upgrades replay label to community-verified on quorum. Full worker
-// registry + dispute escalation deferred.
-
-// POST /api/community/attest
-// Body: { matchId, actionLogHash, workerIdentity, signature }
-export async function handleCommunityAttest(
-  _store: StableStore, _req: http.IncomingMessage, res: http.ServerResponse,
+// GET /api/community/status/:matchId
+// Returns current quorum state for the match (public, no auth).
+export async function handleCommunityStatus(
+  store: StableStore, matchId: string, _req: http.IncomingMessage, res: http.ServerResponse,
 ): Promise<void> {
-  return json(res, 501, {
-    ok: false,
-    reason: "Community verification pool not implemented in this scaffold. See ARCHITECTURE.md.",
+  const replay = await store.getReplay(matchId);
+  if (!replay) return json(res, 404, { error: "replay not found" });
+  const list = communityAttestations.get(communityKey(matchId)) ?? [];
+  const agreeing = list.filter((a) => a.agreed);
+  return json(res, 200, {
+    matchId,
+    currentTier: replay.trust?.tier,
+    quorum: {
+      required: COMMUNITY_QUORUM_REQUIRED,
+      total: list.length,
+      agreed: agreeing.length,
+      reached: replay.trust?.tier === "community-verified",
+    },
+    // Don't leak worker IDs unless already in the label.
+    verifierIds: replay.trust?.verification?.verifierIds,
   });
 }

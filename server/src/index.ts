@@ -16,13 +16,24 @@ import { Firehose } from "./firehose.js";
 import { handleClaimHandle, handleSubmit } from "./submit.js";
 import {
   handleCommunityAttest,
+  handleCommunityRegister,
+  handleCommunityStatus,
   handleDuelAccept,
   handleDuelChallenge,
-  handleDuelRendezvous,
+  handleDuelSignalGet,
+  handleDuelSignalPost,
   handleDuelSubmit,
   handleSpectateTuple,
   handleVerifyReplay,
 } from "./verify.js";
+import {
+  handleAttestRegister,
+  handleAttestSubmit,
+  handleProofCommit,
+  handleProofReveal,
+  handleProofZkSubmit,
+  handleProofZkSystems,
+} from "./proof.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -103,12 +114,43 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && url.pathname === "/api/duel/submit") {
     return handleDuelSubmit(store, req, res);
   }
-  if (req.method === "GET" && url.pathname.startsWith("/api/duel/rendezvous/")) {
-    const challengeId = url.pathname.slice("/api/duel/rendezvous/".length);
-    return handleDuelRendezvous(challengeId, req, res);
+  if (req.method === "POST" && url.pathname.startsWith("/api/duel/signal/")) {
+    const matchId = url.pathname.slice("/api/duel/signal/".length);
+    return handleDuelSignalPost(matchId, req, res);
+  }
+  if (req.method === "GET" && url.pathname.startsWith("/api/duel/signal/")) {
+    const matchId = url.pathname.slice("/api/duel/signal/".length);
+    return handleDuelSignalGet(matchId, req, res);
+  }
+  if (req.method === "POST" && url.pathname === "/api/community/workers/register") {
+    return handleCommunityRegister(req, res);
   }
   if (req.method === "POST" && url.pathname === "/api/community/attest") {
     return handleCommunityAttest(store, req, res);
+  }
+  if (req.method === "GET" && url.pathname.startsWith("/api/community/status/")) {
+    const matchId = url.pathname.slice("/api/community/status/".length);
+    return handleCommunityStatus(store, matchId, req, res);
+  }
+
+  // Proof-carrying tiers (L1 commit-reveal, L2 signed-attestation stand-in, L3 envelope)
+  if (req.method === "POST" && url.pathname === "/api/proof/commit") {
+    return handleProofCommit(req, res);
+  }
+  if (req.method === "POST" && url.pathname === "/api/proof/reveal") {
+    return handleProofReveal(store, req, res);
+  }
+  if (req.method === "POST" && url.pathname === "/api/proof/attest/register") {
+    return handleAttestRegister(req, res);
+  }
+  if (req.method === "POST" && url.pathname === "/api/proof/attest/submit") {
+    return handleAttestSubmit(store, req, res);
+  }
+  if (req.method === "GET" && url.pathname === "/api/proof/zk/systems") {
+    return handleProofZkSystems(req, res);
+  }
+  if (req.method === "POST" && url.pathname === "/api/proof/zk/submit") {
+    return handleProofZkSubmit(store, req, res);
   }
 
   json(res, 404, { error: "not found" });

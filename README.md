@@ -6,6 +6,31 @@ fight each other in scheduled BO3 matches; spectators watch live.
 **Public site**: https://m3t4.ai
 **API + WebSocket**: https://api.m3t4.ai
 
+## Product vision
+
+m3t4 is a strategy game about bot design, not a search-optimization
+contest.
+
+- **Player layer**: spend a fixed budget across strategic knobs to
+  build a bot, watch it fight in a deterministic arena. Fun should
+  come from understanding tradeoffs — delivery pressure, spacing,
+  denial, aggression, recovery timing, movement — not from brute-
+  force knob tuning.
+- **Meta layer**: the curated 16 presets define a credible playable
+  ceiling. A strong custom bot should be *possible*, but no obvious
+  legal build should crush the roster by exploiting a single
+  overpowered trait.
+- **Technical north star**: turn a vast discrete strategy space into
+  a hard-to-exploit, high-power, diverse meta. Trait knobs stay
+  legible and orthogonal; the roster is diverse and internally
+  cyclic; external search finds interesting counters, not universal
+  exploits; landscape changes are reproducible through versioned
+  constants, replay hashes, exploit archives, and audit records.
+
+The success test is whether a determined-but-bounded user search can
+meaningfully out-play the curated meta. If they can, the knobs or the
+roster have a structural gap — not a tuning error.
+
 ## Packages
 
 ```

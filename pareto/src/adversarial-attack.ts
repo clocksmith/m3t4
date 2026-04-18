@@ -1,24 +1,3 @@
-// Phase 4a: cheap adversarial attacker.
-//
-// For each target in the installed roster, search for the best legal
-// counter the attacker can find on a bounded compute budget. Report:
-//   - validatedWr (canonical, separate from search estimate)
-//   - transferability vector (counter WR vs EACH other roster member)
-//   - fragilityDelta (WR change under budget-preserving UI transfers)
-//   - budgetPressure (top-K UI sums — cheap vs overdetermined counter signal)
-//
-// Search method: budget-transfer hill climb.
-//   - 20-member population seeded from diverse starts (mix of HOF pool,
-//     axis-anchors, random-simplex samples).
-//   - Each generation: mutate each parent via budgetTransfer, score the
-//     children, keep top-N of (parents ∪ children). Budget-transfer
-//     preserves total spend so we're always on the legal simplex.
-//
-// Search evaluations use 1 seed × 3 stages per candidate (noisy but cheap).
-// The reported validatedWr uses 5 seeds × 3 stages (15 matches). These
-// are stored as separate fields so future analysis can distinguish
-// "attacker optimized against this" from "this is the ground-truth WR."
-
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -37,7 +16,6 @@ import {
 } from "./simplex-sample.js";
 import { budgetTransfer } from "./budget-transfer.js";
 
-// ----- Types -----
 
 export interface TransferabilityEntry {
   rosterId: string;
@@ -52,20 +30,15 @@ export interface BudgetPressure {
 
 export const ATTACKER_VERSION = "1";
 
-// Distance from the ceiling winner (g24-x38 family) computed in three
-// independent spaces. Close in all three = almost certainly the same
-// family. Close in attribute but far in signature = different playstyle
-// despite similar knobs. Close in signature but far in attribute =
-// behavioral clone discovered from a different budget allocation.
 export interface SeedCounterDistance {
-  attributeDistance: number;        // Euclidean in normalized feature space
-  budgetShareJS: number;            // Jensen-Shannon on UI-normalized shares
-  signatureDistance: number;        // Euclidean on H2H row vectors
+  attributeDistance: number;
+  budgetShareJS: number;
+  signatureDistance: number;
 }
 
 export interface AttackResult {
-  // Provenance — every record must be replayable and attributable.
   baselineCommit: string;
+  measurementCommit: string;
   attackerVersion: string;
   simConstantsHash: string;
 
@@ -85,27 +58,23 @@ export interface AttackResult {
   fragilitySamples: number;
   budgetPressure: BudgetPressure;
 
-  // Seed-counter comparison (populated when an explicit seed config
-  // like g24-x38 is provided for family detection).
   seedCounterDistance?: SeedCounterDistance;
 
   discoveredAt: string;
 }
 
 export interface AttackConfig {
-  evalBudget?: number;    // default 10000 — total candidate evaluations
-  populationSize?: number; // default 20
+  evalBudget?: number;
+  populationSize?: number;
   workers?: number;
-  seedCheap?: number;      // default 1 (seed count for search scoring)
-  seedValidate?: number;   // default 5
+  seedCheap?: number;
+  seedValidate?: number;
   stages?: Stage[];
-  // Optional: config that seeds the starting population. Used to
-  // characterize whether attacks on different targets keep rediscovering
-  // the same family (e.g. the g24-x38 ceiling winner).
+  baselineCommit?: string;
+  measurementCommit?: string;
   seedCounter?: BrainConfig;
 }
 
-// ----- Utilities -----
 
 function hashAttributes(cfg: BrainConfig): string {
   const keys = Object.keys(cfg.attributes).sort();
@@ -118,8 +87,6 @@ function hashAttributes(cfg: BrainConfig): string {
   return h.toString(16).padStart(8, "0");
 }
 
-// Uses canonical USER_KNOBS + nativeToUI so range/knob semantics stay
-// in lockstep with the rest of the sim.
 function uiVector(cfg: BrainConfig): number[] {
   return USER_KNOBS.map((k) => {
     const v = cfg.attributes[k];
@@ -138,7 +105,6 @@ function computeBudgetPressure(counter: BrainConfig): BudgetPressure {
   };
 }
 
-// Euclidean on normalized attribute vectors.
 function attributeDistance(a: BrainConfig, b: BrainConfig): number {
   const va = featureVector(a); const vb = featureVector(b);
   let s = 0;
@@ -146,9 +112,6 @@ function attributeDistance(a: BrainConfig, b: BrainConfig): number {
   return Math.sqrt(s);
 }
 
-// Jensen-Shannon divergence on UI-space budget shares. Catches "same
-// region, different allocation" similarities that raw knob distance
-// may miss. In [0, 1] for base-2 log.
 function budgetShareJS(a: BrainConfig, b: BrainConfig): number {
   const uA = uiVector(a), uB = uiVector(b);
   const sA = uA.reduce((s, v) => s + v, 0) || 1;
@@ -164,8 +127,6 @@ function budgetShareJS(a: BrainConfig, b: BrainConfig): number {
   return 0.5 * klPM + 0.5 * klQM;
 }
 
-// Euclidean over matchup-signature rows. Both vectors are indexed by
-// rosterId; comparison uses only shared keys.
 function signatureDistance(
   a: TransferabilityEntry[], b: TransferabilityEntry[],
 ): number {
@@ -190,7 +151,14 @@ function currentGitCommit(): string {
   }
 }
 
-// ----- Diverse seed population -----
+function gitWorktreeDirty(): boolean {
+  try {
+    return execSync("git status --porcelain", { encoding: "utf8" }).trim().length > 0;
+  } catch {
+    return true;
+  }
+}
+
 
 function diverseStarts(
   count: number,
@@ -200,9 +168,6 @@ function diverseStarts(
 ): SampledCandidate[] {
   const out: SampledCandidate[] = [];
 
-  // Seed-counter family seeding: 1 original + 3 budget-transfer variants.
-  // Lets the attacker explicitly check "does this basin beat this target?"
-  // without hoping random search rediscovers it.
   if (seedCounter) {
     const seedBase: SampledCandidate = {
       config: { id: `seed-${seedCounter.id}-0`, attributes: { ...seedCounter.attributes } },
@@ -220,7 +185,6 @@ function diverseStarts(
     }
   }
 
-  // ~40% from HOF extremes (top by external WR + a few random lower-tier)
   const fromHof = Math.floor(count * 0.4);
   for (let i = 0; i < fromHof && i < hofPool.length && out.length < count; i++) {
     const pick = hofPool[i % hofPool.length];
@@ -235,12 +199,10 @@ function diverseStarts(
     });
   }
 
-  // ~30% axis-anchor + pair-anchor (guaranteed coverage of weak-axis exploits)
   const rest = count - out.length;
   const anchors = sampleInitialPopulation(Math.floor(rest * 0.6), generation);
   for (const a of anchors.slice(0, Math.floor(rest * 0.6))) out.push(a);
 
-  // Remainder: Dirichlet mix (fresh randomness)
   const kinds: SourceKind[] = ["dirichlet_sparse", "dirichlet_balanced", "dirichlet_dense"];
   while (out.length < count) {
     const kind = kinds[Math.floor(Math.random() * kinds.length)];
@@ -253,7 +215,6 @@ function diverseStarts(
   return out.slice(0, count);
 }
 
-// ----- Scoring -----
 
 async function scoreCandidatesVsTarget(
   candidates: BrainConfig[],
@@ -285,7 +246,6 @@ async function scoreCandidatesVsTarget(
   return wins.map((w, i) => played[i] > 0 ? w / played[i] : 0.5);
 }
 
-// ----- Hill-climb search -----
 
 export async function attack(
   target: BrainConfig,
@@ -311,8 +271,6 @@ export async function attack(
 
   const gensMax = Math.floor((evalBudget - popSize) / popSize);
   for (let g = 0; g < gensMax; g++) {
-    // Each parent begets one budget-transfer child. Occasional multi-transfer
-    // for bigger jumps. Pure-simplex moves keep us legal by construction.
     const children = population.map((p, i) => {
       const multi = Math.random() < 0.25 ? 3 : 1;
       return budgetTransfer(p, { multiTransfers: multi }, Math.random, `atk-g${g}-${i}`, g);
@@ -322,7 +280,6 @@ export async function attack(
     );
     evalsUsed += popSize;
 
-    // Tournament: combine and keep top popSize
     const combined = [
       ...population.map((p, i) => ({ cand: p, wr: scores[i] })),
       ...children.map((c, i) => ({ cand: c, wr: childScores[i] })),
@@ -344,7 +301,6 @@ function argmax(xs: number[]): number {
   return best;
 }
 
-// ----- Post-search analysis -----
 
 async function validateCounter(
   counter: BrainConfig,
@@ -386,9 +342,6 @@ async function computeFragility(
   workers: number,
   counterValidatedWr: number,
 ): Promise<number> {
-  // Budget-preserving UI transfers (±5-ish) — same operator family as
-  // search, so the magnitude is comparable across axes. Raw native
-  // perturbations would be meaningless (moat ±5 vs burnRate ±5).
   const mutants: BrainConfig[] = [];
   for (let i = 0; i < samples; i++) {
     const m = budgetTransfer(
@@ -400,11 +353,9 @@ async function computeFragility(
   }
   const scores = await scoreCandidatesVsTarget(mutants, target, seeds, stages, workers);
   const meanMutantWr = scores.reduce((s, x) => s + x, 0) / scores.length;
-  // Positive delta = counter degrades under mutation (basin is narrow)
   return counterValidatedWr - meanMutantWr;
 }
 
-// ----- Full attack pipeline -----
 
 export async function attackTarget(
   target: BrainConfig,
@@ -416,11 +367,11 @@ export async function attackTarget(
   const stages = config.stages ?? Object.values(STAGES);
   const workers = config.workers ?? os.cpus().length;
   const seedValidate = config.seedValidate ?? 5;
+  const measurementCommit = config.measurementCommit ?? currentGitCommit();
+  const baselineCommit = config.baselineCommit ?? measurementCommit;
 
-  // 1. Hill-climb search
   const searchResult = await attack(target, hofPool, config);
 
-  // Counter meta (approximate — we reconstruct for fragility mutation)
   const counterMeta: SampledCandidate["meta"] = {
     configHash: hashAttributes(searchResult.counter),
     uiSpendVector: uiVector(searchResult.counter),
@@ -431,32 +382,27 @@ export async function attackTarget(
     parentIds: null, mutationKind: "transfer", generation: 0,
   };
 
-  // 2. Validation WR (canonical)
   const { wr: validatedWr, matches: validationMatches } = await validateCounter(
     searchResult.counter, target, seedValidate, stages, workers,
   );
 
-  // 3. Transferability vector vs rest of roster
   const { vector, mean } = await computeTransferability(
     searchResult.counter, roster, target.id, seedValidate, stages, workers,
   );
 
-  // 4. Fragility under budget-preserving transfers
   const fragilityDelta = await computeFragility(
     searchResult.counter, counterMeta, target, 8, seedValidate, stages, workers, validatedWr,
   );
 
-  // 5. Budget pressure (geometric)
   const budgetPressure = computeBudgetPressure(searchResult.counter);
 
-  // 6. Seed-counter family distance (if seed was provided)
   let seedCounterDistance: SeedCounterDistance | undefined;
   if (config.seedCounter) {
     const attr = attributeDistance(searchResult.counter, config.seedCounter);
     const js = budgetShareJS(searchResult.counter, config.seedCounter);
     const sig = seedCounterSignature
       ? signatureDistance(vector, seedCounterSignature)
-      : Infinity; // caller didn't supply seed sig
+      : Infinity;
     seedCounterDistance = {
       attributeDistance: attr,
       budgetShareJS: js,
@@ -467,7 +413,8 @@ export async function attackTarget(
   const validationBudget = seedValidate * stages.length * 2;
 
   return {
-    baselineCommit: currentGitCommit(),
+    baselineCommit,
+    measurementCommit,
     attackerVersion: ATTACKER_VERSION,
     simConstantsHash: REPLAY_CONSTANTS_HASH,
     targetId: target.id,
@@ -489,7 +436,6 @@ export async function attackTarget(
   };
 }
 
-// ----- Archive helpers -----
 
 export function archivePath(outDir: string, targetHash: string): string {
   return path.resolve(outDir, `by-target/${targetHash}.json`);
@@ -501,9 +447,6 @@ export function readArchive(outDir: string, targetHash: string): AttackResult[] 
   try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return []; }
 }
 
-// Append/merge: new results are added to existing archive. Callers decide
-// whether to dedupe by counter hash. Never overwrite — the archive is
-// an accumulating history of attacks, not a snapshot.
 export function appendArchive(outDir: string, targetHash: string, newResult: AttackResult): AttackResult[] {
   const existing = readArchive(outDir, targetHash);
   existing.push(newResult);
@@ -513,8 +456,6 @@ export function appendArchive(outDir: string, targetHash: string, newResult: Att
   return existing;
 }
 
-// Retention: keep counters that still score >0.55 against ANY current
-// roster member. Prunes stale exploits whose target meta has drifted.
 export function pruneArchive(archive: AttackResult[], currentRosterIds: Set<string>): AttackResult[] {
   return archive.filter((r) => {
     if (!currentRosterIds.has(r.targetId)) return false;
@@ -522,7 +463,6 @@ export function pruneArchive(archive: AttackResult[], currentRosterIds: Set<stri
   });
 }
 
-// ----- CLI -----
 
 async function main(): Promise<void> {
   const args = (() => {
@@ -538,16 +478,20 @@ async function main(): Promise<void> {
     return out;
   })();
 
-  // CLI contract:
-  //   --targets  "current" | comma-separated ids       (default: "current" = all 16)
-  //   --budget   total search evaluations per target   (default: 10000)
-  //   --starts   population size / seed count          (default: 20)
-  //   --neighbors  children per generation (= starts)  (default: mirrors --starts)
-  //   --validation-seeds  canonical validation seeds   (default: 5)
-  //   --out      archive directory                     (default: pareto/exploits/v5a)
-  //   --bank     optional HOF json for diverse starts  (from roster-evolve dump)
-  //   --seed-counter  path to ceiling output JSON ({bestEver.config}) —
-  //                   inject as explicit start + used for family distance
+  const measurementCommit = currentGitCommit();
+  const baselineCommit = args["baseline-commit"] ?? measurementCommit;
+  const allowDirty = args["allow-dirty"] === "1";
+  const dirty = gitWorktreeDirty();
+  if (dirty && !allowDirty) {
+    console.error(
+      `Refusing to start attack from a dirty worktree at measurementCommit=${measurementCommit}.\n` +
+      `Commit/stash unrelated changes, or pass --allow-dirty for exploratory runs.`
+    );
+    process.exit(2);
+  }
+  if (dirty) {
+    console.error(`WARNING: attack is running from a dirty worktree at measurementCommit=${measurementCommit}`);
+  }
   const targetsArg = args.targets ?? "current";
   const evalBudget = parseInt(args.budget ?? "10000", 10);
   const starts = parseInt(args.starts ?? "20", 10);
@@ -572,9 +516,6 @@ async function main(): Promise<void> {
         return r;
       });
 
-  // Load seed-counter (e.g. the ceiling winner). Pre-compute its signature
-  // against the roster once so every per-target attack can reuse it for
-  // signatureDistance.
   let seedCounter: BrainConfig | undefined;
   let seedCounterSignature: TransferabilityEntry[] | undefined;
   if (seedCounterPath && fs.existsSync(seedCounterPath)) {
@@ -592,7 +533,8 @@ async function main(): Promise<void> {
 
   console.error(`\nAttacking ${targets.length} target(s). budget=${evalBudget}/target ` +
     `starts=${starts} neighbors=${neighbors} validation=${validationSeeds}seeds ` +
-    `out=${outDir} seedCounter=${seedCounter?.id ?? "none"}`);
+    `out=${outDir} seedCounter=${seedCounter?.id ?? "none"} ` +
+    `baselineCommit=${baselineCommit} measurementCommit=${measurementCommit}`);
 
   for (const target of targets) {
     console.error(`\n[attack] ${target.id}`);
@@ -601,6 +543,8 @@ async function main(): Promise<void> {
       populationSize: neighbors,
       seedValidate: validationSeeds,
       seedCounter,
+      baselineCommit,
+      measurementCommit,
     }, seedCounterSignature);
     const d = result.seedCounterDistance;
     console.log(`target=${result.targetId} validatedWr=${(result.validatedWr * 100).toFixed(1)}% ` +

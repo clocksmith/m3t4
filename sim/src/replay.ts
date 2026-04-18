@@ -14,10 +14,6 @@ export const REPLAY_ACTION_ENCODING = "decision-action-pairs-v1";
 export const REPLAY_FRAME_ENCODING = "trace-frames-v1";
 export const REPLAY_RULESET = "m3t4-sim-v1";
 
-// Canonical hash over every sim constant that affects match outcomes. Any
-// change to this table must bump the hash automatically so replays made by
-// one build won't silently validate against a different build. The exported
-// hash is what server/firehose binds into `sim.constantsHash`.
 export const REPLAY_CONSTANTS_HASH = (() => {
   const table = {
     STEP, GRAVITY, WALL_SLIDE, COYOTE_TIME, JUMP_BUFFER_TIME,
@@ -26,11 +22,6 @@ export const REPLAY_CONSTANTS_HASH = (() => {
     POINTS_TO_WIN_ROUND, ROUNDS_TO_WIN_MATCH, GOAL_TIMER_START,
     ROUND_TIMER_MAX_TICKS, GOAL_DWELL_S,
     ARENA_L, ARENA_R, ARENA_T, FLOOR_Y,
-    // BEHAVIOR_VERSION is folded in so trait-to-policy changes invalidate
-    // the constants hash in the same way physics changes do. Without
-    // this, a ranked artifact stamped under brain v1 would silently
-    // decode under brain v2 and produce different semantics even though
-    // the physics constants match.
     BEHAVIOR_VERSION,
   };
   return replayHashJson(table);
@@ -155,10 +146,6 @@ export interface CreateReplayArtifactV1Options {
 
 export interface ReplayDecodeOptionsV1 {
   verifyExpected?: boolean;
-  // Escape hatch for archival inspection of old ranked artifacts whose
-  // constantsHash no longer matches the current build. Decoding proceeds
-  // under the current physics; results are NOT faithful to the original
-  // match. Default false — ranked decode rejects on mismatch.
   allowConstantsMismatch?: boolean;
 }
 
@@ -207,9 +194,6 @@ export function replayBase64ToBytes(encoded: string): Uint8Array {
   return out;
 }
 
-// FNV-1a is used here only for deterministic corruption detection and cache
-// identity. It is not authenticated integrity and must not be used as an
-// anti-cheat or replay-forgery boundary.
 export function replayHashBytes(bytes: Uint8Array): string {
   let h = 2166136261 >>> 0;
   for (const b of bytes) {
@@ -320,11 +304,6 @@ export function decodeReplayActions(log: ReplayActionLogV1): Uint8Array {
   return bytes;
 }
 
-// Recomputes each integrity hash from the stored payload and throws on
-// mismatch. Catches accidental mutation or corruption after creation.
-// Not a trust boundary — FNV-1a is not collision-resistant — but closes
-// the silent-divergence gap where e.g. a mutated initial.stage would
-// quietly produce a different replay result.
 export function verifyReplayIntegrityV1(artifact: ReplayArtifactV1): void {
   const i = artifact.integrity;
   const stageHash = replayHashJson(artifact.initial.stage);
@@ -340,9 +319,6 @@ export function verifyReplayIntegrityV1(artifact: ReplayArtifactV1): void {
   if (p0 !== i.playerHashes[0] || p1 !== i.playerHashes[1]) {
     throw new Error(`replay playerHashes mismatch: [${p0},${p1}] !== [${i.playerHashes.join(",")}]`);
   }
-  // Recompute actionLog hash from the stored bytes. Previous version only
-  // compared two stored fields, so a tampered byte-stream that also had
-  // its .hash updated would pass integrity (only failing later at decode).
   const actionBytes = replayBase64ToBytes(artifact.actions.bytesBase64);
   const recomputedActionHash = replayHashBytes(actionBytes);
   if (recomputedActionHash !== artifact.actions.hash) {
@@ -496,11 +472,6 @@ function verifyReplayResult(expected: ReplayResultV1, actual: ReplayResultV1): v
   }
 }
 
-// Structural checks that always fire (presence + ruleset + stepHz +
-// ranked-requires-binding). Value-match against current build's
-// REPLAY_CONSTANTS_HASH is NOT done here — that's a decode-time
-// concern, because test/archival code may legitimately construct
-// artifacts with "wrong" hashes to exercise rejection paths.
 function assertReplaySimInfo(mode: ReplayMode, sim: ReplaySimInfoV1): void {
   if (sim.packageName !== "@m3t4/sim") {
     throw new Error(`unsupported replay packageName: ${sim.packageName}`);
@@ -516,17 +487,13 @@ function assertReplaySimInfo(mode: ReplayMode, sim: ReplaySimInfoV1): void {
   }
 }
 
-// Decode-time only: ranked artifacts stamped with a constantsHash that
-// disagrees with the current build indicate cross-build physics drift.
-// Decoding anyway produces results that don't faithfully reflect the
-// original match. Require explicit opt-in for archival inspection.
 function assertConstantsHashMatch(mode: ReplayMode, sim: ReplaySimInfoV1, allowConstantsMismatch: boolean): void {
   if (mode !== "ranked") return;
   if (!sim.constantsHash) return;
   if (sim.constantsHash === REPLAY_CONSTANTS_HASH) return;
   if (allowConstantsMismatch) return;
   throw new Error(
-    `ranked replay constantsHash mismatch: artifact=${sim.constantsHash} current=${REPLAY_CONSTANTS_HASH} (physics diverged; pass allowConstantsMismatch for archival inspection)`
+    `ranked replay constantsHash mismatch: artifact=${sim.constantsHash} current=${REPLAY_CONSTANTS_HASH} (sim/rules diverged; pass allowConstantsMismatch for archival inspection)`
   );
 }
 

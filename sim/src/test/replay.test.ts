@@ -119,8 +119,6 @@ test("ranked replay artifacts require a sim binding", () => {
     result,
   }), /sourceHash or sim\.constantsHash/);
 
-  // Use the REAL current hash — previously "test-constants" passed because
-  // the check was presence-only. Now ranked decode value-matches the hash.
   const artifact = createReplayArtifactV1({
     matchId: "ranked-bound",
     mode: "ranked",
@@ -138,7 +136,7 @@ test("ranked replay artifacts require a sim binding", () => {
   assert.equal(replayArtifactToResultV1(artifact).result.logHash, result.logHash);
 });
 
-test("ranked replay decode rejects mismatched constantsHash (cross-build drift)", () => {
+test("ranked replay decode rejects mismatched constantsHash (sim/rules drift)", () => {
   const stage = STAGES.datacenter;
   const result = simulate({
     stage, brainA: STRATEGIES.blitz, brainB: STRATEGIES.shipper,
@@ -152,14 +150,12 @@ test("ranked replay decode rejects mismatched constantsHash (cross-build drift)"
       { kind: "brain", tier: "system", label: "shipper", config: STRATEGIES.shipper },
     ],
     actionLog: result.frameLog, result,
-    sim: { constantsHash: "00000000" }, // obviously wrong
+    sim: { constantsHash: "00000000" },
   });
-  // Without opt-in: rejects on physics drift.
   assert.throws(
     () => replayArtifactToResultV1(artifact),
     /constantsHash mismatch/,
   );
-  // With explicit opt-in: decodes anyway (archival inspection path).
   assert.doesNotThrow(
     () => replayArtifactToResultV1(artifact, { allowConstantsMismatch: true }),
   );
@@ -184,22 +180,16 @@ test("replay decode detects tampered stage, players, and action bytes", () => {
     actionLog: result.frameLog, result,
   });
 
-  // Baseline decodes cleanly.
   assert.doesNotThrow(() => replayArtifactToResultV1(make()));
 
-  // Mutated stage → stageHash mismatch.
   const a1 = make();
   (a1.initial.stage as { name: string }).name = "tampered";
   assert.throws(() => replayArtifactToResultV1(a1), /stageHash mismatch/);
 
-  // Mutated player config → playerHashes mismatch.
   const a2 = make();
   (a2.players[0].config as { id: string }).id = "not-blitz";
   assert.throws(() => replayArtifactToResultV1(a2), /playerHashes mismatch/);
 
-  // Flipped action byte → caught by integrity check (recomputes from bytes).
-  // Previously only the decodeReplayActions step caught this; now both
-  // fire, integrity first.
   const a3 = make();
   const raw = Buffer.from(a3.actions.bytesBase64, "base64");
   raw[0] ^= 0x01;
@@ -246,10 +236,6 @@ test("REPLAY_CONSTANTS_HASH is stable across identical calls and versions", asyn
 });
 
 test("REPLAY_CONSTANTS_HASH includes BEHAVIOR_VERSION", async () => {
-  // Regression: brain edits must bump the constants hash so replays
-  // made under brain v1 do not silently decode under brain v2. Simulate
-  // by hashing the constants table with two different BEHAVIOR_VERSION
-  // values and verifying they differ.
   const { replayHashJson } = await import("../replay.js");
   const { STEP, STATS } = await import("../constants.js");
   const v1 = replayHashJson({ STEP, STATS, BEHAVIOR_VERSION: 1 });
@@ -258,10 +244,6 @@ test("REPLAY_CONSTANTS_HASH includes BEHAVIOR_VERSION", async () => {
 });
 
 test("REPLAY_CONSTANTS_HASH includes nested STATS fields", async () => {
-  // Regression: earlier impl used JSON.stringify(table, keysArray) which
-  // treats the array as a key *filter* rather than sort order, so nested
-  // STATS.swipeTime etc. were silently dropped. Recomputing with and
-  // without a STATS mutation must produce different hashes.
   const { replayHashJson } = await import("../replay.js");
   const { STATS, STEP, GRAVITY, GOAL_DWELL_S } = await import("../constants.js");
   const withCurrent = replayHashJson({
@@ -284,12 +266,6 @@ test("REPLAY_CONSTANTS_HASH includes nested STATS fields", async () => {
 });
 
 test("verifyReplayIntegrityV1 recomputes action hash from bytes (tamper without decode)", () => {
-  // Regression: previously the integrity check only compared two stored
-  // fields (actions.hash == integrity.actionLogHash), so if an attacker
-  // flipped action bytes AND updated both stored hashes consistently,
-  // integrity would pass and only decode would catch it. inspect-replay
-  // --no-verify would exit clean on tampered bytes. Now the integrity
-  // check hashes the actual bytes and compares.
   const stage = STAGES.datacenter;
   const result = simulate({
     stage, brainA: STRATEGIES.blitz, brainB: STRATEGIES.shipper,
@@ -303,8 +279,6 @@ test("verifyReplayIntegrityV1 recomputes action hash from bytes (tamper without 
     ],
     actionLog: result.frameLog, result,
   });
-  // Flip a byte in the base64-encoded actions. Don't update the stored
-  // hashes — simulating a naive tamper. Should fail integrity.
   const raw = Buffer.from(artifact.actions.bytesBase64, "base64");
   raw[0] ^= 0x01;
   artifact.actions.bytesBase64 = raw.toString("base64");

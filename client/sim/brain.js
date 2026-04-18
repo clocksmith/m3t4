@@ -1,37 +1,6 @@
-// Parameterized brain: single function that reads the per-tick params and
-// emits an Action. The DSL layer produces those params from the raw config.
-// Manual behavior version. Bump this integer every time the trait-to-
-// policy mapping changes — new thresholds, new decision branches,
-// modified heuristics, etc. Physics-only changes (constants in
-// constants.ts) don't need a bump; those flow through REPLAY_CONSTANTS_HASH
-// already. This version is folded into the constants hash so replays
-// and exploit archives bind to a specific brain edition.
-//
-// Bump reasoning should be recorded in CHANGELOG.md or commit message.
-// v1: initial frozen baseline at commit 0708505 (v5-annealed roster).
-//     Passive-foil physics + memory-driven brain (counter-punish,
-//     anti-air, dwell defense, stuck detector, post-kill momentum,
-//     target-aware climb, wall-flank, foresight preemption, etc.).
-// v2: A.3 structural fix — split predicted distance (predDist/predDir)
-//     from actual physical distance (absDist/absDir). Movement and
-//     positioning still use prediction (foresight helps you be where
-//     opp will be). Hit decisions, safety gates, physical contact
-//     (danger, counter-punish gate, mutual-imminent, swing reach,
-//     safe-strike inner, post-clash recovery, stuck close check)
-//     now use actual distance — a sword strikes at real positions,
-//     not predicted ones. Target: eliminate the g24-x38 "high-foresight
-//     spacer" universal counter family by removing foresight's free
-//     amplification of physical hit decisions. Gate inventory:
-//     BRAIN_AUDIT_v1.md. The old v5-annealed roster HOF is semantically
-//     invalid under v2; re-evolve from scratch before any selection.
 export const BEHAVIOR_VERSION = 2;
 const REACH_UP = 260;
 function climbStep(obs, targetY) {
-    // Pick the platform within jump range that's closest to the target y.
-    // Without a target, default to the highest in range (most ambitious).
-    // This fixes the "bot on floor jumps to highest platform instead of the
-    // ledge right under the goal" bug that left bots orbiting mid-level
-    // platforms when the actual goal was on a low side ledge.
     let best = null;
     let bestScore = Infinity;
     for (const p of obs.platforms) {
@@ -69,8 +38,6 @@ function navigateTo(obs, tx, ty) {
             const jump = (obs.self.onGround && launchZone) || stillRising;
             return { left: dir < 0, right: dir > 0, up: jump };
         }
-        // No reachable platform but target is above — jump anyway and drift
-        // toward tx. Next tick we'll likely see a platform in range.
         const dx2 = tx - obs.self.x;
         const stillRising = !obs.self.onGround && obs.self.vy < -150;
         return {
@@ -85,16 +52,10 @@ function navigateTo(obs, tx, ty) {
 export function runParamBrain(obs, params) {
     if (obs.self.dead)
         return {};
-    // Score-state: losing bots commit harder; winning bots play safer.
     const losing = obs.self.rounds < obs.opp.rounds ||
         (obs.self.rounds === obs.opp.rounds && obs.self.score < obs.opp.score);
     const winning = obs.self.rounds > obs.opp.rounds ||
         (obs.self.rounds === obs.opp.rounds && obs.self.score > obs.opp.score);
-    // 1. Carrying tokens → deliver.
-    //    Abort only if opp is *between me and the goal*. Multiple escape
-    //    hatches: (a) dwell defense if already at goal, (b) jump-over if
-    //    opp blocks path on the ground, (c) skip abort entirely if goal
-    //    timer is running out, (d) skip abort if losing (must commit).
     if (obs.self.hasToken && obs.goal.exists && params.shipRate > 0.3) {
         const toGoal = obs.goal.x - obs.self.x;
         const toOpp = obs.opp.x - obs.self.x;
@@ -102,23 +63,14 @@ export function runParamBrain(obs, params) {
             && Math.abs(toOpp) < Math.abs(toGoal);
         const oppClose = obs.absDx < 150;
         const oppDangerous = !obs.opp.dead && (obs.tick - obs.opp.lastAttackStartTick) > 5;
-        const goalTimerUrgent = obs.goal.timer < 3; // goal about to disappear
+        const goalTimerUrgent = obs.goal.timer < 3;
         const mustCommit = goalTimerUrgent || losing;
         const atGoal = Math.hypot(obs.self.x - obs.goal.x, obs.self.y - obs.goal.y) < 30;
         if (atGoal && oppClose) {
-            // Dwell defense: stay PUT inside the 32px scoring radius. The sim
-            // auto-faces opp when no horizontal input (simulate.ts:289), so
-            // pressing left/right toward opp is both unnecessary AND harmful —
-            // it can push the body out of the dwell circle and reset progress.
-            // Only swing when opp is actually in reach.
             return {
                 action: obs.absDx < 80 && obs.self.swipeCD <= 0,
             };
         }
-        // Jump-over: opp blocks the direct path on the ground. Instead of
-        // aborting, use the vertical axis — leap over opp, keep committing
-        // toward the goal. Fixes the "carrier dies en route" pattern where
-        // carriers abandon delivery at 50% completion and lose their token.
         if (oppInPath && oppClose && obs.self.onGround && obs.absDx < 120) {
             const toGoalSign = Math.sign(toGoal) || 1;
             return {
@@ -127,18 +79,12 @@ export function runParamBrain(obs, params) {
             };
         }
         const abortThreshold = 1 - (params.greed ?? 0.5);
-        if (oppInPath && oppClose && oppDangerous && abortThreshold > 0.6 && !mustCommit) {
-            // Opp blocks, we're not desperate — fight first.
-        }
-        else {
+        const shouldFightBlocker = oppInPath && oppClose && oppDangerous && abortThreshold > 0.6 && !mustCommit;
+        if (!shouldFightBlocker) {
             return navigateTo(obs, obs.goal.x, obs.goal.y);
         }
     }
-    // 1b. Spite: if opp is delivering, actively chase them regardless of normal
-    //     pivot/moat logic. Negative spite = pure denial. Positive = selfish.
     if (obs.opp.hasToken && obs.goal.exists && (params.spite ?? 0) < 0) {
-        // Spite < 0: we care more about denying than our own strategy
-        // Override: close in on the carrier aggressively
         const dxOpp = obs.opp.x - obs.self.x;
         return {
             left: dxOpp < -10,
@@ -146,7 +92,6 @@ export function runParamBrain(obs, params) {
             action: Math.abs(dxOpp) < 110 && Math.abs(obs.dy) < 80,
         };
     }
-    // 2. Anti-stall override, weakened by hallucination
     const E = { ...params };
     const overrideStr = 1 - Math.min(1, (E.hallucination || 0) / 100);
     if (!obs.self.hasToken) {
@@ -159,10 +104,6 @@ export function runParamBrain(obs, params) {
         E.burnRate += (1.0 - E.burnRate) * overrideStr;
         E.pivotSpeed += (0 - E.pivotSpeed) * overrideStr;
     }
-    // Score-state adjustments: losing bots push harder, winning bots camp
-    // harder. Scales the effective aggression without changing the base
-    // attributes — so the behavior shifts naturally without breaking the
-    // attribute-orthogonality invariant.
     if (losing) {
         E.burnRate = Math.min(1, E.burnRate * 1.25);
         E.moat = Math.max(20, E.moat * 0.8);
@@ -171,27 +112,17 @@ export function runParamBrain(obs, params) {
         E.moat = Math.min(240, E.moat * 1.2);
         E.burnRate = Math.max(0.2, E.burnRate * 0.9);
     }
-    // Pacing: rhythmic burst on burnRate. Low pacing = steady; high = burst+rest.
     if ((params.pacing ?? 0) > 0.05) {
         const pacingMul = 1 + (params.pacing ?? 0) * 0.5 * Math.sin(obs.tick * 0.02);
         E.burnRate *= pacingMul;
     }
-    // A.3 structural fix (BEHAVIOR_VERSION 2): split predicted distance
-    // from actual physical distance. Movement/positioning may use prediction
-    // (look ahead to where opp will be); physical contact & strike safety
-    // must use actual distance, because the sword strikes at the real
-    // position — not the predicted one. See BRAIN_AUDIT_v1.md gate inventory.
     const predX = obs.opp.x + obs.opp.vx * E.foresight;
     const predDx = predX - obs.self.x;
     const predDist = Math.abs(predDx);
     const predDir = Math.sign(predDx) || 1;
-    // Actual physical distance/direction — never inherits foresight.
     const absDist = obs.absDx;
     const absDir = Math.sign(obs.dx) || 1;
     const oppActive = obs.opp.swipeT > 0 || obs.opp.diveT > 0;
-    // Danger = a physical threat. Use actual distance; foresight shouldn't
-    // let a bot "feel safe" when opp is actually right there, nor panic
-    // about opp's projected future position.
     const danger = oppActive && absDist < 100;
     const desiredY = obs.opp.y + E.leverage * 150;
     const altitudeOff = obs.self.y - desiredY;
@@ -199,37 +130,22 @@ export function runParamBrain(obs, params) {
     let jump = false;
     let down = false;
     const stillRising = !obs.self.onGround && obs.self.vy < -150;
-    // Memory-driven tactics. All four use recent-world-tick stamps from
-    // simulate.ts — no user-visible attribute, but enables reactive play.
     const ticksSinceClash = obs.tick - obs.self.lastClashTick;
     const ticksSinceOppAttack = obs.tick - obs.opp.lastAttackStartTick;
     const ticksSinceKill = obs.tick - obs.self.lastKillTick;
-    const recentClash = ticksSinceClash < 36; // ~0.3s — avoid immediate re-clash
-    const oppCommitted = ticksSinceOppAttack < 10 && oppActive; // opp just swung
-    const postKillMomentum = ticksSinceKill < 72; // ~0.6s — opp invuln, push now
+    const recentClash = ticksSinceClash < 36;
+    const oppCommitted = ticksSinceOppAttack < 10 && oppActive;
+    const postKillMomentum = ticksSinceKill < 72;
     const cun = params.cunning ?? 0.5;
-    // Post-kill momentum: opp just died and is invulnerable during respawn.
-    // Use the free window to push toward the goal (if carrying) or toward
-    // opp's upcoming spawn so we're there when invuln ends. Committed
-    // decision — don't rethink until the window closes.
     if (postKillMomentum) {
         if (obs.self.hasToken && obs.goal.exists) {
             return navigateTo(obs, obs.goal.x, obs.goal.y);
         }
-        // Head toward the token (dropped at kill point) or opp's last position.
         if (obs.token.exists && !obs.self.hasToken) {
             const tx = obs.token.x - obs.self.x;
             return { left: tx < -10, right: tx > 10 };
         }
     }
-    // Counter-punish: opp just swung. Cunning bots close the gap so we're in
-    // striking range when their swipe ends — they can't parry a recovering
-    // blade. Low cunning bots can't read this and miss the window.
-    //
-    // A.3: gate threshold uses actual distance (real range to the recovering
-    // target); closing direction uses predicted (move toward where opp will
-    // be during its recovery); strike threshold uses actual (must physically
-    // connect).
     if (oppCommitted && cun > 0.5 && absDist < 160 && obs.self.swipeCD <= 0) {
         return {
             left: predDir < 0,
@@ -237,16 +153,7 @@ export function runParamBrain(obs, params) {
             action: absDist < 90,
         };
     }
-    // Mutual-contact preemption: both bots approaching head-on at same Y
-    // with passive foils is the classic walk-into-each-other setup. Bots
-    // with foresight sometimes hop to break Y-symmetry — but not every
-    // tick, or mirror matches hop-stalemate forever (observed intern-v-
-    // intern: 0 kills in 4 min). Phase-gated so it fires ~15% of opportunity
-    // windows; the other 85% the bot commits through (now safe after the
-    // passive-mutual-clash fix in simulate.ts).
     const approachSpeed = Math.abs(obs.self.vx) + Math.abs(obs.opp.vx);
-    // A.3: mutual-imminent is a physical-collision setup, not a
-    // positioning decision. Use actual distance and actual direction.
     const mutualImminent = absDist < 150 &&
         Math.abs(obs.dy) < 30 &&
         approachSpeed > 280 &&
@@ -254,22 +161,15 @@ export function runParamBrain(obs, params) {
         obs.opp.swipeT <= 0 &&
         obs.self.onGround;
     if (mutualImminent && E.foresight > 0.08) {
-        // Phase + id-offset: P0 juke chance peaks at different tick than P1.
         const phase = (obs.tick + obs.self.id * 37) % 120;
         if (phase < 18) {
             const flip = obs.self.id === 0 ? 1 : -1;
             return { left: -absDir * flip < 0, right: -absDir * flip > 0, up: true };
         }
     }
-    // Wall-flank: networking specialists actively seek the far wall for an
-    // altitude advantage when opp holds the token. Gated: only pursue a wall
-    // if we're actually below opp (need the altitude) AND not already
-    // committing to a flank (altitude gap hasn't stalled). Otherwise we
-    // camp on the top platform forever and never come back for the delivery.
     if (obs.opp.hasToken && E.networking > 0.5 && obs.self.onGround
         && altitudeOff > 40 && obs.self.wall === 0
-        && obs.self.y > obs.opp.y - 60 // only if still BELOW opp
-    ) {
+        && obs.self.y > obs.opp.y - 60) {
         const oppSide = obs.opp.x > obs.self.x ? 1 : -1;
         const targetWallX = oppSide > 0 ? obs.arena.right : obs.arena.left;
         const distToWall = Math.abs(obs.self.x - targetWallX);
@@ -281,60 +181,39 @@ export function runParamBrain(obs, params) {
             };
         }
     }
-    // Wall-jump assist (reactive: we're already on a wall)
     if (E.networking > 0.4 && obs.self.wall !== 0 && altitudeOff > 60) {
         return { left: obs.self.wall < 0, right: obs.self.wall > 0, up: true };
     }
-    // Dive from air
     if (!obs.self.onGround &&
         E.leverage < -0.4 &&
         obs.self.y < obs.opp.y - 30 &&
         obs.absDx < 70) {
         return { down: true, action: true };
     }
-    // Stuck detector: if we haven't moved meaningfully in ~1.5s, force a
-    // mixup. Kills platform-camping, center-mirror stalemates, and goal-
-    // orbit oscillation. Action depends on context — jumping over opp
-    // breaks clash loops, dropping through breaks platform camps.
     const ticksSinceMove = obs.tick - obs.self.lastMoveTick;
     const stuck = ticksSinceMove > 90;
     if (stuck) {
-        // A.3: "close" test uses actual distance (real proximity); movement
-        // direction when far uses predicted (head toward where opp will be).
         if (obs.self.onGround && absDist < 200) {
-            // Mirror-image clash loop. Commit: jump toward opp (setup for dive).
             return { left: absDir < 0, right: absDir > 0, up: true };
         }
         if (obs.self.onGround) {
-            // Platform camp with opp elsewhere. Drop through (if possible) or
-            // hop off and head toward opp's (predicted) x.
             return { left: predDir < 0, right: predDir > 0, down: true };
         }
-        // Airborne and stuck — commit a dive if we have altitude.
         if (obs.self.y < obs.opp.y - 20)
             return { down: true, action: true };
     }
-    // A.3: post-clash is an aftermath of physical contact. Distance gate
-    // and movement directions both use actual — foresight has no bearing
-    // on recovering from a real clash.
     if (recentClash && absDist < 110) {
-        // Post-clash: response branches on attributes so bots with different
-        // profiles don't mirror each other. Per-fighter id offset desyncs
-        // even identical attribute sets — without it, mirror-match bots
-        // loop-clash at the same cadence forever.
         const aggressive = (params.spite ?? 0) > 0.1 || (params.pacing ?? 0) > 0.5;
         const evasive = (params.pivotSpeed ?? 0) > 0.6;
         const phase = (ticksSinceClash + obs.self.id * 13) % 40;
         if (phase < 12) {
-            move = -absDir; // both retreat briefly during stun
+            move = -absDir;
         }
         else if (aggressive && obs.self.onGround) {
             move = absDir;
-            jump = true; // commit jump-over
+            jump = true;
         }
         else if (evasive) {
-            // Retreat further + optional defensive swing. Upward slash covers
-            // above; opp chasing high gets clipped.
             return {
                 left: -absDir < 0,
                 right: -absDir > 0,
@@ -342,20 +221,16 @@ export function runParamBrain(obs, params) {
             };
         }
         else {
-            // Default: phase-varied mixup — not "hold position" because that
-            // just lets opp reset the loop. Phase-gated jump-over breaks
-            // horizontal stalemate by adding vertical axis.
             if (phase < 24) {
-                move = -absDir; // extended retreat
+                move = -absDir;
             }
             else {
                 move = absDir;
-                jump = obs.self.onGround; // commit forward over opp
+                jump = obs.self.onGround;
             }
         }
     }
     else if (danger && E.pivotSpeed > 0.5) {
-        // A.3: retreat from physical threat uses actual direction.
         move = -absDir;
         jump = obs.self.onGround || stillRising;
     }
@@ -370,9 +245,6 @@ export function runParamBrain(obs, params) {
         }
     }
     else if (altitudeOff < -80) {
-        // Descending to opp's level — use actual horizontal alignment, not
-        // predicted (predicting lateral motion while dropping vertically
-        // would make bots drift to an empty space).
         down = true;
         if (obs.dx > 10)
             move = 1;
@@ -380,38 +252,25 @@ export function runParamBrain(obs, params) {
             move = -1;
     }
     else {
-        // A.3: moat management is spacing policy — predicted distance and
-        // direction are appropriate ("stay N ahead of where opp will be").
         if (predDist > E.moat + 15)
             move = predDir;
         else if (predDist < E.moat - 15)
             move = -predDir;
     }
-    // A.3: swing reach is a hit decision. Must use actual distance —
-    // the sword strikes at the physical position, not the predicted one.
     const swingRange = 50 + E.burnRate * 80;
     const inSwingReach = absDist < swingRange && Math.abs(obs.dy) < 80;
     const oppOpen = obs.opp.stun > 0 || (!oppActive && Math.abs(obs.opp.vx) < 120);
-    // Anti-air priority: opp diving at us. Upward slash catches their arc.
     const oppDivingAtUs = obs.opp.diveT > 0 && obs.absDx < 110 && obs.opp.y < obs.self.y + 20;
-    // Advantage swings: no passive-foil retaliation possible here.
     const selfBehindOpp = (obs.self.x - obs.opp.x) * obs.opp.facing < 0 && obs.absDx < 100;
     const verticalAdvantage = obs.self.y < obs.opp.y - 30 && obs.absDx < 140;
     const freeSwing = oppDivingAtUs || selfBehindOpp || verticalAdvantage;
-    // Cunning: how patient about swing timing.
-    //   Low cunning (~0):  swing reflexively when in reach (even if opp is ready)
-    //   High cunning (~1): wait for opp to be recovering/stunned/committed
-    // (`cun` declared earlier for the counter-punish check.)
     const reckless = cun < 0.3;
     const patient = cun > 0.7;
-    // A.3: safe-strike inner gate is a hit safety check. Must use actual
-    // distance — prediction would let foresight bots convince themselves
-    // they're safely outside reach when opp is physically adjacent.
     let safeStrike = inSwingReach && (!oppActive || absDist < 70);
     if (patient)
         safeStrike = safeStrike && oppOpen;
     else if (reckless)
-        safeStrike = inSwingReach; // no safety check
+        safeStrike = inSwingReach;
     if (stillRising && (altitudeOff > 60 || danger))
         jump = true;
     return {

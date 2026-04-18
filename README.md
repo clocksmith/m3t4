@@ -62,7 +62,7 @@ See `pareto/README.md`. The Monte Carlo/evolution tools are local-only
 
 ## Docs
 
-- **public** — this README, `sim/README.md`, `pareto/README.md`
+- **public** — this README, `ARCHITECTURE.md`, `sim/README.md`, `pareto/README.md`
 - **private** (do not publish):
   - `ARENA_DESIGN.md` — competitive-layer architecture + threat model
   - `BRAIN_TUNING.md` — mechanical tuning internals, balance journey

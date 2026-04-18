@@ -302,3 +302,98 @@ test("verifyReplayIntegrityV1 is idempotent on a fresh artifact", () => {
   assert.doesNotThrow(() => verifyReplayIntegrityV1(artifact));
   assert.doesNotThrow(() => verifyReplayIntegrityV1(artifact));
 });
+
+// --- Trust label tests ---
+
+test("createReplayArtifactV1 stamps a default trust label from mode", async () => {
+  const { createReplayArtifactV1 } = await import("../replay.js");
+  const stage = STAGES.datacenter;
+  const result = simulate({
+    stage, brainA: STRATEGIES.blitz, brainB: STRATEGIES.shipper,
+    seed: 7, maxTicks: 240,
+  });
+  const ranked = createReplayArtifactV1({
+    matchId: "r", mode: "ranked", stage, seed: 7, chars: DEFAULT_CHARS,
+    players: [
+      { kind: "brain", tier: "user", label: "blitz", config: STRATEGIES.blitz },
+      { kind: "brain", tier: "user", label: "shipper", config: STRATEGIES.shipper },
+    ],
+    actionLog: result.frameLog, result,
+    sim: { constantsHash: REPLAY_CONSTANTS_HASH },
+  });
+  assert.equal(ranked.trust?.tier, "ranked-server");
+  assert.equal(ranked.trust?.proofIssuer, "server");
+  assert.equal(ranked.trust?.ruleset, "m3t4");
+  assert.equal(ranked.trust?.simConstantsHash, REPLAY_CONSTANTS_HASH);
+
+  const practice = createReplayArtifactV1({
+    matchId: "p", mode: "practice", stage, seed: 7, chars: DEFAULT_CHARS,
+    players: [
+      { kind: "brain", tier: "local", label: "blitz", config: STRATEGIES.blitz },
+      { kind: "brain", tier: "local", label: "shipper", config: STRATEGIES.shipper },
+    ],
+    actionLog: result.frameLog, result,
+  });
+  assert.equal(practice.trust?.tier, "local-practice");
+  assert.equal(practice.trust?.proofIssuer, "client");
+});
+
+test("explicit trust label override wins over default", async () => {
+  const { createReplayArtifactV1, createTrustLabel } = await import("../replay.js");
+  const stage = STAGES.datacenter;
+  const result = simulate({
+    stage, brainA: STRATEGIES.blitz, brainB: STRATEGIES.shipper,
+    seed: 8, maxTicks: 240,
+  });
+  const custom = createTrustLabel("p2p-action-verified", "client", {
+    verification: { actionLogHash: "deadbeef", stateHashCadenceTicks: 120 },
+  });
+  const art = createReplayArtifactV1({
+    matchId: "x", mode: "generated", stage, seed: 8, chars: DEFAULT_CHARS,
+    players: [
+      { kind: "brain", tier: "tool", label: "blitz", config: STRATEGIES.blitz },
+      { kind: "brain", tier: "tool", label: "shipper", config: STRATEGIES.shipper },
+    ],
+    actionLog: result.frameLog, result,
+    trust: custom,
+  });
+  assert.equal(art.trust?.tier, "p2p-action-verified");
+  assert.equal(art.trust?.verification?.actionLogHash, "deadbeef");
+});
+
+test("verifyActionLog re-simulates action log and confirms result", async () => {
+  const { verifyActionLog } = await import("../replay.js");
+  const stage = STAGES.datacenter;
+  const result = simulate({
+    stage, brainA: STRATEGIES.blitz, brainB: STRATEGIES.shipper,
+    seed: 12345, maxTicks: 240,
+  });
+  const out = verifyActionLog({
+    seed: 12345,
+    stage,
+    chars: DEFAULT_CHARS,
+    actionLog: result.frameLog,
+    expectedLogHash: result.logHash,
+  });
+  assert.equal(out.ok, true);
+  assert.equal(out.result.logHash, result.logHash);
+  assert.equal(out.result.winner, result.winner);
+});
+
+test("verifyActionLog detects logHash mismatch (tampered expectation)", async () => {
+  const { verifyActionLog } = await import("../replay.js");
+  const stage = STAGES.datacenter;
+  const result = simulate({
+    stage, brainA: STRATEGIES.blitz, brainB: STRATEGIES.shipper,
+    seed: 54321, maxTicks: 240,
+  });
+  const out = verifyActionLog({
+    seed: 54321,
+    stage,
+    chars: DEFAULT_CHARS,
+    actionLog: result.frameLog,
+    expectedLogHash: "00000000", // wrong
+  });
+  assert.equal(out.ok, false);
+  assert.ok(out.reason && out.reason.includes("logHash mismatch"));
+});

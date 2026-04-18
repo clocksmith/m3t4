@@ -31,6 +31,41 @@ export type ReplayMode = "ranked" | "practice" | "generated" | "test";
 export type ReplayPlayerKind = "human" | "brain" | "scripted";
 export type ReplayPlayerTier = "user" | "system" | "local" | "tool";
 
+// Trust labels — first-class replay metadata. A viewer reads one label
+// and knows the match's proof tier without tracing the provenance chain.
+// See ARCHITECTURE.md for the full definition of each tier.
+export type TrustTier =
+  | "ranked-server"
+  | "local-practice"
+  | "tuple-verified"
+  | "p2p-action-verified"
+  | "community-verified"
+  | "attested-agent"
+  | "proof-carrying";
+
+export interface TrustLabelQuorum {
+  required: number;
+  total: number;
+  agreed: number;
+}
+
+export interface TrustLabelVerification {
+  quorum?: TrustLabelQuorum;
+  verifierIds?: string[];
+  actionLogHash?: string;
+  stateHashCadenceTicks?: number;
+}
+
+export interface TrustLabel {
+  tier: TrustTier;
+  simConstantsHash: string;
+  behaviorVersion: number;
+  ruleset: "m3t4";
+  proofIssuedAt: string;
+  proofIssuer: "server" | "client" | "community-quorum";
+  verification?: TrustLabelVerification;
+}
+
 export interface ReplayControlBindingV1 {
   left?: string;
   right?: string;
@@ -123,6 +158,7 @@ export interface ReplayArtifactV1 {
   actions: ReplayActionLogV1;
   result: ReplayResultV1;
   integrity: ReplayIntegrityV1;
+  trust?: TrustLabel;
   frames?: ReplayFrameLogV1;
   notes?: string;
 }
@@ -139,9 +175,30 @@ export interface CreateReplayArtifactV1Options {
   createdAt?: string;
   startedAt?: string;
   sim?: Partial<ReplaySimInfoV1>;
+  trust?: TrustLabel | Partial<TrustLabel>;
   frames?: unknown[];
   frameStride?: number;
   notes?: string;
+}
+
+// Build a trust label with sane defaults. Caller provides the tier and
+// proof issuer; everything else (hashes, versions, timestamp, ruleset)
+// is pinned from sim constants. Partial overrides compose on top.
+export function createTrustLabel(
+  tier: TrustTier,
+  proofIssuer: TrustLabel["proofIssuer"],
+  overrides?: Partial<TrustLabel>,
+): TrustLabel {
+  return {
+    tier,
+    simConstantsHash: REPLAY_CONSTANTS_HASH,
+    behaviorVersion: BEHAVIOR_VERSION,
+    ruleset: "m3t4",
+    proofIssuedAt: overrides?.proofIssuedAt ?? new Date().toISOString(),
+    proofIssuer,
+    verification: overrides?.verification,
+    ...(overrides ?? {}),
+  };
 }
 
 export interface ReplayDecodeOptionsV1 {
@@ -249,6 +306,8 @@ export function createReplayArtifactV1(opts: CreateReplayArtifactV1Options): Rep
   const actionHash = replayHashBytes(opts.actionLog);
   const result = replayResultFrom(opts.result);
 
+  const trust = normalizeTrustLabel(opts.trust, opts.mode);
+
   return {
     schema: REPLAY_SCHEMA_ID,
     version: REPLAY_SCHEMA_VERSION,
@@ -281,8 +340,34 @@ export function createReplayArtifactV1(opts: CreateReplayArtifactV1Options): Rep
       actionLogHash: actionHash,
       frameLogHash: frames?.hash,
     },
+    trust,
     frames,
     notes: opts.notes,
+  };
+}
+
+function normalizeTrustLabel(
+  input: TrustLabel | Partial<TrustLabel> | undefined,
+  mode: ReplayMode,
+): TrustLabel {
+  // Default tier inference from the replay mode when the caller doesn't
+  // supply a tier. ranked → ranked-server; practice → local-practice;
+  // generated/test → local-practice. Callers that create a tuple/p2p/
+  // community-verified artifact MUST pass tier explicitly.
+  const defaultTier: TrustTier =
+    mode === "ranked" ? "ranked-server" : "local-practice";
+  const defaultIssuer: TrustLabel["proofIssuer"] =
+    mode === "ranked" ? "server" : "client";
+  const tier = input?.tier ?? defaultTier;
+  const proofIssuer = input?.proofIssuer ?? defaultIssuer;
+  return {
+    tier,
+    simConstantsHash: input?.simConstantsHash ?? REPLAY_CONSTANTS_HASH,
+    behaviorVersion: input?.behaviorVersion ?? BEHAVIOR_VERSION,
+    ruleset: "m3t4",
+    proofIssuedAt: input?.proofIssuedAt ?? new Date().toISOString(),
+    proofIssuer,
+    verification: input?.verification,
   };
 }
 
@@ -394,6 +479,93 @@ export function replayArtifactToResultV1(
     result,
     consumedBytes: offset,
     consumedDecisionTicks: offset / 2,
+  };
+}
+
+// Standalone verify helper: given a tuple + action log, re-simulate and
+// return the result. Used by the server verify endpoint to confirm that a
+// posted action log actually produces the claimed outcome under the
+// pinned sim version. Does NOT require a full ReplayArtifactV1.
+export interface VerifyActionLogInput {
+  seed: number;
+  stage: Stage;
+  chars: [Character, Character];
+  actionLog: Uint8Array;
+  expectedLogHash?: string;          // from the posted result, optional
+  expectedResult?: ReplayResultV1;   // optional full result check
+}
+
+export interface VerifyActionLogOutput {
+  ok: boolean;
+  result: ReplayResultV1;
+  reason?: string;                   // set when ok === false
+  simConstantsHash: string;
+  behaviorVersion: number;
+}
+
+export function verifyActionLog(input: VerifyActionLogInput): VerifyActionLogOutput {
+  const bytes = input.actionLog;
+  if (bytes.length % 2 !== 0) {
+    return mismatchResult("actionLog must contain paired P1/P2 bytes", bytes);
+  }
+  const world = createStepperWorld({
+    stage: input.stage,
+    seed: input.seed,
+    chars: input.chars,
+  });
+  let offset = 0;
+  let hashAcc = 2166136261 >>> 0;
+  const empty = {};
+  // Run until the action log is exhausted OR the match concludes.
+  while (world.matchWinner === -1 && offset + 1 < bytes.length) {
+    if (world.freeze > 0 || world.roundPause > 0) {
+      stepWorld(world, empty, empty);
+      continue;
+    }
+    const pa = bytes[offset++];
+    const pb = bytes[offset++];
+    hashAcc = fnvByte(hashAcc, pa);
+    hashAcc = fnvByte(hashAcc, pb);
+    stepWorld(world, unpackAction(pa), unpackAction(pb));
+  }
+  const result = replayResultFromWorld(world, hashAcc.toString(16).padStart(8, "0"));
+  if (input.expectedLogHash !== undefined && input.expectedLogHash !== result.logHash) {
+    return {
+      ok: false,
+      result,
+      reason: `logHash mismatch: computed=${result.logHash} expected=${input.expectedLogHash}`,
+      simConstantsHash: REPLAY_CONSTANTS_HASH,
+      behaviorVersion: BEHAVIOR_VERSION,
+    };
+  }
+  if (input.expectedResult) {
+    try {
+      verifyReplayResult(input.expectedResult, result);
+    } catch (e) {
+      return {
+        ok: false,
+        result,
+        reason: e instanceof Error ? e.message : String(e),
+        simConstantsHash: REPLAY_CONSTANTS_HASH,
+        behaviorVersion: BEHAVIOR_VERSION,
+      };
+    }
+  }
+  return {
+    ok: true,
+    result,
+    simConstantsHash: REPLAY_CONSTANTS_HASH,
+    behaviorVersion: BEHAVIOR_VERSION,
+  };
+}
+
+function mismatchResult(reason: string, _bytes: Uint8Array): VerifyActionLogOutput {
+  return {
+    ok: false,
+    result: { winner: -1, finalScore: [0, 0], finalRounds: [0, 0], ticks: 0, logHash: "00000000" },
+    reason,
+    simConstantsHash: REPLAY_CONSTANTS_HASH,
+    behaviorVersion: BEHAVIOR_VERSION,
   };
 }
 

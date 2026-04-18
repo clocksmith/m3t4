@@ -6,7 +6,7 @@ export * from "./stage.js";
 export * from "./budget.js";
 export * from "./replay.js";
 export { compileBrain, evaluateParams, compileAttribute, type CompiledBrain } from "./dsl.js";
-export { runParamBrain } from "./brain.js";
+export { BEHAVIOR_VERSION, runParamBrain, createBrainState, resetBrainStateForRound } from "./brain.js";
 export {
   simulate, simulateTrace, DEFAULT_CHARS, packAction, unpackAction,
   applyHallucinationNoise, createStepperWorld, runBrainForWorld, stepWorld, worldObservation, worldToFrame,

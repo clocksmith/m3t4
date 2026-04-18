@@ -21,7 +21,7 @@ import {
   STEP,
   WALL_SLIDE,
 } from "./constants.js";
-import { runParamBrain } from "./brain.js";
+import { createBrainState, resetBrainStateForRound, runParamBrain } from "./brain.js";
 import { RANGES } from "./budget.js";
 import { compileBrain, evaluateParams, type CompiledBrain } from "./dsl.js";
 import { makeRng, type Rng, rngRange } from "./rng.js";
@@ -208,7 +208,7 @@ function makeObs(self: Fighter, opp: Fighter, w: World): Observation {
       id: self.id,
       x: self.x, y: self.y, vx: self.vx, vy: self.vy,
       facing: self.facing, hp: self.hp,
-      onGround: self.onGround, wall: self.wall, stun: self.stun, dead: self.dead,
+      onGround: self.onGround, wall: self.wall, stun: self.stun, invuln: self.invuln, dead: self.dead,
       swipeT: self.swipeT, swipeCD: self.swipeCD, diveT: self.diveT, diveCD: self.diveCD,
       hasToken: !!(w.gold && w.gold.carrier === self.id),
       lastClashTick: self.lastClashTick,
@@ -229,8 +229,8 @@ function makeObs(self: Fighter, opp: Fighter, w: World): Observation {
       rounds: opp.rounds,
     },
     token: w.gold
-      ? { exists: true, x: w.gold.x, y: w.gold.y, carrier: w.gold.carrier }
-      : { exists: false, x: 0, y: 0, carrier: -1 },
+      ? { exists: true, x: w.gold.x, y: w.gold.y, carrier: w.gold.carrier, dwellT: w.gold.dwellT }
+      : { exists: false, x: 0, y: 0, carrier: -1, dwellT: 0 },
     goal: w.goal
       ? { exists: true, x: w.goal.x, y: w.goal.y, label: w.goal.label, timer: w.goal.timer }
       : { exists: false, x: 0, y: 0, label: "", timer: 0 },
@@ -664,6 +664,7 @@ export function simulate(opts: SimulateOptions): MatchResult {
     freeze: 0,
     rng,
     noiseSeed,
+    brainStates: [createBrainState(0), createBrainState(1)],
   };
 
   const brainA = compileBrain(opts.brainA);
@@ -691,15 +692,23 @@ export function simulate(opts: SimulateOptions): MatchResult {
           w.fighters[0].rounds = r0;
           w.fighters[1].rounds = r1;
           w.roundWinner = -1;
+          resetBrainStateForRound(w.brainStates[0], w.tick);
+          resetBrainStateForRound(w.brainStates[1], w.tick);
         } else {
           resetDuel(w, chars);
+          resetBrainStateForRound(w.brainStates[0], w.tick);
+          resetBrainStateForRound(w.brainStates[1], w.tick);
         }
       }
       // Respawn timers still tick during pause
       for (const p of w.fighters)
         if (p.dead && p.respawnT > 0) {
           p.respawnT -= STEP;
-          if (p.respawnT <= 0) respawn(p, w);
+          if (p.respawnT <= 0) {
+            respawn(p, w);
+            // Own respawn = fresh neutral, but keep opp-model buffers.
+            resetBrainStateForRound(w.brainStates[p.id], w.tick);
+          }
         }
       w.tick++;
       continue;
@@ -709,8 +718,8 @@ export function simulate(opts: SimulateOptions): MatchResult {
     const obsB = makeObs(w.fighters[1], w.fighters[0], w);
     const paramsA = applyHallucinationNoise(evaluateParams(brainA, obsA), w.tick, 0, w.noiseSeed);
     const paramsB = applyHallucinationNoise(evaluateParams(brainB, obsB), w.tick, 1, w.noiseSeed);
-    const actA = runParamBrain(obsA, paramsA);
-    const actB = runParamBrain(obsB, paramsB);
+    const actA = runParamBrain(obsA, paramsA, w.brainStates[0]);
+    const actB = runParamBrain(obsB, paramsB, w.brainStates[1]);
 
     const pa = packAction(actA);
     const pb = packAction(actB);
@@ -790,6 +799,7 @@ export function createStepperWorld(opts: {
     freeze: 0,
     rng,
     noiseSeed: noiseSeedFromMatchSeed(opts.seed),
+    brainStates: [createBrainState(0), createBrainState(1)],
   };
 }
 
@@ -800,7 +810,7 @@ export function worldObservation(w: World, selfIdx: 0 | 1): Observation {
 export function runBrainForWorld(w: World, brain: CompiledBrain, selfIdx: 0 | 1): Action {
   const obs = worldObservation(w, selfIdx);
   const params = applyHallucinationNoise(evaluateParams(brain, obs), w.tick, selfIdx, w.noiseSeed);
-  return runParamBrain(obs, params);
+  return runParamBrain(obs, params, w.brainStates[selfIdx]);
 }
 
 export interface StepResult {
@@ -828,14 +838,21 @@ export function stepWorld(w: World, actA: Action, actB: Action): StepResult {
         w.fighters[0].rounds = r0;
         w.fighters[1].rounds = r1;
         w.roundWinner = -1;
+        resetBrainStateForRound(w.brainStates[0], w.tick);
+        resetBrainStateForRound(w.brainStates[1], w.tick);
       } else {
         resetDuel(w, chars);
+        resetBrainStateForRound(w.brainStates[0], w.tick);
+        resetBrainStateForRound(w.brainStates[1], w.tick);
       }
     }
     for (const p of w.fighters) {
       if (p.dead && p.respawnT > 0) {
         p.respawnT -= STEP;
-        if (p.respawnT <= 0) respawn(p, w);
+        if (p.respawnT <= 0) {
+          respawn(p, w);
+          resetBrainStateForRound(w.brainStates[p.id], w.tick);
+        }
       }
     }
     w.tick++;
@@ -870,8 +887,8 @@ export function worldToFrame(w: World): TraceFrame {
       dead: w.fighters[1].dead,
     },
     token: w.gold
-      ? { exists: true, x: w.gold.x, y: w.gold.y, carrier: w.gold.carrier }
-      : { exists: false, x: 0, y: 0, carrier: -1 },
+      ? { exists: true, x: w.gold.x, y: w.gold.y, carrier: w.gold.carrier, dwellT: w.gold.dwellT }
+      : { exists: false, x: 0, y: 0, carrier: -1, dwellT: 0 },
     goal: w.goal
       ? { exists: true, x: w.goal.x, y: w.goal.y, label: w.goal.label }
       : { exists: false, x: 0, y: 0, label: "" },
@@ -888,7 +905,7 @@ export interface TraceFrame {
   tick: number;
   p0: { x: number; y: number; facing: -1 | 1; swipeT: number; diveT: number; dead: boolean };
   p1: { x: number; y: number; facing: -1 | 1; swipeT: number; diveT: number; dead: boolean };
-  token: { exists: boolean; x: number; y: number; carrier: 0 | 1 | -1 };
+  token: { exists: boolean; x: number; y: number; carrier: 0 | 1 | -1; dwellT: number };
   goal: { exists: boolean; x: number; y: number; label: string };
   scoreboard: [number, number];
   rounds: [number, number];
@@ -912,6 +929,7 @@ export function simulateTrace(opts: SimulateOptions): TraceResult {
     fighters: [makeFighter(0, chars[0], stage.spawnL, 1), makeFighter(1, chars[1], stage.spawnR, -1)],
     gold: null, goal: null, lastGoalIdx: -1,
     roundPause: 0, roundWinner: -1, matchWinner: -1, freeze: 0, rng, noiseSeed,
+    brainStates: [createBrainState(0), createBrainState(1)],
   };
   const brainA = compileBrain(opts.brainA);
   const brainB = compileBrain(opts.brainB);
@@ -923,7 +941,7 @@ export function simulateTrace(opts: SimulateOptions): TraceResult {
     tick: w.tick,
     p0: { x: w.fighters[0].x, y: w.fighters[0].y, facing: w.fighters[0].facing, swipeT: w.fighters[0].swipeT, diveT: w.fighters[0].diveT, dead: w.fighters[0].dead },
     p1: { x: w.fighters[1].x, y: w.fighters[1].y, facing: w.fighters[1].facing, swipeT: w.fighters[1].swipeT, diveT: w.fighters[1].diveT, dead: w.fighters[1].dead },
-    token: w.gold ? { exists: true, x: w.gold.x, y: w.gold.y, carrier: w.gold.carrier } : { exists: false, x: 0, y: 0, carrier: -1 },
+    token: w.gold ? { exists: true, x: w.gold.x, y: w.gold.y, carrier: w.gold.carrier, dwellT: w.gold.dwellT } : { exists: false, x: 0, y: 0, carrier: -1, dwellT: 0 },
     goal: w.goal ? { exists: true, x: w.goal.x, y: w.goal.y, label: w.goal.label } : { exists: false, x: 0, y: 0, label: "" },
     scoreboard: [w.fighters[0].score, w.fighters[1].score],
     rounds: [w.fighters[0].rounds, w.fighters[1].rounds],
@@ -940,9 +958,21 @@ export function simulateTrace(opts: SimulateOptions): TraceResult {
           w.fighters[0].score = 0; w.fighters[1].score = 0;
           w.fighters[0].rounds = r0; w.fighters[1].rounds = r1;
           w.roundWinner = -1;
-        } else resetDuel(w, chars);
+          resetBrainStateForRound(w.brainStates[0], w.tick);
+          resetBrainStateForRound(w.brainStates[1], w.tick);
+        } else {
+          resetDuel(w, chars);
+          resetBrainStateForRound(w.brainStates[0], w.tick);
+          resetBrainStateForRound(w.brainStates[1], w.tick);
+        }
       }
-      for (const p of w.fighters) if (p.dead && p.respawnT > 0) { p.respawnT -= STEP; if (p.respawnT <= 0) respawn(p, w); }
+      for (const p of w.fighters) if (p.dead && p.respawnT > 0) {
+        p.respawnT -= STEP;
+        if (p.respawnT <= 0) {
+          respawn(p, w);
+          resetBrainStateForRound(w.brainStates[p.id], w.tick);
+        }
+      }
       frames.push(snap());
       w.tick++;
       continue;
@@ -951,8 +981,8 @@ export function simulateTrace(opts: SimulateOptions): TraceResult {
     const obsB = makeObs(w.fighters[1], w.fighters[0], w);
     const paramsA = applyHallucinationNoise(evaluateParams(brainA, obsA), w.tick, 0, w.noiseSeed);
     const paramsB = applyHallucinationNoise(evaluateParams(brainB, obsB), w.tick, 1, w.noiseSeed);
-    const actA = runParamBrain(obsA, paramsA);
-    const actB = runParamBrain(obsB, paramsB);
+    const actA = runParamBrain(obsA, paramsA, w.brainStates[0]);
+    const actB = runParamBrain(obsB, paramsB, w.brainStates[1]);
     const pa = packAction(actA), pb = packAction(actB);
     log.push(pa, pb);
     hashAcc ^= pa; hashAcc = Math.imul(hashAcc, 16777619) >>> 0;

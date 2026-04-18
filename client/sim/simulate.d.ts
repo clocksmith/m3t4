@@ -52,6 +52,7 @@ export interface TraceFrame {
         x: number;
         y: number;
         carrier: 0 | 1 | -1;
+        dwellT: number;
     };
     goal: {
         exists: boolean;

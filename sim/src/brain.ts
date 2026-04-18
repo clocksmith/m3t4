@@ -1,8 +1,192 @@
-import type { Action, Observation, Params, Platform } from "./types.js";
+import type {
+  Action, BrainMode, BrainState, Observation, Params, Platform,
+} from "./types.js";
+import { ARENA_L, ARENA_R, STATS, STEP } from "./constants.js";
 
-export const BEHAVIOR_VERSION = 2;
+// v3: Intent state machine. Five modes — neutral, offense, zone,
+// objective, escape — each with its own behavior loop and minimum
+// commitment window. Replaces v2's per-tick reactive ladder. Params
+// bias mode transitions and tactical details within each mode; they no
+// longer drive behavior directly via a flat if/else.
+export const BEHAVIOR_VERSION = 3;
 
-const REACH_UP = 260;
+// ---------- Opp-model buffer sizing ----------
+//
+// Bounded ring: max 16 entries per stream, hard decay at 240 ticks (2 s).
+// That's enough to see "opp threw 8 swipes in the last second" without
+// letting the buffer grow unbounded. oppAggression = count / 2.0 → 0..1
+// when spam is sustained.
+const OPP_BUFFER_MAX = 16;
+const OPP_BUFFER_DECAY_TICKS = 240;
+
+// ---------- Mode commitment math ----------
+//
+// Each mode has a minimum duration before it can yield to a non-emergency
+// transition. Emergency triggers (imminent death, token state change)
+// bypass this. Pacing scales these: low pacing → longer commits (patient),
+// high pacing → shorter (mixup-y). Effective = base * (1.5 - pacing).
+const MIN_DURATION: Record<BrainMode, number> = {
+  neutral: 0,
+  offense: 20,
+  zone: 40,
+  objective: 10,
+  escape: 45,
+};
+
+// Derived from STATS.swipeTime (0.12s = ~14.4 ticks) and swipeCD (0.192s
+// = ~23 ticks). Recovery window = ticks after a swipe starts during which
+// opp is no longer active (swipeT=0) but can't yet restart (swipeCD>0).
+const SWIPE_ACTIVE_TICKS = Math.ceil(STATS.swipeTime / STEP);
+const SWIPE_FULL_CD_TICKS = Math.ceil(STATS.swipeTime * 1.6 / STEP);
+const RECOVERY_WINDOW_START = SWIPE_ACTIVE_TICKS;
+const RECOVERY_WINDOW_END = SWIPE_FULL_CD_TICKS + 2; // small slack
+
+// Distance band used by several modes' "close enough to commit"
+// thresholds. burnRate extends effective swing reach.
+function swingRange(params: Params): number {
+  return 50 + params.burnRate * 80;
+}
+
+// ---------- State lifecycle ----------
+
+export function createBrainState(id: 0 | 1): BrainState {
+  return {
+    id,
+    mode: "neutral",
+    substate: null,
+    modeEnterTick: 0,
+    recentOppSwipeTicks: [],
+    recentOppDiveTicks: [],
+    lastKnownOppAttackStartTick: -9999,
+    lastTransitionReason: "init",
+  };
+}
+
+// Reset on round boundary and on own respawn. Keeps opp-model buffers
+// (bounded and decay-clamped) so cross-life reads of opp behavior
+// survive; resets plan-layer so we don't carry stale intent into a new
+// spacing situation.
+export function resetBrainStateForRound(state: BrainState, tick: number): void {
+  state.mode = "neutral";
+  state.substate = null;
+  state.modeEnterTick = tick;
+  state.lastTransitionReason = "round-reset";
+}
+
+// ---------- Opp-model update ----------
+
+function pushBounded(buf: number[], tick: number): void {
+  buf.push(tick);
+  if (buf.length > OPP_BUFFER_MAX) buf.shift();
+}
+
+function decayBuffer(buf: number[], now: number): void {
+  while (buf.length > 0 && now - buf[0] > OPP_BUFFER_DECAY_TICKS) buf.shift();
+}
+
+function updateOppModel(state: BrainState, obs: Observation): void {
+  decayBuffer(state.recentOppSwipeTicks, obs.tick);
+  decayBuffer(state.recentOppDiveTicks, obs.tick);
+
+  const oppAttackStart = obs.opp.lastAttackStartTick;
+  if (oppAttackStart !== state.lastKnownOppAttackStartTick && oppAttackStart >= 0) {
+    // Classify: dive started mid-air, swipe started on ground. We don't
+    // know which happened from lastAttackStartTick alone, but we can
+    // peek at current state: if opp.diveT > 0 this frame, it was a dive.
+    if (obs.opp.diveT > 0) pushBounded(state.recentOppDiveTicks, oppAttackStart);
+    else pushBounded(state.recentOppSwipeTicks, oppAttackStart);
+    state.lastKnownOppAttackStartTick = oppAttackStart;
+  }
+}
+
+// ---------- Derived signals ----------
+
+interface Signals {
+  predDist: number;
+  predDir: -1 | 1;
+  absDist: number;
+  absDir: -1 | 1;
+  altitudeOff: number;       // self.y - desiredY (positive = below desired)
+  inReach: boolean;          // absDist within swingRange
+  canSwing: boolean;         // swipeCD clear AND inReach
+  oppActive: boolean;        // opp mid-swipe or mid-dive
+  oppCommittedAtUs: boolean; // opp active AND collinear-ish vertically
+  oppRecovering: boolean;    // opp in post-swipe recovery window
+  oppOpen: boolean;          // opp stunned or stationary
+  oppClosingFast: boolean;   // opp.vx toward us AND absDist close
+  oppAggression: number;     // 0..1: swipes per 2s, clamped
+  freeSwing: boolean;        // opp diving at us / behind opp / vertical advantage
+  cornered: boolean;         // near wall AND opp between us and center
+  ticksSinceOppAttack: number;
+  ticksSinceClash: number;
+  ticksSinceKill: number;
+  stuck: boolean;
+}
+
+function deriveSignals(obs: Observation, params: Params, state: BrainState): Signals {
+  const predX = obs.opp.x + obs.opp.vx * params.foresight;
+  const predDx = predX - obs.self.x;
+  const predDist = Math.abs(predDx);
+  const predDir = (Math.sign(predDx) || 1) as -1 | 1;
+
+  const absDist = obs.absDx;
+  const absDir = (Math.sign(obs.dx) || 1) as -1 | 1;
+
+  const desiredY = obs.opp.y + params.leverage * 150;
+  const altitudeOff = obs.self.y - desiredY;
+
+  const reach = swingRange(params);
+  const inReach = absDist < reach && Math.abs(obs.dy) < 80;
+  const canSwing = obs.self.swipeCD <= 0 && inReach;
+
+  const oppActive = obs.opp.swipeT > 0 || obs.opp.diveT > 0;
+  const oppCommittedAtUs = oppActive && Math.abs(obs.dy) < 80 && absDist < reach + 60;
+
+  const ticksSinceOppAttack = obs.tick - obs.opp.lastAttackStartTick;
+  const oppRecovering =
+    ticksSinceOppAttack >= RECOVERY_WINDOW_START &&
+    ticksSinceOppAttack <= RECOVERY_WINDOW_END &&
+    !oppActive;
+
+  const oppOpen = obs.opp.stun > 0 || (!oppActive && Math.abs(obs.opp.vx) < 120 && Math.abs(obs.opp.vy) < 80);
+
+  // Opp closing fast: their velocity component toward us is significant
+  // AND they're within one swing-range of contact.
+  const oppClosingFast =
+    Math.sign(obs.opp.vx) === -absDir &&
+    Math.abs(obs.opp.vx) > 260 &&
+    absDist < reach + 80;
+
+  const oppAggression = Math.min(1, state.recentOppSwipeTicks.length / (OPP_BUFFER_DECAY_TICKS / 120));
+
+  const oppDivingAtUs = obs.opp.diveT > 0 && absDist < 110 && obs.opp.y < obs.self.y + 20;
+  const selfBehindOpp = (obs.self.x - obs.opp.x) * obs.opp.facing < 0 && absDist < 100;
+  const verticalAdvantage = obs.self.y < obs.opp.y - 30 && absDist < 140;
+  const freeSwing = oppDivingAtUs || selfBehindOpp || verticalAdvantage;
+
+  const wallDistLeft = obs.self.x - obs.arena.left;
+  const wallDistRight = obs.arena.right - obs.self.x;
+  const nearWall = Math.min(wallDistLeft, wallDistRight) < 80;
+  const oppBetweenUsAndCenter =
+    (wallDistLeft < wallDistRight && obs.opp.x > obs.self.x) ||
+    (wallDistRight < wallDistLeft && obs.opp.x < obs.self.x);
+  const cornered = nearWall && oppBetweenUsAndCenter && absDist < 240;
+
+  const ticksSinceClash = obs.tick - obs.self.lastClashTick;
+  const ticksSinceKill = obs.tick - obs.self.lastKillTick;
+  const ticksSinceMove = obs.tick - obs.self.lastMoveTick;
+  const stuck = ticksSinceMove > 90;
+
+  return {
+    predDist, predDir, absDist, absDir, altitudeOff,
+    inReach, canSwing,
+    oppActive, oppCommittedAtUs, oppRecovering, oppOpen, oppClosingFast,
+    oppAggression, freeSwing, cornered,
+    ticksSinceOppAttack, ticksSinceClash, ticksSinceKill, stuck,
+  };
+}
+
+// ---------- Platform helpers ----------
 
 function climbStep(obs: Observation, targetY?: number): Platform | null {
   let best: Platform | null = null;
@@ -10,14 +194,21 @@ function climbStep(obs: Observation, targetY?: number): Platform | null {
   for (const p of obs.platforms) {
     if (p.solid) continue;
     if (p.y >= obs.self.y - 30) continue;
-    if (p.y < obs.self.y - REACH_UP) continue;
+    if (p.y < obs.self.y - 260) continue;
     const score = targetY !== undefined ? Math.abs(p.y - targetY) : p.y;
-    if (score < bestScore) {
-      best = p;
-      bestScore = score;
-    }
+    if (score < bestScore) { best = p; bestScore = score; }
   }
   return best;
+}
+
+function onDropThroughPlatform(obs: Observation): Platform | null {
+  for (const p of obs.platforms) {
+    if (p.solid) continue;
+    const overX = obs.self.x > p.x && obs.self.x < p.x + p.w;
+    const nearY = Math.abs(obs.self.y + STATS.bodyH * 0.5 - p.y) < 4;
+    if (overX && nearY && obs.self.onGround) return p;
+  }
+  return null;
 }
 
 function navigateTo(obs: Observation, tx: number, ty: number): Action {
@@ -40,260 +231,415 @@ function navigateTo(obs: Observation, tx: number, ty: number): Action {
     }
     const dx2 = tx - obs.self.x;
     const stillRising = !obs.self.onGround && obs.self.vy < -150;
-    return {
-      left: dx2 < -10,
-      right: dx2 > 10,
-      up: obs.self.onGround || stillRising,
-    };
+    return { left: dx2 < -10, right: dx2 > 10, up: obs.self.onGround || stillRising };
   }
   const dx = tx - obs.self.x;
   return { left: dx < -10, right: dx > 10 };
 }
 
-export function runParamBrain(obs: Observation, params: Params): Action {
-  if (obs.self.dead) return {};
+// ---------- Mode transition ----------
 
-  const losing =
-    obs.self.rounds < obs.opp.rounds ||
-    (obs.self.rounds === obs.opp.rounds && obs.self.score < obs.opp.score);
-  const winning =
-    obs.self.rounds > obs.opp.rounds ||
-    (obs.self.rounds === obs.opp.rounds && obs.self.score > obs.opp.score);
+function enterMode(
+  state: BrainState, mode: BrainMode, substate: string | null,
+  tick: number, reason: string,
+): void {
+  state.mode = mode;
+  state.substate = substate;
+  state.modeEnterTick = tick;
+  state.lastTransitionReason = reason;
+}
 
-  if (obs.self.hasToken && obs.goal.exists && params.shipRate > 0.3) {
-    const toGoal = obs.goal.x - obs.self.x;
-    const toOpp = obs.opp.x - obs.self.x;
-    const oppInPath = Math.sign(toGoal) === Math.sign(toOpp)
-      && Math.abs(toOpp) < Math.abs(toGoal);
-    const oppClose = obs.absDx < 150;
-    const oppDangerous = !obs.opp.dead && (obs.tick - obs.opp.lastAttackStartTick) > 5;
-    const goalTimerUrgent = obs.goal.timer < 3;
-    const mustCommit = goalTimerUrgent || losing;
+function ticksInMode(state: BrainState, tick: number): number {
+  return tick - state.modeEnterTick;
+}
 
-    const atGoal = Math.hypot(obs.self.x - obs.goal.x, obs.self.y - obs.goal.y) < 30;
-    if (atGoal && oppClose) {
-      return {
-        action: obs.absDx < 80 && obs.self.swipeCD <= 0,
-      };
+function effectiveMinDuration(mode: BrainMode, params: Params): number {
+  const pacing = Math.max(0, Math.min(1, params.pacing ?? 0));
+  return Math.round(MIN_DURATION[mode] * (1.5 - pacing));
+}
+
+// Global transition logic: picks the next mode for *this* tick. Called at
+// the top of each brain tick before the mode-specific behavior fn. The
+// rule is: check emergency triggers first (can fire regardless of
+// min-duration), then check normal triggers (gated by min-duration).
+function decideMode(obs: Observation, params: Params, state: BrainState, sig: Signals): void {
+  const tick = obs.tick;
+  const t = ticksInMode(state, tick);
+  const minDur = effectiveMinDuration(state.mode, params);
+
+  // --- Emergency overrides (always fire) ---
+
+  // Own respawn: mode should already have been reset externally; defensive.
+  if (obs.self.dead) {
+    if (state.mode !== "neutral") enterMode(state, "neutral", null, tick, "dead");
+    return;
+  }
+
+  // Hard danger: opp committed at close range, we're not committed and
+  // can't match. ESCAPE regardless of min-duration. Invuln is a free pass.
+  const canMatchCommit = obs.self.swipeCD <= 0 && sig.inReach;
+  const hardDanger =
+    sig.oppCommittedAtUs &&
+    sig.absDist < swingRange(params) + 20 &&
+    obs.self.swipeT <= 0 &&
+    obs.self.diveT <= 0 &&
+    obs.self.invuln <= 0 &&
+    !canMatchCommit;
+  if (hardDanger && state.mode !== "escape") {
+    enterMode(state, "escape", null, tick, "hard-danger");
+    return;
+  }
+
+  // Token state change is authoritative: drops into OBJECTIVE.
+  const objectiveActive =
+    obs.self.hasToken ||
+    (obs.opp.hasToken && obs.goal.exists) ||
+    (obs.token.exists && !obs.self.hasToken && !obs.opp.hasToken);
+  if (objectiveActive && state.mode !== "objective") {
+    // Only preempt non-escape modes; escaping a kill threat trumps
+    // objective routing.
+    if (state.mode !== "escape" || t >= minDur) {
+      enterMode(state, "objective", null, tick, "token-state");
     }
-    if (oppInPath && oppClose && obs.self.onGround && obs.absDx < 120) {
-      const toGoalSign = Math.sign(toGoal) || 1;
-      return {
-        left: toGoalSign < 0, right: toGoalSign > 0,
-        up: true,
-      };
-    }
-    const abortThreshold = 1 - (params.greed ?? 0.5);
-    const shouldFightBlocker = oppInPath && oppClose && oppDangerous && abortThreshold > 0.6 && !mustCommit;
-    if (!shouldFightBlocker) {
-      return navigateTo(obs, obs.goal.x, obs.goal.y);
-    }
+  }
+  if (!objectiveActive && state.mode === "objective") {
+    enterMode(state, "neutral", null, tick, "objective-cleared");
   }
 
-  if (obs.opp.hasToken && obs.goal.exists && (params.spite ?? 0) < 0) {
-    const dxOpp = obs.opp.x - obs.self.x;
-    return {
-      left: dxOpp < -10,
-      right: dxOpp > 10,
-      action: Math.abs(dxOpp) < 110 && Math.abs(obs.dy) < 80,
-    };
+  // --- Normal transitions (min-duration gated) ---
+
+  if (t < minDur) return; // respect commitment window
+
+  // OFFENSE-punish entry: opp in recovery window, we can swing.
+  if (
+    state.mode === "neutral" && sig.oppRecovering && obs.self.swipeCD <= 0
+    && sig.absDist < swingRange(params) + 120
+  ) {
+    enterMode(state, "offense", "punish", tick, "opp-recovery");
+    return;
   }
 
-  const E = { ...params };
-  const overrideStr = 1 - Math.min(1, (E.hallucination || 0) / 100);
-  if (!obs.self.hasToken) {
-    E.moat += (Math.min(params.moat, 50) - E.moat) * overrideStr;
-    E.pivotSpeed += (params.pivotSpeed * 0.3 - E.pivotSpeed) * overrideStr;
-    E.burnRate += (Math.max(params.burnRate, 0.7) - E.burnRate) * overrideStr;
-  }
-  if (obs.opp.hasToken && obs.goal.exists) {
-    E.moat += (0 - E.moat) * overrideStr;
-    E.burnRate += (1.0 - E.burnRate) * overrideStr;
-    E.pivotSpeed += (0 - E.pivotSpeed) * overrideStr;
+  // OFFENSE-press entry: opp open / stunned / cornered / we have altitude.
+  if (state.mode === "neutral" && (
+    obs.opp.stun > 0 ||
+    (sig.oppOpen && sig.absDist < 260) ||
+    (obs.self.y < obs.opp.y - 40 && sig.absDist < 200)
+  )) {
+    enterMode(state, "offense", "press", tick, "opp-open-or-altitude");
+    return;
   }
 
-  if (losing) {
-    E.burnRate = Math.min(1, E.burnRate * 1.25);
-    E.moat = Math.max(20, E.moat * 0.8);
-  } else if (winning) {
-    E.moat = Math.min(240, E.moat * 1.2);
-    E.burnRate = Math.max(0.2, E.burnRate * 0.9);
+  // ZONE entry: opp is a spammer and we're not pressured.
+  if (state.mode === "neutral" && sig.oppAggression > 0.5 && sig.absDist > 120) {
+    enterMode(state, "zone", null, tick, "opp-spammer");
+    return;
   }
 
-  if ((params.pacing ?? 0) > 0.05) {
-    const pacingMul = 1 + (params.pacing ?? 0) * 0.5 * Math.sin(obs.tick * 0.02);
-    E.burnRate *= pacingMul;
+  // OFFENSE-bait entry: moderate greed, foresight, opp not committed,
+  // in the "just outside reach" band. Creates the bait window.
+  if (
+    state.mode === "neutral" && !sig.oppActive &&
+    (params.greed ?? 0.5) > 0.4 && (params.cunning ?? 0.5) > 0.4 &&
+    sig.absDist > swingRange(params) && sig.absDist < swingRange(params) + 80
+  ) {
+    enterMode(state, "offense", "bait", tick, "bait-window");
+    return;
   }
 
-  const predX = obs.opp.x + obs.opp.vx * E.foresight;
-  const predDx = predX - obs.self.x;
-  const predDist = Math.abs(predDx);
-  const predDir = Math.sign(predDx) || 1;
+  // OFFENSE exit: stale window with no commitment opportunity.
+  if (state.mode === "offense" && t > 80) {
+    enterMode(state, "neutral", null, tick, "offense-stale");
+    return;
+  }
 
-  const absDist = obs.absDx;
-  const absDir = Math.sign(obs.dx) || 1;
+  // ZONE exit: opp stopped pressing OR we're no longer center-adjacent.
+  if (state.mode === "zone" && (sig.oppAggression < 0.2 || sig.cornered)) {
+    enterMode(state, sig.cornered ? "escape" : "neutral", null, tick, "zone-cleared");
+    return;
+  }
 
-  const oppActive = obs.opp.swipeT > 0 || obs.opp.diveT > 0;
-  const danger = oppActive && absDist < 100;
+  // ESCAPE exit: spacing restored.
+  if (state.mode === "escape" && sig.absDist > 280 && obs.self.stun <= 0) {
+    enterMode(state, "neutral", null, tick, "escape-complete");
+    return;
+  }
+}
 
-  const desiredY = obs.opp.y + E.leverage * 150;
-  const altitudeOff = obs.self.y - desiredY;
+// ---------- Mode behavior functions ----------
 
+function runNeutralMode(obs: Observation, params: Params, sig: Signals): Action {
+  // Hold spacing at moat. Only swing on freeSwing opportunity.
   let move = 0;
+  if (sig.predDist > params.moat + 15) move = sig.predDir;
+  else if (sig.predDist < params.moat - 15) move = -sig.predDir;
+
   let jump = false;
   let down = false;
   const stillRising = !obs.self.onGround && obs.self.vy < -150;
+  if (sig.altitudeOff > 60 && obs.self.onGround) jump = true;
+  if (sig.altitudeOff > 60 && stillRising) jump = true;
+  if (sig.altitudeOff < -80) down = true;
 
-  const ticksSinceClash = obs.tick - obs.self.lastClashTick;
-  const ticksSinceOppAttack = obs.tick - obs.opp.lastAttackStartTick;
-  const ticksSinceKill = obs.tick - obs.self.lastKillTick;
-  const recentClash = ticksSinceClash < 36;
-  const oppCommitted = ticksSinceOppAttack < 10 && oppActive;
-  const postKillMomentum = ticksSinceKill < 72;
-  const cun = params.cunning ?? 0.5;
-
-  if (postKillMomentum) {
-    if (obs.self.hasToken && obs.goal.exists) {
-      return navigateTo(obs, obs.goal.x, obs.goal.y);
-    }
-    if (obs.token.exists && !obs.self.hasToken) {
-      const tx = obs.token.x - obs.self.x;
-      return { left: tx < -10, right: tx > 10 };
-    }
-  }
-
-  if (oppCommitted && cun > 0.5 && absDist < 160 && obs.self.swipeCD <= 0) {
-    return {
-      left: predDir < 0,
-      right: predDir > 0,
-      action: absDist < 90,
-    };
-  }
-
-  const approachSpeed = Math.abs(obs.self.vx) + Math.abs(obs.opp.vx);
-  const mutualImminent =
-    absDist < 150 &&
-    Math.abs(obs.dy) < 30 &&
-    approachSpeed > 280 &&
-    obs.self.swipeT <= 0 &&
-    obs.opp.swipeT <= 0 &&
-    obs.self.onGround;
-  if (mutualImminent && E.foresight > 0.08) {
-    const phase = (obs.tick + obs.self.id * 37) % 120;
-    if (phase < 18) {
-      const flip = obs.self.id === 0 ? 1 : -1;
-      return { left: -absDir * flip < 0, right: -absDir * flip > 0, up: true };
-    }
-  }
-
-  if (
-    obs.opp.hasToken && E.networking > 0.5 && obs.self.onGround
-    && altitudeOff > 40 && obs.self.wall === 0
-    && obs.self.y > obs.opp.y - 60
-  ) {
-    const oppSide = obs.opp.x > obs.self.x ? 1 : -1;
-    const targetWallX = oppSide > 0 ? obs.arena.right : obs.arena.left;
-    const distToWall = Math.abs(obs.self.x - targetWallX);
-    if (distToWall > 60) {
-      return {
-        left: targetWallX < obs.self.x,
-        right: targetWallX > obs.self.x,
-        up: true,
-      };
-    }
-  }
-
-  if (E.networking > 0.4 && obs.self.wall !== 0 && altitudeOff > 60) {
-    return { left: obs.self.wall < 0, right: obs.self.wall > 0, up: true };
-  }
-
-  if (
-    !obs.self.onGround &&
-    E.leverage < -0.4 &&
-    obs.self.y < obs.opp.y - 30 &&
-    obs.absDx < 70
-  ) {
-    return { down: true, action: true };
-  }
-
-  const ticksSinceMove = obs.tick - obs.self.lastMoveTick;
-  const stuck = ticksSinceMove > 90;
-  if (stuck) {
-    if (obs.self.onGround && absDist < 200) {
-      return { left: absDir < 0, right: absDir > 0, up: true };
-    }
-    if (obs.self.onGround) {
-      return { left: predDir < 0, right: predDir > 0, down: true };
-    }
-    if (obs.self.y < obs.opp.y - 20) return { down: true, action: true };
-  }
-
-  if (recentClash && absDist < 110) {
-    const aggressive = (params.spite ?? 0) > 0.1 || (params.pacing ?? 0) > 0.5;
-    const evasive = (params.pivotSpeed ?? 0) > 0.6;
-    const phase = (ticksSinceClash + obs.self.id * 13) % 40;
-    if (phase < 12) {
-      move = -absDir;
-    } else if (aggressive && obs.self.onGround) {
-      move = absDir;
-      jump = true;
-    } else if (evasive) {
-      return {
-        left: -absDir < 0,
-        right: -absDir > 0,
-        action: (params.cunning ?? 0) > 0.5,
-      };
-    } else {
-      if (phase < 24) {
-        move = -absDir;
-      } else {
-        move = absDir;
-        jump = obs.self.onGround;
-      }
-    }
-  } else if (danger && E.pivotSpeed > 0.5) {
-    move = -absDir;
-    jump = obs.self.onGround || stillRising;
-  } else if (altitudeOff > 60) {
-    const nav = navigateTo(obs, obs.opp.x, desiredY);
-    move = nav.left ? -1 : nav.right ? 1 : 0;
-    jump = !!nav.up || stillRising;
-    if (!nav.up && E.networking > 0.5 && obs.self.onGround) {
-      const toLeft = obs.self.x - obs.arena.left;
-      const toRight = obs.arena.right - obs.self.x;
-      move = toLeft < toRight ? -1 : 1;
-    }
-  } else if (altitudeOff < -80) {
-    down = true;
-    if (obs.dx > 10) move = 1;
-    else if (obs.dx < -10) move = -1;
-  } else {
-    if (predDist > E.moat + 15) move = predDir;
-    else if (predDist < E.moat - 15) move = -predDir;
-  }
-
-  const swingRange = 50 + E.burnRate * 80;
-  const inSwingReach = absDist < swingRange && Math.abs(obs.dy) < 80;
-  const oppOpen = obs.opp.stun > 0 || (!oppActive && Math.abs(obs.opp.vx) < 120);
-
-  const oppDivingAtUs = obs.opp.diveT > 0 && obs.absDx < 110 && obs.opp.y < obs.self.y + 20;
-  const selfBehindOpp = (obs.self.x - obs.opp.x) * obs.opp.facing < 0 && obs.absDx < 100;
-  const verticalAdvantage = obs.self.y < obs.opp.y - 30 && obs.absDx < 140;
-  const freeSwing = oppDivingAtUs || selfBehindOpp || verticalAdvantage;
-
-  const reckless = cun < 0.3;
-  const patient = cun > 0.7;
-  let safeStrike = inSwingReach && (!oppActive || absDist < 70);
-  if (patient) safeStrike = safeStrike && oppOpen;
-  else if (reckless) safeStrike = inSwingReach;
-
-  if (stillRising && (altitudeOff > 60 || danger)) jump = true;
+  const takeFreeSwing = sig.canSwing && sig.freeSwing;
 
   return {
     left: move < 0,
     right: move > 0,
     up: jump,
     down,
-    action: freeSwing || (safeStrike && (E.burnRate > 0.15 || oppOpen)),
+    action: takeFreeSwing,
   };
+}
+
+function runOffenseMode(
+  obs: Observation, params: Params, state: BrainState, sig: Signals,
+): Action {
+  const sub = state.substate ?? "press";
+
+  // Shared close-gap movement.
+  let move: number = sig.predDir;
+  let jump = false;
+  let down = false;
+  const stillRising = !obs.self.onGround && obs.self.vy < -150;
+
+  // Altitude press toward desiredY while closing.
+  if (sig.altitudeOff > 60 && obs.self.onGround) jump = true;
+  if (sig.altitudeOff > 60 && stillRising) jump = true;
+  if (sig.altitudeOff < -80) down = true;
+
+  // Dive as mobility when above opp (press substate only).
+  if (
+    sub === "press" && !obs.self.onGround &&
+    obs.self.y < obs.opp.y - 40 && obs.self.diveCD <= 0 &&
+    sig.absDist < 140 && Math.abs(obs.dy) > 30
+  ) {
+    return { down: true, action: true, left: move < 0, right: move > 0 };
+  }
+
+  // Bait: hover just outside reach, mirror opp motion, don't close hard.
+  if (sub === "bait") {
+    const baitDist = swingRange(params) + 30;
+    if (sig.predDist > baitDist + 20) move = sig.predDir;
+    else if (sig.predDist < baitDist - 20) move = -sig.predDir;
+    else move = 0;
+    // Only commit if opp is now in our reach while we're not yet in theirs
+    // (they committed and whiffed short, or they opened).
+    const baitCommit = sig.canSwing && (sig.oppRecovering || sig.oppOpen || sig.freeSwing);
+    return {
+      left: move < 0, right: move > 0, up: jump, down,
+      action: baitCommit,
+    };
+  }
+
+  // Punish: sprint into opp, commit on arrival. No moat discipline.
+  if (sub === "punish") {
+    move = sig.absDir;
+    const commit = sig.canSwing && (sig.oppRecovering || sig.oppOpen || sig.freeSwing || sig.absDist < 60);
+    return {
+      left: move < 0, right: move > 0, up: jump, down,
+      action: commit,
+    };
+  }
+
+  // Press: close gap, swing when in reach AND it's safe to commit.
+  // Safe to commit means either (a) opp is not committed-at-us, so we
+  // land first if we're faster, or (b) we're willing to trade (greed
+  // high → doubleKO is acceptable), or (c) freeSwing / opp recovering.
+  const safeCommit =
+    sig.freeSwing ||
+    sig.oppRecovering ||
+    sig.oppOpen ||
+    (!sig.oppCommittedAtUs) ||
+    ((params.greed ?? 0.5) > 0.6 && sig.absDist < swingRange(params) * 0.7);
+
+  return {
+    left: move < 0, right: move > 0, up: jump, down,
+    action: sig.canSwing && safeCommit,
+  };
+}
+
+function runZoneMode(obs: Observation, params: Params, sig: Signals): Action {
+  // Denial posture. Hold preferred altitude, let opp approach through our
+  // preferred angle. Swipe only on opp recovery / freeSwing.
+  let move = 0;
+
+  // Preferred zone distance — wider than moat by +40 for zone discipline.
+  const zoneDist = Math.max(params.moat + 40, 150);
+  if (sig.predDist > zoneDist + 15) move = sig.predDir;
+  else if (sig.predDist < zoneDist - 15) move = -sig.predDir;
+
+  // Altitude preference (leverage-driven). Prefer the elevated side.
+  let jump = false;
+  let down = false;
+  const stillRising = !obs.self.onGround && obs.self.vy < -150;
+  if (sig.altitudeOff > 40 && (obs.self.onGround || stillRising)) jump = true;
+  if (sig.altitudeOff < -100) down = true;
+
+  // Wall-climb-jump for altitude recovery when wall-bound and opp below.
+  if (obs.self.wall !== 0 && sig.altitudeOff > 40) {
+    return { left: obs.self.wall < 0, right: obs.self.wall > 0, up: true };
+  }
+
+  const zoneStrike = sig.canSwing && (sig.freeSwing || sig.oppRecovering);
+
+  return {
+    left: move < 0, right: move > 0, up: jump, down,
+    action: zoneStrike,
+  };
+}
+
+function runObjectiveMode(obs: Observation, params: Params, sig: Signals): Action {
+  // Token state drives the sub-behavior.
+  const iHaveToken = obs.self.hasToken;
+  const oppHasToken = obs.opp.hasToken;
+
+  // DELIVER: I have the token. Route to goal. Once within 40px, stand
+  // ground (the dwell window) and only swipe if opp tries to hit me.
+  if (iHaveToken && obs.goal.exists) {
+    const dxGoal = obs.goal.x - obs.self.x;
+    const dyGoal = obs.goal.y - obs.self.y;
+    const atGoal = Math.hypot(dxGoal, dyGoal) < 40;
+
+    if (atGoal) {
+      // Dwell hold. Don't chase opp. Defensive swing if opp walks into
+      // reach while we dwell. Small altitude adjust if opp above.
+      let action = false;
+      if (sig.canSwing && sig.oppCommittedAtUs) action = true;
+      if (sig.canSwing && sig.freeSwing) action = true;
+      let jumpD = false;
+      if (obs.opp.y < obs.self.y - 40 && obs.opp.diveT > 0) jumpD = true; // escape incoming dive
+      return { action, up: jumpD };
+    }
+
+    // Committed route to goal. Shouldn't-fight-blocker unless dangerous
+    // AND not time-urgent.
+    const oppInPath = Math.sign(dxGoal) === Math.sign(obs.opp.x - obs.self.x)
+      && Math.abs(obs.opp.x - obs.self.x) < Math.abs(dxGoal);
+    const goalTimerUrgent = obs.goal.timer < 3;
+    const shouldFight =
+      oppInPath && sig.absDist < 120 &&
+      !goalTimerUrgent && (params.greed ?? 0.5) < 0.4 && !sig.oppCommittedAtUs;
+
+    if (oppInPath && sig.absDist < 120 && obs.self.onGround) {
+      // Jump over blocker.
+      const toGoalSign = Math.sign(dxGoal) || 1;
+      return { left: toGoalSign < 0, right: toGoalSign > 0, up: true };
+    }
+
+    if (!shouldFight) {
+      return navigateTo(obs, obs.goal.x, obs.goal.y);
+    }
+  }
+
+  // INTERCEPT: opp has token. Split on distance — far → block the goal
+  // line; close → kill-for-reset.
+  if (oppHasToken && obs.goal.exists) {
+    const dxGoal = obs.goal.x - obs.self.x;
+    const oppToGoal = Math.hypot(obs.goal.x - obs.opp.x, obs.goal.y - obs.opp.y);
+    const goalTimerUrgent = obs.goal.timer < 3;
+
+    if (sig.absDist < 200 && obs.self.onGround) {
+      // Kill-for-reset. Close and commit.
+      const move = sig.absDir;
+      const commit = sig.canSwing && (sig.freeSwing || sig.oppRecovering || sig.oppOpen || sig.absDist < 80);
+      return { left: move < 0, right: move > 0, action: commit };
+    }
+
+    // Block the goal. Position between opp and goal.
+    // Target: a point closer to the goal than opp is.
+    const blockX = obs.goal.x + Math.sign(obs.opp.x - obs.goal.x) * Math.max(60, Math.min(140, oppToGoal * 0.5));
+    const tx = blockX;
+    const ty = obs.goal.y;
+    if (goalTimerUrgent) {
+      // Urgent: commit to swipe opp if close.
+      if (sig.absDist < 120) return { left: sig.absDir < 0, right: sig.absDir > 0, action: sig.canSwing };
+    }
+    return navigateTo(obs, tx, ty);
+  }
+
+  // PICKUP: token on ground, neither holds. Race.
+  if (obs.token.exists && obs.token.carrier === -1) {
+    const tx = obs.token.x;
+    const ty = obs.token.y;
+    const myDist = Math.hypot(tx - obs.self.x, ty - obs.self.y);
+    const oppDist = Math.hypot(tx - obs.opp.x, ty - obs.opp.y);
+    if (myDist <= oppDist + 20) {
+      return navigateTo(obs, tx, ty);
+    }
+    // Opp will reach first. Preempt with a swipe if we can catch them.
+    if (sig.canSwing && sig.absDist < swingRange(params)) {
+      return { action: true, left: sig.absDir < 0, right: sig.absDir > 0 };
+    }
+    return navigateTo(obs, tx, ty);
+  }
+
+  // Fallback — shouldn't reach here because objective-active triggered
+  // the mode entry.
+  return runNeutralMode(obs, params, sig);
+}
+
+function runEscapeMode(obs: Observation, params: Params, sig: Signals): Action {
+  // Priority ladder. NEVER swipe.
+  // 1. Wall-bound → wall-jump away.
+  if (obs.self.wall !== 0) {
+    return { left: obs.self.wall > 0, right: obs.self.wall < 0, up: true };
+  }
+
+  // 2. On non-solid platform with opp on same level → drop-through.
+  const dropPlat = onDropThroughPlatform(obs);
+  if (dropPlat && Math.abs(obs.dy) < 40 && sig.absDist < 160) {
+    return { down: true };
+  }
+
+  // 3. Airborne and opp below/level → horizontal drift toward nearest
+  //    safe side (farther from opp).
+  if (!obs.self.onGround) {
+    const dir = obs.opp.x > obs.self.x ? -1 : 1;
+    return { left: dir < 0, right: dir > 0 };
+  }
+
+  // 4. Cornered → straight-up stall-climb to a platform out of reach.
+  if (sig.cornered) {
+    const step = climbStep(obs);
+    if (step) {
+      const platL = step.x + 12;
+      const platR = step.x + step.w - 12;
+      let dir = 0;
+      if (obs.self.x < platL) dir = 1;
+      else if (obs.self.x > platR) dir = -1;
+      return { left: dir < 0, right: dir > 0, up: true };
+    }
+    return { up: true, left: obs.opp.x > obs.self.x, right: obs.opp.x < obs.self.x };
+  }
+
+  // 5. Default: run perpendicular/away from opp at ground speed.
+  const awayDir = obs.opp.x > obs.self.x ? -1 : 1;
+  // Pivot-speed flavor: high pivotSpeed takes the longer path (more
+  // distance) via an upward arc; low pivotSpeed hugs the ground.
+  const useArc = (params.pivotSpeed ?? 0.5) > 0.5 && obs.self.onGround;
+  return {
+    left: awayDir < 0,
+    right: awayDir > 0,
+    up: useArc,
+  };
+}
+
+// ---------- Dispatcher ----------
+
+export function runParamBrain(
+  obs: Observation, params: Params, state: BrainState,
+): Action {
+  if (obs.self.dead) return {};
+
+  updateOppModel(state, obs);
+  const sig = deriveSignals(obs, params, state);
+  decideMode(obs, params, state, sig);
+
+  switch (state.mode) {
+    case "neutral":   return runNeutralMode(obs, params, sig);
+    case "offense":   return runOffenseMode(obs, params, state, sig);
+    case "zone":      return runZoneMode(obs, params, sig);
+    case "objective": return runObjectiveMode(obs, params, sig);
+    case "escape":    return runEscapeMode(obs, params, sig);
+  }
 }

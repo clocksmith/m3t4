@@ -174,6 +174,32 @@ export interface World {
   freeze: number;
   rng: Rng;
   noiseSeed: number;
+  brainStates: [BrainState, BrainState];
+}
+
+// ============ Brain intent state (brain v3) ============
+//
+// One state object per fighter per match. Mutated in place by the brain.
+// Lives for the full match; mode resets to "neutral" on round boundary and
+// on own respawn, but the rolling opp-model buffers are preserved across
+// lives so an opp's playstyle (e.g. swipe-spammer) is remembered.
+
+export type BrainMode = "neutral" | "offense" | "zone" | "objective" | "escape";
+
+export interface BrainState {
+  id: 0 | 1;
+  mode: BrainMode;
+  substate: string | null;
+  modeEnterTick: number;
+
+  // Rolling event buffers — ring-bounded, tick-stamped. Entries older than
+  // OPP_BUFFER_DECAY_TICKS (defined in brain.ts) are dropped on insert.
+  recentOppSwipeTicks: number[];
+  recentOppDiveTicks: number[];
+  lastKnownOppAttackStartTick: number;
+
+  // Debug hook — reason for last mode transition. Not used in decisions.
+  lastTransitionReason: string;
 }
 
 // ============ Observation (passed to brains) ============
@@ -190,6 +216,7 @@ export interface Observation {
     onGround: boolean;
     wall: -1 | 0 | 1;
     stun: number;
+    invuln: number;
     dead: boolean;
     swipeT: number;
     swipeCD: number;
@@ -220,7 +247,7 @@ export interface Observation {
     score: number;
     rounds: number;
   };
-  token: { exists: boolean; x: number; y: number; carrier: 0 | 1 | -1 };
+  token: { exists: boolean; x: number; y: number; carrier: 0 | 1 | -1; dwellT: number };
   goal: { exists: boolean; x: number; y: number; label: string; timer: number };
   platforms: Platform[];
   arena: { left: number; right: number; top: number; floor: number };

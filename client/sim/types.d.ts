@@ -121,6 +121,18 @@ export interface World {
     freeze: number;
     rng: Rng;
     noiseSeed: number;
+    brainStates: [BrainState, BrainState];
+}
+export type BrainMode = "neutral" | "offense" | "zone" | "objective" | "escape";
+export interface BrainState {
+    id: 0 | 1;
+    mode: BrainMode;
+    substate: string | null;
+    modeEnterTick: number;
+    recentOppSwipeTicks: number[];
+    recentOppDiveTicks: number[];
+    lastKnownOppAttackStartTick: number;
+    lastTransitionReason: string;
 }
 export interface Observation {
     self: {
@@ -134,6 +146,7 @@ export interface Observation {
         onGround: boolean;
         wall: -1 | 0 | 1;
         stun: number;
+        invuln: number;
         dead: boolean;
         swipeT: number;
         swipeCD: number;
@@ -169,6 +182,7 @@ export interface Observation {
         x: number;
         y: number;
         carrier: 0 | 1 | -1;
+        dwellT: number;
     };
     goal: {
         exists: boolean;

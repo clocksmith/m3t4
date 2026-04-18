@@ -1,0 +1,456 @@
+// Phase 4a: cheap adversarial attacker.
+//
+// For each target in the installed roster, search for the best legal
+// counter the attacker can find on a bounded compute budget. Report:
+//   - validatedWr (canonical, separate from search estimate)
+//   - transferability vector (counter WR vs EACH other roster member)
+//   - fragilityDelta (WR change under budget-preserving UI transfers)
+//   - budgetPressure (top-K UI sums — cheap vs overdetermined counter signal)
+//
+// Search method: budget-transfer hill climb.
+//   - 20-member population seeded from diverse starts (mix of HOF pool,
+//     axis-anchors, random-simplex samples).
+//   - Each generation: mutate each parent via budgetTransfer, score the
+//     children, keep top-N of (parents ∪ children). Budget-transfer
+//     preserves total spend so we're always on the legal simplex.
+//
+// Search evaluations use 1 seed × 3 stages per candidate (noisy but cheap).
+// The reported validatedWr uses 5 seeds × 3 stages (15 matches). These
+// are stored as separate fields so future analysis can distinguish
+// "attacker optimized against this" from "this is the ground-truth WR."
+
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import {
+  STAGES, STRATEGIES, STRATEGY_NAMES,
+  USER_KNOBS, nativeToUI,
+  type BrainConfig, type Stage,
+} from "@m3t4/sim";
+import { runMatches, type MatchSpec } from "./parallel.js";
+import {
+  sampleCandidate, sampleInitialPopulation,
+  type SampledCandidate, type SourceKind,
+} from "./simplex-sample.js";
+import { budgetTransfer } from "./budget-transfer.js";
+
+// ----- Types -----
+
+export interface TransferabilityEntry {
+  rosterId: string;
+  wr: number;
+}
+
+export interface BudgetPressure {
+  top3UiSum: number;
+  top5UiSum: number;
+  spent: number;
+}
+
+export interface AttackResult {
+  targetId: string;
+  targetHash: string;
+  counter: BrainConfig;
+  searchWr: number;
+  validatedWr: number;
+  validationMatches: number;
+  searchBudget: number;
+  searchMethod: "budget-transfer-hillclimb";
+  transferabilityVector: TransferabilityEntry[];
+  transferabilityMean: number;
+  fragilityDelta: number;
+  fragilitySamples: number;
+  budgetPressure: BudgetPressure;
+  discoveredAt: string;
+}
+
+export interface AttackConfig {
+  evalBudget?: number;    // default 2000 — total candidate evaluations
+  populationSize?: number; // default 20
+  workers?: number;
+  seedCheap?: number;      // default 1 (seed count for search scoring)
+  seedValidate?: number;   // default 5
+  stages?: Stage[];
+}
+
+// ----- Utilities -----
+
+function hashAttributes(cfg: BrainConfig): string {
+  const keys = Object.keys(cfg.attributes).sort();
+  const json = keys.map((k) => `${k}:${cfg.attributes[k as never]}`).join("|");
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < json.length; i++) {
+    h ^= json.charCodeAt(i) & 0xff;
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+// Uses canonical USER_KNOBS + nativeToUI so range/knob semantics stay
+// in lockstep with the rest of the sim.
+function uiVector(cfg: BrainConfig): number[] {
+  return USER_KNOBS.map((k) => {
+    const v = cfg.attributes[k];
+    if (typeof v !== "number") return 0;
+    return Math.round(nativeToUI(k, v));
+  });
+}
+
+function computeBudgetPressure(counter: BrainConfig): BudgetPressure {
+  const ui = uiVector(counter);
+  const sorted = ui.slice().sort((a, b) => b - a);
+  return {
+    top3UiSum: sorted[0] + sorted[1] + sorted[2],
+    top5UiSum: sorted[0] + sorted[1] + sorted[2] + sorted[3] + sorted[4],
+    spent: ui.reduce((s, v) => s + v, 0),
+  };
+}
+
+// ----- Diverse seed population -----
+
+function diverseStarts(count: number, hofPool: BrainConfig[], generation = 0): SampledCandidate[] {
+  const out: SampledCandidate[] = [];
+
+  // ~40% from HOF extremes (top by external WR + a few random lower-tier)
+  const fromHof = Math.floor(count * 0.4);
+  for (let i = 0; i < fromHof && i < hofPool.length; i++) {
+    const pick = hofPool[i % hofPool.length];
+    out.push({
+      config: { id: `attack-start-hof-${i}`, attributes: { ...pick.attributes } },
+      meta: {
+        configHash: hashAttributes(pick), uiSpendVector: uiVector(pick),
+        budgetShareVector: [], spent: uiVector(pick).reduce((s, v) => s + v, 0),
+        axisExtremes: [], sourceKind: "hof_elite",
+        parentIds: null, mutationKind: null, generation,
+      },
+    });
+  }
+
+  // ~30% axis-anchor + pair-anchor (guaranteed coverage of weak-axis exploits)
+  const rest = count - out.length;
+  const anchors = sampleInitialPopulation(Math.floor(rest * 0.6), generation);
+  for (const a of anchors.slice(0, Math.floor(rest * 0.6))) out.push(a);
+
+  // Remainder: Dirichlet mix (fresh randomness)
+  const kinds: SourceKind[] = ["dirichlet_sparse", "dirichlet_balanced", "dirichlet_dense"];
+  while (out.length < count) {
+    const kind = kinds[Math.floor(Math.random() * kinds.length)];
+    out.push(sampleCandidate({
+      id: `attack-start-${kind}-${out.length}`,
+      sourceKind: kind, generation, rng: Math.random,
+    }));
+  }
+
+  return out.slice(0, count);
+}
+
+// ----- Scoring -----
+
+async function scoreCandidatesVsTarget(
+  candidates: BrainConfig[],
+  target: BrainConfig,
+  seedsPerMatchup: number,
+  stages: Stage[],
+  workers: number,
+): Promise<number[]> {
+  const specs: MatchSpec[] = [];
+  candidates.forEach((c, ci) => {
+    if (c.id === target.id) return;
+    for (const stage of stages) {
+      for (let s = 0; s < seedsPerMatchup; s++) {
+        const seed = ((s * 101 + stage.id.length * 37 + ci * 13) | 0) >>> 0;
+        specs.push({ a: c, b: target, stageId: stage.id as MatchSpec["stageId"], seed, meta: { ci, side: 0 } });
+        specs.push({ a: target, b: c, stageId: stage.id as MatchSpec["stageId"], seed, meta: { ci, side: 1 } });
+      }
+    }
+  });
+  const outcomes = await runMatches(specs, { workers });
+  const wins = new Array(candidates.length).fill(0);
+  const played = new Array(candidates.length).fill(0);
+  for (const o of outcomes) {
+    const m = o.spec.meta as { ci: number; side: 0 | 1 };
+    played[m.ci]++;
+    if (o.winner === m.side) wins[m.ci]++;
+    else if (o.winner === -1) wins[m.ci] += 0.5;
+  }
+  return wins.map((w, i) => played[i] > 0 ? w / played[i] : 0.5);
+}
+
+// ----- Hill-climb search -----
+
+export async function attack(
+  target: BrainConfig,
+  hofPool: BrainConfig[],
+  config: AttackConfig = {},
+): Promise<{ counter: BrainConfig; searchWr: number; evalsUsed: number }> {
+  const evalBudget = config.evalBudget ?? 2000;
+  const popSize = config.populationSize ?? 20;
+  const workers = config.workers ?? os.cpus().length;
+  const stages = config.stages ?? Object.values(STAGES);
+  const seedCheap = config.seedCheap ?? 1;
+
+  let population = diverseStarts(popSize, hofPool);
+  let scores = await scoreCandidatesVsTarget(
+    population.map((p) => p.config), target, seedCheap, stages, workers,
+  );
+  let evalsUsed = popSize;
+  let best = {
+    config: population[argmax(scores)].config,
+    meta: population[argmax(scores)].meta,
+    wr: Math.max(...scores),
+  };
+
+  const gensMax = Math.floor((evalBudget - popSize) / popSize);
+  for (let g = 0; g < gensMax; g++) {
+    // Each parent begets one budget-transfer child. Occasional multi-transfer
+    // for bigger jumps. Pure-simplex moves keep us legal by construction.
+    const children = population.map((p, i) => {
+      const multi = Math.random() < 0.25 ? 3 : 1;
+      return budgetTransfer(p, { multiTransfers: multi }, Math.random, `atk-g${g}-${i}`, g);
+    });
+    const childScores = await scoreCandidatesVsTarget(
+      children.map((c) => c.config), target, seedCheap, stages, workers,
+    );
+    evalsUsed += popSize;
+
+    // Tournament: combine and keep top popSize
+    const combined = [
+      ...population.map((p, i) => ({ cand: p, wr: scores[i] })),
+      ...children.map((c, i) => ({ cand: c, wr: childScores[i] })),
+    ].sort((a, b) => b.wr - a.wr);
+    population = combined.slice(0, popSize).map((x) => x.cand);
+    scores = combined.slice(0, popSize).map((x) => x.wr);
+
+    if (scores[0] > best.wr) {
+      best = { config: population[0].config, meta: population[0].meta, wr: scores[0] };
+    }
+  }
+
+  return { counter: best.config, searchWr: best.wr, evalsUsed };
+}
+
+function argmax(xs: number[]): number {
+  let best = 0;
+  for (let i = 1; i < xs.length; i++) if (xs[i] > xs[best]) best = i;
+  return best;
+}
+
+// ----- Post-search analysis -----
+
+async function validateCounter(
+  counter: BrainConfig,
+  target: BrainConfig,
+  seeds: number,
+  stages: Stage[],
+  workers: number,
+): Promise<{ wr: number; matches: number }> {
+  const scores = await scoreCandidatesVsTarget([counter], target, seeds, stages, workers);
+  const matches = seeds * stages.length * 2;
+  return { wr: scores[0], matches };
+}
+
+async function computeTransferability(
+  counter: BrainConfig,
+  roster: BrainConfig[],
+  targetId: string,
+  seeds: number,
+  stages: Stage[],
+  workers: number,
+): Promise<{ vector: TransferabilityEntry[]; mean: number }> {
+  const vector: TransferabilityEntry[] = [];
+  for (const r of roster) {
+    if (r.id === targetId || r.id === counter.id) continue;
+    const scores = await scoreCandidatesVsTarget([counter], r, seeds, stages, workers);
+    vector.push({ rosterId: r.id, wr: scores[0] });
+  }
+  const mean = vector.length ? vector.reduce((s, x) => s + x.wr, 0) / vector.length : 0;
+  return { vector, mean };
+}
+
+async function computeFragility(
+  counter: BrainConfig,
+  counterMeta: SampledCandidate["meta"],
+  target: BrainConfig,
+  samples: number,
+  seeds: number,
+  stages: Stage[],
+  workers: number,
+  counterValidatedWr: number,
+): Promise<number> {
+  // Budget-preserving UI transfers (±5-ish) — same operator family as
+  // search, so the magnitude is comparable across axes. Raw native
+  // perturbations would be meaningless (moat ±5 vs burnRate ±5).
+  const mutants: BrainConfig[] = [];
+  for (let i = 0; i < samples; i++) {
+    const m = budgetTransfer(
+      { config: counter, meta: counterMeta },
+      { deltas: [3, 5], multiTransfers: 1 },
+      Math.random, `frag-${i}`, 0,
+    );
+    mutants.push(m.config);
+  }
+  const scores = await scoreCandidatesVsTarget(mutants, target, seeds, stages, workers);
+  const meanMutantWr = scores.reduce((s, x) => s + x, 0) / scores.length;
+  // Positive delta = counter degrades under mutation (basin is narrow)
+  return counterValidatedWr - meanMutantWr;
+}
+
+// ----- Full attack pipeline -----
+
+export async function attackTarget(
+  target: BrainConfig,
+  roster: BrainConfig[],
+  hofPool: BrainConfig[],
+  config: AttackConfig = {},
+): Promise<AttackResult> {
+  const stages = config.stages ?? Object.values(STAGES);
+  const workers = config.workers ?? os.cpus().length;
+  const seedValidate = config.seedValidate ?? 5;
+
+  // 1. Hill-climb search
+  const searchResult = await attack(target, hofPool, config);
+
+  // Counter meta (approximate — we reconstruct for fragility mutation)
+  const counterMeta: SampledCandidate["meta"] = {
+    configHash: hashAttributes(searchResult.counter),
+    uiSpendVector: uiVector(searchResult.counter),
+    budgetShareVector: [],
+    spent: uiVector(searchResult.counter).reduce((s, v) => s + v, 0),
+    axisExtremes: [],
+    sourceKind: "budget_transfer_mutation",
+    parentIds: null, mutationKind: "transfer", generation: 0,
+  };
+
+  // 2. Validation WR (canonical)
+  const { wr: validatedWr, matches: validationMatches } = await validateCounter(
+    searchResult.counter, target, seedValidate, stages, workers,
+  );
+
+  // 3. Transferability vector vs rest of roster
+  const { vector, mean } = await computeTransferability(
+    searchResult.counter, roster, target.id, seedValidate, stages, workers,
+  );
+
+  // 4. Fragility under budget-preserving transfers
+  const fragilityDelta = await computeFragility(
+    searchResult.counter, counterMeta, target, 8, seedValidate, stages, workers, validatedWr,
+  );
+
+  // 5. Budget pressure (geometric)
+  const budgetPressure = computeBudgetPressure(searchResult.counter);
+
+  return {
+    targetId: target.id,
+    targetHash: hashAttributes(target),
+    counter: searchResult.counter,
+    searchWr: searchResult.searchWr,
+    validatedWr,
+    validationMatches,
+    searchBudget: searchResult.evalsUsed,
+    searchMethod: "budget-transfer-hillclimb",
+    transferabilityVector: vector,
+    transferabilityMean: mean,
+    fragilityDelta,
+    fragilitySamples: 8,
+    budgetPressure,
+    discoveredAt: new Date().toISOString(),
+  };
+}
+
+// ----- Archive helpers -----
+
+export function archivePath(outDir: string, targetHash: string): string {
+  return path.resolve(outDir, `by-target/${targetHash}.json`);
+}
+
+export function readArchive(outDir: string, targetHash: string): AttackResult[] {
+  const p = archivePath(outDir, targetHash);
+  if (!fs.existsSync(p)) return [];
+  try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return []; }
+}
+
+// Append/merge: new results are added to existing archive. Callers decide
+// whether to dedupe by counter hash. Never overwrite — the archive is
+// an accumulating history of attacks, not a snapshot.
+export function appendArchive(outDir: string, targetHash: string, newResult: AttackResult): AttackResult[] {
+  const existing = readArchive(outDir, targetHash);
+  existing.push(newResult);
+  const p = archivePath(outDir, targetHash);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, JSON.stringify(existing, null, 2));
+  return existing;
+}
+
+// Retention: keep counters that still score >0.55 against ANY current
+// roster member. Prunes stale exploits whose target meta has drifted.
+export function pruneArchive(archive: AttackResult[], currentRosterIds: Set<string>): AttackResult[] {
+  return archive.filter((r) => {
+    if (!currentRosterIds.has(r.targetId)) return false;
+    return r.transferabilityVector.some((t) => t.wr > 0.55) || r.validatedWr > 0.55;
+  });
+}
+
+// ----- CLI -----
+
+async function main(): Promise<void> {
+  const args = (() => {
+    const out: Record<string, string> = {};
+    for (let i = 2; i < process.argv.length; i++) {
+      const k = process.argv[i];
+      if (k.startsWith("--")) {
+        const next = process.argv[i + 1];
+        if (next && !next.startsWith("--")) { out[k.slice(2)] = next; i++; }
+        else out[k.slice(2)] = "1";
+      }
+    }
+    return out;
+  })();
+
+  // CLI contract:
+  //   --targets  "current" | comma-separated ids       (default: "current" = all 16)
+  //   --budget   total search evaluations per target   (default: 10000)
+  //   --starts   population size / seed count          (default: 20)
+  //   --neighbors  children per generation (= starts)  (default: mirrors --starts)
+  //   --out      archive directory                     (default: pareto/exploits)
+  //   --bank     optional HOF json for diverse starts  (from roster-evolve dump)
+  const targetsArg = args.targets ?? "current";
+  const evalBudget = parseInt(args.budget ?? "10000", 10);
+  const starts = parseInt(args.starts ?? "20", 10);
+  const neighbors = parseInt(args.neighbors ?? String(starts), 10);
+  const outDir = args.out ?? "pareto/exploits";
+  const bankPath = args.bank;
+
+  const roster = STRATEGY_NAMES.map((n) => STRATEGIES[n as keyof typeof STRATEGIES]);
+  const hofPool: BrainConfig[] = bankPath && fs.existsSync(bankPath)
+    ? (JSON.parse(fs.readFileSync(bankPath, "utf8")).hof ?? [])
+        .map((h: { id: string; attributes: BrainConfig["attributes"] }) =>
+          ({ id: h.id, attributes: h.attributes } as BrainConfig))
+    : [];
+
+  const targets = targetsArg === "current"
+    ? roster
+    : targetsArg.split(",").map((id) => id.trim()).map((id) => {
+        const r = roster.find((x) => x.id === id);
+        if (!r) throw new Error(`unknown target: ${id}`);
+        return r;
+      });
+
+  console.error(`Attacking ${targets.length} target(s). budget=${evalBudget}/target starts=${starts} neighbors=${neighbors} out=${outDir}`);
+  for (const target of targets) {
+    console.error(`\n[attack] ${target.id}`);
+    const result = await attackTarget(target, roster, hofPool, {
+      evalBudget,
+      populationSize: neighbors,
+    });
+    console.log(`target=${result.targetId} validatedWr=${(result.validatedWr * 100).toFixed(1)}% ` +
+      `transferMean=${(result.transferabilityMean * 100).toFixed(1)}% ` +
+      `fragilityDelta=${(result.fragilityDelta * 100).toFixed(1)}% ` +
+      `top3UiSum=${result.budgetPressure.top3UiSum} top5UiSum=${result.budgetPressure.top5UiSum} ` +
+      `spent=${result.budgetPressure.spent}`);
+    appendArchive(outDir, result.targetHash, result);
+  }
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  await main();
+}

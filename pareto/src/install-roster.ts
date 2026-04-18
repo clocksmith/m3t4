@@ -27,7 +27,7 @@ interface RosterJSON {
     spent: number;
     internalWr: number;
     counters: number;
-    vsOldMeta: number;
+    vsOldMeta: number | null;
     origIdx?: number;
   }>;
   _names?: string[];
@@ -73,7 +73,10 @@ export const STRATEGIES: Record<StrategyName, BrainConfig> = {
 for (let i = 0; i < NAMES.length; i++) {
   const name = NAMES[i];
   const r = data.roster[i];
-  const comment = `  // evolved id=${r.id} spent=${r.spent} counters=${r.counters} internalWr=${(r.internalWr * 100).toFixed(1)}% vsOldMeta=${(r.vsOldMeta * 100).toFixed(1)}%`;
+  const vsOldStr = r.vsOldMeta === null || r.vsOldMeta === undefined
+    ? "n/a"
+    : `${(r.vsOldMeta * 100).toFixed(1)}%`;
+  const comment = `  // evolved id=${r.id} spent=${r.spent} counters=${r.counters} internalWr=${(r.internalWr * 100).toFixed(1)}% vsOldMeta=${vsOldStr}`;
   body += `${comment}\n`;
   body += `  ${name}: {\n    id: "${name}",\n    attributes: {\n${attrLine(r.attributes)}\n    },\n  },\n`;
 }
@@ -91,5 +94,8 @@ console.log(`Wrote ${STRATEGIES_PATH} (${NAMES.length} presets)`);
 console.log(`\nRoster summary:`);
 for (let i = 0; i < NAMES.length; i++) {
   const r = data.roster[i];
-  console.log(`  ${NAMES[i].padEnd(12)}  spent=${String(r.spent).padStart(3)}  counters=${String(r.counters).padStart(2)}  internal=${(r.internalWr*100).toFixed(1).padStart(5)}%  vsOld=${(r.vsOldMeta*100).toFixed(1).padStart(5)}%`);
+  const vsOldShow = r.vsOldMeta === null || r.vsOldMeta === undefined
+    ? "n/a".padStart(6)
+    : `${(r.vsOldMeta * 100).toFixed(1)}%`.padStart(6);
+  console.log(`  ${NAMES[i].padEnd(12)}  spent=${String(r.spent).padStart(3)}  counters=${String(r.counters).padStart(2)}  internal=${(r.internalWr*100).toFixed(1).padStart(5)}%  vsOld=${vsOldShow}`);
 }

@@ -20,8 +20,10 @@ import { nonDominatedSort, tournamentSelect } from "./nsga2.js";
 import { NoveltyArchive, featureVector } from "./novelty.js";
 import {
   USER_BUDGET, budgetSpent,
-  randomBudgeted, mutateBudgeted, crossoverBudgeted,
+  crossoverBudgeted,
 } from "./budget-util.js";
+import { sampleCandidate, sampleInitialPopulation, type SampledCandidate, type SourceKind, type CandidateMeta } from "./simplex-sample.js";
+import { budgetTransfer, swapAxes } from "./budget-transfer.js";
 
 function parseArgs(argv: string[]): Record<string, string> {
   const out: Record<string, string> = {};
@@ -54,7 +56,9 @@ console.error(`[roster] gens=${GENS} pop=${POP} seeds=${SEEDS} workers=${WORKERS
 console.error(`[roster] roster=${ROSTER} HOF min WR=${HOF_MIN_WR} co-evolve every ${COEVOLVE_EVERY} gens\n`);
 
 // Hall of Fame: every config that ever scored above HOF_MIN_WR.
-interface HOFItem { cfg: BrainConfig; wr: number; gen: number; spent: number }
+// Carries CandidateMeta so Phase 4 adversarial analysis can correlate
+// exploitability with sourceKind/mutationKind.
+interface HOFItem { cfg: BrainConfig; wr: number; gen: number; spent: number; meta: CandidateMeta }
 const hof: HOFItem[] = [];
 const hofIds = new Set<string>();
 
@@ -65,9 +69,14 @@ const opponentIds = new Set(opponentPool.map((c) => c.id));
 // Novelty archive in attribute space.
 const novelty = new NoveltyArchive({ k: 5, archiveMax: 400, minNovelty: 0.05 });
 
-// Seed population: named projections + random.
-let pop: BrainConfig[] = [];
-for (let i = 0; i < POP; i++) pop.push(randomBudgeted(`seed-${i}`));
+// Seed population: simplex-aware sampler. Guarantees axis-anchor +
+// pair-anchor coverage on gen 0, then fills with Dirichlet mixture.
+// Replaces the old randomBudgeted seed which produced center-biased
+// supply that evolution couldn't escape.
+const metaById = new Map<string, CandidateMeta>();
+const initialSamples = sampleInitialPopulation(POP, 0);
+let pop: BrainConfig[] = initialSamples.map((s) => s.config);
+for (const s of initialSamples) metaById.set(s.config.id, s.meta);
 
 for (let g = 0; g < GENS; g++) {
   // Sanity
@@ -90,12 +99,19 @@ for (let g = 0; g < GENS; g++) {
   // Non-dominated sort with novelty as a fifth objective.
   const ranked = nonDominatedSort(records, { novelty: noveltyMap });
 
-  // HOF: strong AND distinct-enough.
+  // HOF: strong AND distinct-enough. Each HOF entry carries its metadata
+  // for Phase 4 adversarial/sourceKind analysis.
   for (const r of records) {
     if (r.winRate >= HOF_MIN_WR) {
       const cfg = byId.get(r.id)!;
       if (!hofIds.has(cfg.id) && novelty.maybeAdd(cfg)) {
-        hof.push({ cfg, wr: r.winRate, gen: g, spent: budgetSpent(cfg) });
+        const meta = metaById.get(cfg.id) ?? {
+          configHash: cfg.id, uiSpendVector: [], budgetShareVector: [],
+          spent: budgetSpent(cfg), axisExtremes: [],
+          sourceKind: "random_legacy" as SourceKind,
+          parentIds: null, mutationKind: null, generation: g,
+        };
+        hof.push({ cfg, wr: r.winRate, gen: g, spent: budgetSpent(cfg), meta });
         hofIds.add(cfg.id);
       }
     }
@@ -121,26 +137,63 @@ for (let g = 0; g < GENS; g++) {
   }
 
   if (g + 1 < GENS) {
-    // Build next population via tournament + mutation/crossover/random.
+    // Build next population via budget-transfer mutation + fresh samples.
+    // Replaces old cube-style jitter mutation which preserved ratios
+    // (couldn't move a moderate config into a specialist region).
     const next: BrainConfig[] = [];
-    // Elitism: front 0 carried forward.
     const elites = ranked
       .filter((r) => r.fronts === 0)
       .map((r) => byId.get(r.id)!)
       .filter(Boolean)
       .slice(0, Math.floor(POP * 0.25));
     next.push(...elites);
+
+    // Helper to get SampledCandidate shape from an existing config
+    const wrap = (cfg: BrainConfig): SampledCandidate => {
+      const meta = metaById.get(cfg.id) ?? {
+        configHash: cfg.id, uiSpendVector: [], budgetShareVector: [],
+        spent: budgetSpent(cfg), axisExtremes: [],
+        sourceKind: "hof_elite" as SourceKind,
+        parentIds: null, mutationKind: null, generation: g,
+      };
+      return { config: cfg, meta };
+    };
+
     while (next.length < POP) {
-      const r = Math.random();
-      if (r < 0.4 && elites.length >= 2) {
+      const roll = Math.random();
+      if (roll < 0.3 && elites.length >= 2) {
         const a = tournamentSelect(ranked); const b = tournamentSelect(ranked);
         const ac = byId.get(a.id)!; const bc = byId.get(b.id)!;
-        next.push(crossoverBudgeted(ac, bc, `g${g+1}-x${next.length}`));
-      } else if (r < 0.85) {
+        const child = crossoverBudgeted(ac, bc, `g${g+1}-x${next.length}`);
+        metaById.set(child.id, {
+          configHash: child.id, uiSpendVector: [], budgetShareVector: [],
+          spent: budgetSpent(child), axisExtremes: [],
+          sourceKind: "crossover", parentIds: [ac.id, bc.id],
+          mutationKind: "crossover", generation: g + 1,
+        });
+        next.push(child);
+      } else if (roll < 0.75) {
+        // Budget-transfer mutation (simplex-aware)
         const p = tournamentSelect(ranked);
-        next.push(mutateBudgeted(byId.get(p.id)!, `g${g+1}-m${next.length}`, 0.4, 0.15));
+        const parent = wrap(byId.get(p.id)!);
+        const multi = Math.random() < 0.3 ? 3 : 1;
+        const mutated = budgetTransfer(parent, { multiTransfers: multi }, Math.random, `g${g+1}-m${next.length}`, g + 1);
+        metaById.set(mutated.config.id, mutated.meta);
+        next.push(mutated.config);
+      } else if (roll < 0.88) {
+        // Occasional swap-axes for radical interaction exploration
+        const p = tournamentSelect(ranked);
+        const parent = wrap(byId.get(p.id)!);
+        const mutated = swapAxes(parent, Math.random, `g${g+1}-s${next.length}`, g + 1);
+        metaById.set(mutated.config.id, mutated.meta);
+        next.push(mutated.config);
       } else {
-        next.push(randomBudgeted(`g${g+1}-r${next.length}`));
+        // Fresh Dirichlet-mixture sample: keep injecting novelty
+        const kinds: SourceKind[] = ["dirichlet_sparse", "dirichlet_balanced", "dirichlet_dense", "axis_anchor"];
+        const kind = kinds[Math.floor(Math.random() * kinds.length)];
+        const fresh = sampleCandidate({ id: `g${g+1}-${kind}-${next.length}`, sourceKind: kind, generation: g + 1 });
+        metaById.set(fresh.config.id, fresh.meta);
+        next.push(fresh.config);
       }
     }
     pop = next;
@@ -301,6 +354,7 @@ fs.writeFileSync(OUT, JSON.stringify({
     internalWr: globalWr[i],
     counters: countersOf[i],
     vsOldMeta: extWr.get(r.id) ?? 0,
+    sourceMeta: metaById.get(selected[i].cfg.id) ?? null,
   })),
   internalMax, internalP95, minCounters, noCounters,
   cycleCount: cycles.length,
@@ -308,4 +362,20 @@ fs.writeFileSync(OUT, JSON.stringify({
   poolFinalSize: opponentPool.length,
 }, null, 2));
 
-console.error(`\nWrote ${OUT}`);
+// Dump full HOF to disk so Phase 4 adversarial tools + roster-select
+// have something bigger than 16 to work with. Each entry carries its
+// generation metadata (sourceKind, mutationKind, parentIds, etc.)
+// for downstream correlation analysis.
+const HOF_OUT = OUT.replace(/\.json$/, ".hof.json");
+fs.writeFileSync(HOF_OUT, JSON.stringify({
+  generatedAt: new Date().toISOString(),
+  hof: hof.map((h) => ({
+    id: h.cfg.id,
+    attributes: h.cfg.attributes,
+    wr: h.wr,
+    gen: h.gen,
+    spent: h.spent,
+    meta: h.meta,
+  })),
+}, null, 2));
+console.error(`Wrote ${OUT} (roster) + ${HOF_OUT} (full HOF of ${hof.length})`);

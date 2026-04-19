@@ -49,11 +49,40 @@ const HOF_MIN_WR = parseFloat(args.minwr ?? "0.55");
 const COEVOLVE_EVERY = parseInt(args.coevolveEvery ?? "5", 10);
 const OUT = args.out ?? "/tmp/new-roster.json";
 
+// Adversarial references: configs drawn from Phase 4 exploit archives.
+// When provided, the selector enforces a MINIMUM win rate against this
+// pool for elite/HOF eligibility. This closes the "internal ecology
+// passes, external attack succeeds" failure mode: candidates must prove
+// they can handle known exploit shapes, not just beat the current meta.
+const ADV_REFS_PATH = args["adversary-refs"];
+const ADV_MIN_WR = parseFloat(args["adversary-min-wr"] ?? "0.35");
+
+interface AdversaryBankEntry {
+  id?: string;
+  targetId?: string;
+  attributes: Record<string, number>;
+}
+interface AdversaryBank {
+  refs: AdversaryBankEntry[];
+}
+let adversaryRefs: BrainConfig[] = [];
+if (ADV_REFS_PATH && fs.existsSync(ADV_REFS_PATH)) {
+  const bank = JSON.parse(fs.readFileSync(ADV_REFS_PATH, "utf8")) as AdversaryBank;
+  adversaryRefs = bank.refs.map((r, i) => ({
+    id: r.id ?? `adv-${r.targetId ?? i}`,
+    attributes: r.attributes,
+  } as BrainConfig));
+}
+
 const namedPool = STRATEGY_NAMES.map((n) => STRATEGIES[n]);
 const stages = Object.values(STAGES);
 
 console.error(`[roster] gens=${GENS} pop=${POP} seeds=${SEEDS} workers=${WORKERS}`);
-console.error(`[roster] roster=${ROSTER} HOF min WR=${HOF_MIN_WR} co-evolve every ${COEVOLVE_EVERY} gens\n`);
+console.error(`[roster] roster=${ROSTER} HOF min WR=${HOF_MIN_WR} co-evolve every ${COEVOLVE_EVERY} gens`);
+if (adversaryRefs.length > 0) {
+  console.error(`[roster] adversarial refs: ${adversaryRefs.length} configs, min WR gate ${ADV_MIN_WR}`);
+}
+console.error("");
 
 // Hall of Fame: every config that ever scored above HOF_MIN_WR.
 // Carries CandidateMeta so Phase 4 adversarial analysis can correlate
@@ -90,6 +119,19 @@ for (let g = 0; g < GENS; g++) {
     candidates: pop, references: opponentPool, stages,
     seedsPerMatchup: SEEDS, workers: WORKERS,
   });
+
+  // Separate scoring pass against adversarial references. Cheaper than
+  // adding them to the main pool because it keeps the two fitness
+  // signals distinct: "beat current meta" vs "resist known exploits".
+  let adversaryWr = new Map<string, number>();
+  if (adversaryRefs.length > 0) {
+    process.stderr.write(`  adv-score vs ${adversaryRefs.length} refs...\n`);
+    const advRecords = await scoreBatch({
+      candidates: pop, references: adversaryRefs, stages,
+      seedsPerMatchup: SEEDS, workers: WORKERS,
+    });
+    adversaryWr = new Map(advRecords.map((r) => [r.id, r.winRate]));
+  }
   const byId = new Map(pop.map((c) => [c.id, c] as const));
 
   // Compute novelty for each candidate relative to current archive.
@@ -99,10 +141,15 @@ for (let g = 0; g < GENS; g++) {
   // Non-dominated sort with novelty as a fifth objective.
   const ranked = nonDominatedSort(records, { novelty: noveltyMap });
 
-  // HOF: strong AND distinct-enough. Each HOF entry carries its metadata
-  // for Phase 4 adversarial/sourceKind analysis.
+  // HOF: strong AND distinct-enough AND (if adversary refs provided)
+  // proves it can resist known exploits above ADV_MIN_WR. This last
+  // gate is the critical change: v7 passed every internal gate and
+  // still got annihilated externally. Filtering HOF-eligibility by
+  // adversary-resistance prevents the same failure mode for v8.
   for (const r of records) {
     if (r.winRate >= HOF_MIN_WR) {
+      const advOk = adversaryRefs.length === 0 || (adversaryWr.get(r.id) ?? 0) >= ADV_MIN_WR;
+      if (!advOk) continue;
       const cfg = byId.get(r.id)!;
       if (!hofIds.has(cfg.id) && novelty.maybeAdd(cfg)) {
         const meta = metaById.get(cfg.id) ?? {
@@ -120,8 +167,14 @@ for (let g = 0; g < GENS; g++) {
   const sorted = records.slice().sort((a, b) => b.winRate - a.winRate);
   const best = sorted[0];
   const meanWr = records.reduce((s, r) => s + r.winRate, 0) / records.length;
+  let advSummary = "";
+  if (adversaryRefs.length > 0) {
+    const advAvg = Array.from(adversaryWr.values()).reduce((s, v) => s + v, 0) / Math.max(1, adversaryWr.size);
+    const advBest = adversaryWr.get(best.id) ?? 0;
+    advSummary = `  advBest=${(advBest * 100).toFixed(1)}%  advMean=${(advAvg * 100).toFixed(1)}%`;
+  }
   process.stderr.write(
-    `  best=${(best.winRate * 100).toFixed(1)}% (${best.id})  mean=${(meanWr * 100).toFixed(1)}%  hof=${hof.length}  pool=${opponentPool.length}\n`,
+    `  best=${(best.winRate * 100).toFixed(1)}% (${best.id})  mean=${(meanWr * 100).toFixed(1)}%  hof=${hof.length}  pool=${opponentPool.length}${advSummary}\n`,
   );
 
   // Co-evolution: periodically inject top recent HOF into opponent pool.

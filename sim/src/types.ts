@@ -175,6 +175,11 @@ export interface World {
   rng: Rng;
   noiseSeed: number;
   brainStates: [BrainState, BrainState];
+  // Optional per-fighter telemetry. When present, simulate() tallies mode
+  // usage + action counts into these objects. Opt-in via SimulateOptions
+  // so default MatchResult shape is unchanged. Not part of simulation
+  // state; tallying is read-only and deterministic.
+  telemetry?: [FighterTelemetry, FighterTelemetry];
 }
 
 // ============ Brain intent state (brain v3) ============
@@ -185,6 +190,48 @@ export interface World {
 // lives so an opp's playstyle (e.g. swipe-spammer) is remembered.
 
 export type BrainMode = "neutral" | "offense" | "zone" | "objective" | "escape";
+
+// Per-fighter per-match telemetry. Populated by simulate() when it runs
+// the brain loop; exposed on MatchResult.telemetry. Purely additive — no
+// state evolution, deterministic, no BEHAVIOR_VERSION bump. Introduced
+// as brain v4.0 diagnostic so anti-stall interventions can be picked
+// from evidence, not speculation.
+export interface FighterTelemetry {
+  modeTicks: Record<BrainMode, number>;
+  substateTicks: {
+    press: number; bait: number; punish: number;
+    deliver: number; intercept: number; pickup: number;
+  };
+  modeSwitches: number;
+  zoneEntries: number;
+  objectiveEntries: number;
+  escapeEntries: number;
+  swipes: number;
+  dives: number;
+  kills: number;
+  deaths: number;
+  clashes: number;
+  deliveries: number; // goal-dwell completions credited
+  ticks: number;      // decision ticks for this fighter (excludes freeze/roundPause)
+}
+
+export function emptyFighterTelemetry(): FighterTelemetry {
+  return {
+    modeTicks: { neutral: 0, offense: 0, zone: 0, objective: 0, escape: 0 },
+    substateTicks: { press: 0, bait: 0, punish: 0, deliver: 0, intercept: 0, pickup: 0 },
+    modeSwitches: 0,
+    zoneEntries: 0,
+    objectiveEntries: 0,
+    escapeEntries: 0,
+    swipes: 0,
+    dives: 0,
+    kills: 0,
+    deaths: 0,
+    clashes: 0,
+    deliveries: 0,
+    ticks: 0,
+  };
+}
 
 export interface BrainState {
   id: 0 | 1;
@@ -277,4 +324,5 @@ export interface MatchResult {
   seed: number;
   logHash: string;
   frameLog: Uint8Array; // packed input + score delta log
+  telemetry?: [FighterTelemetry, FighterTelemetry];
 }

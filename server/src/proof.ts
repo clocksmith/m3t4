@@ -20,6 +20,7 @@ import {
   type BrainConfig, type Stage, type TrustLabel,
 } from "@m3t4/sim";
 import type { StableStore } from "./stable.js";
+import type { VerifyStore } from "./verify-store.js";
 
 // ---------------------------- helpers ----------------------------
 
@@ -97,22 +98,6 @@ function budgetOf(config: BrainConfig): number {
 // In-memory commitment state; production needs persistence keyed by
 // matchId or tournament round.
 
-interface Commitment {
-  commitmentId: string;
-  uid: string;
-  commitmentHash: string;  // sha256(config_json_canonical + ":" + salt)
-  matchId?: string;        // filled when paired with opponent
-  opponentCommitmentId?: string;
-  createdAt: string;
-  revealed?: {
-    config: BrainConfig;
-    salt: string;
-    revealedAt: string;
-  };
-}
-
-const commitments = new Map<string, Commitment>();
-
 // Canonical JSON for hashing — sort keys, stringify stably. Must match
 // on the client; publish a shared helper for production.
 function canonicalJson(value: unknown): string {
@@ -134,7 +119,7 @@ function computeCommitmentHash(config: BrainConfig, salt: string): string {
 // The server never sees the config or salt at this stage — only the
 // hash. The player keeps (config, salt) locally until reveal time.
 export async function handleProofCommit(
-  req: http.IncomingMessage, res: http.ServerResponse,
+  vstore: VerifyStore, req: http.IncomingMessage, res: http.ServerResponse,
 ): Promise<void> {
   let body: any;
   try { body = await readJsonBody(req); }
@@ -146,11 +131,10 @@ export async function handleProofCommit(
     return json(res, 400, { ok: false, reason: "commitmentHash must be 64-char hex sha256" });
   }
   const commitmentId = crypto.randomBytes(16).toString("hex");
-  const rec: Commitment = {
+  vstore.createCommitment({
     commitmentId, uid, commitmentHash,
     createdAt: new Date().toISOString(),
-  };
-  commitments.set(commitmentId, rec);
+  });
   return json(res, 200, { commitmentId, commitmentHash });
 }
 
@@ -176,7 +160,8 @@ export async function handleProofCommit(
 // (if match context provided) the configs reproduce the claimed match
 // outcome. Stamps the replay with a proof-carrying label.
 export async function handleProofReveal(
-  store: StableStore, req: http.IncomingMessage, res: http.ServerResponse,
+  store: StableStore, vstore: VerifyStore,
+  req: http.IncomingMessage, res: http.ServerResponse,
 ): Promise<void> {
   let body: any;
   try { body = await readJsonBody(req); }
@@ -193,9 +178,9 @@ export async function handleProofReveal(
     return json(res, 400, { ok: false, reason: "config required" });
   }
 
-  const rec = commitments.get(commitmentId);
+  const rec = vstore.getCommitment(commitmentId);
   if (!rec) return json(res, 404, { ok: false, reason: "commitment not found" });
-  if (rec.revealed) return json(res, 409, { ok: false, reason: "already revealed" });
+  if (rec.revealedAt) return json(res, 409, { ok: false, reason: "already revealed" });
 
   // Verify commitment matches
   const computed = computeCommitmentHash(config as BrainConfig, salt);
@@ -209,11 +194,7 @@ export async function handleProofReveal(
     return json(res, 400, { ok: false, reason: `illegal config: budget ${spent} > ${BUDGET_CAP}` });
   }
 
-  rec.revealed = {
-    config: config as BrainConfig,
-    salt,
-    revealedAt: new Date().toISOString(),
-  };
+  vstore.markCommitmentRevealed(commitmentId, new Date().toISOString());
 
   const proofTier: TrustLabel["tier"] = "proof-carrying";
   const proofMeta = {
@@ -330,14 +311,6 @@ export async function handleProofReveal(
 // nor that the config was legal without a reveal. Combining L2 with
 // L1 reveal or L3 proof closes those gaps.
 
-interface AttestedAgentKey {
-  uid: string;
-  publicKeyPem: string;
-  runtimeVersionsAllowed: string[];
-  registeredAt: string;
-}
-
-const attestedKeys = new Map<string, AttestedAgentKey>(); // keyed by uid
 const APPROVED_RUNTIME_VERSIONS = new Set<string>([
   // Allowlist shape: "<package>@<version>+<behavior-version>".
   // Production should pull this from a server-signed manifest.
@@ -347,7 +320,7 @@ const APPROVED_RUNTIME_VERSIONS = new Set<string>([
 // POST /api/proof/attest/register
 // Body: { publicKeyPem: string, runtimeVersions: string[] }
 export async function handleAttestRegister(
-  req: http.IncomingMessage, res: http.ServerResponse,
+  vstore: VerifyStore, req: http.IncomingMessage, res: http.ServerResponse,
 ): Promise<void> {
   let body: any;
   try { body = await readJsonBody(req); }
@@ -364,12 +337,11 @@ export async function handleAttestRegister(
   try { crypto.createPublicKey(publicKeyPem); }
   catch { return json(res, 400, { ok: false, reason: "publicKeyPem not parseable" }); }
 
-  const rec: AttestedAgentKey = {
-    uid, publicKeyPem, runtimeVersionsAllowed: runtimeVersions,
-    registeredAt: new Date().toISOString(),
-  };
-  attestedKeys.set(uid, rec);
-  return json(res, 200, { ok: true, uid, registered: rec.registeredAt });
+  const registeredAt = new Date().toISOString();
+  vstore.setAttestedKey({
+    uid, publicKeyPem, runtimeVersionsAllowed: runtimeVersions, registeredAt,
+  });
+  return json(res, 200, { ok: true, uid, registered: registeredAt });
 }
 
 // POST /api/proof/attest/submit
@@ -384,7 +356,8 @@ export async function handleAttestRegister(
 // Server verifies signature, runtime-version allowlist, and sim hash
 // consistency. On success, upgrades replay tier to attested-agent.
 export async function handleAttestSubmit(
-  store: StableStore, req: http.IncomingMessage, res: http.ServerResponse,
+  store: StableStore, vstore: VerifyStore,
+  req: http.IncomingMessage, res: http.ServerResponse,
 ): Promise<void> {
   let body: any;
   try { body = await readJsonBody(req); }
@@ -403,7 +376,7 @@ export async function handleAttestSubmit(
   if (!APPROVED_RUNTIME_VERSIONS.has(runtimeVersion)) {
     return json(res, 403, { ok: false, reason: "runtimeVersion not in allowlist" });
   }
-  const key = attestedKeys.get(uid);
+  const key = vstore.getAttestedKey(uid);
   if (!key) return json(res, 403, { ok: false, reason: "no attestation key registered for uid" });
 
   const replay = await store.getReplay(matchId);
@@ -553,4 +526,49 @@ export async function handleProofZkSystems(
     registered: Array.from(proofVerifiers.keys()),
     note: "Verifiers are registered by backend modules. Empty = no L3 backend wired.",
   });
+}
+
+// ---------------------------- dev-mock verifier ----------------------------
+//
+// Registers a "dev-mock" proof system that accepts any envelope whose
+// proofBytesB64 is a valid HMAC-SHA256 signature over the envelope fields
+// using the server's TOKEN_SECRET. This is NOT zero-knowledge — it's a
+// keyed authentication code. It exists so the L3 pipeline can be
+// exercised end-to-end (route, store, label upgrade) without a full
+// circuit toolchain. Real ZK verifiers register their own entries.
+//
+// Clients compute: sign = HMAC(secret, `${proofSystem}|${matchId}|${actionLogHash}|${simConstantsHash}|${behaviorVersion}`)
+// and base64-encode the raw bytes.
+//
+// DISABLE THIS IN PRODUCTION. The secret is intended for dev use only.
+
+const DEV_MOCK_SECRET: string =
+  process.env.M3T4_PROOF_DEV_MOCK_SECRET
+  ?? "dev-mock-zk-accept-any-signed-envelope-do-not-ship";
+
+registerProofVerifier({
+  name: "unknown" as ProofSystem,  // overwritten on self-register below
+  async verify(env) {
+    const payload = [
+      env.proofSystem, env.matchId, env.actionLogHash,
+      env.simConstantsHash, String(env.behaviorVersion),
+    ].join("|");
+    const want = crypto.createHmac("sha256", DEV_MOCK_SECRET).update(payload).digest();
+    let got: Buffer;
+    try { got = Buffer.from(env.proofBytesB64, "base64"); }
+    catch { return { ok: false, reason: "proofBytesB64 malformed" }; }
+    if (want.length !== got.length) return { ok: false, reason: "signature length" };
+    if (!crypto.timingSafeEqual(want, got)) return { ok: false, reason: "signature mismatch" };
+    return { ok: true };
+  },
+});
+
+// Rename the entry to "dev-mock" properly. The constructor above assigns
+// `name: "unknown"` because the type demands a ProofSystem literal and
+// "dev-mock" isn't in the union. We overwrite post-register so the map
+// key is correct without widening the public type.
+{
+  const entry = proofVerifiers.get("unknown" as ProofSystem);
+  proofVerifiers.delete("unknown" as ProofSystem);
+  if (entry) proofVerifiers.set("dev-mock" as ProofSystem, { ...entry, name: "dev-mock" as ProofSystem });
 }

@@ -5,9 +5,10 @@ import * as spectate from "./modes/spectate.js";
 import * as practice from "./modes/practice.js";
 import * as build from "./modes/build.js";
 import * as submit from "./modes/submit.js";
+import * as duel from "./modes/duel.js";
 import { auth } from "./lib/auth.js";
 
-const MODES = { spectate, practice, build, submit };
+const MODES = { spectate, practice, build, submit, duel };
 const DEFAULT_MODE = "spectate";
 
 const appEl = document.getElementById("app");

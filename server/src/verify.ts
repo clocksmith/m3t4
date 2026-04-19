@@ -12,6 +12,7 @@ import {
   verifyActionLog,
 } from "@m3t4/sim";
 import type { StableStore } from "./stable.js";
+import type { VerifyStore } from "./verify-store.js";
 
 // ---------------------------- helpers ----------------------------
 
@@ -193,25 +194,10 @@ function verifyMatchToken(token: SignedMatchToken): boolean {
   return hmacVerify(JSON.stringify(payload), signature);
 }
 
-// In-memory challenge state — scaffold only; replace with store-backed
-// queue for production. Duel lifetime: pending → accepted → submitted.
-interface DuelChallenge {
-  challengeId: string;
-  fromUid: string;
-  toUid: string;
-  stageId: string;
-  createdAt: string;
-  expiresAt: string;
-  token?: SignedMatchToken;
-  submitted?: boolean;
-}
-const duelChallenges = new Map<string, DuelChallenge>();
-
 // POST /api/duel/challenge  { toUid, stageId? }
 export async function handleDuelChallenge(
-  req: http.IncomingMessage, res: http.ServerResponse,
+  vstore: VerifyStore, req: http.IncomingMessage, res: http.ServerResponse,
 ): Promise<void> {
-  // TODO auth: extract fromUid from bearer token; for scaffold, accept any.
   let body: any;
   try { body = await readJsonBody(req); }
   catch { return json(res, 400, { ok: false, reason: "invalid json body" }); }
@@ -228,27 +214,26 @@ export async function handleDuelChallenge(
   const challengeId = crypto.randomBytes(12).toString("hex");
   const now = new Date();
   const exp = new Date(now.getTime() + 5 * 60 * 1000); // 5 min
-  const ch: DuelChallenge = {
+  vstore.createChallenge({
     challengeId, fromUid, toUid, stageId,
     createdAt: now.toISOString(),
     expiresAt: exp.toISOString(),
-  };
-  duelChallenges.set(challengeId, ch);
-  return json(res, 200, { challengeId, expiresAt: ch.expiresAt });
+  });
+  return json(res, 200, { challengeId, expiresAt: exp.toISOString() });
 }
 
 // POST /api/duel/accept  { challengeId }
 export async function handleDuelAccept(
-  req: http.IncomingMessage, res: http.ServerResponse,
+  vstore: VerifyStore, req: http.IncomingMessage, res: http.ServerResponse,
 ): Promise<void> {
   let body: any;
   try { body = await readJsonBody(req); }
   catch { return json(res, 400, { ok: false, reason: "invalid json body" }); }
   const { challengeId } = body ?? {};
-  const ch = typeof challengeId === "string" ? duelChallenges.get(challengeId) : null;
+  const ch = typeof challengeId === "string" ? vstore.getChallenge(challengeId) : undefined;
   if (!ch) return json(res, 404, { ok: false, reason: "challenge not found" });
   if (new Date(ch.expiresAt) < new Date()) {
-    duelChallenges.delete(challengeId);
+    vstore.deleteChallenge(challengeId);
     return json(res, 410, { ok: false, reason: "challenge expired" });
   }
   if (ch.token) {
@@ -270,7 +255,7 @@ export async function handleDuelAccept(
     expiresAt: exp.toISOString(),
     stateHashCadenceTicks: 120,
   });
-  ch.token = token;
+  vstore.updateChallenge(challengeId, { token });
   return json(res, 200, { token });
 }
 
@@ -378,35 +363,7 @@ export async function handleDuelSubmit(
 
 type SdpRole = "offer" | "answer";
 
-interface SignalSlot {
-  matchId: string;
-  offer?: { sdp: string; fromPlayerId: string; postedAt: string };
-  answer?: { sdp: string; fromPlayerId: string; postedAt: string };
-  iceCandidates: Array<{ fromPlayerId: string; candidate: any; postedAt: string }>;
-  createdAt: string;
-}
-
-const signalSlots = new Map<string, SignalSlot>();
 const SIGNAL_TTL_MS = 10 * 60 * 1000; // 10 min, matches token expiry
-
-function ensureSignalSlot(matchId: string): SignalSlot {
-  const existing = signalSlots.get(matchId);
-  if (existing) return existing;
-  const slot: SignalSlot = {
-    matchId,
-    iceCandidates: [],
-    createdAt: new Date().toISOString(),
-  };
-  signalSlots.set(matchId, slot);
-  return slot;
-}
-
-function sweepSignalSlots(): void {
-  const cutoff = Date.now() - SIGNAL_TTL_MS;
-  for (const [id, slot] of signalSlots) {
-    if (new Date(slot.createdAt).getTime() < cutoff) signalSlots.delete(id);
-  }
-}
 
 // POST /api/duel/signal/:matchId
 // Body: { role: "offer" | "answer", sdp: string, fromPlayerId: string }
@@ -416,16 +373,16 @@ function sweepSignalSlots(): void {
 // other peer polls the GET variant to retrieve. No auth in this
 // scaffold — production should require a valid MatchToken header.
 export async function handleDuelSignalPost(
-  matchId: string, req: http.IncomingMessage, res: http.ServerResponse,
+  vstore: VerifyStore, matchId: string, req: http.IncomingMessage, res: http.ServerResponse,
 ): Promise<void> {
   if (!matchId) return json(res, 400, { ok: false, reason: "matchId required" });
-  sweepSignalSlots();
+  vstore.sweepSignalSlots(SIGNAL_TTL_MS);
 
   let body: any;
   try { body = await readJsonBody(req); }
   catch { return json(res, 400, { ok: false, reason: "invalid json body" }); }
 
-  const slot = ensureSignalSlot(matchId);
+  const slot = vstore.ensureSignalSlot(matchId);
   const { role, sdp, ice, fromPlayerId } = body ?? {};
   if (typeof fromPlayerId !== "string" || !fromPlayerId) {
     return json(res, 400, { ok: false, reason: "fromPlayerId required" });
@@ -433,11 +390,11 @@ export async function handleDuelSignalPost(
 
   // ICE candidate deposit
   if (ice !== undefined) {
-    slot.iceCandidates.push({
+    vstore.addIceCandidate(matchId, {
       fromPlayerId, candidate: ice,
       postedAt: new Date().toISOString(),
     });
-    return json(res, 200, { ok: true, count: slot.iceCandidates.length });
+    return json(res, 200, { ok: true, count: slot.iceCandidates.length + 1 });
   }
 
   // SDP deposit
@@ -447,23 +404,19 @@ export async function handleDuelSignalPost(
   if (role !== "offer" && role !== "answer") {
     return json(res, 400, { ok: false, reason: "role must be offer|answer" });
   }
-  (slot as any)[role as SdpRole] = {
-    sdp, fromPlayerId,
-    postedAt: new Date().toISOString(),
-  };
+  vstore.updateSignalSlot(matchId, {
+    [role]: { sdp, fromPlayerId, postedAt: new Date().toISOString() },
+  } as any);
   return json(res, 200, { ok: true, role });
 }
 
 // GET /api/duel/signal/:matchId?role=offer|answer&sinceIce=<ISO>
-//
-// Pull the counterpart SDP and any ICE candidates posted since the given
-// timestamp. Poll-based; a production impl might upgrade to SSE.
 export async function handleDuelSignalGet(
-  matchId: string, req: http.IncomingMessage, res: http.ServerResponse,
+  vstore: VerifyStore, matchId: string, req: http.IncomingMessage, res: http.ServerResponse,
 ): Promise<void> {
   if (!matchId) return json(res, 400, { ok: false, reason: "matchId required" });
-  sweepSignalSlots();
-  const slot = signalSlots.get(matchId);
+  vstore.sweepSignalSlots(SIGNAL_TTL_MS);
+  const slot = vstore.getSignalSlot(matchId);
   if (!slot) return json(res, 404, { ok: false, reason: "signal slot not found" });
 
   const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
@@ -502,30 +455,6 @@ export async function handleDuelSignalGet(
 const COMMUNITY_QUORUM_TOTAL = 3; // M — minimum pool required
 const COMMUNITY_QUORUM_REQUIRED = 2; // N — agreeing workers required
 
-interface CommunityWorker {
-  workerId: string;
-  label?: string;                // optional human-readable
-  sharedSecret: string;          // HMAC key (scaffold — use public keys in prod)
-  registeredAt: string;
-  delisted?: boolean;            // repeated disagreements flag a worker
-  disagreementCount: number;
-}
-
-interface CommunityAttestation {
-  matchId: string;
-  workerId: string;
-  computedLogHash: string;
-  agreed: boolean;               // true if computedLogHash === server's
-  postedAt: string;
-}
-
-const communityWorkers = new Map<string, CommunityWorker>();
-const communityAttestations = new Map<string, CommunityAttestation[]>();
-
-function communityKey(matchId: string): string {
-  return matchId;
-}
-
 // POST /api/community/workers/register
 // Body: { label?: string }
 // Returns: { workerId, sharedSecret }
@@ -533,20 +462,19 @@ function communityKey(matchId: string): string {
 // The secret is returned ONCE at registration. Workers store it and
 // sign attestations with it. Losing the secret requires re-registration.
 export async function handleCommunityRegister(
-  req: http.IncomingMessage, res: http.ServerResponse,
+  vstore: VerifyStore, req: http.IncomingMessage, res: http.ServerResponse,
 ): Promise<void> {
   let body: any;
   try { body = await readJsonBody(req); } catch { body = {}; }
   const workerId = crypto.randomBytes(12).toString("hex");
   const sharedSecret = crypto.randomBytes(32).toString("hex");
-  const worker: CommunityWorker = {
+  vstore.registerWorker({
     workerId,
     label: typeof body?.label === "string" ? body.label : undefined,
     sharedSecret,
     registeredAt: new Date().toISOString(),
     disagreementCount: 0,
-  };
-  communityWorkers.set(workerId, worker);
+  });
   return json(res, 200, { workerId, sharedSecret, quorum: {
     total: COMMUNITY_QUORUM_TOTAL, required: COMMUNITY_QUORUM_REQUIRED,
   } });
@@ -569,7 +497,7 @@ export async function handleCommunityRegister(
 //    replay.trust.tier to "community-verified".
 //  - On disagreement, increment worker.disagreementCount; delist at 3.
 export async function handleCommunityAttest(
-  store: StableStore, req: http.IncomingMessage, res: http.ServerResponse,
+  store: StableStore, vstore: VerifyStore, req: http.IncomingMessage, res: http.ServerResponse,
 ): Promise<void> {
   let body: any;
   try { body = await readJsonBody(req); }
@@ -589,7 +517,7 @@ export async function handleCommunityAttest(
     return json(res, 400, { ok: false, reason: "signature required" });
   }
 
-  const worker = communityWorkers.get(workerId);
+  const worker = vstore.getWorker(workerId);
   if (!worker) {
     return json(res, 403, { ok: false, reason: "worker not registered" });
   }
@@ -613,21 +541,17 @@ export async function handleCommunityAttest(
   if (!replay) return json(res, 404, { ok: false, reason: "replay not found" });
 
   const agreed = replay.result.logHash === computedLogHash;
-  const attestation: CommunityAttestation = {
+  const list = vstore.upsertAttestation({
     matchId, workerId, computedLogHash, agreed,
     postedAt: new Date().toISOString(),
-  };
-  const key = communityKey(matchId);
-  const list = communityAttestations.get(key) ?? [];
-  // De-dup per worker: a worker can only attest once per match (overwrite).
-  const existingIdx = list.findIndex((a) => a.workerId === workerId);
-  if (existingIdx >= 0) list[existingIdx] = attestation;
-  else list.push(attestation);
-  communityAttestations.set(key, list);
+  });
 
   if (!agreed) {
-    worker.disagreementCount += 1;
-    if (worker.disagreementCount >= 3) worker.delisted = true;
+    const newCount = worker.disagreementCount + 1;
+    vstore.updateWorker(workerId, {
+      disagreementCount: newCount,
+      delisted: newCount >= 3 ? true : worker.delisted,
+    });
   }
 
   // Quorum evaluation
@@ -676,11 +600,12 @@ export async function handleCommunityAttest(
 // GET /api/community/status/:matchId
 // Returns current quorum state for the match (public, no auth).
 export async function handleCommunityStatus(
-  store: StableStore, matchId: string, _req: http.IncomingMessage, res: http.ServerResponse,
+  store: StableStore, vstore: VerifyStore, matchId: string,
+  _req: http.IncomingMessage, res: http.ServerResponse,
 ): Promise<void> {
   const replay = await store.getReplay(matchId);
   if (!replay) return json(res, 404, { error: "replay not found" });
-  const list = communityAttestations.get(communityKey(matchId)) ?? [];
+  const list = vstore.getAttestations(matchId);
   const agreeing = list.filter((a) => a.agreed);
   return json(res, 200, {
     matchId,
@@ -691,7 +616,6 @@ export async function handleCommunityStatus(
       agreed: agreeing.length,
       reached: replay.trust?.tier === "community-verified",
     },
-    // Don't leak worker IDs unless already in the label.
     verifierIds: replay.trust?.verification?.verifierIds,
   });
 }

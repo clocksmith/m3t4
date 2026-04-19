@@ -14,6 +14,8 @@ import { CONFIG } from "./config.js";
 import { FileStableStore, stablePublic } from "./stable.js";
 import { Firehose } from "./firehose.js";
 import { handleClaimHandle, handleSubmit } from "./submit.js";
+import { defaultVerifyStorePath, VerifyStore } from "./verify-store.js";
+import { initZkVerifiers } from "./zk.js";
 import {
   handleCommunityAttest,
   handleCommunityRegister,
@@ -41,7 +43,12 @@ const __dirname = path.dirname(__filename);
 const STORE_PATH = process.env.STORE_PATH ?? path.join(__dirname, "..", "data", "m3t4.json");
 
 const store = new FileStableStore(STORE_PATH);
+const vstore = new VerifyStore(defaultVerifyStorePath());
 const firehose = new Firehose(store);
+
+// Initialize ZK verifiers. No-op if no vkey.json is present — route
+// will reject proofs with an explicit "no verifier" message.
+initZkVerifiers();
 
 function json(res: http.ServerResponse, code: number, body: unknown): void {
   res.writeHead(code, { "content-type": "application/json", "access-control-allow-origin": "*" });
@@ -106,45 +113,45 @@ const server = http.createServer(async (req, res) => {
     return handleSpectateTuple(store, matchId, req, res);
   }
   if (req.method === "POST" && url.pathname === "/api/duel/challenge") {
-    return handleDuelChallenge(req, res);
+    return handleDuelChallenge(vstore, req, res);
   }
   if (req.method === "POST" && url.pathname === "/api/duel/accept") {
-    return handleDuelAccept(req, res);
+    return handleDuelAccept(vstore, req, res);
   }
   if (req.method === "POST" && url.pathname === "/api/duel/submit") {
     return handleDuelSubmit(store, req, res);
   }
   if (req.method === "POST" && url.pathname.startsWith("/api/duel/signal/")) {
     const matchId = url.pathname.slice("/api/duel/signal/".length);
-    return handleDuelSignalPost(matchId, req, res);
+    return handleDuelSignalPost(vstore, matchId, req, res);
   }
   if (req.method === "GET" && url.pathname.startsWith("/api/duel/signal/")) {
     const matchId = url.pathname.slice("/api/duel/signal/".length);
-    return handleDuelSignalGet(matchId, req, res);
+    return handleDuelSignalGet(vstore, matchId, req, res);
   }
   if (req.method === "POST" && url.pathname === "/api/community/workers/register") {
-    return handleCommunityRegister(req, res);
+    return handleCommunityRegister(vstore, req, res);
   }
   if (req.method === "POST" && url.pathname === "/api/community/attest") {
-    return handleCommunityAttest(store, req, res);
+    return handleCommunityAttest(store, vstore, req, res);
   }
   if (req.method === "GET" && url.pathname.startsWith("/api/community/status/")) {
     const matchId = url.pathname.slice("/api/community/status/".length);
-    return handleCommunityStatus(store, matchId, req, res);
+    return handleCommunityStatus(store, vstore, matchId, req, res);
   }
 
   // Proof-carrying tiers (L1 commit-reveal, L2 signed-attestation stand-in, L3 envelope)
   if (req.method === "POST" && url.pathname === "/api/proof/commit") {
-    return handleProofCommit(req, res);
+    return handleProofCommit(vstore, req, res);
   }
   if (req.method === "POST" && url.pathname === "/api/proof/reveal") {
-    return handleProofReveal(store, req, res);
+    return handleProofReveal(store, vstore, req, res);
   }
   if (req.method === "POST" && url.pathname === "/api/proof/attest/register") {
-    return handleAttestRegister(req, res);
+    return handleAttestRegister(vstore, req, res);
   }
   if (req.method === "POST" && url.pathname === "/api/proof/attest/submit") {
-    return handleAttestSubmit(store, req, res);
+    return handleAttestSubmit(store, vstore, req, res);
   }
   if (req.method === "GET" && url.pathname === "/api/proof/zk/systems") {
     return handleProofZkSystems(req, res);

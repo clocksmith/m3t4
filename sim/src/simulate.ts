@@ -543,6 +543,8 @@ function killPlayer(w: World, vid: 0 | 1, kid: 0 | 1): void {
   v.diveT = 0;
   v.hp = 0;
   k.lastKillTick = w.tick;
+  w.killCounts[kid]++;
+  w.roundKillCounts[kid]++;
   if (w.telemetry) { w.telemetry[kid].kills++; w.telemetry[vid].deaths++; }
   w.freeze = Math.max(w.freeze, HIT_FREEZE);
 
@@ -579,15 +581,8 @@ function scorePoint(w: World, pid: 0 | 1): void {
   p.score += 1;
   if (w.telemetry) w.telemetry[pid].deliveries++;
   if (p.score >= POINTS_TO_WIN_ROUND) {
-    p.rounds += 1;
-    w.roundWinner = pid;
     p.giant = 1.8;
-    if (p.rounds >= ROUNDS_TO_WIN_MATCH) {
-      w.matchWinner = pid;
-      w.roundPause = 2.8;
-      return;
-    }
-    w.roundPause = 2.2;
+    finishRound(w, pid, p.rounds + 1 >= ROUNDS_TO_WIN_MATCH ? 2.8 : 2.2);
     return;
   }
   w.roundPause = 1.0;
@@ -643,6 +638,49 @@ function resetDuel(w: World, chars: [Character, Character]): void {
   w.fighters[1] = p1;
   w.gold = null;
   w.goal = null;
+  w.roundStartTick = w.tick;
+  w.roundKillCounts = [0, 0];
+}
+
+export function settleWorldWinner(w: World): void {
+  if (w.matchWinner !== -1) return;
+  const [a, b] = w.fighters;
+  if (a.rounds > b.rounds) w.matchWinner = 0;
+  else if (b.rounds > a.rounds) w.matchWinner = 1;
+  else if (a.score > b.score) w.matchWinner = 0;
+  else if (b.score > a.score) w.matchWinner = 1;
+  else if (w.killCounts[0] > w.killCounts[1]) w.matchWinner = 0;
+  else if (w.killCounts[1] > w.killCounts[0]) w.matchWinner = 1;
+}
+
+function roundTimeoutWinner(w: World): -1 | 0 | 1 {
+  const [a, b] = w.fighters;
+  if (a.score > b.score) return 0;
+  if (b.score > a.score) return 1;
+  if (w.roundKillCounts[0] > w.roundKillCounts[1]) return 0;
+  if (w.roundKillCounts[1] > w.roundKillCounts[0]) return 1;
+  return -1;
+}
+
+function finishRound(w: World, winner: -1 | 0 | 1, pause = 1.0): void {
+  if (winner !== -1) {
+    w.fighters[winner].rounds += 1;
+    w.roundWinner = winner;
+    if (w.fighters[winner].rounds >= ROUNDS_TO_WIN_MATCH) {
+      w.matchWinner = winner;
+    }
+  } else {
+    w.roundWinner = -1;
+  }
+  w.gold = null;
+  w.goal = null;
+  w.roundPause = Math.max(w.roundPause, pause);
+}
+
+function updateRoundTimer(w: World): void {
+  if (w.matchWinner !== -1 || w.roundPause > 0 || w.roundWinner !== -1) return;
+  if (w.tick - w.roundStartTick < ROUND_TIMER_MAX_TICKS) return;
+  finishRound(w, roundTimeoutWinner(w), 0.8);
 }
 
 // ---------- Frame log packing ----------
@@ -743,9 +781,12 @@ export function simulate(opts: SimulateOptions): MatchResult {
     gold: null,
     goal: null,
     lastGoalIdx: -1,
+    roundStartTick: 0,
     roundPause: 0,
     roundWinner: -1,
     matchWinner: -1,
+    killCounts: [0, 0],
+    roundKillCounts: [0, 0],
     freeze: 0,
     rng,
     noiseSeed,
@@ -824,18 +865,12 @@ export function simulate(opts: SimulateOptions): MatchResult {
     tickFighter(w.fighters[1], w.fighters[0], actB, w);
     resolveCombat(w);
     updateGold(w);
+    updateRoundTimer(w);
 
     w.tick++;
   }
 
-  // If match never concluded by KO, decide winner by round-then-score
-  if (w.matchWinner === -1) {
-    const [a, b] = w.fighters;
-    if (a.rounds > b.rounds) w.matchWinner = 0;
-    else if (b.rounds > a.rounds) w.matchWinner = 1;
-    else if (a.score > b.score) w.matchWinner = 0;
-    else if (b.score > a.score) w.matchWinner = 1;
-  }
+  settleWorldWinner(w);
 
   return {
     winner: w.matchWinner,
@@ -884,9 +919,12 @@ export function createStepperWorld(opts: {
     gold: null,
     goal: null,
     lastGoalIdx: -1,
+    roundStartTick: 0,
     roundPause: 0,
     roundWinner: -1,
     matchWinner: -1,
+    killCounts: [0, 0],
+    roundKillCounts: [0, 0],
     freeze: 0,
     rng,
     noiseSeed: noiseSeedFromMatchSeed(opts.seed),
@@ -953,6 +991,7 @@ export function stepWorld(w: World, actA: Action, actB: Action): StepResult {
   tickFighter(w.fighters[1], w.fighters[0], actB, w);
   resolveCombat(w);
   updateGold(w);
+  updateRoundTimer(w);
   w.tick++;
   return { matchWinner: w.matchWinner, tick: w.tick };
 }
@@ -1018,8 +1057,9 @@ export function simulateTrace(opts: SimulateOptions): TraceResult {
     tick: 0,
     stage,
     fighters: [makeFighter(0, chars[0], stage.spawnL, 1), makeFighter(1, chars[1], stage.spawnR, -1)],
-    gold: null, goal: null, lastGoalIdx: -1,
-    roundPause: 0, roundWinner: -1, matchWinner: -1, freeze: 0, rng, noiseSeed,
+    gold: null, goal: null, lastGoalIdx: -1, roundStartTick: 0,
+    roundPause: 0, roundWinner: -1, matchWinner: -1,
+    killCounts: [0, 0], roundKillCounts: [0, 0], freeze: 0, rng, noiseSeed,
     brainStates: [createBrainState(0), createBrainState(1)],
   };
   const brainA = compileBrain(opts.brainA);
@@ -1082,17 +1122,12 @@ export function simulateTrace(opts: SimulateOptions): TraceResult {
     tickFighter(w.fighters[1], w.fighters[0], actB, w);
     resolveCombat(w);
     updateGold(w);
+    updateRoundTimer(w);
     frames.push(snap());
     w.tick++;
   }
 
-  if (w.matchWinner === -1) {
-    const [a, b] = w.fighters;
-    if (a.rounds > b.rounds) w.matchWinner = 0;
-    else if (b.rounds > a.rounds) w.matchWinner = 1;
-    else if (a.score > b.score) w.matchWinner = 0;
-    else if (b.score > a.score) w.matchWinner = 1;
-  }
+  settleWorldWinner(w);
 
   return {
     result: {

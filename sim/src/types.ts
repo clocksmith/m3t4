@@ -168,9 +168,12 @@ export interface World {
   gold: Gold | null;
   goal: Goal | null;
   lastGoalIdx: number;
+  roundStartTick: number;
   roundPause: number;
   roundWinner: -1 | 0 | 1;
   matchWinner: -1 | 0 | 1;
+  killCounts: [number, number];
+  roundKillCounts: [number, number];
   freeze: number;
   rng: Rng;
   noiseSeed: number;

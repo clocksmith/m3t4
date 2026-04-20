@@ -33,8 +33,9 @@ export const STATS = {
     hitPush: 380,
     resistance: 1.0,
 };
-export const POINTS_TO_WIN_ROUND = 3;
+export const POINTS_TO_WIN_ROUND = 2;
 export const ROUNDS_TO_WIN_MATCH = 2;
+export const TIMEOUT_TIEBREAK = "round-score-kills-v1";
 export const GOAL_TIMER_START = 10;
 export const ROUND_TIMER_MAX_TICKS = 60 * 120; // safety cap: 60 s per round
 // Carrier must keep their body top within this goal radius long enough to score.

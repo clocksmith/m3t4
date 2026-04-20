@@ -31,8 +31,9 @@ export declare const STATS: {
     readonly hitPush: 380;
     readonly resistance: 1;
 };
-export declare const POINTS_TO_WIN_ROUND = 3;
+export declare const POINTS_TO_WIN_ROUND = 2;
 export declare const ROUNDS_TO_WIN_MATCH = 2;
+export declare const TIMEOUT_TIEBREAK = "round-score-kills-v1";
 export declare const GOAL_TIMER_START = 10;
 export declare const ROUND_TIMER_MAX_TICKS: number;
 export declare const GOAL_DWELL_S = 0.35;

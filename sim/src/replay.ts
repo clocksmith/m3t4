@@ -2,11 +2,11 @@ import {
   ARENA_L, ARENA_R, ARENA_T,
   CLASH_FREEZE, COYOTE_TIME, DOUBLE_KO_RESPAWN_S, FLOOR_Y, GOAL_DWELL_RADIUS, GOAL_DWELL_S, GOAL_TIMER_START,
   GRAVITY, HIT_FREEZE, JUMP_BUFFER_TIME, KILL_RESPAWN_S, POINTS_TO_WIN_ROUND,
-  RESPAWN_INVULN_S, ROUNDS_TO_WIN_MATCH, ROUND_TIMER_MAX_TICKS, STATS, STEP, WALL_SLIDE,
+  RESPAWN_INVULN_S, ROUNDS_TO_WIN_MATCH, ROUND_TIMER_MAX_TICKS, STATS, STEP, TIMEOUT_TIEBREAK, WALL_SLIDE,
 } from "./constants.js";
 import { BEHAVIOR_VERSION } from "./brain.js";
 import type { BrainConfig, Character, MatchResult, Stage } from "./types.js";
-import { createStepperWorld, stepWorld, unpackAction } from "./simulate.js";
+import { createStepperWorld, settleWorldWinner, stepWorld, unpackAction } from "./simulate.js";
 
 export const REPLAY_SCHEMA_ID = "m3t4.replay";
 export const REPLAY_SCHEMA_VERSION = 1;
@@ -19,7 +19,7 @@ export const REPLAY_CONSTANTS_HASH = (() => {
     STEP, GRAVITY, WALL_SLIDE, COYOTE_TIME, JUMP_BUFFER_TIME,
     HIT_FREEZE, CLASH_FREEZE,
     STATS,
-    POINTS_TO_WIN_ROUND, ROUNDS_TO_WIN_MATCH, GOAL_TIMER_START,
+    POINTS_TO_WIN_ROUND, ROUNDS_TO_WIN_MATCH, TIMEOUT_TIEBREAK, GOAL_TIMER_START,
     ROUND_TIMER_MAX_TICKS, GOAL_DWELL_S, GOAL_DWELL_RADIUS, KILL_RESPAWN_S,
     DOUBLE_KO_RESPAWN_S, RESPAWN_INVULN_S,
     ARENA_L, ARENA_R, ARENA_T, FLOOR_Y,
@@ -569,6 +569,7 @@ export function replayArtifactToResultV1(
     throw new Error(`replay action log has ${bytes.length - offset} trailing bytes`);
   }
 
+  settleWorldWinner(world);
   const result = replayResultFromWorld(world, hashAcc.toString(16).padStart(8, "0"));
   if (opts.verifyExpected !== false) verifyReplayResult(artifact.result, result);
   return {

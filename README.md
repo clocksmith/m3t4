@@ -47,13 +47,96 @@ is roster selection; sometimes it is the trait-to-brain mapping. The
 goal is not to eliminate counters, but to make counters specific,
 costly, and understandable.
 
+## System architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                    USER BROWSER  (https://m3t4.ai)                       │
+│                                                                          │
+│   CORE (always on)                         OPTIONAL (feature-flagged)    │
+│   ┌─────────┐  ┌─────────┐  ┌────────┐     ┌──────────────────────┐      │
+│   │ live    │  │practice │  │  build │     │     #duel            │      │
+│   │ WS feed │  │ local   │  │ editor │     │  (p2pDuel flag)      │      │
+│   └────┬────┘  │  sim    │  └────────┘     │  WebRTC + signaling  │      │
+│        │       └─────────┘                  └──────┬───────────────┘     │
+│        │       ┌─────────┐                         │                     │
+│        │       │ submit  │──── bearer token ───────│                     │
+│        │       └────┬────┘                         │                     │
+└────────┼────────────┼─────────────────────────────┼──────────────────────┘
+         │ /ws        │ POST /api/ranked/submit     │ /api/duel/*
+         ▼            ▼                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│             SERVER  (https://api.m3t4.ai · Cloud Run · Node+ws)          │
+│                                                                          │
+│   ┌─────────────────────────────────────────────────────────────────┐    │
+│   │ CORE routes (server/src/routes/)                                │    │
+│   │  /api/ranked/submit  /api/leaderboard  /api/stables/:uid        │    │
+│   │  /api/verify/replay  /api/spectate/tuple/:id   WS /ws firehose  │    │
+│   └─────────────────────────────────────────────────────────────────┘    │
+│   ┌─────────────────────────────────────────────────────────────────┐    │
+│   │ OPTIONAL routes (gated by CONFIG.features)                      │    │
+│   │  p2pDuel         → server/src/p2p/          /api/duel/*         │    │
+│   │  communityVerify → server/src/community/    /api/community/*    │    │
+│   │  proofLab        → server/src/labs/proof/   /api/proof/*        │    │
+│   └─────────────────────────────────────────────────────────────────┘    │
+│                                                                          │
+│   ┌──────────────┐  ┌──────────────────────┐  ┌──────────────────┐       │
+│   │ Firebase     │  │   @m3t4/sim          │  │  StableStore     │       │
+│   │ auth adapter │  │  brain v5 +          │  │  configs · Elo · │       │
+│   │ (dev/prod)   │  │  deterministic sim + │  │  replays         │       │
+│   │              │  │  replay/hash format  │  │  (File · Fire-   │       │
+│   │              │  │                      │  │   store prod)    │       │
+│   └──────────────┘  └──────────────────────┘  └──────────────────┘       │
+└──────────────────────────────────────────────────────────────────────────┘
+                                  ▲
+                                  │ (offline-only; never touches prod)
+                                  │
+┌─────────────────────────────────┴────────────────────────────────────────┐
+│              pareto/ TOOLKIT (developer laptop)                          │
+│                                                                          │
+│  roster-evolve      → evolves candidate 16-bot roster via adv-gated      │
+│                        search                                            │
+│  adversarial-attack → Phase 4 external exploit search (certification)    │
+│  trace-stalls       → mode-telemetry breakdown of stall patterns         │
+│  meta-health        → combined-pool H2H report (release gate)            │
+│  phantom-gate       → internal ecology gate (cycles, uncountered, max)   │
+│  install-roster     → writes sim/src/strategies.ts canonical 16 presets  │
+│                                                                          │
+│  Cycle: evolve → install → phantom-gate → meta-health → attack → ship    │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+Key invariants:
+
+- **Sim is shared**: one deterministic engine runs in-browser (practice,
+  local verify), on-server (ranked, `/verify/replay`), and in `pareto/`
+  tools. Brain version + physics constants hash into
+  `REPLAY_CONSTANTS_HASH`; any rule change bumps it.
+- **Ranked never touches p2p**: even with feature flags on, ranked
+  matches always run server-authoritatively. p2p is exhibition-only,
+  non-ranked, nav-hidden in beta.
+- **pareto/ is offline**: evolves and tests locally; only the output
+  (`install-roster` writing `sim/src/strategies.ts`) touches prod.
+- **Feature flags are the beta knob**: `CONFIG.features = { p2pDuel,
+  communityVerify, proofLab, zk }`. All off by default. Client hides
+  the nav item; server skips registering the route set entirely.
+
 ## Packages
 
 ```
 sim/          — deterministic headless game simulator (@m3t4/sim)
+                brain state machine, physics constants, replay format
 pareto/       — local Monte Carlo + evolutionary search toolkit
+                roster-evolve, adversarial-attack, meta-health,
+                trace-stalls, phantom-gate, install-roster
 server/       — Cloud Run service (REST + WebSocket + matchmaker)
+  routes/     —   core: ranked, replay-verify
+  p2p/        —   optional: exhibition duel (WebRTC signaling)
+  community/  —   optional: federated replay-verification workers
+  labs/proof/ —   optional: L1 commit-reveal, L2 attestation,
+                  L3 zk envelope
 client/       — spectator SPA hosted at m3t4.ai
+  modes/      —   spectate, practice, build, submit (+ duel flag-gated)
 theming/      — character/weapon/stage visual data
 ```
 

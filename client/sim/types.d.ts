@@ -165,6 +165,7 @@ export interface BrainState {
     recentSelfClashTicks: number[];
     lastKnownSelfClashTick: number;
     deliveryPlan: DeliveryPlan | null;
+    escapeEntriesThisRound: number;
     lastTransitionReason: string;
 }
 export type DeliveryTacticKind = "direct" | "kill-first" | "feint";

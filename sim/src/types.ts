@@ -275,6 +275,15 @@ export interface BrainState {
   // expiry. See planDeliveryTactic() for scoring. Replay-safe.
   deliveryPlan: DeliveryPlan | null;
 
+  // v5.1: count of ESCAPE entries since the last reset. Capped by
+  // ESCAPE_LOOP_CAP; once hit, decideMode stops routing hard-danger to
+  // ESCAPE and instead forces commit-into-trade. Prevents the mutual
+  // escape-spiral that produced the 8-bot aerial stalemate clique.
+  // Resets via resetBrainStateForRound, which fires on round boundary
+  // AND on own respawn — so the effective lifetime is "since last round
+  // start or own death," not strictly per round.
+  escapeEntriesThisRound: number;
+
   // Debug hook — reason for last mode transition. Not used in decisions.
   lastTransitionReason: string;
 }

@@ -4,7 +4,7 @@ import { GOAL_DWELL_RADIUS, GOAL_DWELL_S, KILL_RESPAWN_S, RESPAWN_INVULN_S, STAT
 // commitment window. Replaces v2's per-tick reactive ladder. Params
 // bias mode transitions and tactical details within each mode; they no
 // longer drive behavior directly via a flat if/else.
-export const BEHAVIOR_VERSION = 5;
+export const BEHAVIOR_VERSION = 6;
 // ---------- Opp-model buffer sizing ----------
 //
 // Bounded ring: max 16 entries per stream, hard decay at 240 ticks (2 s).
@@ -35,6 +35,18 @@ const RECOVERY_WINDOW_START = SWIPE_ACTIVE_TICKS;
 const RECOVERY_WINDOW_END = SWIPE_FULL_CD_TICKS + 2; // small slack
 const PASSIVE_FOIL_DANGER_RANGE = STATS.sword + STATS.bodyW;
 const CLASH_LOOP_THRESHOLD = 10;
+// v5.1 anti-stalemate constants
+//
+// OFFENSE_COMMIT_TIMEOUT_TICKS: if a bot has been in OFFENSE for this
+// many ticks with zero attacks issued, force a commit on the next
+// canSwing tick regardless of safety gates. Breaks "approach but never
+// commit" loops that produce the aerial-family 0-0 stalemate.
+//
+// ESCAPE_LOOP_CAP: once a bot has entered ESCAPE this many times in the
+// current round, decideMode no longer routes to ESCAPE — hard-danger
+// becomes commit-into-trade instead. Prevents indefinite mutual flight.
+const OFFENSE_COMMIT_TIMEOUT_TICKS = 90;
+const ESCAPE_LOOP_CAP = 4;
 // Distance band used by several modes' "close enough to commit"
 // thresholds. burnRate extends effective swing reach.
 function swingRange(params) {
@@ -53,6 +65,7 @@ export function createBrainState(id) {
         recentSelfClashTicks: [],
         lastKnownSelfClashTick: -9999,
         deliveryPlan: null,
+        escapeEntriesThisRound: 0,
         lastTransitionReason: "init",
     };
 }
@@ -65,6 +78,7 @@ export function resetBrainStateForRound(state, tick) {
     state.substate = null;
     state.modeEnterTick = tick;
     state.deliveryPlan = null; // plan's timing estimates are stale across respawn
+    state.escapeEntriesThisRound = 0; // escape cap resets per round
     state.lastTransitionReason = "round-reset";
 }
 // ---------- Opp-model update ----------
@@ -262,7 +276,17 @@ function decideMode(obs, params, state, sig) {
             obs.self.invuln <= 0 &&
             !canMatchCommit);
     if (hardDanger && state.mode !== "escape") {
-        enterMode(state, "escape", null, tick, "hard-danger");
+        // v5.1 escape cap: once we've entered ESCAPE ESCAPE_LOOP_CAP times
+        // in this round, stop fleeing and commit into the trade. This is
+        // the asymmetry that breaks mutual escape-spirals in the aerial
+        // family.
+        if (state.escapeEntriesThisRound >= ESCAPE_LOOP_CAP) {
+            enterMode(state, "offense", "punish", tick, "escape-cap-commit");
+        }
+        else {
+            enterMode(state, "escape", null, tick, "hard-danger");
+            state.escapeEntriesThisRound++;
+        }
         return;
     }
     // Token state change is authoritative: drops into OBJECTIVE.
@@ -315,7 +339,14 @@ function decideMode(obs, params, state, sig) {
     }
     // ZONE exit: opp stopped pressing OR we're no longer center-adjacent.
     if (state.mode === "zone" && (sig.oppAggression < 0.2 || sig.cornered)) {
-        enterMode(state, sig.cornered ? "escape" : "neutral", null, tick, "zone-cleared");
+        // v5.1 escape cap applies here too.
+        if (sig.cornered && state.escapeEntriesThisRound < ESCAPE_LOOP_CAP) {
+            enterMode(state, "escape", null, tick, "zone-cleared-cornered");
+            state.escapeEntriesThisRound++;
+        }
+        else {
+            enterMode(state, "neutral", null, tick, "zone-cleared");
+        }
         return;
     }
     // ESCAPE exit: spacing restored.
@@ -352,7 +383,12 @@ function runNeutralMode(obs, params, sig) {
         action: takeFreeSwing,
     };
 }
-function dominantAntiLoopTrait(params) {
+// v5.1 symmetry breaker: when the top trait is close to the second
+// (within 0.1), fighter id 0 picks #1 and fighter id 1 picks #2. This
+// prevents mirror matches from mutually resolving to the same response
+// (e.g. two aerials both picking "escape" forever). Deterministic:
+// state.id is fixed per match, so replay integrity is preserved.
+function dominantAntiLoopTrait(params, state) {
     const entries = [
         ["greed", params.greed ?? 0.5],
         ["cunning", params.cunning ?? 0.5],
@@ -360,12 +396,65 @@ function dominantAntiLoopTrait(params) {
         ["shipRate", params.shipRate ?? 0.5],
     ];
     entries.sort((a, b) => b[1] - a[1]);
+    if (entries[0][1] - entries[1][1] < 0.1 && state.id === 1) {
+        return entries[1][0];
+    }
     return entries[0][0];
 }
 function runOffenseMode(obs, params, state, sig) {
     const sub = state.substate ?? "press";
+    // v5.1 OFFENSE commit-timeout: if our last attack was more than
+    // OFFENSE_COMMIT_TIMEOUT_TICKS ago, force a commit on the next
+    // canSwing tick. Uses global tick arithmetic (obs.self.lastAttackStartTick)
+    // so it survives OFFENSE ↔ NEUTRAL bouncing — the 8-bot aerial
+    // stalemate clique triggers ~577 mode switches in a 28800-tick match,
+    // so a per-OFFENSE-entry counter never accumulates. lastAttackStartTick
+    // defaults to -9999 (never attacked); that's fine — force-commit will
+    // fire on the first canSwing tick, which requires inReach AND cooldown
+    // clear, so the bot still has to approach before committing.
+    // v5.1 OFFENSE commit-timeout. Triggers on the specific pathology:
+    // bot is in a clash loop OR inside passive-foil danger OR within
+    // foil-reach, AND hasn't landed an attack in a long time. That scope
+    // targets the stalemate cause (close-range but never committing)
+    // without force-firing blind swipes when opp is far away.
+    //
+    // Uses global tick arithmetic (obs.self.lastAttackStartTick) so it
+    // survives OFFENSE↔NEUTRAL mode bouncing — the aerial clique triggers
+    // hundreds of mode switches per match, so a per-entry counter never
+    // accumulates.
+    //
+    // Id-asymmetric threshold: fighter 0 commits 7 ticks earlier than
+    // fighter 1. Identical-config mirror matches otherwise produce
+    // perfectly synchronized swipes that always mutually parry. The
+    // 7-tick offset is inside the swipe active window (14.4 ticks) so
+    // fighter 0 can land before fighter 1 starts. Deterministic — state.id
+    // is fixed per match.
+    const asymOffset = state.id === 0 ? 0 : 7;
+    const ticksSinceOwnAttack = obs.tick - obs.self.lastAttackStartTick;
+    const swipeReady = obs.self.swipeCD <= 0 && obs.self.stun <= 0 &&
+        obs.self.swipeT <= 0 && obs.self.diveT <= 0;
+    // "Engaged" context: recently clashed (within 3s) OR currently in a
+    // clash loop OR within passive-foil geometry OR within medium combat
+    // range (2x normal max swing reach ≈ 260). Excludes the "opp is far
+    // across the stage" case so we don't blind-swipe into thin air, while
+    // still catching the aerial-clique pathology where bots oscillate at
+    // medium range with intermittent clashes.
+    const ticksSinceClash = obs.tick - obs.self.lastClashTick;
+    const commitContext = sig.clashLoop ||
+        sig.passiveFoilDanger ||
+        ticksSinceClash < 360 ||
+        sig.absDist < 260;
+    if (commitContext &&
+        ticksSinceOwnAttack > (OFFENSE_COMMIT_TIMEOUT_TICKS + asymOffset) &&
+        swipeReady) {
+        return {
+            left: sig.absDir < 0,
+            right: sig.absDir > 0,
+            action: true,
+        };
+    }
     if (sig.clashLoop && ticksInMode(state, obs.tick) > 60) {
-        const trait = dominantAntiLoopTrait(params);
+        const trait = dominantAntiLoopTrait(params, state);
         if (trait === "pivotSpeed")
             return runEscapeMode(obs, params, sig);
         if (trait === "shipRate" && (obs.token.exists || obs.self.hasToken || obs.opp.hasToken)) {

@@ -54,8 +54,8 @@ function defaultParams(overrides: Partial<Params> = {}): Params {
 
 // --- Tests ---
 
-test("BEHAVIOR_VERSION is 5", () => {
-  assert.equal(BEHAVIOR_VERSION, 5);
+test("BEHAVIOR_VERSION is 6", () => {
+  assert.equal(BEHAVIOR_VERSION, 6);
 });
 
 test("createBrainState initializes neutral with empty buffers", () => {
@@ -339,4 +339,55 @@ test("high-shipRate config prefers direct tactic", () => {
   runParamBrain(obs, params, state);
   assert.equal(state.deliveryPlan!.tactic, "direct",
     "shipRate-dominant config with far opp should pick direct");
+});
+
+// ---- v5.1 anti-stalemate regression ----
+
+test("v5.1: 8-bot aerial clique does NOT produce all-draw pairings", () => {
+  // Before v5.1 (BEHAVIOR_VERSION=5), every ordered pair inside this
+  // 8-member aerial-negative-leverage-low-greed clique produced
+  // guaranteed 0-0 stalemates across seeds/stages — full 28800-tick
+  // timeouts. After v5.1, at least one sampled pair per matchup must
+  // produce a non-draw (score, kill, or decisive timeout under the
+  // kill-tiebreak rule).
+  const clique = [
+    "pivot", "unicorn", "disruptor", "operator",
+    "shipper", "moonshot", "founder", "acolyte",
+  ] as const;
+
+  // Use a small deterministic sample — 3 stages × 2 seeds = 6 samples
+  // per pair. Before the patch, 0% resolved; after, expect >50%.
+  const stages = [STAGES.datacenter, STAGES.boardroom, STAGES.demoday];
+  const seeds = [1, 42];
+
+  const failed: string[] = [];
+  for (const a of clique) {
+    for (const b of clique) {
+      let anyResolved = false;
+      for (const stage of stages) {
+        for (const seed of seeds) {
+          const r = simulate({
+            stage,
+            brainA: STRATEGIES[a],
+            brainB: STRATEGIES[b],
+            seed,
+          });
+          const resolved =
+            r.winner !== -1 ||
+            r.finalScore[0] > 0 ||
+            r.finalScore[1] > 0 ||
+            r.finalRounds[0] > 0 ||
+            r.finalRounds[1] > 0;
+          if (resolved) { anyResolved = true; break; }
+        }
+        if (anyResolved) break;
+      }
+      if (!anyResolved) failed.push(`${a} vs ${b}`);
+    }
+  }
+
+  assert.equal(
+    failed.length, 0,
+    `${failed.length} aerial-clique pairs still always-stalemate across 6 samples:\n  ${failed.slice(0, 10).join("\n  ")}${failed.length > 10 ? "\n  ..." : ""}`,
+  );
 });

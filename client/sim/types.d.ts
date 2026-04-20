@@ -1,5 +1,5 @@
 import type { Rng } from "./rng.js";
-export declare const PARAM_KEYS: readonly ["burnRate", "moat", "shipRate", "foresight", "pivotSpeed", "leverage", "networking", "spite", "greed", "pacing", "cunning", "hallucination"];
+export declare const PARAM_KEYS: readonly ["burnRate", "moat", "shipRate", "foresight", "pivotSpeed", "leverage", "networking", "spite", "greed", "pacing", "cunning", "lift", "parry", "chase", "discipline", "hallucination"];
 export type ParamKey = (typeof PARAM_KEYS)[number];
 export type Params = Record<ParamKey, number>;
 export declare const DEFAULT_PARAMS: Params;

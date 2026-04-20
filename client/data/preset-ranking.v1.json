@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "computedAt": "2026-04-20T17:13:41.558Z",
+  "seedsPerPairing": 3,
+  "totalMatches": 720,
+  "rows": [
+    {
+      "name": "disruptor",
+      "wins": 57,
+      "losses": 33,
+      "draws": 0,
+      "wr": 0.6333333333333333
+    },
+    {
+      "name": "incumbent",
+      "wins": 56,
+      "losses": 34,
+      "draws": 0,
+      "wr": 0.6222222222222222
+    },
+    {
+      "name": "founder",
+      "wins": 55,
+      "losses": 35,
+      "draws": 0,
+      "wr": 0.6111111111111112
+    },
+    {
+      "name": "acolyte",
+      "wins": 52,
+      "losses": 37,
+      "draws": 1,
+      "wr": 0.5833333333333334
+    },
+    {
+      "name": "blitz",
+      "wins": 47,
+      "losses": 43,
+      "draws": 0,
+      "wr": 0.5222222222222223
+    },
+    {
+      "name": "intern",
+      "wins": 47,
+      "losses": 43,
+      "draws": 0,
+      "wr": 0.5222222222222223
+    },
+    {
+      "name": "standby",
+      "wins": 45,
+      "losses": 45,
+      "draws": 0,
+      "wr": 0.5
+    },
+    {
+      "name": "troll",
+      "wins": 44,
+      "losses": 46,
+      "draws": 0,
+      "wr": 0.4888888888888889
+    },
+    {
+      "name": "operator",
+      "wins": 43,
+      "losses": 47,
+      "draws": 0,
+      "wr": 0.4777777777777778
+    },
+    {
+      "name": "regulatory",
+      "wins": 42,
+      "losses": 47,
+      "draws": 1,
+      "wr": 0.4722222222222222
+    },
+    {
+      "name": "shipper",
+      "wins": 40,
+      "losses": 50,
+      "draws": 0,
+      "wr": 0.4444444444444444
+    },
+    {
+      "name": "acquirer",
+      "wins": 40,
+      "losses": 50,
+      "draws": 0,
+      "wr": 0.4444444444444444
+    },
+    {
+      "name": "pivot",
+      "wins": 39,
+      "losses": 51,
+      "draws": 0,
+      "wr": 0.43333333333333335
+    },
+    {
+      "name": "oracle",
+      "wins": 39,
+      "losses": 51,
+      "draws": 0,
+      "wr": 0.43333333333333335
+    },
+    {
+      "name": "moonshot",
+      "wins": 39,
+      "losses": 51,
+      "draws": 0,
+      "wr": 0.43333333333333335
+    },
+    {
+      "name": "unicorn",
+      "wins": 34,
+      "losses": 56,
+      "draws": 0,
+      "wr": 0.37777777777777777
+    }
+  ],
+  "tiers": {
+    "hard": "acolyte",
+    "medium": "operator",
+    "easy": "unicorn"
+  }
+}

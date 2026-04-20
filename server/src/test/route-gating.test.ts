@@ -4,7 +4,14 @@ import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { ReplayArtifactV1 } from "@m3t4/sim";
+import {
+  computedHallucinationForSpend,
+  USER_KNOBS,
+  uiToNative,
+  type BrainConfig,
+  type ParamKey,
+  type ReplayArtifactV1,
+} from "@m3t4/sim";
 import { json } from "../http-utils.js";
 import { registerDuelRoutes } from "../p2p/routes.js";
 import { registerRankedRoutes } from "../routes/ranked.js";
@@ -14,6 +21,7 @@ import { VerifyStore } from "../verify-store.js";
 
 class MemoryStableStore {
   private replays = new Map<string, ReplayArtifactV1>();
+  submitted: Array<{ userId: string; slotIdx: number; config: BrainConfig; name?: string }> = [];
   async archiveReplay(a: ReplayArtifactV1): Promise<void> { this.replays.set(a.match.matchId, a); }
   async getReplay(matchId: string): Promise<ReplayArtifactV1 | null> {
     return this.replays.get(matchId) ?? null;
@@ -25,6 +33,10 @@ class MemoryStableStore {
   async updateStable(): Promise<void> {}
   async claimHandle(): Promise<any> { return null; }
   async addSlot(): Promise<any> { return null; }
+  async submitToSlot(userId: string, slotIdx: number, config: BrainConfig, name?: string): Promise<{ slotId: string }> {
+    this.submitted.push({ userId, slotIdx, config, name });
+    return { slotId: `${userId}-${slotIdx}` };
+  }
   async recordMatch(): Promise<void> {}
 }
 
@@ -47,7 +59,13 @@ function boot(routes: RouteList): Promise<{ port: number; close: () => Promise<v
   });
 }
 
-async function req(port: number, method: string, url: string, body?: unknown): Promise<{ status: number; body: any }> {
+async function req(
+  port: number,
+  method: string,
+  url: string,
+  body?: unknown,
+  headers: Record<string, string> = {},
+): Promise<{ status: number; body: any }> {
   return new Promise((resolve, reject) => {
     const payload = body === undefined ? undefined : JSON.stringify(body);
     const r = http.request({
@@ -57,6 +75,7 @@ async function req(port: number, method: string, url: string, body?: unknown): P
       path: url,
       headers: {
         "content-type": "application/json",
+        ...headers,
         ...(payload ? { "content-length": String(Buffer.byteLength(payload)) } : {}),
       },
     }, (resp) => {
@@ -71,6 +90,13 @@ async function req(port: number, method: string, url: string, body?: unknown): P
     if (payload) r.write(payload);
     r.end();
   });
+}
+
+function configFromUi(values: Partial<Record<ParamKey, number>>, spent: number): BrainConfig {
+  const attrs: BrainConfig["attributes"] = {};
+  for (const k of USER_KNOBS) attrs[k] = uiToNative(k, values[k] ?? 0);
+  attrs.hallucination = computedHallucinationForSpend(spent);
+  return { id: "route-budget-test", attributes: attrs };
 }
 
 function registerCore(routes: RouteList, store: MemoryStableStore): void {
@@ -110,6 +136,34 @@ test("centralized route graph hides P2P routes by default", async (t) => {
   assert.equal(duel.status, 404);
 });
 
+test("ranked submit rejects over-budget configs before store write", async (t) => {
+  const routes: RouteList = [];
+  const store = new MemoryStableStore();
+  registerCore(routes, store);
+  const srv = await boot(routes);
+  t.after(() => srv.close());
+
+  const cfg = configFromUi({
+    burnRate: 100,
+    moat: 100,
+    shipRate: 100,
+    foresight: 100,
+  }, 400);
+  const resp = await req(srv.port, "POST", "/api/ranked/submit", {
+    slotIdx: 0,
+    config: cfg,
+    name: "illegal-overbudget",
+  }, { authorization: "Bearer alice" });
+
+  assert.equal(resp.status, 400);
+  assert.equal(resp.body.error, "invalid user config");
+  assert.ok(
+    resp.body.details.some((detail: string) => detail.includes("exceeds")),
+    `expected over-budget error, got ${JSON.stringify(resp.body.details)}`,
+  );
+  assert.equal(store.submitted.length, 0);
+});
+
 test("P2P routes are available only when the duel registrar is mounted", async (t) => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "m3t4-route-gating-"));
   const routes: RouteList = [];
@@ -130,4 +184,3 @@ test("P2P routes are available only when the duel registrar is mounted", async (
   assert.equal(duel.status, 200);
   assert.ok(duel.body.challengeId);
 });
-

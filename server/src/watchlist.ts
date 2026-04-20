@@ -3,6 +3,7 @@ import {
   nativeToUI,
   ROUND_TIMER_MAX_TICKS,
   ROUNDS_TO_WIN_MATCH,
+  USER_KNOBS,
   type BrainConfig,
   type MatchResult,
   type ParamKey,
@@ -71,19 +72,7 @@ const ARCHETYPE_FINGERPRINTS: Array<{ tag: string; config: BrainConfig }> = [
   },
 ];
 
-const VECTOR_KEYS: ParamKey[] = [
-  "burnRate",
-  "moat",
-  "shipRate",
-  "foresight",
-  "pivotSpeed",
-  "leverage",
-  "networking",
-  "spite",
-  "greed",
-  "pacing",
-  "cunning",
-];
+const VECTOR_KEYS: ParamKey[] = [...USER_KNOBS];
 
 const ARCHETYPE_VECTORS = ARCHETYPE_FINGERPRINTS.map((fp) => ({
   tag: fp.tag,

@@ -23,6 +23,8 @@ import { registerDuelRoutes } from "./p2p/routes.js";
 import { registerCommunityVerifyRoutes } from "./community/routes.js";
 import { registerProofRoutes } from "./labs/proof/routes.js";
 import { initZkVerifiers } from "./labs/proof/zk.js";
+import { registerComputeRoutes } from "./compute/routes.js";
+import { ComputeStore } from "./compute/store.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,6 +58,22 @@ if (CONFIG.features.communityVerify) {
 if (CONFIG.features.proofLab) {
   const proofStore = new VerifyStore(defaultVerifyStorePath("proof"));
   registerProofRoutes(routes, { store, vstore: proofStore, zkEnabled: CONFIG.features.zk });
+}
+
+if (CONFIG.features.distributedCompute) {
+  const computeStore = new ComputeStore();
+  registerComputeRoutes(routes, { store: computeStore });
+  // Seed a small prime-search task so freshly-connected workers have
+  // something to chew on without needing an admin API call. Real
+  // workloads are posted via /api/compute/tasks (gated separately).
+  computeStore.createTask({
+    kind: "prime-search.v0",
+    chunks: Array.from({ length: 32 }, (_, i) => ({
+      params: { start: 1_000_000 + i * 20_000, endExclusive: 1_000_000 + (i + 1) * 20_000 },
+    })),
+    minExecutions: 2,
+    minAgreeing: 2,
+  });
 }
 
 const server = http.createServer(async (req, res) => {

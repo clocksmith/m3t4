@@ -1,0 +1,1107 @@
+{
+  "$schema": "./visual-theme.schema.json",
+  "meta": {
+    "version": "1.0.0",
+    "theme": "Post-Revenue Delivery Ritual",
+    "visualTone": "dry boardroom apocalypse, underplayed cruelty, no wink-to-camera jokes",
+    "boundary": "Visual assets only: palettes, sprites, textures, VFX, particles, and image-generation prompts. No game rules, reward tracks, runtime selection, or HUD copy."
+  },
+  "particlePacks": {
+    "office_weather": [
+      "particle-dust",
+      "particle-spark",
+      "particle-datacenter-packet",
+      "particle-paper-cut",
+      "particle-deferred-maintenance"
+    ]
+  },
+  "stageVisualPacks": {
+    "datacenter": {
+      "cold_aisle_chapel": {
+        "status": "playable",
+        "palette": {
+          "skyTop": "#101018",
+          "skyMid": "#0c1218",
+          "skyBottom": "#05070a",
+          "platformFace": "#111a22",
+          "platformEdge": "#33404a",
+          "ambient": "rgba(180,220,255,0.025)"
+        },
+        "backdropMotif": "server-racks",
+        "particles": "office_weather",
+        "layers": {
+          "sky": "assets/stages/datacenter/cold_aisle_chapel/layers/sky.png",
+          "farParallax": "assets/stages/datacenter/cold_aisle_chapel/layers/far_parallax.png",
+          "midParallax": "assets/stages/datacenter/cold_aisle_chapel/layers/mid_parallax.png",
+          "nearParallax": "assets/stages/datacenter/cold_aisle_chapel/layers/near_parallax.png"
+        },
+        "textures": {
+          "platform": "assets/stages/datacenter/cold_aisle_chapel/textures/platform.png",
+          "platformEdge": "assets/stages/datacenter/cold_aisle_chapel/textures/platform_edge.png",
+          "wall": "assets/stages/datacenter/cold_aisle_chapel/textures/wall.png",
+          "floorDetail": "assets/stages/datacenter/cold_aisle_chapel/textures/floor_detail.png"
+        }
+      }
+    },
+    "boardroom": {
+      "fiduciary_basement": {
+        "status": "playable",
+        "palette": {
+          "skyTop": "#171116",
+          "skyMid": "#1d1516",
+          "skyBottom": "#080506",
+          "platformFace": "#2e241f",
+          "platformEdge": "#7a6655",
+          "ambient": "rgba(230,205,160,0.025)"
+        },
+        "backdropMotif": "boardroom-table",
+        "particles": "office_weather",
+        "previewThumb": "assets/stages/boardroom/fiduciary_basement/ui/preview_thumb.png",
+        "layers": {
+          "sky": "assets/stages/boardroom/fiduciary_basement/layers/sky.png",
+          "farParallax": "assets/stages/boardroom/fiduciary_basement/layers/far_parallax.png",
+          "midParallax": "assets/stages/boardroom/fiduciary_basement/layers/mid_parallax.png",
+          "nearParallax": "assets/stages/boardroom/fiduciary_basement/layers/near_parallax.png"
+        },
+        "textures": {
+          "platform": "assets/stages/boardroom/fiduciary_basement/textures/platform.png",
+          "platformEdge": "assets/stages/boardroom/fiduciary_basement/textures/platform_edge.png",
+          "wall": "assets/stages/boardroom/fiduciary_basement/textures/wall.png",
+          "floorDetail": "assets/stages/boardroom/fiduciary_basement/textures/floor_detail.png"
+        }
+      }
+    },
+    "demoday": {
+      "demo_day_afterparty": {
+        "status": "playable",
+        "palette": {
+          "skyTop": "#171020",
+          "skyMid": "#100917",
+          "skyBottom": "#050307",
+          "platformFace": "#1d1727",
+          "platformEdge": "#8665c9",
+          "ambient": "rgba(180,120,255,0.03)"
+        },
+        "backdropMotif": "stage-with-crowd",
+        "particles": "office_weather",
+        "previewThumb": "assets/stages/demoday/demo_day_afterparty/ui/preview_thumb.png",
+        "layers": {
+          "sky": "assets/stages/demoday/demo_day_afterparty/layers/sky.png",
+          "farParallax": "assets/stages/demoday/demo_day_afterparty/layers/far_parallax.png",
+          "midParallax": "assets/stages/demoday/demo_day_afterparty/layers/mid_parallax.png",
+          "nearParallax": "assets/stages/demoday/demo_day_afterparty/layers/near_parallax.png"
+        },
+        "textures": {
+          "platform": "assets/stages/demoday/demo_day_afterparty/textures/platform.png",
+          "platformEdge": "assets/stages/demoday/demo_day_afterparty/textures/platform_edge.png",
+          "wall": "assets/stages/demoday/demo_day_afterparty/textures/wall.png",
+          "floorDetail": "assets/stages/demoday/demo_day_afterparty/textures/floor_detail.png"
+        }
+      }
+    }
+  },
+  "characterVisualPacks": {
+    "sama": {
+      "capacity_mystic": {
+        "colors": {
+          "primary": "#6ee7b7",
+          "trim": "#d1fae5",
+          "shadow": "#047857"
+        },
+        "combatReadability": "fast setup duelist with polished menace"
+      }
+    },
+    "darrius": {
+      "policy_undertaker": {
+        "colors": {
+          "primary": "#fb923c",
+          "trim": "#fed7aa",
+          "shadow": "#9a3412"
+        },
+        "combatReadability": "measured enforcer with long, corrective swings"
+      }
+    },
+    "demis": {
+      "quiet_solver": {
+        "colors": {
+          "primary": "#60a5fa",
+          "trim": "#dbeafe",
+          "shadow": "#1e3a8a"
+        },
+        "combatReadability": "precise thinker whose weapon geometry looks unfair"
+      }
+    },
+    "mark": {
+      "sunlit_operator": {
+        "colors": {
+          "primary": "#c084fc",
+          "trim": "#ede9fe",
+          "shadow": "#5b21b6"
+        },
+        "combatReadability": "pressure fighter built from wellness jargon and impact"
+      }
+    }
+  },
+  "characterGraphics": {
+    "sama": {
+      "monastic_infra": {
+        "spriteSheet": "assets/chars/sama/monastic_infra/sprite.png",
+        "portraits": {
+          "neutral": "assets/chars/sama/monastic_infra/portraits/neutral.png",
+          "hurt": "assets/chars/sama/monastic_infra/portraits/hurt.png",
+          "ko": "assets/chars/sama/monastic_infra/portraits/ko.png",
+          "victory": "assets/chars/sama/monastic_infra/portraits/victory.png",
+          "large": "assets/chars/sama/monastic_infra/portraits/large.png"
+        }
+      }
+    },
+    "darrius": {
+      "legal_department_midnight": {
+        "spriteSheet": "assets/chars/darrius/legal_department_midnight/sprite.png",
+        "portraits": {
+          "neutral": "assets/chars/darrius/legal_department_midnight/portraits/neutral.png",
+          "hurt": "assets/chars/darrius/legal_department_midnight/portraits/hurt.png",
+          "ko": "assets/chars/darrius/legal_department_midnight/portraits/ko.png",
+          "victory": "assets/chars/darrius/legal_department_midnight/portraits/victory.png",
+          "large": "assets/chars/darrius/legal_department_midnight/portraits/large.png"
+        }
+      }
+    },
+    "demis": {
+      "chalk_and_static": {
+        "spriteSheet": "assets/chars/demis/chalk_and_static/sprite.png",
+        "portraits": {
+          "neutral": "assets/chars/demis/chalk_and_static/portraits/neutral.png",
+          "hurt": "assets/chars/demis/chalk_and_static/portraits/hurt.png",
+          "ko": "assets/chars/demis/chalk_and_static/portraits/ko.png",
+          "victory": "assets/chars/demis/chalk_and_static/portraits/victory.png",
+          "large": "assets/chars/demis/chalk_and_static/portraits/large.png"
+        }
+      }
+    },
+    "mark": {
+      "wellness_berserker": {
+        "spriteSheet": "assets/chars/mark/wellness_berserker/sprite.png",
+        "portraits": {
+          "neutral": "assets/chars/mark/wellness_berserker/portraits/neutral.png",
+          "hurt": "assets/chars/mark/wellness_berserker/portraits/hurt.png",
+          "ko": "assets/chars/mark/wellness_berserker/portraits/ko.png",
+          "victory": "assets/chars/mark/wellness_berserker/portraits/victory.png",
+          "large": "assets/chars/mark/wellness_berserker/portraits/large.png"
+        }
+      }
+    }
+  },
+  "weaponVisuals": {
+    "sama": {
+      "worldcoin_orb_flail": {
+        "class": "flail",
+        "silhouette": "orb on thick braided cable",
+        "sprite": "assets/weapons/sama/common/worldcoin_orb_flail.png",
+        "hitVFX": "hit-orb-thud",
+        "trail": {
+          "color": "#ede9fe",
+          "width": 3,
+          "ttl": 0.12
+        }
+      },
+      "backpack_maul": {
+        "class": "maul",
+        "silhouette": "rectangular backpack swung by twin straps",
+        "sprite": "assets/weapons/sama/rare/backpack_maul.png",
+        "hitVFX": "hit-launch-protocol",
+        "trail": {
+          "color": "#22d3ee",
+          "width": 3,
+          "ttl": 0.15
+        }
+      },
+      "gpu_server_blade": {
+        "class": "blade",
+        "silhouette": "long hot server blade with fins",
+        "sprite": "assets/weapons/sama/epic/gpu_server_blade.png",
+        "hitVFX": "hit-overheat",
+        "trail": {
+          "color": "#a78bfa",
+          "width": 4,
+          "ttl": 0.18
+        }
+      },
+      "heat_sink_greatsword": {
+        "class": "greatsword",
+        "silhouette": "oversized finned slab with glowing core",
+        "sprite": "assets/weapons/sama/legendary/heat_sink_greatsword.png",
+        "hitVFX": "hit-failover",
+        "trail": {
+          "color": "#f472b6",
+          "width": 5,
+          "ttl": 0.2
+        }
+      }
+    },
+    "darrius": {
+      "rolled_constitution_bat": {
+        "class": "bat",
+        "silhouette": "thick glowing scroll bound with iron rings",
+        "sprite": "assets/weapons/darrius/common/rolled_constitution_bat.png",
+        "hitVFX": "hit-redline",
+        "trail": {
+          "color": "#ede9fe",
+          "width": 3,
+          "ttl": 0.12
+        }
+      },
+      "alignment_baton": {
+        "class": "club",
+        "silhouette": "short steel baton with warning stripe cap",
+        "sprite": "assets/weapons/darrius/rare/alignment_baton.png",
+        "hitVFX": "hit-policy-mark",
+        "trail": {
+          "color": "#22d3ee",
+          "width": 3,
+          "ttl": 0.15
+        }
+      },
+      "red_team_pike": {
+        "class": "pike",
+        "silhouette": "long pole with forked testing spearhead",
+        "sprite": "assets/weapons/darrius/epic/red_team_pike.png",
+        "hitVFX": "hit-mitigation",
+        "trail": {
+          "color": "#a78bfa",
+          "width": 4,
+          "ttl": 0.18
+        }
+      },
+      "guardrail_greatsword": {
+        "class": "greatsword",
+        "silhouette": "bent highway rail with bolted grip",
+        "sprite": "assets/weapons/darrius/legendary/guardrail_greatsword.png",
+        "hitVFX": "hit-compliance-seal",
+        "trail": {
+          "color": "#f472b6",
+          "width": 5,
+          "ttl": 0.2
+        }
+      }
+    },
+    "demis": {
+      "nobel_medal_flail": {
+        "class": "flail",
+        "silhouette": "heavy medal on academic lanyard",
+        "sprite": "assets/weapons/demis/common/nobel_medal_flail.png",
+        "hitVFX": "hit-rejection-note",
+        "trail": {
+          "color": "#ede9fe",
+          "width": 3,
+          "ttl": 0.12
+        }
+      },
+      "folded_chess_axe": {
+        "class": "axe",
+        "silhouette": "hinged board head on straight haft",
+        "sprite": "assets/weapons/demis/rare/folded_chess_axe.png",
+        "hitVFX": "hit-fold",
+        "trail": {
+          "color": "#22d3ee",
+          "width": 3,
+          "ttl": 0.15
+        }
+      },
+      "go_board_maul": {
+        "class": "maul",
+        "silhouette": "square board slab with inset stone studs",
+        "sprite": "assets/weapons/demis/epic/go_board_maul.png",
+        "hitVFX": "hit-counterexample",
+        "trail": {
+          "color": "#a78bfa",
+          "width": 4,
+          "ttl": 0.18
+        }
+      },
+      "alphafold_blade": {
+        "class": "blade",
+        "silhouette": "rigid spiraling protein sword",
+        "sprite": "assets/weapons/demis/legendary/alphafold_blade.png",
+        "hitVFX": "hit-qed",
+        "trail": {
+          "color": "#f472b6",
+          "width": 5,
+          "ttl": 0.2
+        }
+      }
+    },
+    "mark": {
+      "sunscreen_bottle_club": {
+        "class": "club",
+        "silhouette": "oversized lotion bottle with thick cap",
+        "sprite": "assets/weapons/mark/common/sunscreen_bottle_club.png",
+        "hitVFX": "hit-wellness",
+        "trail": {
+          "color": "#ede9fe",
+          "width": 3,
+          "ttl": 0.12
+        }
+      },
+      "controller_nunchucks": {
+        "class": "nunchucks",
+        "silhouette": "paired controllers linked by charging cable",
+        "sprite": "assets/weapons/mark/rare/controller_nunchucks.png",
+        "hitVFX": "hit-input-lag",
+        "trail": {
+          "color": "#22d3ee",
+          "width": 3,
+          "ttl": 0.15
+        }
+      },
+      "shareholder_sauce_club": {
+        "class": "club",
+        "silhouette": "thick crystallized bottle used as a cudgel",
+        "sprite": "assets/weapons/mark/epic/shareholder_sauce_club.png",
+        "hitVFX": "hit-guidance-cut",
+        "trail": {
+          "color": "#a78bfa",
+          "width": 4,
+          "ttl": 0.18
+        }
+      },
+      "quest_flail": {
+        "class": "flail",
+        "silhouette": "headset swung from elite strap",
+        "sprite": "assets/weapons/mark/legendary/quest_flail.png",
+        "hitVFX": "hit-social-graph",
+        "trail": {
+          "color": "#f472b6",
+          "width": 5,
+          "ttl": 0.2
+        }
+      }
+    }
+  },
+  "objectiveVisuals": {
+    "deliveryProfiles": {
+      "proof_core": {
+        "shape": "gold_chip_cube",
+        "readability": "bright gold cube with blinking white center",
+        "sprite": "assets/objectives/proof_core/payload.png",
+        "carryVFX": "fx-proof-glow",
+        "dropVFX": "fx-proof-spark",
+        "scoreVFX": "fx-proof-cashout"
+      },
+      "kill_receipt": {
+        "shape": "gold_receipt_strip",
+        "readability": "paper tab with metal clip and warning glow",
+        "sprite": "assets/objectives/kill_receipt/payload.png",
+        "carryVFX": "fx-receipt-flicker",
+        "dropVFX": "fx-receipt-tumble",
+        "scoreVFX": "fx-receipt-stamp"
+      },
+      "claim_drive": {
+        "shape": "sealed_data_cartridge",
+        "readability": "rectangular drive with gold latch and hot core",
+        "sprite": "assets/objectives/claim_drive/payload.png",
+        "carryVFX": "fx-drive-bloom",
+        "dropVFX": "fx-drive-static",
+        "scoreVFX": "fx-drive-upload"
+      }
+    },
+    "targetProfiles": {
+      "demand_node": {
+        "shape": "floor_ring_plus_uplink",
+        "readability": "lit floor ring with vertical receiver post",
+        "sprite": "assets/objectives/demand_node/target.png",
+        "idleVFX": "fx-node-hum",
+        "readyVFX": "fx-node-ready",
+        "scoreVFX": "fx-node-accept"
+      },
+      "cashout_ring": {
+        "shape": "thick circle gate",
+        "readability": "large ring with pulsing inset chevrons",
+        "sprite": "assets/objectives/cashout_ring/target.png",
+        "idleVFX": "fx-ring-buzz",
+        "readyVFX": "fx-ring-greenlight",
+        "scoreVFX": "fx-ring-payout"
+      },
+      "uplink_pad": {
+        "shape": "rectangular pad with antenna",
+        "readability": "landing pad slab with rising mast",
+        "sprite": "assets/objectives/uplink_pad/target.png",
+        "idleVFX": "fx-pad-static",
+        "readyVFX": "fx-pad-lock",
+        "scoreVFX": "fx-pad-transfer"
+      }
+    }
+  },
+  "artDirection": {
+    "styleSuffix": "16-bit SNES-style pixel art, flat orthographic side-view, hard contrast, cinematic dry corporate-apocalypse tone, clean rigid silhouette, isolated on a pure magenta #FF00FF background, high readability at the requested canvas size, limited color palette (<=32 colors), no anti-aliased blur, no soft gradients, sharp pixel-perfect edges, dithered shading only, black 1px outline where silhouette meets background, no text or letters unless specified",
+    "negativePrompt": "photorealistic, 3d render, smooth shading, anti-aliasing, blurred edges, painterly, watercolor, soft gradients, lens flare, bokeh, depth-of-field, camera grain, motion blur, cel shading, noise, jpeg artifacts, text labels, watermark, signature, logo, extra limbs, melted anatomy",
+    "bgKeyColor": "#FF00FF",
+    "silhouetteRule": "Every character / weapon / moving entity must be isolated on the pure magenta background so an alpha key recovers a clean transparent PNG. No background elements inside the keyed rectangle.",
+    "downscale": "Generate at recommended resolution, then downsample to output dimensions using nearest-neighbor. Never bilinear or lanczos for pixel art.",
+    "postProcess": [
+      "1. Crop any generator-added borders.",
+      "2. Nearest-neighbor downscale to target dimensions.",
+      "3. Key near-#FF00FF background to alpha (RGB-distance tolerance 24).",
+      "4. Verify silhouette continuity at 2x preview.",
+      "5. Index to <=32 colors (optional; preserves palette discipline)."
+    ],
+    "modelDefaults": {
+      "sdxl": {
+        "steps": 40,
+        "cfgScale": 6.5,
+        "sampler": "DPM++ 2M Karras",
+        "loraHints": [
+          "pixel-art-xl",
+          "sprite-sheet"
+        ]
+      },
+      "gemini": {
+        "modelHint": "Gemini image generation",
+        "outputMode": "single image",
+        "instructionStyle": "Use the prompt verbatim. Preserve exact layout, grid, dimensions, magenta key background, and post-process requirements."
+      },
+      "gpt": {
+        "modelHint": "GPT image generation",
+        "outputMode": "single image",
+        "instructionStyle": "Use the prompt verbatim. Preserve exact layout, grid, dimensions, magenta key background, and post-process requirements."
+      },
+      "midjourney": {
+        "version": "v6",
+        "stylize": 100,
+        "aspectFormat": "--ar {W}:{H} --style raw"
+      }
+    }
+  },
+  "prompts": {
+    "defaults": {
+      "seedBase": 170000,
+      "notes": "Seeds below are the seedBase plus a per-asset offset. Reproducibility depends on provider support for deterministic seeds. Append styleSuffix to every base prompt. Always include negativePrompt."
+    },
+    "stages": {
+      "datacenter/cold_aisle_chapel/layers/sky.png": {
+        "seed": 170001,
+        "out": "assets/stages/datacenter/cold_aisle_chapel/layers/sky.png",
+        "outW": 1280,
+        "outH": 720,
+        "genW": 1280,
+        "genH": 720,
+        "kind": "still",
+        "base": "Cold Aisle Chapel backdrop SKY layer: bleak vertical server-rack monoliths stretching to a dead sky, thin neon coolant glow in deep teal, distant blinking telemetry dots, low saturation, oppressive vertical lines, palette skyTop #101018 skyMid #0c1218 skyBottom #05070a, no foreground elements, full bleed, 16:9"
+      },
+      "datacenter/cold_aisle_chapel/layers/far_parallax.png": {
+        "seed": 170002,
+        "out": "assets/stages/datacenter/cold_aisle_chapel/layers/far_parallax.png",
+        "outW": 1920,
+        "outH": 720,
+        "genW": 1920,
+        "genH": 720,
+        "kind": "parallax-strip",
+        "tileX": true,
+        "base": "Cold Aisle Chapel FAR parallax: distant server racks and severed coolant pipes receding into teal haze, subtle atmospheric depth, deep shadow, no midground foliage, silhouette-readable at 480px wide, horizontally tileable seam-matched left/right edges, transparent #FF00FF background"
+      },
+      "datacenter/cold_aisle_chapel/layers/mid_parallax.png": {
+        "seed": 170003,
+        "out": "assets/stages/datacenter/cold_aisle_chapel/layers/mid_parallax.png",
+        "outW": 1920,
+        "outH": 720,
+        "genW": 1920,
+        "genH": 720,
+        "kind": "parallax-strip",
+        "tileX": true,
+        "base": "Cold Aisle Chapel MID parallax: midground aisles, slow-spinning orange warning strobes, tangled CAT6 cables hanging like dead vines, readable silhouettes, horizontally tileable, transparent #FF00FF background"
+      },
+      "datacenter/cold_aisle_chapel/layers/near_parallax.png": {
+        "seed": 170004,
+        "out": "assets/stages/datacenter/cold_aisle_chapel/layers/near_parallax.png",
+        "outW": 1920,
+        "outH": 720,
+        "genW": 1920,
+        "genH": 720,
+        "kind": "parallax-strip",
+        "tileX": true,
+        "base": "Cold Aisle Chapel NEAR parallax: dense foreground rack spines, exposed motherboard green, yellow sparks, heavy conduit shadows framing the edges, strong vertical silhouette, horizontally tileable, transparent #FF00FF background"
+      },
+      "datacenter/cold_aisle_chapel/textures/platform.png": {
+        "seed": 170005,
+        "out": "assets/stages/datacenter/cold_aisle_chapel/textures/platform.png",
+        "outW": 256,
+        "outH": 64,
+        "genW": 1024,
+        "genH": 256,
+        "kind": "tile",
+        "tileX": true,
+        "base": "Seamless tiling metal platform tile, matte carbon-steel grating, heavy edge wear, top-down perspective, 4:1 aspect, left and right edges seam-matched, palette platformFace #111a22 platformEdge #33404a"
+      },
+      "datacenter/cold_aisle_chapel/textures/platform_edge.png": {
+        "seed": 170006,
+        "out": "assets/stages/datacenter/cold_aisle_chapel/textures/platform_edge.png",
+        "outW": 256,
+        "outH": 16,
+        "genW": 1024,
+        "genH": 64,
+        "kind": "tile",
+        "tileX": true,
+        "base": "Seamless platform-edge rim cap, rounded bevels, severe cable-burn patina, exposed copper accents, very thin strip 16:1 aspect, horizontally tileable"
+      },
+      "datacenter/cold_aisle_chapel/textures/wall.png": {
+        "seed": 170007,
+        "out": "assets/stages/datacenter/cold_aisle_chapel/textures/wall.png",
+        "outW": 128,
+        "outH": 256,
+        "genW": 512,
+        "genH": 1024,
+        "kind": "tile",
+        "tileX": true,
+        "tileY": true,
+        "base": "Seamless vertical rack-face wall tile, light scrape marks, empty blade-server slots, 1:2 aspect, tileable both axes"
+      },
+      "datacenter/cold_aisle_chapel/textures/floor_detail.png": {
+        "seed": 170008,
+        "out": "assets/stages/datacenter/cold_aisle_chapel/textures/floor_detail.png",
+        "outW": 256,
+        "outH": 64,
+        "genW": 1024,
+        "genH": 256,
+        "kind": "decal",
+        "base": "Floor detail decal strip: oil smears, scorch freckles, micro-sparks, dropped screws, elements scattered across the strip, transparent #FF00FF background"
+      },
+      "boardroom/fiduciary_basement/ui/preview_thumb.png": {
+        "seed": 170010,
+        "out": "assets/stages/boardroom/fiduciary_basement/ui/preview_thumb.png",
+        "outW": 512,
+        "outH": 288,
+        "genW": 1024,
+        "genH": 576,
+        "kind": "still",
+        "base": "Fiduciary Basement preview thumbnail: sterile corporate undercroft wide shot, cold glass reflections, shattered dry-erase boards, muted legal office fluorescent lighting, moody composition, palette skyTop #171116 skyMid #1d1516 skyBottom #080506",
+        "status": "deferred"
+      },
+      "boardroom/fiduciary_basement/layers/sky.png": {
+        "seed": 170011,
+        "out": "assets/stages/boardroom/fiduciary_basement/layers/sky.png",
+        "outW": 1280,
+        "outH": 720,
+        "genW": 1280,
+        "genH": 720,
+        "kind": "still",
+        "base": "Fiduciary Basement SKY layer: sterile corporate undercroft, cold glass reflections, shattered dry-erase boards, muted legal fluorescent lighting, muted amber accents, no foreground",
+        "status": "deferred"
+      },
+      "boardroom/fiduciary_basement/layers/far_parallax.png": {
+        "seed": 170012,
+        "out": "assets/stages/boardroom/fiduciary_basement/layers/far_parallax.png",
+        "outW": 1920,
+        "outH": 720,
+        "genW": 1920,
+        "genH": 720,
+        "kind": "parallax-strip",
+        "tileX": true,
+        "base": "Fiduciary Basement FAR parallax: distant filing aisles, endless identical doors, boardroom shadow grids, tileable horizontally, transparent #FF00FF background",
+        "status": "deferred"
+      },
+      "boardroom/fiduciary_basement/layers/mid_parallax.png": {
+        "seed": 170013,
+        "out": "assets/stages/boardroom/fiduciary_basement/layers/mid_parallax.png",
+        "outW": 1920,
+        "outH": 720,
+        "genW": 1920,
+        "genH": 720,
+        "kind": "parallax-strip",
+        "tileX": true,
+        "base": "Fiduciary Basement MID parallax: elongated mahogany table forms, cracked telepresence screens in depth, tileable horizontally, transparent #FF00FF background",
+        "status": "deferred"
+      },
+      "boardroom/fiduciary_basement/layers/near_parallax.png": {
+        "seed": 170014,
+        "out": "assets/stages/boardroom/fiduciary_basement/layers/near_parallax.png",
+        "outW": 1920,
+        "outH": 720,
+        "genW": 1920,
+        "genH": 720,
+        "kind": "parallax-strip",
+        "tileX": true,
+        "base": "Fiduciary Basement NEAR parallax: close-up wood and stone hybrid architecture, overturned ergonomic chairs, thick legal dust, framing silhouettes, tileable horizontally, transparent #FF00FF background",
+        "status": "deferred"
+      },
+      "boardroom/fiduciary_basement/textures/platform.png": {
+        "seed": 170015,
+        "out": "assets/stages/boardroom/fiduciary_basement/textures/platform.png",
+        "outW": 256,
+        "outH": 64,
+        "genW": 1024,
+        "genH": 256,
+        "kind": "tile",
+        "tileX": true,
+        "base": "Seamless polished but scratched mahogany conference-table veneer platform tile, matte corporate, 4:1 aspect, horizontally tileable",
+        "status": "deferred"
+      },
+      "boardroom/fiduciary_basement/textures/platform_edge.png": {
+        "seed": 170016,
+        "out": "assets/stages/boardroom/fiduciary_basement/textures/platform_edge.png",
+        "outW": 256,
+        "outH": 16,
+        "genW": 1024,
+        "genH": 64,
+        "kind": "tile",
+        "tileX": true,
+        "base": "Seamless platform edge trim with tarnished brass filing accents, 16:1 aspect, horizontally tileable",
+        "status": "deferred"
+      },
+      "boardroom/fiduciary_basement/textures/wall.png": {
+        "seed": 170017,
+        "out": "assets/stages/boardroom/fiduciary_basement/textures/wall.png",
+        "outW": 128,
+        "outH": 256,
+        "genW": 512,
+        "genH": 1024,
+        "kind": "tile",
+        "tileX": true,
+        "tileY": true,
+        "base": "Seamless acoustic wood-panel wall tile, micro-engraved contract clauses as faint relief, heavy scuffing, 1:2 aspect, tileable both axes",
+        "status": "deferred"
+      },
+      "boardroom/fiduciary_basement/textures/floor_detail.png": {
+        "seed": 170018,
+        "out": "assets/stages/boardroom/fiduciary_basement/textures/floor_detail.png",
+        "outW": 256,
+        "outH": 64,
+        "genW": 1024,
+        "genH": 256,
+        "kind": "decal",
+        "base": "Floor detail decal strip: ruined rubber mats, paper edge wear, tiny scattered security badges, transparent #FF00FF background",
+        "status": "deferred"
+      },
+      "demoday/demo_day_afterparty/ui/preview_thumb.png": {
+        "seed": 170020,
+        "out": "assets/stages/demoday/demo_day_afterparty/ui/preview_thumb.png",
+        "outW": 512,
+        "outH": 288,
+        "genW": 1024,
+        "genH": 576,
+        "kind": "still",
+        "base": "Demo Day Afterparty preview thumbnail: burnt-out pitch-black stage, thick crowd-lens haze, flickering 'DISRUPT' neon in the distance, cynical and moody",
+        "status": "deferred"
+      },
+      "demoday/demo_day_afterparty/layers/sky.png": {
+        "seed": 170021,
+        "out": "assets/stages/demoday/demo_day_afterparty/layers/sky.png",
+        "outW": 1280,
+        "outH": 720,
+        "genW": 1280,
+        "genH": 720,
+        "kind": "still",
+        "base": "Demo Day Afterparty SKY layer: pitch-black stage sky, thick crowd-lens haze, flickering purple 'DISRUPT' neon in the distance, palette skyTop #171020 skyMid #100917 skyBottom #050307",
+        "status": "deferred"
+      },
+      "demoday/demo_day_afterparty/layers/far_parallax.png": {
+        "seed": 170022,
+        "out": "assets/stages/demoday/demo_day_afterparty/layers/far_parallax.png",
+        "outW": 1920,
+        "outH": 720,
+        "genW": 1920,
+        "genH": 720,
+        "kind": "parallax-strip",
+        "tileX": true,
+        "base": "Demo Day FAR parallax: far crowd lights, collapsed projection scaffolding, cynical event depth, horizontally tileable, transparent #FF00FF background",
+        "status": "deferred"
+      },
+      "demoday/demo_day_afterparty/layers/mid_parallax.png": {
+        "seed": 170023,
+        "out": "assets/stages/demoday/demo_day_afterparty/layers/mid_parallax.png",
+        "outW": 1920,
+        "outH": 720,
+        "genW": 1920,
+        "genH": 720,
+        "kind": "parallax-strip",
+        "tileX": true,
+        "base": "Demo Day MID parallax: torn middle-stage banners, bent stage edge rails, glitched moving ad strips, horizontally tileable, transparent #FF00FF background",
+        "status": "deferred"
+      },
+      "demoday/demo_day_afterparty/layers/near_parallax.png": {
+        "seed": 170024,
+        "out": "assets/stages/demoday/demo_day_afterparty/layers/near_parallax.png",
+        "outW": 1920,
+        "outH": 720,
+        "genW": 1920,
+        "genH": 720,
+        "kind": "parallax-strip",
+        "tileX": true,
+        "base": "Demo Day NEAR parallax: close event rigging, cracked plexiglass podiums, wet lacquered floor reflections, strong silhouettes, horizontally tileable, transparent #FF00FF background",
+        "status": "deferred"
+      },
+      "demoday/demo_day_afterparty/textures/platform.png": {
+        "seed": 170025,
+        "out": "assets/stages/demoday/demo_day_afterparty/textures/platform.png",
+        "outW": 256,
+        "outH": 64,
+        "genW": 1024,
+        "genH": 256,
+        "kind": "tile",
+        "tileX": true,
+        "base": "Seamless sticky resin show-floor platform tile, subtle purple neon underglow, 4:1 aspect, horizontally tileable",
+        "status": "deferred"
+      },
+      "demoday/demo_day_afterparty/textures/platform_edge.png": {
+        "seed": 170026,
+        "out": "assets/stages/demoday/demo_day_afterparty/textures/platform_edge.png",
+        "outW": 256,
+        "outH": 16,
+        "genW": 1024,
+        "genH": 64,
+        "kind": "tile",
+        "tileX": true,
+        "base": "Seamless platform edge with heavy anti-slip diamond plate, scratched-out sponsor marks, 16:1 aspect, horizontally tileable",
+        "status": "deferred"
+      },
+      "demoday/demo_day_afterparty/textures/wall.png": {
+        "seed": 170027,
+        "out": "assets/stages/demoday/demo_day_afterparty/textures/wall.png",
+        "outW": 128,
+        "outH": 256,
+        "genW": 512,
+        "genH": 1024,
+        "kind": "tile",
+        "tileX": true,
+        "tileY": true,
+        "base": "Seamless matte black cloth backdrop wall tile, grime, faint shadow of an abandoned step-and-repeat logo grid, 1:2 aspect, tileable both axes",
+        "status": "deferred"
+      },
+      "demoday/demo_day_afterparty/textures/floor_detail.png": {
+        "seed": 170028,
+        "out": "assets/stages/demoday/demo_day_afterparty/textures/floor_detail.png",
+        "outW": 256,
+        "outH": 64,
+        "genW": 1024,
+        "genH": 256,
+        "kind": "decal",
+        "base": "Floor detail decal strip: confetti burn marks, marker drips, trampled lanyards, stage residue, transparent #FF00FF background",
+        "status": "deferred"
+      }
+    },
+    "characterSheets": {
+      "_sharedRules": {
+        "outW": 384,
+        "outH": 768,
+        "genW": 768,
+        "genH": 1536,
+        "cellW": 64,
+        "cellH": 64,
+        "genCellW": 128,
+        "genCellH": 128,
+        "cols": 6,
+        "rows": 12,
+        "rowsPerPrompt": 3,
+        "animationRows": [
+          {
+            "row": 0,
+            "anim": "idle",
+            "frames": 4,
+            "fps": 6,
+            "pose": "subtle breathing, feet planted, slight sway"
+          },
+          {
+            "row": 1,
+            "anim": "run",
+            "frames": 6,
+            "fps": 12,
+            "pose": "full-cycle run: contact, recoil, passing, high-point, contact-opposite, recoil-opposite"
+          },
+          {
+            "row": 2,
+            "anim": "jump",
+            "frames": 2,
+            "fps": 10,
+            "pose": "anticipation crouch, then launch"
+          },
+          {
+            "row": 3,
+            "anim": "fall",
+            "frames": 2,
+            "fps": 10,
+            "pose": "peak hang, then descent with trailing cloth/hair"
+          },
+          {
+            "row": 4,
+            "anim": "wallSlide",
+            "frames": 2,
+            "fps": 8,
+            "pose": "side-on wall-slide body pose against an implied invisible wall, hand-brake sliding, alternating arm, no drawn wall or platform"
+          },
+          {
+            "row": 5,
+            "anim": "dive",
+            "frames": 2,
+            "fps": 12,
+            "pose": "committed aerial dive downward with empty hands, no weapon, no slash effect, no ground"
+          },
+          {
+            "row": 6,
+            "anim": "swing",
+            "frames": 6,
+            "fps": 60,
+            "pose": "empty-hand swing body animation: wind-up, three mid-swing body frames with implied arc through pose only, follow-through, recover, no weapon or slash trail"
+          },
+          {
+            "row": 7,
+            "anim": "hit",
+            "frames": 3,
+            "fps": 20,
+            "pose": "impact jolt, knockback, recovery"
+          },
+          {
+            "row": 8,
+            "anim": "ko",
+            "frames": 4,
+            "fps": 10,
+            "pose": "stagger, knee-drop, prone, still"
+          },
+          {
+            "row": 9,
+            "anim": "carry",
+            "frames": 2,
+            "fps": 4,
+            "pose": "walk cycle holding glowing token high in off-hand"
+          },
+          {
+            "row": 10,
+            "anim": "taunt",
+            "frames": 4,
+            "fps": 8,
+            "pose": "deliberate in-character gesture (see character-specific hint)"
+          },
+          {
+            "row": 11,
+            "anim": "victory",
+            "frames": 4,
+            "fps": 8,
+            "pose": "idle-victory loop matching character archetype"
+          }
+        ],
+        "layoutDirective": "Strict sprite sheet grid: EXACTLY 6 columns x 12 rows, each frame centered in its 128x128 generation cell (target 64x64 after 2x nearest-neighbor downscale), no gutters. Character facing camera-right in every frame. Silhouette must fit entirely inside the 52x52 hitbox core with 6px padding. Weapons NOT drawn on this sheet (weapons are a separate layer).",
+        "taunt": {
+          "sama": "index finger raised as if consulting a graph only they can see",
+          "darrius": "slowly closing a leatherbound folder",
+          "demis": "drawing a small diagram in the air",
+          "mark": "two-finger salute, chin up"
+        },
+        "generationStrategy": [
+          "Strategy A (preferred): generate three animation rows at a time as a 768x384 strip with a 6x3 grid of exact 128x128 cells and no gutters. Downscale each strip exactly 2x to 384x192 nearest-neighbor, then compose four strips into the final 384x768 sheet.",
+          "Strategy B (fallback): ask for the full 6x12 grid in one shot with strict layoutDirective. Expect lower alignment reliability and more re-rolls."
+        ]
+      },
+      "sama": {
+        "seed": 170101,
+        "out": "assets/chars/sama/monastic_infra/sprite.png",
+        "base": "Character A the Capacity Mystic, 16-bit character sprite: Character A likeness \u2014 lean frame, fair complexion, clean-shaven or light stubble, light brown short hair with a slight natural wave, prominent nose, bright perceptive eyes. Wearing a plain grey or navy crewneck sweater or quarter-zip, dark denim, understated sneakers. Quiet founder intensity, posture of a medieval saint, cold and ceremonial. Teal #6ee7b7 primary / #d1fae5 trim / #047857 shadow. Silhouette reads as 'minimalist tech-founder as priest' at 64px. Include all 12 animation rows in the shared sprite-sheet layout."
+      },
+      "darrius": {
+        "seed": 170201,
+        "out": "assets/chars/darrius/legal_department_midnight/sprite.png",
+        "base": "Character B the Policy Undertaker, 16-bit character sprite: Character B likeness \u2014 compact build, dark thick tousled hair in a short practical cut, dark expressive eyes, rounded jawline with a well-groomed shadow of a beard, soft features. Wearing a muted dark navy sweater-hoodie over a plain shirt, standard jacket, no suit no pinstripes. Safety-researcher-turned-enforcer, quiet contemplative posture gone slightly predatory. Amber #fb923c primary / #fed7aa trim / #9a3412 shadow. Silhouette reads as 'the alignment team stopped asking nicely' at 64px. Include all 12 animation rows in the shared sprite-sheet layout."
+      },
+      "demis": {
+        "seed": 170301,
+        "out": "assets/chars/demis/chalk_and_static/sprite.png",
+        "base": "Character C the Quiet Solver, 16-bit character sprite: Character C likeness \u2014 medium build, dark hair graying at the temples in a short neatly parted cut, light-to-medium complexion, clean-shaven, warm expressive face, bright intelligent eyes that crinkle at the corners. Wearing a crisp white or pale collared shirt with no tie under a well-fitted dark blazer or tailored sport coat, smart casual trousers. Polished academic-corporate bearing, precise stiff economical animations. Cool #60a5fa primary / #dbeafe trim / #1e3a8a shadow. Silhouette reads as 'polished theorem delivering a correction' at 64px. Include all 12 animation rows in the shared sprite-sheet layout.",
+        "status": "deferred"
+      },
+      "mark": {
+        "seed": 170401,
+        "out": "assets/chars/mark/wellness_berserker/sprite.png",
+        "base": "Character D the Sunlit Operator, 16-bit character sprite: Character D likeness \u2014 slender athletic martial-arts build, pale skin, light curly reddish-brown hair grown out from the old short cut into a longer textured style, light blue eyes with intense focused gaze, occasional light beard. Wearing matte black tactical athleisure layered with an oversized designer tee or jacket, a chunky silver chain, white sunscreen war-paint smears on the cheekbones. Aggressive low stance, feral vibe, modern streetwear-meets-MMA. Purple #c084fc primary / #ede9fe trim / #5b21b6 shadow. Silhouette reads as 'influencer combat athlete' at 64px. Include all 12 animation rows in the shared sprite-sheet layout.",
+        "status": "deferred"
+      }
+    },
+    "portraitSheets": {
+      "_sharedRules": {
+        "outW": 192,
+        "outH": 192,
+        "genW": 512,
+        "genH": 512,
+        "cols": 2,
+        "rows": 2,
+        "cellW": 96,
+        "cellH": 96,
+        "genCellW": 256,
+        "genCellH": 256,
+        "cellOrder": [
+          "neutral",
+          "hurt",
+          "ko",
+          "victory"
+        ],
+        "layoutDirective": "Strict 2x2 grid of head-and-shoulders busts of the SAME character, same haircut, same garment, same framing, same lighting; ONLY expression changes per cell. 10px magenta #FF00FF gutter between cells. Entire sheet isolated on pure magenta #FF00FF. Top-left cell = neutral, top-right = hurt, bottom-left = ko, bottom-right = victory. Readable at 96px per cell."
+      },
+      "sama": {
+        "seed": 170110,
+        "out": "assets/chars/sama/monastic_infra/portraits/sheet.png",
+        "base": "Character A the Capacity Mystic, 2x2 portrait sheet: Character A likeness \u2014 lean build, fair complexion, clean-shaven or light stubble, light brown short hair with a slight natural wave, prominent nose, bright perceptive eyes. Plain grey or navy crewneck sweater or high-collared quarter-zip, teal #6ee7b7 accent. Top-left (neutral): severe calm, unblinking, ceremonial-cold founder staring through the lens. Top-right (hurt): tense jaw, restrained rage, hand fixing a cufflink at collar. Bottom-left (ko): glassy posture, upright but defeated, still-resilient aura. Bottom-right (victory): soft smug terrifying certainty, the faintest satisfied half-smile. Same face, same hair, same outfit, same lighting across all four cells."
+      },
+      "darrius": {
+        "seed": 170210,
+        "out": "assets/chars/darrius/legal_department_midnight/portraits/sheet.png",
+        "base": "Character B the Policy Undertaker, 2x2 portrait sheet: Character B likeness \u2014 compact build, dark thick tousled hair in a short practical cut, dark expressive eyes, rounded jawline with a well-groomed shadow of a beard, soft features. Dark navy sweater-hoodie over a plain shirt, amber #fb923c accent. Top-left (neutral): formal menace, contemplative intensity turned enforcer. Top-right (hurt): defensive bruised posture, shielding a leather ledger against chest. Bottom-left (ko): half-collapsed leaning on an unseen desk, intimidating even in defeat. Bottom-right (victory): cold compliance triumph, stamping a document just out of frame. Same face, same hair, same outfit, same lighting across all four cells."
+      },
+      "demis": {
+        "seed": 170310,
+        "out": "assets/chars/demis/chalk_and_static/portraits/sheet.png",
+        "base": "Character C the Quiet Solver, 2x2 portrait sheet: Character C likeness \u2014 medium build, dark hair graying at the temples neatly parted, light-to-medium complexion, clean-shaven, warm expressive face, bright intelligent eyes that crinkle at the corners. Crisp pale collared shirt, no tie, under a well-fitted dark blazer, cool blue #60a5fa accent. Top-left (neutral): polished thinker, slightly abstracted gaze. Top-right (hurt): precision-focused pain, wincing at a miscalculation. Bottom-left (ko): elegant collapse, geometric and clean pose. Bottom-right (victory): warm crinkle-eyed smile, absolute proof achieved. Same face, same hair, same outfit, same lighting across all four cells.",
+        "status": "deferred"
+      },
+      "mark": {
+        "seed": 170410,
+        "out": "assets/chars/mark/wellness_berserker/portraits/sheet.png",
+        "base": "Character D the Sunlit Operator, 2x2 portrait sheet: Character D likeness \u2014 pale skin, light curly reddish-brown hair grown out into a longer textured style, prominent light blue eyes with intense focused gaze, straight nose, occasional light beard. Matte black tactical athleisure under an oversized designer tee or jacket, chunky silver chain visible, white sunscreen war-paint smears on cheekbones. Purple #c084fc accent. Top-left (neutral): intense calm, shark-like unblinking. Top-right (hurt): jaw-forward anger, feral. Bottom-left (ko): dramatic but funny-serious, reaching out for a headset. Bottom-right (victory): predatory confidence, totally oblivious to the irony. Same face, same hair, same outfit, same lighting across all four cells.",
+        "status": "deferred"
+      }
+    },
+    "portraitsLarge": {
+      "_sharedRules": {
+        "outW": 256,
+        "outH": 384,
+        "genW": 768,
+        "genH": 1152,
+        "layoutDirective": "Single full-body character-select portrait, 2:3 aspect, silhouette isolated on pure magenta #FF00FF, stage shadow behind fixed foreground"
+      },
+      "sama": {
+        "seed": 170114,
+        "out": "assets/chars/sama/monastic_infra/portraits/large.png",
+        "base": "Character A full-body character-select portrait: Character A likeness \u2014 lean frame, fair complexion, clean-shaven, light brown short hair with a slight natural wave, bright perceptive eyes, prominent nose. Plain grey crewneck sweater or high-collared quarter-zip, optionally layered with a lightweight tailored blazer, dark denim, understated sneakers. Ceremonial saint-like stance, monastic-tech founder bearing, quiet founder-priest intensity, teal #6ee7b7 accent. Fixed foreground with stage shadow behind."
+      },
+      "darrius": {
+        "seed": 170214,
+        "out": "assets/chars/darrius/legal_department_midnight/portraits/large.png",
+        "base": "Character B full-body character-select portrait: Character B likeness \u2014 compact build, dark thick tousled hair in a short practical cut, dark expressive eyes, rounded jawline with a shadow of a beard. Dark navy sweater-hoodie over a plain collared shirt, standard jacket, casual trousers. Contemplative stance gone slightly predatory, safety-researcher-turned-enforcer bearing, amber #fb923c accent. Fixed foreground with stage shadow behind."
+      },
+      "demis": {
+        "seed": 170314,
+        "out": "assets/chars/demis/chalk_and_static/portraits/large.png",
+        "base": "Character C full-body character-select portrait: Character C likeness \u2014 medium build, dark hair graying at the temples neatly parted, light-to-medium complexion, clean-shaven, warm expressive face, bright intelligent eyes. Crisp pale collared shirt with no tie under a well-fitted dark blazer, smart casual trousers. Polished academic-corporate stance, theorem-warrior bearing, cool blue #60a5fa accent. Fixed foreground with stage shadow behind.",
+        "status": "deferred"
+      },
+      "mark": {
+        "seed": 170414,
+        "out": "assets/chars/mark/wellness_berserker/portraits/large.png",
+        "base": "Character D full-body character-select portrait: Character D likeness \u2014 slender athletic martial-arts build, pale skin, light curly reddish-brown hair grown out into a longer textured style, prominent light blue eyes with focused intense gaze, straight nose, occasional light beard. Matte black tactical athleisure under an oversized designer tee or jacket, chunky silver chain, white sunscreen war-paint smears on cheekbones. Aggressive low combat stance, platform-crush bearing, modern streetwear-meets-MMA, purple #c084fc accent. Fixed foreground with stage shadow behind.",
+        "status": "deferred"
+      }
+    },
+    "objectives": {
+      "proof_core/payload.png": {
+        "seed": 171001,
+        "out": "assets/objectives/proof_core/payload.png",
+        "outW": 48,
+        "outH": 48,
+        "genW": 384,
+        "genH": 384,
+        "kind": "sprite",
+        "base": "Proof Core payload: bright gold chip-cube with blinking white center, sacred delivery object, readable at 48px, isolated on pure magenta #FF00FF"
+      },
+      "demand_node/target.png": {
+        "seed": 171002,
+        "out": "assets/objectives/demand_node/target.png",
+        "outW": 96,
+        "outH": 96,
+        "genW": 512,
+        "genH": 512,
+        "kind": "sprite",
+        "base": "Demand Node target receiver: lit floor ring with vertical uplink post, corporate shrine receiver, ready to accept proof, readable at 96px, isolated on pure magenta #FF00FF"
+      }
+    },
+    "weaponSheetsLaunch": {
+      "_sharedRules": {
+        "outW": 96,
+        "outH": 48,
+        "genW": 512,
+        "genH": 256,
+        "cols": 2,
+        "rows": 1,
+        "cellW": 48,
+        "cellH": 48,
+        "genCellW": 256,
+        "genCellH": 256,
+        "cellOrder": [
+          "common",
+          "rare"
+        ],
+        "layoutDirective": "Strict 1x2 horizontal grid, 256x256 cell, 10px magenta #FF00FF gutter between cells. Entire sheet isolated on pure magenta #FF00FF. Left cell = common rarity weapon. Right cell = rare rarity weapon. Same lighting and scale across both cells. Striking mass must be at the FAR END of each weapon silhouette \u2014 the 52px rigid hitbox rule. Weapon holder/handle NOT drawn (character sheet owns the hand). Readable at 48px per cell."
+      },
+      "sama": {
+        "seed": 170501,
+        "out": "assets/weapons/sama/launch.png",
+        "base": "Character A launch weapon sheet, 1x2 strip. Left cell (common, Worldcoin Orb Flail): heavy metal orb on a taut braided cable, clean flail silhouette, mass at the orb end, ceremonial but brutal. Right cell (rare, Backpack Maul): rectangular tech backpack converted into a blunt maul, reinforced corners, twin straps pulled taut, mass at the pack end."
+      },
+      "darrius": {
+        "seed": 170505,
+        "out": "assets/weapons/darrius/launch.png",
+        "base": "Character B launch weapon sheet, 1x2 strip. Left cell (common, Rolled Constitution Bat): thick parchment scroll bound in iron rings and used as a bat, rigid heavy cylinder, mass at the document end. Right cell (rare, Alignment Baton): short steel enforcement baton with warning stripe cap, compact club silhouette, severe and bureaucratic."
+      },
+      "demis": {
+        "seed": 170509,
+        "out": "assets/weapons/demis/launch.png",
+        "base": "Character C launch weapon sheet, 1x2 strip. Left cell (common, Nobel Medal Flail): heavy medal on a taut academic lanyard, precise rigid flail silhouette, mass at the medal end. Right cell (rare, Folded Chess Axe): hinged chessboard folded into a dense axe head on a straight haft, geometric and absurdly precise.",
+        "status": "deferred"
+      },
+      "mark": {
+        "seed": 170513,
+        "out": "assets/weapons/mark/launch.png",
+        "base": "Character D launch weapon sheet, 1x2 strip. Left cell (common, Sunscreen Bottle Club): oversized sunscreen bottle reinforced as a club, thick cap as striking mass, blunt and readable. Right cell (rare, Controller Nunchucks): paired game controllers linked by a taut charging cable, clean paired-weight silhouette, mass at the controllers.",
+        "status": "deferred"
+      }
+    },
+    "weaponSheetsDeferred": {
+      "_sharedRules": {
+        "status": "deferred",
+        "outW": 96,
+        "outH": 48,
+        "genW": 512,
+        "genH": 256,
+        "cols": 2,
+        "rows": 1,
+        "cellW": 48,
+        "cellH": 48,
+        "genCellW": 256,
+        "genCellH": 256,
+        "cellOrder": [
+          "epic",
+          "legendary"
+        ],
+        "layoutDirective": "Strict 1x2 horizontal grid, same rules as launch sheets. Left cell = epic rarity. Right cell = legendary rarity. Generate only when epic + legendary rarities unlock for the affected character."
+      },
+      "sama": {
+        "seed": 170503,
+        "out": "assets/weapons/sama/deferred.png",
+        "base": "Character A deferred weapon sheet, 1x2 strip. Left cell (epic, GPU Server Blade): long hot server blade with cooling fins, glowing fault LEDs, rigid sword silhouette, mass at the finned blade end. Right cell (legendary, Heat-Sink Greatsword): oversized finned heat sink slab forged into a greatsword, glowing thermal core, brutal rectangular silhouette."
+      },
+      "darrius": {
+        "seed": 170507,
+        "out": "assets/weapons/darrius/deferred.png",
+        "base": "Character B deferred weapon sheet, 1x2 strip. Left cell (epic, Red-Team Pike): long polearm with forked testing spearhead and red warning tags, clean pike silhouette, mass at the forked tip. Right cell (legendary, Guardrail Greatsword): bent highway guardrail with bolted grip, massive protective slab weapon, bureaucratic safety made violent."
+      },
+      "demis": {
+        "seed": 170511,
+        "out": "assets/weapons/demis/deferred.png",
+        "base": "Character C deferred weapon sheet, 1x2 strip. Left cell (epic, Go Board Maul): square board slab with inset stone studs mounted as a maul, sober academic brutality, mass at the board end. Right cell (legendary, AlphaFold Blade): rigid spiraling protein structure sharpened into a blade, elegant scientific silhouette, not soft, clearly a sword."
+      },
+      "mark": {
+        "seed": 170515,
+        "out": "assets/weapons/mark/deferred.png",
+        "base": "Character D deferred weapon sheet, 1x2 strip. Left cell (epic, Shareholder Sauce Club): thick crystallized condiment bottle forged into a cudgel, curved bottle silhouette, ridiculous but physically blunt. Right cell (legendary, Quest Flail): cracked headset swung from an elite strap like a flail, heavy visor mass at the striking end, clean silhouette."
+      }
+    },
+    "lockedSlot": {
+      "_sharedRules": {
+        "outW": 48,
+        "outH": 48,
+        "genW": 384,
+        "genH": 384,
+        "layoutDirective": "Single locked-slot placeholder icon, readable at 48px, isolated on pure magenta #FF00FF."
+      },
+      "locked_weapon": {
+        "seed": 170599,
+        "out": "assets/ui/locked_slot.png",
+        "base": "Locked weapon slot placeholder: dark silhouette of a generic short weapon inside a corporate audit stamp frame, muted greyscale palette, subtle chain-and-padlock overlay across the silhouette, conveys 'reserved, not yet released' without text, severe and bureaucratic tone."
+      }
+    }
+  }
+}

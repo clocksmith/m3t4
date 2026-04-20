@@ -1,6 +1,6 @@
 // Simplex-aware candidate sampling.
 //
-// The legal config space is an 11D bounded integer simplex (sum ≤ 360,
+// The legal config space is a bounded integer simplex (sum <= 360,
 // each knob 0-100). Random budget-respecting allocation is center-biased
 // — it spreads mass evenly, producing moderate configs that evolution
 // converges on.
@@ -37,7 +37,7 @@ export type MutationKind =
 
 export interface CandidateMeta {
   configHash: string;
-  uiSpendVector: number[];    // length 11, 0-100 each
+  uiSpendVector: number[];    // length USER_KNOBS, 0-100 each
   budgetShareVector: number[]; // normalized to sum=1
   spent: number;
   axisExtremes: string[];     // knobs where ui > 80 or ui < 20 (for [-1,1] knobs: extreme toward either pole)
@@ -123,9 +123,9 @@ function toMeta(
 function allocateSparse(rng: () => number, budget = USER_BUDGET): number[] {
   // 2-3 active axes grab most budget. Each near their cap. Rest near 0.
   const nActive = 2 + Math.floor(rng() * 2); // 2 or 3
-  const order = Array.from({ length: 11 }, (_, i) => i).sort(() => rng() - 0.5);
+  const order = Array.from({ length: USER_KNOBS.length }, (_, i) => i).sort(() => rng() - 0.5);
   const active = order.slice(0, nActive);
-  const ui = new Array(11).fill(0);
+  const ui = new Array(USER_KNOBS.length).fill(0);
   let remaining = budget;
   for (let i = 0; i < active.length; i++) {
     const isLast = i === active.length - 1;
@@ -148,9 +148,9 @@ function allocateSparse(rng: () => number, budget = USER_BUDGET): number[] {
 function allocateBalanced(rng: () => number, budget = USER_BUDGET): number[] {
   // 5-7 active axes, moderate values. α=1 broad-simplex equivalent.
   const nActive = 5 + Math.floor(rng() * 3); // 5-7
-  const order = Array.from({ length: 11 }, (_, i) => i).sort(() => rng() - 0.5);
+  const order = Array.from({ length: USER_KNOBS.length }, (_, i) => i).sort(() => rng() - 0.5);
   const active = order.slice(0, nActive);
-  const ui = new Array(11).fill(0);
+  const ui = new Array(USER_KNOBS.length).fill(0);
   const shares = new Array(nActive).fill(0).map(() => 0.3 + rng() * 0.7);
   const shareSum = shares.reduce((a, x) => a + x, 0);
   for (let i = 0; i < active.length; i++) {
@@ -168,11 +168,11 @@ function allocateBalanced(rng: () => number, budget = USER_BUDGET): number[] {
 }
 
 function allocateDense(rng: () => number, budget = USER_BUDGET): number[] {
-  // All 11 knobs get similar moderate value, small jitter.
-  const mean = budget / 11;
-  const ui = new Array(11).fill(0);
+  // All user knobs get similar moderate value, small jitter.
+  const mean = budget / USER_KNOBS.length;
+  const ui = new Array(USER_KNOBS.length).fill(0);
   let spent = 0;
-  for (let i = 0; i < 11; i++) {
+  for (let i = 0; i < USER_KNOBS.length; i++) {
     const v = Math.max(0, Math.min(100, Math.round(mean + (rng() - 0.5) * mean * 0.5)));
     ui[i] = v;
     spent += v;
@@ -196,7 +196,7 @@ function allocateDense(rng: () => number, budget = USER_BUDGET): number[] {
 // support knob, rest minimal. Tests whether a single-axis specialist
 // survives the adversarial gate.
 function allocateAxisAnchor(rng: () => number, axisIdx: number, pole: "high" | "low", budget = USER_BUDGET): number[] {
-  const ui = new Array(11).fill(0);
+  const ui = new Array(USER_KNOBS.length).fill(0);
   const knob = USER_KNOBS[axisIdx];
   const [lo, hi] = RANGES[knob];
   const isBipolar = lo < 0 && hi > 0;
@@ -208,7 +208,8 @@ function allocateAxisAnchor(rng: () => number, axisIdx: number, pole: "high" | "
     burnRate: "pacing", moat: "pivotSpeed", shipRate: "greed",
     foresight: "cunning", pivotSpeed: "moat", leverage: "networking",
     networking: "leverage", spite: "greed", greed: "shipRate",
-    pacing: "burnRate", cunning: "foresight",
+    pacing: "burnRate", cunning: "foresight", lift: "shipRate",
+    parry: "pivotSpeed", chase: "burnRate", discipline: "shipRate",
   };
   const supportIdx = USER_KNOBS.indexOf(SUPPORT_MAP[knob] as ParamKey);
   if (supportIdx >= 0 && supportIdx !== axisIdx) {
@@ -216,7 +217,7 @@ function allocateAxisAnchor(rng: () => number, axisIdx: number, pole: "high" | "
   }
   // Distribute remaining budget minimally across other axes
   let remaining = budget - ui.reduce((s, v) => s + v, 0);
-  const otherIdxs = Array.from({ length: 11 }, (_, i) => i).filter((i) => i !== axisIdx && i !== supportIdx);
+  const otherIdxs = Array.from({ length: USER_KNOBS.length }, (_, i) => i).filter((i) => i !== axisIdx && i !== supportIdx);
   otherIdxs.sort(() => rng() - 0.5);
   for (const idx of otherIdxs) {
     if (remaining <= 0) break;
@@ -228,11 +229,11 @@ function allocateAxisAnchor(rng: () => number, axisIdx: number, pole: "high" | "
 }
 
 function allocatePairAnchor(rng: () => number, a: number, b: number, budget = USER_BUDGET): number[] {
-  const ui = new Array(11).fill(0);
+  const ui = new Array(USER_KNOBS.length).fill(0);
   ui[a] = 70 + Math.floor(rng() * 25);
   ui[b] = 50 + Math.floor(rng() * 30);
   let remaining = budget - ui[a] - ui[b];
-  const others = Array.from({ length: 11 }, (_, i) => i).filter((i) => i !== a && i !== b);
+  const others = Array.from({ length: USER_KNOBS.length }, (_, i) => i).filter((i) => i !== a && i !== b);
   others.sort(() => rng() - 0.5);
   for (const idx of others) {
     if (remaining <= 0) break;
@@ -260,7 +261,7 @@ export function sampleCandidate(opts: SampleConfig): SampledCandidate {
     case "dirichlet_balanced": ui = allocateBalanced(rng); break;
     case "dirichlet_dense": ui = allocateDense(rng); break;
     case "axis_anchor": {
-      const axisIdx = Math.floor(rng() * 11);
+      const axisIdx = Math.floor(rng() * USER_KNOBS.length);
       // For bipolar axes (leverage, spite), flip pole randomly
       const knob = USER_KNOBS[axisIdx];
       const [lo, hi] = RANGES[knob];
@@ -273,7 +274,9 @@ export function sampleCandidate(opts: SampleConfig): SampledCandidate {
       const pairs: Array<[ParamKey, ParamKey]> = [
         ["burnRate", "pacing"], ["shipRate", "greed"],
         ["moat", "pivotSpeed"], ["foresight", "cunning"],
-        ["leverage", "networking"],
+        ["leverage", "networking"], ["lift", "shipRate"],
+        ["parry", "pivotSpeed"], ["chase", "burnRate"],
+        ["discipline", "shipRate"],
       ];
       const [pa, pb] = pairs[Math.floor(rng() * pairs.length)];
       ui = allocatePairAnchor(rng, USER_KNOBS.indexOf(pa), USER_KNOBS.indexOf(pb));
@@ -309,7 +312,9 @@ export function sampleInitialPopulation(size: number, generation = 0, rng: () =>
   const pairs: Array<[ParamKey, ParamKey]> = [
     ["burnRate", "pacing"], ["shipRate", "greed"],
     ["moat", "pivotSpeed"], ["foresight", "cunning"],
-    ["leverage", "networking"],
+    ["leverage", "networking"], ["lift", "shipRate"],
+    ["parry", "pivotSpeed"], ["chase", "burnRate"],
+    ["discipline", "shipRate"],
   ];
   for (const [pa, pb] of pairs) {
     const ui = allocatePairAnchor(rng, USER_KNOBS.indexOf(pa), USER_KNOBS.indexOf(pb));

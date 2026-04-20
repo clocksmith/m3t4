@@ -4,7 +4,7 @@ import type {
 } from "./types.js";
 import {
   ARENA_L, ARENA_R, GOAL_DWELL_RADIUS, GOAL_DWELL_S, KILL_RESPAWN_S,
-  RESPAWN_INVULN_S, STATS, STEP,
+  GRAVITY, RESPAWN_INVULN_S, STATS, STEP,
 } from "./constants.js";
 
 // v3: Intent state machine. Five modes — neutral, offense, zone,
@@ -12,7 +12,7 @@ import {
 // commitment window. Replaces v2's per-tick reactive ladder. Params
 // bias mode transitions and tactical details within each mode; they no
 // longer drive behavior directly via a flat if/else.
-export const BEHAVIOR_VERSION = 7;
+export const BEHAVIOR_VERSION = 8;
 
 // ---------- Opp-model buffer sizing ----------
 //
@@ -74,6 +74,11 @@ const ZONE_MAX_TICKS_PER_ROUND = 720;   // 6s — zone can be sustained longer
 // thresholds. burnRate extends effective swing reach.
 function swingRange(params: Params): number {
   return 50 + params.burnRate * 80;
+}
+
+function unit(v: number | undefined, fallback = 0): number {
+  const x = v ?? fallback;
+  return x < 0 ? 0 : x > 1 ? 1 : x;
 }
 
 // ---------- State lifecycle ----------
@@ -270,12 +275,32 @@ function onDropThroughPlatform(obs: Observation): Platform | null {
   return null;
 }
 
-function navigateTo(obs: Observation, tx: number, ty: number): Action {
+function directJumpReachable(obs: Observation, tx: number, ty: number, lift: number): boolean {
+  if (lift <= 0.05 || !obs.self.onGround) return false;
+  const height = obs.self.y - ty;
+  const maxHeight = (STATS.jump * STATS.jump) / (2 * GRAVITY);
+  if (height < 35 || height > maxHeight - 8) return false;
+  const disc = STATS.jump * STATS.jump - 2 * GRAVITY * height;
+  if (disc <= 0) return false;
+  const timeToTargetY = (STATS.jump - Math.sqrt(disc)) / GRAVITY;
+  const usefulAirTime = Math.max(0.25, timeToTargetY + 0.22);
+  const dx = Math.abs(tx - obs.self.x);
+  const plumbLine = 55 + lift * 75;
+  const airControl = STATS.speed * usefulAirTime * (0.45 + lift * 0.35);
+  return dx <= plumbLine || dx <= airControl;
+}
+
+function navigateTo(obs: Observation, tx: number, ty: number, params?: Params): Action {
   if (ty > obs.self.y + 80) {
     const dx = tx - obs.self.x;
     return { left: dx < -10, right: dx > 10, down: true };
   }
   if (ty < obs.self.y - 50) {
+    const lift = unit(params?.lift);
+    if (directJumpReachable(obs, tx, ty, lift)) {
+      const dx = tx - obs.self.x;
+      return { left: dx < -10, right: dx > 10, up: true };
+    }
     const step = climbStep(obs, ty);
     if (step) {
       const platL = step.x + 12;
@@ -305,6 +330,14 @@ function dwellDistance(obs: Observation): number {
     obs.self.x - obs.goal.x,
     obs.self.y - STATS.bodyH * 0.5 - obs.goal.y,
   );
+}
+
+function chaseTargetX(obs: Observation): number {
+  if (!obs.opp.dead) return obs.opp.x;
+  // Observation deliberately hides stage spawn points. Approximate the
+  // opponent's home-side respawn from arena bounds; this is close enough
+  // for a pressure route and stays deterministic across stages.
+  return obs.self.id === 0 ? obs.arena.right - 244 : obs.arena.left + 244;
 }
 
 // ---------- Mode transition ----------
@@ -484,6 +517,19 @@ function decideMode(obs: Observation, params: Params, state: BrainState, sig: Si
 // ---------- Mode behavior functions ----------
 
 function runNeutralMode(obs: Observation, params: Params, sig: Signals): Action {
+  const chase = unit(params.chase);
+  const chaseWindow = chase > 0.05 && sig.ticksSinceKill >= 0 && sig.ticksSinceKill < 180;
+  if (chaseWindow && !obs.self.hasToken && !obs.opp.hasToken && !obs.token.exists) {
+    const tx = chaseTargetX(obs);
+    const dx = tx - obs.self.x;
+    const nearLiveOpp = !obs.opp.dead && sig.absDist < swingRange(params) + chase * 70;
+    return {
+      left: dx < -10,
+      right: dx > 10,
+      action: nearLiveOpp && sig.canSwing && chase > 0.35,
+    };
+  }
+
   // Hold spacing at moat. Only swing on freeSwing opportunity.
   let move = 0;
   if (sig.predDist > params.moat + 15) move = sig.predDir;
@@ -515,12 +561,13 @@ function runNeutralMode(obs: Observation, params: Params, sig: Signals): Action 
 // state.id is fixed per match, so replay integrity is preserved.
 function dominantAntiLoopTrait(
   params: Params, state: BrainState,
-): "greed" | "cunning" | "pivotSpeed" | "shipRate" {
-  const entries: Array<["greed" | "cunning" | "pivotSpeed" | "shipRate", number]> = [
+): "greed" | "cunning" | "pivotSpeed" | "shipRate" | "parry" {
+  const entries: Array<["greed" | "cunning" | "pivotSpeed" | "shipRate" | "parry", number]> = [
     ["greed", params.greed ?? 0.5],
     ["cunning", params.cunning ?? 0.5],
     ["pivotSpeed", params.pivotSpeed ?? 0.5],
     ["shipRate", params.shipRate ?? 0.5],
+    ["parry", params.parry ?? 0],
   ];
   entries.sort((a, b) => b[1] - a[1]);
   if (entries[0][1] - entries[1][1] < 0.1 && state.id === 1) {
@@ -587,6 +634,25 @@ function runOffenseMode(
     };
   }
 
+  const parry = unit(params.parry);
+  const parryWindow =
+    parry > 0.05 &&
+    (
+      sig.passiveFoilDanger ||
+      sig.clashLoop ||
+      ticksSinceClash < 60 + parry * 80
+    );
+  const parryClose =
+    sig.absDist < PASSIVE_FOIL_DANGER_RANGE + parry * 80 &&
+    Math.abs(obs.dy) < STATS.bodyH + 24;
+  if (parryWindow && parryClose && swipeReady && (sig.canSwing || parry > 0.35)) {
+    return {
+      left: sig.absDir < 0,
+      right: sig.absDir > 0,
+      action: true,
+    };
+  }
+
   if (sig.clashLoop && ticksInMode(state, obs.tick) > 60) {
     const trait = dominantAntiLoopTrait(params, state);
     if (trait === "pivotSpeed") return runEscapeMode(obs, params, sig);
@@ -599,6 +665,13 @@ function runOffenseMode(
         left: sig.absDir < 0,
         right: sig.absDir > 0,
         action: sig.canSwing,
+      };
+    }
+    if (trait === "parry") {
+      return {
+        left: sig.absDir < 0,
+        right: sig.absDir > 0,
+        action: swipeReady && (sig.canSwing || parry > 0.35),
       };
     }
     const drop = onDropThroughPlatform(obs);
@@ -782,6 +855,7 @@ function scoreTactic(
   directTicks: number, oppInterceptTicks: number,
   sig: Signals,
 ): number {
+  const discipline = unit(params.discipline);
   // Compute expected "time to dwell complete" for this tactic.
   let tacticTicks: number;
   switch (kind) {
@@ -802,6 +876,7 @@ function scoreTactic(
   switch (kind) {
     case "direct":
       traitWeight += (params.shipRate ?? 0.5) * 0.8;
+      traitWeight += discipline * 0.7;
       break;
     case "kill-first":
       // Only meaningful if blocker is actually close AND we can swing
@@ -809,14 +884,23 @@ function scoreTactic(
       traitWeight += (params.greed ?? 0.5) * 1.0;
       // Spite negative (prefers denial over delivery) also pushes kill
       traitWeight += Math.max(0, -(params.spite ?? 0)) * 0.5;
+      traitWeight *= 1 - discipline * 0.45;
       break;
     case "feint":
       // Only meaningful if opp is close enough to be baitable
       if (sig.absDist > 260) return 0;
       traitWeight += (params.cunning ?? 0.5) * 1.0;
+      traitWeight *= 1 - discipline * 0.55;
       break;
   }
   return success * traitWeight;
+}
+
+function deliveryPlanHorizon(kind: DeliveryTacticKind, params: Params): number {
+  const discipline = unit(params.discipline);
+  if (kind === "direct") return PLAN_HORIZON_TICKS + Math.round(discipline * 18);
+  if (kind === "feint") return FEINT_PLAN_HORIZON_TICKS;
+  return PLAN_HORIZON_TICKS + Math.round(discipline * 8);
 }
 
 function planDeliveryTactic(
@@ -836,7 +920,7 @@ function planDeliveryTactic(
   return {
     tactic: best,
     startedAt: obs.tick,
-    expiresAt: obs.tick + (best === "feint" ? FEINT_PLAN_HORIZON_TICKS : PLAN_HORIZON_TICKS),
+    expiresAt: obs.tick + deliveryPlanHorizon(best, params),
     feintUntil: best === "feint" ? obs.tick + FEINT_DURATION_TICKS : undefined,
     score: bestScore,
   };
@@ -865,6 +949,7 @@ function runObjectiveMode(
     const targetY = goalBodyY(obs);
     const dyGoal = targetY - obs.self.y;
     const atGoal = dwellDistance(obs) < GOAL_DWELL_RADIUS;
+    const discipline = unit(params.discipline);
 
     if (atGoal) {
       // Dwell hold. Don't chase opp. Defensive swing if opp walks into
@@ -910,8 +995,9 @@ function runObjectiveMode(
     // Kill-first tactic or (any plan + emergent fight condition): commit
     // swipe when the blocker is close and we have the opportunity.
     const wantKill = plan.tactic === "kill-first";
+    const blockerDetourRange = Math.max(70, 120 - discipline * 45);
     const shouldFight =
-      (wantKill || oppInPath) && sig.absDist < 120 &&
+      (wantKill || (oppInPath && sig.absDist < blockerDetourRange)) &&
       sig.canSwing &&
       !sig.oppCommittedAtUs &&
       (
@@ -931,14 +1017,14 @@ function runObjectiveMode(
       };
     }
 
-    if (oppInPath && sig.absDist < 120 && obs.self.onGround) {
+    if (oppInPath && sig.absDist < blockerDetourRange && obs.self.onGround) {
       // Jump over blocker.
       const toGoalSign = Math.sign(dxGoal) || 1;
       return { left: toGoalSign < 0, right: toGoalSign > 0, up: true };
     }
 
     // Default (direct tactic, or fall-through): navigate to goal.
-    return navigateTo(obs, obs.goal.x, targetY);
+    return navigateTo(obs, obs.goal.x, targetY, params);
   }
 
   // INTERCEPT: opp has token. Split on distance — far → block the goal
@@ -974,7 +1060,7 @@ function runObjectiveMode(
       // Urgent: commit to swipe opp if close.
       if (sig.absDist < 120) return { left: sig.absDir < 0, right: sig.absDir > 0, action: sig.canSwing };
     }
-    return navigateTo(obs, tx, ty);
+    return navigateTo(obs, tx, ty, params);
   }
 
   // PICKUP: token on ground, neither holds. Race.
@@ -986,13 +1072,13 @@ function runObjectiveMode(
     const oppDist = Math.hypot(tx - obs.opp.x, ty - obs.opp.y);
     const pickupCommit = 20 + (params.shipRate ?? 0.5) * 90 + Math.max(0, params.spite ?? 0) * 30;
     if (myDist <= oppDist + pickupCommit) {
-      return navigateTo(obs, tx, ty);
+      return navigateTo(obs, tx, ty, params);
     }
     // Opp will reach first. Preempt with a swipe if we can catch them.
     if (sig.canSwing && sig.absDist < swingRange(params)) {
       return { action: true, left: sig.absDir < 0, right: sig.absDir > 0 };
     }
-    return navigateTo(obs, tx, ty);
+    return navigateTo(obs, tx, ty, params);
   }
 
   // Fallback — shouldn't reach here because objective-active triggered

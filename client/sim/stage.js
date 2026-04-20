@@ -14,8 +14,8 @@ export const STAGE_DATACENTER = {
     ],
     goals: [
         { x: 210, y: 494, sx: 210, sy: 476, label: "CUSTOMERS" },
-        { x: 1070, y: 494, sx: 1070, sy: 476, label: "GPUs" },
-        { x: 640, y: 164, sx: 640, sy: 148, label: "RUNWAY" },
+        { x: 1070, y: 494, sx: 1070, sy: 476, label: "RUNWAY" },
+        { x: 640, y: 164, sx: 640, sy: 148, label: "COMPUTE" },
     ],
     spawnL: { x: 300, y: 590 },
     spawnR: { x: 980, y: 590 },
@@ -32,8 +32,8 @@ export const STAGE_BOARDROOM = {
     ],
     goals: [
         { x: 260, y: 310, sx: 260, sy: 292, label: "CUSTOMERS" },
-        { x: 1020, y: 310, sx: 1020, sy: 292, label: "GPUs" },
-        { x: 640, y: 190, sx: 640, sy: 172, label: "RUNWAY" },
+        { x: 1020, y: 310, sx: 1020, sy: 292, label: "RUNWAY" },
+        { x: 640, y: 190, sx: 640, sy: 172, label: "COMPUTE" },
     ],
     spawnL: { x: 300, y: 590 },
     spawnR: { x: 980, y: 590 },
@@ -52,8 +52,8 @@ export const STAGE_DEMODAY = {
     ],
     goals: [
         { x: 190, y: 390, sx: 190, sy: 372, label: "CUSTOMERS" },
-        { x: 1090, y: 390, sx: 1090, sy: 372, label: "GPUs" },
-        { x: 640, y: 130, sx: 640, sy: 112, label: "RUNWAY" },
+        { x: 1090, y: 390, sx: 1090, sy: 372, label: "RUNWAY" },
+        { x: 640, y: 130, sx: 640, sy: 112, label: "COMPUTE" },
     ],
     spawnL: { x: 280, y: 590 },
     spawnR: { x: 1000, y: 590 },

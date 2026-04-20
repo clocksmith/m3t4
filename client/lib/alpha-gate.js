@@ -7,13 +7,13 @@ export async function installAlphaGate() {
   if (sessionStorage.getItem(KEY) === expected) return;
 
   document.body.innerHTML = `
-    <main class="page" style="max-width:520px;margin:12vh auto;">
+    <main class="page alpha-shell">
       <div class="page-header">
         <h1>m3t4 <small>closed alpha</small></h1>
       </div>
       <div class="panel">
         <div class="row">
-          <input id="alpha-password" type="password" placeholder="alpha password" style="flex:1;">
+          <input id="alpha-password" class="u-fill" type="password" placeholder="alpha password">
           <button id="alpha-enter" class="primary">enter</button>
         </div>
         <div id="alpha-error" class="error"></div>
@@ -43,9 +43,8 @@ export async function installAlphaGate() {
           </div>
           <nav>
             <a href="#spectate" data-route="spectate">live</a>
-            <a href="#practice" data-route="practice">practice</a>
             <a href="#build" data-route="build">build</a>
-            <a href="#submit" data-route="submit">submit</a>
+            <a href="#profile" data-route="profile">profile</a>
             <a href="#duel" data-route="duel" data-feature="p2pDuel" hidden>duel</a>
           </nav>
           <div id="whoami" class="whoami"></div>

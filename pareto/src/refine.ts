@@ -10,19 +10,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
-  STAGES, STRATEGIES, STRATEGY_NAMES, DEFAULT_PARAMS, PARAM_KEYS,
+  STAGES, STRATEGIES, STRATEGY_NAMES, DEFAULT_PARAMS, PARAM_KEYS, RANGES,
   type BrainConfig, type ParamKey,
 } from "@m3t4/sim";
 import { cmaInit, cmaSample, cmaTell, cmaIncumbent } from "./cmaes.js";
 import { scoreBatch } from "./score.js";
-
-const RANGES: Record<ParamKey, [number, number]> = {
-  burnRate: [0, 1], moat: [0, 300], shipRate: [0, 1],
-  foresight: [0, 0.25], pivotSpeed: [0, 1], leverage: [-1, 1],
-  networking: [0, 1],
-  spite: [-1, 1], greed: [0, 1], pacing: [0, 1], cunning: [0, 1],
-  hallucination: [0, 100],
-};
 
 function parseArgs(argv: string[]): Record<string, string> {
   const out: Record<string, string> = {};

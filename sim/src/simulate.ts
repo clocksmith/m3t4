@@ -1000,30 +1000,32 @@ export function stepWorld(w: World, actA: Action, actB: Action): StepResult {
 export function worldToFrame(w: World): TraceFrame {
   return {
     tick: w.tick,
-    p0: {
-      x: w.fighters[0].x,
-      y: w.fighters[0].y,
-      facing: w.fighters[0].facing,
-      swipeT: w.fighters[0].swipeT,
-      diveT: w.fighters[0].diveT,
-      dead: w.fighters[0].dead,
-    },
-    p1: {
-      x: w.fighters[1].x,
-      y: w.fighters[1].y,
-      facing: w.fighters[1].facing,
-      swipeT: w.fighters[1].swipeT,
-      diveT: w.fighters[1].diveT,
-      dead: w.fighters[1].dead,
-    },
+    p0: fighterToFrame(w.fighters[0]),
+    p1: fighterToFrame(w.fighters[1]),
     token: w.gold
       ? { exists: true, x: w.gold.x, y: w.gold.y, carrier: w.gold.carrier, dwellT: w.gold.dwellT }
       : { exists: false, x: 0, y: 0, carrier: -1, dwellT: 0 },
     goal: w.goal
-      ? { exists: true, x: w.goal.x, y: w.goal.y, label: w.goal.label }
-      : { exists: false, x: 0, y: 0, label: "" },
+      ? { exists: true, x: w.goal.x, y: w.goal.y, label: w.goal.label, timer: w.goal.timer }
+      : { exists: false, x: 0, y: 0, label: "", timer: 0 },
     scoreboard: [w.fighters[0].score, w.fighters[1].score],
     rounds: [w.fighters[0].rounds, w.fighters[1].rounds],
+  };
+}
+
+function fighterToFrame(f: Fighter): TraceFighterFrame {
+  return {
+    x: f.x,
+    y: f.y,
+    vx: f.vx,
+    vy: f.vy,
+    facing: f.facing,
+    onGround: f.onGround,
+    wall: f.wall,
+    stun: f.stun,
+    swipeT: f.swipeT,
+    diveT: f.diveT,
+    dead: f.dead,
   };
 }
 
@@ -1031,12 +1033,26 @@ export { STATS } from "./constants.js";
 
 // ---------- simulateTrace: same as simulate but returns per-tick snapshots ----------
 
+export interface TraceFighterFrame {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  facing: -1 | 1;
+  onGround: boolean;
+  wall: -1 | 0 | 1;
+  stun: number;
+  swipeT: number;
+  diveT: number;
+  dead: boolean;
+}
+
 export interface TraceFrame {
   tick: number;
-  p0: { x: number; y: number; facing: -1 | 1; swipeT: number; diveT: number; dead: boolean };
-  p1: { x: number; y: number; facing: -1 | 1; swipeT: number; diveT: number; dead: boolean };
+  p0: TraceFighterFrame;
+  p1: TraceFighterFrame;
   token: { exists: boolean; x: number; y: number; carrier: 0 | 1 | -1; dwellT: number };
-  goal: { exists: boolean; x: number; y: number; label: string };
+  goal: { exists: boolean; x: number; y: number; label: string; timer: number };
   scoreboard: [number, number];
   rounds: [number, number];
 }
@@ -1070,10 +1086,10 @@ export function simulateTrace(opts: SimulateOptions): TraceResult {
 
   const snap = (): TraceFrame => ({
     tick: w.tick,
-    p0: { x: w.fighters[0].x, y: w.fighters[0].y, facing: w.fighters[0].facing, swipeT: w.fighters[0].swipeT, diveT: w.fighters[0].diveT, dead: w.fighters[0].dead },
-    p1: { x: w.fighters[1].x, y: w.fighters[1].y, facing: w.fighters[1].facing, swipeT: w.fighters[1].swipeT, diveT: w.fighters[1].diveT, dead: w.fighters[1].dead },
+    p0: fighterToFrame(w.fighters[0]),
+    p1: fighterToFrame(w.fighters[1]),
     token: w.gold ? { exists: true, x: w.gold.x, y: w.gold.y, carrier: w.gold.carrier, dwellT: w.gold.dwellT } : { exists: false, x: 0, y: 0, carrier: -1, dwellT: 0 },
-    goal: w.goal ? { exists: true, x: w.goal.x, y: w.goal.y, label: w.goal.label } : { exists: false, x: 0, y: 0, label: "" },
+    goal: w.goal ? { exists: true, x: w.goal.x, y: w.goal.y, label: w.goal.label, timer: w.goal.timer } : { exists: false, x: 0, y: 0, label: "", timer: 0 },
     scoreboard: [w.fighters[0].score, w.fighters[1].score],
     rounds: [w.fighters[0].rounds, w.fighters[1].rounds],
   });

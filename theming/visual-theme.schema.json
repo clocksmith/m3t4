@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://m3t4.ai/schemas/visual-theme.schema.json",
+  "title": "m3t4 Visual Theme",
+  "type": "object",
+  "required": [
+    "meta",
+    "stageVisualPacks",
+    "characterVisualPacks",
+    "characterGraphics",
+    "weaponVisuals",
+    "objectiveVisuals",
+    "artDirection",
+    "prompts"
+  ],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["version", "theme", "boundary"],
+      "additionalProperties": true
+    },
+    "particlePacks": { "type": "object" },
+    "stageVisualPacks": { "type": "object" },
+    "characterVisualPacks": { "type": "object" },
+    "characterGraphics": { "type": "object" },
+    "weaponVisuals": { "type": "object" },
+    "objectiveVisuals": { "type": "object" },
+    "artDirection": {
+      "type": "object",
+      "required": ["styleSuffix", "negativePrompt"],
+      "additionalProperties": true
+    },
+    "prompts": {
+      "type": "object",
+      "required": ["stages", "characterSheets", "portraits", "weaponSheets"],
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

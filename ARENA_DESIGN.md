@@ -11,7 +11,7 @@ tuning journey — this doc is the layer above it.
 
 Assume:
 
-- **Sim code is open source.** Anyone can read `arena/sim/src/*` and learn
+- **Sim code is open source.** Anyone can read `sim/src/*` and learn
   exactly how each attribute maps to behavior.
 - **Rich-compute adversary.** Someone can run 100× our Monte Carlo and
   find bots that hit 85-90% WR against any fixed opponent pool.
@@ -170,7 +170,7 @@ After a pair is chosen, server picks which **slot** from each stable:
 ## 6. Match format
 
 **BO3** — matches existing `ROUNDS_TO_WIN_MATCH = 2` in
-`arena/sim/src/constants.ts`. First to 2 rounds wins. Each round is
+`sim/src/constants.ts`. First to 2 rounds wins. Each round is
 capped at 60 s.
 
 - Fast enough for firehose throughput
@@ -361,12 +361,11 @@ These were mentioned but not locked. Decide before they block build:
 
 Read, in order:
 
-1. `arena/README.md` — public package-level docs
-2. `public/labs/self/PLAN.md` — public game design rationale
-3. `BRAIN_TUNING.md` — **private**, mechanical tuning internals
-4. **this file** — competitive-layer architecture + threat model
-5. `arena/sim/src/simulate.ts` — the sim
-6. (server code, once it exists) `arena/server/src/*`
+1. `README.md` — public package-level docs
+2. `BRAIN_TUNING.md` — **private**, mechanical tuning internals (note: predates v5.2 anti-stall work; see `RELEASE_v9.md` for current state)
+3. **this file** — competitive-layer architecture + threat model
+4. `sim/src/simulate.ts` — the sim
+5. `server/src/*` — server code
 
 **Don't skip 3 and 4.** Most balance breakage and most privacy
 leaks come from editing the sim or server without reading these.

@@ -2,17 +2,7 @@
 // operators that can promote scalars into trajectories and add triggers.
 
 import type { AttributeSpec, BrainConfig, ParamKey } from "@m3t4/sim";
-import { DEFAULT_PARAMS, PARAM_KEYS } from "@m3t4/sim";
-
-// ---------- Ranges ----------
-
-const RANGES: Record<ParamKey, [number, number]> = {
-  burnRate: [0, 1], moat: [0, 300], shipRate: [0, 1],
-  foresight: [0, 0.25], pivotSpeed: [0, 1], leverage: [-1, 1],
-  networking: [0, 1],
-  spite: [-1, 1], greed: [0, 1], pacing: [0, 1], cunning: [0, 1],
-  hallucination: [0, 100],
-};
+import { DEFAULT_PARAMS, PARAM_KEYS, RANGES } from "@m3t4/sim";
 
 function rand(lo: number, hi: number): number {
   return lo + Math.random() * (hi - lo);

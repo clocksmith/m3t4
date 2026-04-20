@@ -2,9 +2,8 @@
 // Only one mode active at a time.
 
 import * as spectate from "./modes/spectate.js";
-import * as practice from "./modes/practice.js";
 import * as build from "./modes/build.js";
-import * as submit from "./modes/submit.js";
+import * as profile from "./modes/profile.js";
 import { status as getStatus } from "./lib/api.js";
 import { auth } from "./lib/auth.js";
 
@@ -13,9 +12,14 @@ const FEATURES = {
   communityVerify: false,
   proofLab: false,
   zk: false,
+  distributedCompute: false,
 };
+window.__M3T4_FEATURES__ = FEATURES;
 
-const MODES = { spectate, practice, build, submit };
+// Practice was absorbed into build (live test stage + human P1/P2
+// toggles). Legacy #practice hash redirects to #build.
+const MODES = { spectate, build, profile };
+const LEGACY_HASH = { practice: "build" };
 const OPTIONAL_MODE_LOADERS = {
   duel: () => import("./modes/duel.js"),
 };
@@ -47,7 +51,9 @@ function syncNavVisibility() {
 
 function render() {
   const hash = (window.location.hash || "#" + DEFAULT_MODE).slice(1);
-  const [name] = hash.split("?");
+  const [rawName] = hash.split("?");
+  const name = LEGACY_HASH[rawName] ?? rawName;
+  if (LEGACY_HASH[rawName]) { location.hash = "#" + name; return; }
   const activeName = name in MODES && routeEnabled(name) ? name : DEFAULT_MODE;
   const mode = MODES[activeName] ?? MODES[DEFAULT_MODE];
 
@@ -71,7 +77,7 @@ function renderWhoami() {
       renderWhoami();
     });
   } else {
-    whoamiEl.innerHTML = `<a href="#submit">sign in</a>`;
+    whoamiEl.innerHTML = `<a href="#profile">sign in</a>`;
   }
 }
 

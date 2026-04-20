@@ -6,10 +6,24 @@ Baseline commit: `d70c93b`
 
 Ruleset:
 
-- `BEHAVIOR_VERSION = 5`
-- `REPLAY_CONSTANTS_HASH = f82ff36f`
+- `BEHAVIOR_VERSION = 7` (was 5 at initial v9 ship; bumped through v5.1 + v5.2)
+- `REPLAY_CONSTANTS_HASH = f82ff36f` (update on next rebuild)
 - v9 roster installed in `sim/src/strategies.ts`
 - Ranked authority model: server-run configs, `ranked-server` trust label
+
+### Behavior bump log since initial v9 ship
+
+- **v5.1 (BEHAVIOR_VERSION 6):** aerial-clique fix — OFFENSE commit-timeout
+  under clash/passive-foil/close-range contexts with per-fighter asymOffset
+  to break mirror-match sync.
+- **v5.2 (BEHAVIOR_VERSION 7):** escape/zone max-duration caps
+  (`ESCAPE_MAX_TICKS_PER_ROUND = 540`, `ZONE_MAX_TICKS_PER_ROUND = 720`)
+  + progress-stalled close-override for 0-score stagnation. Cleared all
+  8 residual pair-stage stalemates; 300-seed matrix shows 0/768 100%-draw
+  pair-stages (down from 8/768).
+- **v8 (in flight):** lift / parry / chase / routeDiscipline knobs — pre-
+  registered gate cleared via `trace-nav.ts`; poise failed the slope test
+  and is held.
 
 ## Ship Decision
 

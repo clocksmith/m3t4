@@ -9,16 +9,12 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { STRATEGIES, STRATEGY_NAMES, type BrainConfig, type ParamKey } from "@m3t4/sim";
+import { RANGES, STRATEGIES, STRATEGY_NAMES, USER_KNOBS, type BrainConfig, type ParamKey } from "@m3t4/sim";
 import { featureVector } from "./novelty.js";
 
 const LOG_PATH = path.resolve(process.cwd(), "pareto/roster-history.jsonl");
 
-const KNOBS: ParamKey[] = [
-  "burnRate", "moat", "shipRate", "foresight",
-  "pivotSpeed", "leverage", "networking", "spite",
-  "greed", "pacing", "cunning",
-];
+const KNOBS: ParamKey[] = [...USER_KNOBS];
 
 interface DiversityReport {
   n: number;
@@ -56,13 +52,6 @@ function std(xs: number[]): number {
   return Math.sqrt(v);
 }
 
-const PARAM_RANGES: Record<ParamKey, [number, number]> = {
-  burnRate: [0, 1], moat: [0, 300], shipRate: [0, 1],
-  foresight: [0, 0.25], pivotSpeed: [0, 1], leverage: [-1, 1],
-  networking: [0, 1], spite: [-1, 1], greed: [0, 1],
-  pacing: [0, 1], cunning: [0, 1], hallucination: [0, 300],
-};
-
 function computeDiversity(roster: Array<{ id: string; config: BrainConfig }>): DiversityReport {
   const n = roster.length;
   const pairs: Array<{ i: number; j: number; d: number }> = [];
@@ -79,7 +68,7 @@ function computeDiversity(roster: Array<{ id: string; config: BrainConfig }>): D
   const farthest = pairs.reduce((a, p) => (p.d > a.d ? p : a));
 
   const perAttribute = KNOBS.map((k) => {
-    const [lo, hi] = PARAM_RANGES[k];
+    const [lo, hi] = RANGES[k];
     const values = roster.map((r) => scalarValue(r.config, k));
     const knobStd = std(values);
     const knobRange = Math.max(...values) - Math.min(...values);

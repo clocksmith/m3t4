@@ -13,6 +13,7 @@
 import { WS_ORIGIN, leaderboard } from "../lib/api.js";
 import { STAGES } from "../sim/index.js";
 import { setupCanvas, drawFrame, W, H } from "../lib/render.js";
+import { getComputeClient } from "../lib/compute.js";
 
 const SIM_HZ = 120;                // canonical sim rate
 const JITTER_BUFFER_FRAMES = 6;    // ~2 chunks at STRIDE=3 → ~50ms
@@ -32,6 +33,7 @@ let canvas = null;
 let ctx = null;
 let rafId = 0;
 let statusCb = () => {};
+let computeUnsub = null;
 
 // Playback state — reset on every matchStart.
 let frameBuf = [];
@@ -65,6 +67,7 @@ function trimPlaybackToLiveWindow() {
 
 export function mount(root, { setStatus }) {
   statusCb = setStatus;
+  const computeEnabled = !!(window.__M3T4_FEATURES__?.distributedCompute);
   root.innerHTML = `
     <div class="page">
       <div class="page-header">
@@ -78,15 +81,34 @@ export function mount(root, { setStatus }) {
           <div id="leaderboard">loading…</div>
         </aside>
       </div>
+      ${computeEnabled ? `
+      <div class="panel" id="compute-panel">
+        <h3>Donate idle cycles <small class="tight">(opt-in · runs off-thread · pauses when hidden or on battery)</small></h3>
+        <div class="row row-loose">
+          <label><input type="checkbox" id="compute-toggle"> contribute</label>
+          <label>intensity
+            <select id="compute-intensity">
+              <option value="low">low</option>
+              <option value="medium" selected>medium</option>
+              <option value="spicy">spicy</option>
+            </select>
+          </label>
+          <span class="tight" id="compute-state">off</span>
+          <span class="tight" id="compute-totals">accepted 0 · rejected 0 · pending 0</span>
+        </div>
+        <div class="tight mt-xs" id="compute-current"></div>
+      </div>` : ""}
       <div class="panel">
         <h3>Stream</h3>
-        <div id="stream-log" class="tight" style="max-height:120px; overflow:auto"></div>
+        <div id="stream-log" class="tight stream-log"></div>
       </div>
     </div>`;
   canvas = root.querySelector("#stage-canvas");
   leaderboardEl = root.querySelector("#leaderboard");
   const { ctx: c } = setupCanvas(canvas);
   ctx = c;
+
+  if (computeEnabled) wireComputePanel(root);
 
   running = true;
   connect();
@@ -95,12 +117,45 @@ export function mount(root, { setStatus }) {
   loop();
 }
 
+function wireComputePanel(root) {
+  const client = getComputeClient();
+  const toggle = root.querySelector("#compute-toggle");
+  const intensity = root.querySelector("#compute-intensity");
+  const stateEl = root.querySelector("#compute-state");
+  const totalsEl = root.querySelector("#compute-totals");
+  const currentEl = root.querySelector("#compute-current");
+  if (!client.isAvailable()) {
+    stateEl.textContent = "unavailable (needs Worker + SubtleCrypto)";
+    toggle.disabled = true;
+    intensity.disabled = true;
+    return;
+  }
+  toggle.addEventListener("change", () => {
+    if (toggle.checked) client.start({ intensity: intensity.value });
+    else client.stop();
+  });
+  intensity.addEventListener("change", () => client.setIntensity(intensity.value));
+  computeUnsub = client.subscribe((s) => {
+    toggle.checked = s.enabled;
+    intensity.value = s.intensity;
+    stateEl.textContent = s.enabled ? s.state : "off";
+    totalsEl.textContent = `accepted ${s.totals.accepted} · rejected ${s.totals.rejected} · pending ${s.totals.pending}`;
+    currentEl.textContent = s.current
+      ? `chunk ${s.current.chunkId} (${s.current.kind})`
+      : s.workerId ? `worker ${s.workerId}` : "";
+  });
+}
+
 export function unmount() {
   running = false;
   if (ws) { try { ws.close(); } catch {} ws = null; }
   if (lbTimer) { clearInterval(lbTimer); lbTimer = null; }
   if (rafId) cancelAnimationFrame(rafId);
   resetPlayback();
+  if (computeUnsub) { computeUnsub(); computeUnsub = null; }
+  // Compute client itself is a singleton — keep it running so leaving
+  // the tab open donates cycles across mode switches. User pauses via
+  // the toggle or by closing the tab.
 }
 
 function connect() {
@@ -230,9 +285,14 @@ function loop() {
   if (f) {
     drawFrame(ctx, renderState.stage, f, renderState.labels);
   } else {
-    ctx.fillStyle = "#08080e"; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = "#667"; ctx.font = "600 22px -apple-system, system-ui"; ctx.textAlign = "center";
+    ctx.fillStyle = cssColor("--arena-idle-bg", "black"); ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = cssColor("--arena-idle-text", "gray"); ctx.font = "600 22px -apple-system, system-ui"; ctx.textAlign = "center";
     ctx.fillText("waiting for next match…", W / 2, H / 2);
   }
   rafId = requestAnimationFrame(loop);
+}
+
+function cssColor(name, fallback) {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
 }

@@ -1,0 +1,19 @@
+{
+  "$schema": "./economy.schema.json",
+  "meta": {
+    "version": "1.0.0",
+    "boundary": "Product/economy metadata. This is intentionally outside theming."
+  },
+  "rewardTracks": {
+    "rankedSeasonOne": {
+      "winnersOnly": [
+        "legendary weapon recolors",
+        "goal ring prestige shaders",
+        "carrier badge frames",
+        "portrait laurels",
+        "victory title cards"
+      ],
+      "neverLockGameplayPower": true
+    }
+  }
+}

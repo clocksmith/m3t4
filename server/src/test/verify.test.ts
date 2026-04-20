@@ -15,6 +15,8 @@ import crypto from "node:crypto";
 import {
   BEHAVIOR_VERSION, DEFAULT_CHARS, REPLAY_CONSTANTS_HASH,
   STAGES, STRATEGIES, createReplayArtifactV1, simulate,
+  validateUserSubmission,
+  type BrainConfig,
   type ReplayArtifactV1,
 } from "@m3t4/sim";
 import { VerifyStore } from "../verify-store.js";
@@ -106,6 +108,23 @@ function bootTestServer(): Promise<{ port: number; close: () => Promise<void>; s
       });
     });
   });
+}
+
+function legalSubmittedConfig(cfg: BrainConfig): BrainConfig {
+  const filled: BrainConfig = {
+    ...cfg,
+    attributes: {
+      ...cfg.attributes,
+      lift: cfg.attributes.lift ?? 0,
+      parry: cfg.attributes.parry ?? 0,
+      chase: cfg.attributes.chase ?? 0,
+      discipline: cfg.attributes.discipline ?? 0,
+    },
+  };
+  const validation = validateUserSubmission(filled);
+  assert.equal(validation.ok, true, validation.errors.join("; "));
+  assert.ok(validation.config);
+  return validation.config;
 }
 
 async function req(port: number, method: string, url: string, body?: unknown, headers: Record<string, string> = {}): Promise<{ status: number; body: any }> {
@@ -332,7 +351,7 @@ test("proof L1 commit-reveal: valid reveal stamps proof-carrying label", async (
   const srv = await bootTestServer();
   t.after(() => srv.close());
   const salt = "saltsaltsalt";
-  const config = STRATEGIES.blitz;
+  const config = legalSubmittedConfig(STRATEGIES.blitz);
   // Compute canonical commitment
   const canonical = canonicalJson(config);
   const commitmentHash = crypto.createHash("sha256").update(canonical + ":" + salt).digest("hex");

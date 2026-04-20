@@ -10,7 +10,7 @@ export { BEHAVIOR_VERSION, runParamBrain, createBrainState, resetBrainStateForRo
 export {
   simulate, simulateTrace, DEFAULT_CHARS, packAction, unpackAction,
   applyHallucinationNoise, createStepperWorld, runBrainForWorld, settleWorldWinner, stepWorld, worldObservation, worldToFrame,
-  type SimulateOptions, type TraceFrame, type TraceResult, type StepResult,
+  type SimulateOptions, type TraceFighterFrame, type TraceFrame, type TraceResult, type StepResult,
 } from "./simulate.js";
 export { makeRng, type Rng } from "./rng.js";
 export { STRATEGIES, STRATEGY_NAMES, SAMPLE_TRAJECTORIES, type StrategyName } from "./strategies.js";

@@ -1,7 +1,10 @@
-// Submit mode — auth + handle claim + slot management.
+// Profile mode — signed-in identity, stable roster, stats, and bot
+// submission. Only the owner can see this view; the sign-in gate stays
+// if there's no authenticated user.
 
 import { auth } from "../lib/auth.js";
 import * as api from "../lib/api.js";
+import { validateUserSubmission } from "../sim/index.js";
 
 let root = null;
 let setStatus = () => {};
@@ -27,7 +30,7 @@ function render() {
 }
 
 function renderSignIn() {
-  setStatus("submit · not signed in");
+  setStatus("profile · not signed in");
   const authError = auth.error?.();
   if (auth.mode === "firebase") return renderFirebaseSignIn(authError);
   const isAlpha = auth.mode === "alpha-token";
@@ -35,17 +38,17 @@ function renderSignIn() {
   root.innerHTML = `
     <div class="page">
       <div class="page-header">
-        <h1>Submit <small>— sign in first</small></h1>
+        <h1>Profile <small>— sign in to see your stable</small></h1>
       </div>
       <div class="panel">
         <h3>${isAlpha ? "Closed alpha" : "Dev mode"}</h3>
-        <p class="tight" style="margin-bottom:12px;">
+        <p class="tight mb-lg">
           ${isAlpha
             ? "Closed alpha auth: pick your invited UID. The deploy config signs it with the shared alpha token."
             : "Local dev auth: pick any UID; the server accepts it as your identity."}
         </p>
         <div class="row">
-          <input type="text" id="uid-input" placeholder="pick a uid (3-64 chars, a-z 0-9 _ -)" style="flex:1;">
+          <input type="text" id="uid-input" class="u-fill" placeholder="pick a uid (3-64 chars, a-z 0-9 _ -)">
           <button id="signin-btn" class="primary">sign in</button>
         </div>
         <div class="error" id="signin-err"></div>
@@ -68,11 +71,11 @@ function renderFirebaseSignIn(authError) {
   root.innerHTML = `
     <div class="page">
       <div class="page-header">
-        <h1>Submit <small>— sign in first</small></h1>
+        <h1>Profile <small>— sign in to see your stable</small></h1>
       </div>
       <div class="panel">
         <h3>Sign in</h3>
-        <p class="tight" style="margin-bottom:12px;">
+        <p class="tight mb-lg">
           Ranked submissions require Firebase auth. Production builds must
           provide window.__M3T4_FIREBASE_CONFIG__ before app.js loads.
         </p>
@@ -99,11 +102,11 @@ function renderFirebaseSignIn(authError) {
 }
 
 async function renderDashboard(user) {
-  setStatus(`submit · ${user.uid}`);
+  setStatus(`profile · ${user.uid}`);
   root.innerHTML = `
     <div class="page">
       <div class="page-header">
-        <h1>Submit <small>— @${user.handle ?? "unclaimed"} (${user.uid})</small></h1>
+        <h1>Profile <small>— @${user.handle ?? "unclaimed"} (${user.uid}) — only you can see this</small></h1>
         <button id="signout">sign out</button>
       </div>
       ${!user.handle ? handleClaimHtml() : ""}
@@ -113,11 +116,11 @@ async function renderDashboard(user) {
       </div>
       <div class="panel">
         <h3>Submit a config</h3>
-        <div class="tight" style="margin-bottom:8px;">
+        <div class="tight mb-sm">
           Paste JSON from Build mode (or your offline toolkit). Rate-limited to
           1 submission per slot per 24 h. Server validates attributes and privacy.
         </div>
-        <div class="row" style="margin-bottom:6px;">
+        <div class="row mb-xs">
           <label>slot:
             <select id="slot-idx">
               <option>0</option><option>1</option><option>2</option><option>3</option><option>4</option>
@@ -142,7 +145,7 @@ async function renderDashboard(user) {
     root.querySelector("#paste-pending").addEventListener("click", () => {
       root.querySelector("#config-json").value = pending;
     });
-    root.querySelector("#paste-pending").style.background = "#1e3a2c";
+    root.querySelector("#paste-pending").classList.add("is-ready");
   } else {
     root.querySelector("#paste-pending").disabled = true;
   }
@@ -152,7 +155,7 @@ function handleClaimHtml() {
   return `
     <div class="panel">
       <h3>Claim a handle</h3>
-      <div class="tight" style="margin-bottom:8px;">3-20 chars, lowercase + digits + underscore. Public.</div>
+      <div class="tight mb-sm">3-20 chars, lowercase + digits + underscore. Public.</div>
       <div class="row">
         <input type="text" id="handle-input" placeholder="your_handle">
         <button id="handle-claim" class="primary">claim</button>
@@ -184,7 +187,11 @@ function wireSubmit(user) {
       const nameInput = root.querySelector("#slot-name").value.trim();
       const text = root.querySelector("#config-json").value;
       const cfg = JSON.parse(text);
-      const r = await api.submitSlot(await auth.token(), slotIdx, cfg, nameInput || undefined);
+      const validation = validateUserSubmission(cfg);
+      if (!validation.ok || !validation.config) {
+        throw new Error(`invalid config: ${validation.errors.join("; ")}`);
+      }
+      const r = await api.submitSlot(await auth.token(), slotIdx, validation.config, nameInput || undefined);
       msg.className = "ok";
       msg.textContent = `submitted · slotId=${r.slotId}`;
       sessionStorage.removeItem("m3t4:pendingSubmit");
@@ -203,8 +210,8 @@ async function loadStable(user) {
     const s = await api.getStable(user.uid);
     el.innerHTML = `
       <div>@${s.handle} · aggregate ELO ${s.eloAggregate} · ${s.wins}w ${s.losses}l</div>
-      <table style="margin-top:8px; width:100%; border-collapse:collapse;">
-        <thead style="color:#889;"><tr><td>slot</td><td>name</td><td>ELO</td><td>W-L-D</td><td>last played</td></tr></thead>
+      <table class="data-table">
+        <thead><tr><td>slot</td><td>name</td><td>ELO</td><td>W-L-D</td><td>last played</td></tr></thead>
         ${s.slots.map((slot, i) => `
           <tr>
             <td class="rank">${i}</td>

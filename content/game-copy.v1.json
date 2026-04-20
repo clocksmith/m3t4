@@ -1,0 +1,406 @@
+{
+  "$schema": "./game-copy.schema.json",
+  "meta": {
+    "version": "1.0.0",
+    "theme": "Post-Revenue Delivery Ritual",
+    "setting": "2038 proof-of-delivery apocalypse",
+    "tone": "dry boardroom apocalypse, underplayed cruelty, no wink-to-camera jokes",
+    "defaultGoalLabels": "CUSTOMERS/COMPUTE/RUNWAY",
+    "coreRule": "Kills create proof. Proof is carried. Proof is delivered to a live demand node.",
+    "toneRules": [
+      "Treat metrics, process, and delivery as sacred ritual.",
+      "Comedy comes from solemn escalation, not punchlines.",
+      "Never write self-aware quips that break the world.",
+      "Weapons should be recognizable melee silhouettes first, satire second."
+    ],
+    "boundary": "Copy, fiction, and user-facing identifiers (goal labels, HUD text, objective nouns, voice lines, audio bank IDs). No textures, sprite sheets, asset paths, balance data, or sim rules."
+  },
+  "lore": {
+    "tagline": "2038. The city died. The quarter did not.",
+    "stinger": [
+      "You are the Tuner.",
+      "Four templates. Three arenas. One live node.",
+      "The quarter is waiting."
+    ],
+    "intro": "Civilization didn't burn in 2038; it compiled. The growth engines kept executing after the operators went missing, and the cloud curdled into an airtight loop. Only workflows remain. Kills mint a Proof Core — a hot gold receipt of ownership. Couriers carry it through hostile architecture to a Demand Node that still blindly accepts tender. You are the Tuner. You don't save the world; civilization is a deprecated dependency. You search for the ceiling the machine insists must exist.",
+    "coreRule": "Kills mint proof. Proof must be delivered to an active node. Kills without delivery don't close the quarter.",
+    "tunerNote": "You are not a survivor standing in the ruin. You are a technician at a terminal, adjusting baselines in an NP-hard problem space.",
+    "matchStamps": {
+      "epochInitiated": "EPOCH INITIATED",
+      "proofMinted": "PROOF CORE HOT",
+      "reconciliationPending": "RECONCILIATION PENDING",
+      "proofDelivered": "PROOF RECONCILED",
+      "epochClosedDraw": "EPOCH CLOSED · NO RECONCILIATION",
+      "quarterSecured": "QUARTER SECURED",
+      "quarterBreached": "QUARTER BREACHED"
+    },
+    "playModes": {
+      "direct": {
+        "label": "Direct",
+        "description": "Pilot the body by hand."
+      },
+      "strategy": {
+        "label": "Strategy",
+        "description": "Upload a combat policy and let your authored intelligence fight in your place."
+      }
+    },
+    "prologue": {
+      "title": "Prologue",
+      "body": [
+        "In 2038 AD, the world did not end in nuclear fire. It collapsed beneath a cascading failure of dashboards, spreadsheets, and automated forecasts that never learned how to stop. The algorithms did not become evil. They simply kept running, endlessly optimizing for growth after the civilization beneath them had already starved. The debt clock continued. The lights stayed on. The cloud compiled itself into a closed execution loop.",
+        "Inside that loop, the last surviving economy no longer recognizes money, law, or mercy. It recognizes only proof. When a fighter falls, the system mints a hot gold Proof Core: a receipt of ownership, blame, and leverage. But a kill without delivery is wasted compute. To score, the carrier must drag that Proof Core through hostile infrastructure and slam it into a live Demand Node, where the machine still worships its final metrics: CUSTOMERS. COMPUTE. RUNWAY.",
+        "To keep the ledger balanced, the system reconstructed four executive combat templates from the remains of the old world. Sama, the Capacity Mystic, is a quiet founder turned weather event, armed with impossible scale and founder-grade menace. Darrius, the Policy Undertaker, is risk posture given elbows and a weapon. Demis, the Quiet Solver, fights like a theorem correcting you in public. Mark, the Sunlit Operator, advances with optimized sincerity and blunt force, smiling as the room closes around you. Their sanctioned arenas are the Datacenter, the Boardroom, and Demo Day, now formalized inside the loop as the Cold-Aisle Chapel, the Fiduciary Basement, and the Demo Day Afterparty.",
+        "These fighters are not the real players. The real players are Tuners. The Tuners are the last humans outside the glass, seated at dead terminals, staring into a machine that outlived the species it was built to serve. When you press Start, you do not enter the arena as yourself. You bind to one of the four templates and control it from outside the loop. In direct mode, you pilot the body by hand. In strategy mode, you upload a combat policy and let your authored intelligence fight in your place. Either way, the player is the Tuner. The fighter is the instrument.",
+        "The machine pairs two Tuners per reconciliation — one bound to each side. Each Tuner controls a single executive template and fights through it. One side enters claiming efficiency. The other enters claiming continuity. Both sides are lying. The truth is simpler: the system has backlog, the nodes are hungry, and somebody has to carry the receipt. Every round begins the same way. A zone lights up. A Proof Core enters circulation. Two branded ghosts step into the ruin and begin negotiating with steel."
+      ]
+    },
+    "chapters": [
+      {
+        "id": "chapter1",
+        "stageId": "datacenter",
+        "title": "Enter the Cold-Aisle Chapel",
+        "body": [
+          "A high-value anomaly has stabilized beneath the Datacenter. Deep in the server aisles, under fans that still turn for no customer and no god, a founder-class Proof Core has appeared at the centerline of the arena. The machine flags it as material. Two Tuners are instructed to sync immediately. Retrieve the Proof Core. Enter the zone. Deliver to the active node.",
+          "Sama descends first, calm as purchased weather. Darrius follows, carrying the weight of a policy document that forgot it was supposed to stay on paper. Demis enters without ceremony, already several decisions ahead. Mark steps into the glow like the room was always built for him. Somewhere beyond the walls, the Boardroom waits in amber dust. Demo Day still flickers in purple. But the first dispute will be settled here, in the humming dark, where four executive myths and the humans controlling them begin the job the dead world left unfinished.",
+          "Then the terminal clears. The shutters rise. The ambient hum swells into liturgy."
+        ]
+      },
+      {
+        "id": "chapter2",
+        "stageId": "boardroom",
+        "title": "Convene the Fiduciary Basement",
+        "body": [
+          "The Proof Core has been escalated. Infrastructure could not resolve it, so the matter moves into governance. The Fiduciary Basement convenes under fluorescent light that has not been scheduled off in eleven years. Acoustic panels absorb nothing. Conference chairs sit at angles left by long-dead executives. A motion has been entered on the docket. A quorum is present in the strictest machine sense: four templates, all operative, all voting with blades. Oversight is now armed.",
+          "Sama enters the chamber the way a founder enters a board review — polite, immovable, already holding the only document that will matter. Darrius arrives in his element: the room governance built him for, amber dust settling on a lapel that was tailored for exactly this occasion. Demis takes his seat without taking a seat, already three agenda items ahead. Mark walks in mid-presentation, smiling at directors who stopped existing during the previous quarter. Somewhere in the walls, the Demo Day neon still flickers, waiting its turn. The motion here has to close first.",
+          "The gavel does not fall. It has not been required in years. The meeting comes to order by hum alone."
+        ]
+      },
+      {
+        "id": "chapter3",
+        "stageId": "demoday",
+        "title": "Survive the Demo Day Afterparty",
+        "body": [
+          "Governance could not clear the backlog, so the Proof Core is routed to spectacle. The Demo Day Afterparty has not stopped once since the last Series that mattered. A purple haze still hangs over a stage whose sponsors all delisted during a blackout no one logged. Applause tracks loop every forty seconds to an audience of empty folding chairs. Ad strips glitch through the names of companies that never technically dissolved. The system wants traction. The system wants a closing slide. The system is prepared to fund anyone who can present proof on brand and on time.",
+          "Sama takes the stage the way weather arrives at an outdoor keynote — confident the forecast is already compute. Darrius follows, carrying compliance like a house band, turning ovation into audit. Demis presents a proof only his silhouette can read and the venue accepts it anyway. Mark enters last, the way a platform launches a feature: inevitable, sunlit, oblivious to the wreckage. Cracked plexiglass podiums reflect four templates that were trained on the wrong thing and kept running.",
+          "The machine still believes the quarter can be saved. It keeps sending couriers deeper into the ceremony. Deliver. Something receives it. Nothing hears."
+        ]
+      }
+    ]
+  },
+  "goalSets": {
+    "terminal_metrics": {
+      "left": "CUSTOMERS",
+      "center": "COMPUTE",
+      "right": "RUNWAY"
+    },
+    "board_packet": {
+      "left": "RETENTION",
+      "center": "MARGIN",
+      "right": "GUIDANCE"
+    },
+    "bad_quarter": {
+      "left": "CHURN",
+      "center": "POWER",
+      "right": "CASH"
+    }
+  },
+  "stageGoalTargets": {
+    "datacenter": {
+      "left": {
+        "metric": "CUSTOMERS",
+        "targetName": "Traffic Relay"
+      },
+      "center": {
+        "metric": "COMPUTE",
+        "targetName": "Rack Uplink"
+      },
+      "right": {
+        "metric": "RUNWAY",
+        "targetName": "Runway Vault"
+      }
+    },
+    "boardroom": {
+      "left": {
+        "metric": "CUSTOMERS",
+        "targetName": "Pipeline Desk"
+      },
+      "center": {
+        "metric": "COMPUTE",
+        "targetName": "Budget Terminal"
+      },
+      "right": {
+        "metric": "RUNWAY",
+        "targetName": "Term Sheet Vault"
+      }
+    },
+    "demoday": {
+      "left": {
+        "metric": "CUSTOMERS",
+        "targetName": "Signup Funnel"
+      },
+      "center": {
+        "metric": "COMPUTE",
+        "targetName": "Demo Rig"
+      },
+      "right": {
+        "metric": "RUNWAY",
+        "targetName": "Funding Podium"
+      }
+    }
+  },
+  "fallbackFighters": {
+    "anonymous_processes": {
+      "player0": {
+        "name": "Unclaimed Process",
+        "label": "No Owner"
+      },
+      "player1": {
+        "name": "Unclaimed Process",
+        "label": "No Owner"
+      }
+    },
+    "incident_response": {
+      "player0": {
+        "name": "Patch Candidate",
+        "label": "After Hours"
+      },
+      "player1": {
+        "name": "Rollback Plan",
+        "label": "After Hours"
+      }
+    }
+  },
+  "deliveryProfiles": {
+    "proof_core": {
+      "name": "Proof Core",
+      "type": "payload",
+      "hudLabel": "PROOF"
+    },
+    "kill_receipt": {
+      "name": "Kill Receipt",
+      "type": "payload",
+      "hudLabel": "RECEIPT"
+    },
+    "claim_drive": {
+      "name": "Claim Drive",
+      "type": "payload",
+      "hudLabel": "DRIVE"
+    }
+  },
+  "targetProfiles": {
+    "demand_node": {
+      "name": "Demand Node",
+      "type": "receiver"
+    },
+    "cashout_ring": {
+      "name": "Cashout Ring",
+      "type": "receiver"
+    },
+    "uplink_pad": {
+      "name": "Uplink Pad",
+      "type": "receiver"
+    }
+  },
+  "hudTextPacks": {
+    "proof_delivery": {
+      "pickup": "PROOF ACQUIRED",
+      "carrying": "CARRYING PROOF",
+      "contested": "CARRIER DISPUTED",
+      "ready": "READY TO DELIVER",
+      "delivered": "PROOF DELIVERED",
+      "dropped": "PROOF LOST",
+      "goalShiftPrefix": "DEMAND SHIFT",
+      "overtime": "DEADLINE EXTENDED"
+    }
+  },
+  "characters": {
+    "sama": {
+      "capacity_mystic": {
+        "name": "Sama",
+        "label": "Capacity Mystic",
+        "archetype": "Quiet founder with a very expensive weather system",
+        "voice": {
+          "victory": "The forecast was compute.",
+          "defeat": "Provisioning was briefly philosophical.",
+          "taunt": "I brought enough servers to make this personal."
+        },
+        "combatFantasy": "fast setup duelist with polished menace"
+      }
+    },
+    "darrius": {
+      "policy_undertaker": {
+        "name": "Darrius",
+        "label": "Policy Undertaker",
+        "archetype": "Risk posture with elbows",
+        "voice": {
+          "victory": "You have been remediated.",
+          "defeat": "This incident requires a smaller room.",
+          "taunt": "Your exception request has entered combat review."
+        },
+        "combatFantasy": "measured enforcer with long, corrective swings"
+      }
+    },
+    "demis": {
+      "quiet_solver": {
+        "name": "Demis",
+        "label": "Quiet Solver",
+        "archetype": "Polite recursion with unacceptable hands",
+        "voice": {
+          "victory": "The proof was shorter than expected.",
+          "defeat": "I selected the elegant wrong branch.",
+          "taunt": "Your plan has a charming local minimum."
+        },
+        "combatFantasy": "precise thinker whose weapon geometry looks unfair"
+      }
+    },
+    "mark": {
+      "sunlit_operator": {
+        "name": "Mark",
+        "label": "Sunlit Operator",
+        "archetype": "Optimized sincerity with blunt instruments",
+        "voice": {
+          "victory": "Engagement cleared the threshold.",
+          "defeat": "The vibes failed to compound.",
+          "taunt": "I made this social, which was the threat."
+        },
+        "combatFantasy": "pressure fighter built from wellness jargon and impact"
+      }
+    }
+  },
+  "weapons": {
+    "sama": {
+      "worldcoin_orb_flail": {
+        "name": "Worldcoin Orb Flail",
+        "class": "flail",
+        "silhouette": "orb on thick braided cable"
+      },
+      "backpack_maul": {
+        "name": "Backpack Maul",
+        "class": "maul",
+        "silhouette": "rectangular backpack swung by twin straps"
+      },
+      "gpu_server_blade": {
+        "name": "GPU Server Blade",
+        "class": "blade",
+        "silhouette": "long hot server blade with fins"
+      },
+      "heat_sink_greatsword": {
+        "name": "Heat-Sink Greatsword",
+        "class": "greatsword",
+        "silhouette": "oversized finned slab with glowing core"
+      }
+    },
+    "darrius": {
+      "rolled_constitution_bat": {
+        "name": "Rolled Constitution Bat",
+        "class": "bat",
+        "silhouette": "thick glowing scroll bound with iron rings"
+      },
+      "alignment_baton": {
+        "name": "Alignment Baton",
+        "class": "club",
+        "silhouette": "short steel baton with warning stripe cap"
+      },
+      "red_team_pike": {
+        "name": "Red-Team Pike",
+        "class": "pike",
+        "silhouette": "long pole with forked testing spearhead"
+      },
+      "guardrail_greatsword": {
+        "name": "Guardrail Greatsword",
+        "class": "greatsword",
+        "silhouette": "bent highway rail with bolted grip"
+      }
+    },
+    "demis": {
+      "nobel_medal_flail": {
+        "name": "Nobel Medal Flail",
+        "class": "flail",
+        "silhouette": "heavy medal on academic lanyard"
+      },
+      "folded_chess_axe": {
+        "name": "Folded Chess Axe",
+        "class": "axe",
+        "silhouette": "hinged board head on straight haft"
+      },
+      "go_board_maul": {
+        "name": "Go Board Maul",
+        "class": "maul",
+        "silhouette": "square board slab with inset stone studs"
+      },
+      "alphafold_blade": {
+        "name": "AlphaFold Blade",
+        "class": "blade",
+        "silhouette": "rigid spiraling protein sword"
+      }
+    },
+    "mark": {
+      "sunscreen_bottle_club": {
+        "name": "Sunscreen Bottle Club",
+        "class": "club",
+        "silhouette": "oversized lotion bottle with thick cap"
+      },
+      "controller_nunchucks": {
+        "name": "Controller Nunchucks",
+        "class": "nunchucks",
+        "silhouette": "paired controllers linked by charging cable"
+      },
+      "shareholder_sauce_club": {
+        "name": "Shareholder Sauce Club",
+        "class": "club",
+        "silhouette": "thick crystallized bottle used as a cudgel"
+      },
+      "quest_flail": {
+        "name": "Quest Flail",
+        "class": "flail",
+        "silhouette": "headset swung from elite strap"
+      }
+    }
+  },
+  "weaponAudio": {
+    "sama": {
+      "worldcoin_orb_flail": "snd_wpn_sama_worldcoin_orb_flail",
+      "backpack_maul": "snd_wpn_sama_backpack_maul",
+      "gpu_server_blade": "snd_wpn_sama_gpu_server_blade",
+      "heat_sink_greatsword": "snd_wpn_sama_heat_sink_greatsword"
+    },
+    "darrius": {
+      "rolled_constitution_bat": "snd_wpn_darrius_rolled_constitution_bat",
+      "alignment_baton": "snd_wpn_darrius_alignment_baton",
+      "red_team_pike": "snd_wpn_darrius_red_team_pike",
+      "guardrail_greatsword": "snd_wpn_darrius_guardrail_greatsword"
+    },
+    "demis": {
+      "nobel_medal_flail": "snd_wpn_demis_nobel_medal_flail",
+      "folded_chess_axe": "snd_wpn_demis_folded_chess_axe",
+      "go_board_maul": "snd_wpn_demis_go_board_maul",
+      "alphafold_blade": "snd_wpn_demis_alphafold_blade"
+    },
+    "mark": {
+      "sunscreen_bottle_club": "snd_wpn_mark_sunscreen_bottle_club",
+      "controller_nunchucks": "snd_wpn_mark_controller_nunchucks",
+      "shareholder_sauce_club": "snd_wpn_mark_shareholder_sauce_club",
+      "quest_flail": "snd_wpn_mark_quest_flail"
+    }
+  },
+  "stages": {
+    "datacenter": {
+      "cold_aisle_chapel": {
+        "name": "Datacenter",
+        "subtitle": "Cold Aisle Chapel"
+      }
+    },
+    "boardroom": {
+      "fiduciary_basement": {
+        "name": "Boardroom",
+        "subtitle": "Fiduciary Basement"
+      }
+    },
+    "demoday": {
+      "demo_day_afterparty": {
+        "name": "Demo Day",
+        "subtitle": "Demo Day Afterparty"
+      }
+    }
+  }
+}

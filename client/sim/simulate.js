@@ -894,30 +894,31 @@ export function stepWorld(w, actA, actB) {
 export function worldToFrame(w) {
     return {
         tick: w.tick,
-        p0: {
-            x: w.fighters[0].x,
-            y: w.fighters[0].y,
-            facing: w.fighters[0].facing,
-            swipeT: w.fighters[0].swipeT,
-            diveT: w.fighters[0].diveT,
-            dead: w.fighters[0].dead,
-        },
-        p1: {
-            x: w.fighters[1].x,
-            y: w.fighters[1].y,
-            facing: w.fighters[1].facing,
-            swipeT: w.fighters[1].swipeT,
-            diveT: w.fighters[1].diveT,
-            dead: w.fighters[1].dead,
-        },
+        p0: fighterToFrame(w.fighters[0]),
+        p1: fighterToFrame(w.fighters[1]),
         token: w.gold
             ? { exists: true, x: w.gold.x, y: w.gold.y, carrier: w.gold.carrier, dwellT: w.gold.dwellT }
             : { exists: false, x: 0, y: 0, carrier: -1, dwellT: 0 },
         goal: w.goal
-            ? { exists: true, x: w.goal.x, y: w.goal.y, label: w.goal.label }
-            : { exists: false, x: 0, y: 0, label: "" },
+            ? { exists: true, x: w.goal.x, y: w.goal.y, label: w.goal.label, timer: w.goal.timer }
+            : { exists: false, x: 0, y: 0, label: "", timer: 0 },
         scoreboard: [w.fighters[0].score, w.fighters[1].score],
         rounds: [w.fighters[0].rounds, w.fighters[1].rounds],
+    };
+}
+function fighterToFrame(f) {
+    return {
+        x: f.x,
+        y: f.y,
+        vx: f.vx,
+        vy: f.vy,
+        facing: f.facing,
+        onGround: f.onGround,
+        wall: f.wall,
+        stun: f.stun,
+        swipeT: f.swipeT,
+        diveT: f.diveT,
+        dead: f.dead,
     };
 }
 export { STATS } from "./constants.js";
@@ -943,10 +944,10 @@ export function simulateTrace(opts) {
     let hashAcc = 2166136261 >>> 0;
     const snap = () => ({
         tick: w.tick,
-        p0: { x: w.fighters[0].x, y: w.fighters[0].y, facing: w.fighters[0].facing, swipeT: w.fighters[0].swipeT, diveT: w.fighters[0].diveT, dead: w.fighters[0].dead },
-        p1: { x: w.fighters[1].x, y: w.fighters[1].y, facing: w.fighters[1].facing, swipeT: w.fighters[1].swipeT, diveT: w.fighters[1].diveT, dead: w.fighters[1].dead },
+        p0: fighterToFrame(w.fighters[0]),
+        p1: fighterToFrame(w.fighters[1]),
         token: w.gold ? { exists: true, x: w.gold.x, y: w.gold.y, carrier: w.gold.carrier, dwellT: w.gold.dwellT } : { exists: false, x: 0, y: 0, carrier: -1, dwellT: 0 },
-        goal: w.goal ? { exists: true, x: w.goal.x, y: w.goal.y, label: w.goal.label } : { exists: false, x: 0, y: 0, label: "" },
+        goal: w.goal ? { exists: true, x: w.goal.x, y: w.goal.y, label: w.goal.label, timer: w.goal.timer } : { exists: false, x: 0, y: 0, label: "", timer: 0 },
         scoreboard: [w.fighters[0].score, w.fighters[1].score],
         rounds: [w.fighters[0].rounds, w.fighters[1].rounds],
     });

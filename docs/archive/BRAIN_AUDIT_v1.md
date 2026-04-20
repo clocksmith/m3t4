@@ -1,4 +1,16 @@
-# Brain-mapping audit - BEHAVIOR_VERSION 1
+# ARCHIVED — Brain-mapping audit (BEHAVIOR_VERSION 1)
+
+> **Historical artifact.** This audit was written when
+> `BEHAVIOR_VERSION = 1`. The sim has since shipped v5.1 (aerial-clique
+> fix), v5.2 (escape/zone max-duration caps + progress-stalled close-
+> override), and is currently at `BEHAVIOR_VERSION = 7` with v8
+> (lift / parry / chase / routeDiscipline) in flight. Decisions
+> recorded below were sound at the time; do not treat as current
+> guidance. See `sim/src/brain.ts` and `RELEASE_v9.md` for the live
+> behavior lineage.
+
+---
+
 
 Diagnostic output from Phase 4a adversarial attack against the v5-annealed
 roster. The intended baseline is commit `0708505`; the archive currently lives

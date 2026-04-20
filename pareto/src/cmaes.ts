@@ -1,4 +1,4 @@
-// A minimal (μ,λ)-CMA-ES over the 8-dim normalized attribute space.
+// A minimal (μ,λ)-CMA-ES over the normalized attribute space.
 // Not as sophisticated as the full reference implementation, but enough
 // to outperform the random-mutation baseline on smooth fitness landscapes.
 //
@@ -8,16 +8,8 @@
 // diagonal version converges fine.
 
 import type { BrainConfig, ParamKey } from "@m3t4/sim";
-import { PARAM_KEYS } from "@m3t4/sim";
+import { PARAM_KEYS, RANGES } from "@m3t4/sim";
 import { featureVector } from "./novelty.js";
-
-const RANGES: Record<ParamKey, [number, number]> = {
-  burnRate: [0, 1], moat: [0, 300], shipRate: [0, 1],
-  foresight: [0, 0.25], pivotSpeed: [0, 1], leverage: [-1, 1],
-  networking: [0, 1],
-  spite: [-1, 1], greed: [0, 1], pacing: [0, 1], cunning: [0, 1],
-  hallucination: [0, 100],
-};
 
 function denormalize(v: number[]): Partial<Record<ParamKey, number>> {
   const out: Partial<Record<ParamKey, number>> = {};

@@ -1,0 +1,61 @@
+{
+  "$schema": "./presentation-selection.schema.json",
+  "meta": {
+    "version": "1.0.0",
+    "visualTheme": "../theming/visual-theme.v1.json",
+    "gameCopy": "../content/game-copy.v1.json",
+    "boundary": "Runtime selection only: maps stable game IDs to selected visual/copy packs. No asset definitions, prompts, or rules."
+  },
+  "selection": {
+    "goalSet": "terminal_metrics",
+    "deliveryProfile": "proof_core",
+    "targetProfile": "demand_node",
+    "hudTextPack": "proof_delivery",
+    "fallbackFighterProfile": "anonymous_processes",
+    "audioPack": "quiet_liquidity_event",
+    "particlePack": "office_weather",
+    "stages": {
+      "datacenter": "cold_aisle_chapel",
+      "boardroom": "fiduciary_basement",
+      "demoday": "demo_day_afterparty"
+    },
+    "characters": {
+      "sama": "capacity_mystic",
+      "darrius": "policy_undertaker",
+      "demis": "quiet_solver",
+      "mark": "sunlit_operator"
+    },
+    "characterGraphics": {
+      "sama": "monastic_infra",
+      "darrius": "legal_department_midnight",
+      "demis": "chalk_and_static",
+      "mark": "wellness_berserker"
+    },
+    "weaponFamilies": {
+      "sama": {
+        "common": "worldcoin_orb_flail",
+        "rare": "backpack_maul",
+        "epic": "gpu_server_blade",
+        "legendary": "heat_sink_greatsword"
+      },
+      "darrius": {
+        "common": "rolled_constitution_bat",
+        "rare": "alignment_baton",
+        "epic": "red_team_pike",
+        "legendary": "guardrail_greatsword"
+      },
+      "demis": {
+        "common": "nobel_medal_flail",
+        "rare": "folded_chess_axe",
+        "epic": "go_board_maul",
+        "legendary": "alphafold_blade"
+      },
+      "mark": {
+        "common": "sunscreen_bottle_club",
+        "rare": "controller_nunchucks",
+        "epic": "shareholder_sauce_club",
+        "legendary": "quest_flail"
+      }
+    }
+  }
+}

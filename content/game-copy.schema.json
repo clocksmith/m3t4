@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://m3t4.ai/schemas/game-copy.schema.json",
+  "title": "m3t4 Game Copy",
+  "type": "object",
+  "required": [
+    "meta",
+    "goalSets",
+    "fallbackFighters",
+    "deliveryProfiles",
+    "targetProfiles",
+    "hudTextPacks",
+    "characters",
+    "weapons"
+  ],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["version", "theme", "boundary"],
+      "additionalProperties": true
+    },
+    "lore": {
+      "type": "object",
+      "description": "Narrative hook in four zoom levels. tagline=splash/poster, stinger=intro lines, intro=rules/about paragraph, matchStamps=in-game HUD stings.",
+      "properties": {
+        "tagline": { "type": "string" },
+        "stinger": { "type": "array", "items": { "type": "string" } },
+        "intro": { "type": "string" },
+        "coreRule": { "type": "string" },
+        "tunerNote": { "type": "string" },
+        "matchStamps": {
+          "type": "object",
+          "properties": {
+            "epochInitiated": { "type": "string" },
+            "proofMinted": { "type": "string" },
+            "reconciliationPending": { "type": "string" },
+            "proofDelivered": { "type": "string" },
+            "epochClosedDraw": { "type": "string" },
+            "quarterSecured": { "type": "string" },
+            "quarterBreached": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "playModes": {
+          "type": "object",
+          "description": "Names + descriptions for the two Tuner input modes. 'direct' = keyboard, 'strategy' = uploaded combat policy.",
+          "properties": {
+            "direct":   { "type": "object", "properties": { "label": { "type": "string" }, "description": { "type": "string" } } },
+            "strategy": { "type": "object", "properties": { "label": { "type": "string" }, "description": { "type": "string" } } }
+          },
+          "additionalProperties": true
+        },
+        "prologue": {
+          "type": "object",
+          "description": "Full narrative prologue. body is an array of paragraphs so the renderer can space them without parsing prose.",
+          "properties": {
+            "title": { "type": "string" },
+            "body": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "chapters": {
+          "type": "array",
+          "description": "Stage-scoped chapter intros. Display before the first match on the referenced stage.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "stageId": { "type": "string" },
+              "title": { "type": "string" },
+              "body": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "goalSets": { "type": "object" },
+    "stages": { "type": "object" },
+    "stageGoalTargets": { "type": "object" },
+    "fallbackFighters": { "type": "object" },
+    "deliveryProfiles": { "type": "object" },
+    "targetProfiles": { "type": "object" },
+    "hudTextPacks": { "type": "object" },
+    "characters": { "type": "object" },
+    "weapons": { "type": "object" },
+    "weaponAudio": { "type": "object" }
+  },
+  "additionalProperties": false
+}

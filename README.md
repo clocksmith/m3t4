@@ -137,7 +137,11 @@ server/       — Cloud Run service (REST + WebSocket + matchmaker)
                   L3 zk envelope
 client/       — spectator SPA hosted at m3t4.ai
   modes/      —   spectate, practice, build, submit (+ duel flag-gated)
-theming/      — character/weapon/stage visual data
+theming/      — visual-only asset manifests: stages, sprites, VFX, prompts
+content/      — display copy, fiction, HUD strings, fighter/weapon names
+config/       — selected presentation IDs for a release
+data/         — generated local/runtime data such as preset rankings
+docs/         — architecture and renderer contracts
 ```
 
 ## Quick start (dev)

@@ -5,21 +5,13 @@
 // This is the classic Lehman-Stanley novelty search metric.
 
 import type { BrainConfig, ParamKey } from "@m3t4/sim";
-import { DEFAULT_PARAMS, PARAM_KEYS } from "@m3t4/sim";
+import { DEFAULT_PARAMS, PARAM_KEYS, RANGES } from "@m3t4/sim";
 
 export interface NoveltyConfig {
   k?: number;              // neighbors used in distance average
   archiveMax?: number;     // hard cap on archive size
   minNovelty?: number;     // threshold below which configs are NOT archived
 }
-
-const RANGES: Record<ParamKey, [number, number]> = {
-  burnRate: [0, 1], moat: [0, 300], shipRate: [0, 1],
-  foresight: [0, 0.25], pivotSpeed: [0, 1], leverage: [-1, 1],
-  networking: [0, 1],
-  spite: [-1, 1], greed: [0, 1], pacing: [0, 1], cunning: [0, 1],
-  hallucination: [0, 100],
-};
 
 // Produce a fixed-length attribute vector for a config, normalized to [0,1]
 // per-knob so distance comparisons are scale-free.

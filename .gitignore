@@ -27,6 +27,8 @@ client/config.js
 *.log
 arena/server/data/
 /tmp/
+generations/raw/
+theming/generated-prompts/
 
 # deploy artifacts
 .firebase/

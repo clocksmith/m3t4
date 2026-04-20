@@ -31,24 +31,23 @@ export declare function stepWorld(w: World, actA: Action, actB: Action): StepRes
 /** Pull the current world state into a TraceFrame (for renderers). */
 export declare function worldToFrame(w: World): TraceFrame;
 export { STATS } from "./constants.js";
+export interface TraceFighterFrame {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    facing: -1 | 1;
+    onGround: boolean;
+    wall: -1 | 0 | 1;
+    stun: number;
+    swipeT: number;
+    diveT: number;
+    dead: boolean;
+}
 export interface TraceFrame {
     tick: number;
-    p0: {
-        x: number;
-        y: number;
-        facing: -1 | 1;
-        swipeT: number;
-        diveT: number;
-        dead: boolean;
-    };
-    p1: {
-        x: number;
-        y: number;
-        facing: -1 | 1;
-        swipeT: number;
-        diveT: number;
-        dead: boolean;
-    };
+    p0: TraceFighterFrame;
+    p1: TraceFighterFrame;
     token: {
         exists: boolean;
         x: number;
@@ -61,6 +60,7 @@ export interface TraceFrame {
         x: number;
         y: number;
         label: string;
+        timer: number;
     };
     scoreboard: [number, number];
     rounds: [number, number];

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://m3t4.ai/schemas/presentation-selection.schema.json",
+  "title": "m3t4 Presentation Selection",
+  "type": "object",
+  "required": ["meta", "selection"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["version", "visualTheme", "gameCopy", "boundary"],
+      "additionalProperties": true
+    },
+    "selection": {
+      "type": "object",
+      "required": [
+        "goalSet",
+        "deliveryProfile",
+        "targetProfile",
+        "hudTextPack",
+        "fallbackFighterProfile",
+        "audioPack",
+        "particlePack",
+        "stages",
+        "characters",
+        "characterGraphics",
+        "weaponFamilies"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

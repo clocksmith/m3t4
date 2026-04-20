@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://m3t4.ai/schemas/economy.schema.json",
+  "title": "m3t4 Economy Metadata",
+  "type": "object",
+  "required": ["meta", "rewardTracks"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["version", "boundary"],
+      "additionalProperties": true
+    },
+    "rewardTracks": { "type": "object" }
+  },
+  "additionalProperties": false
+}

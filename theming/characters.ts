@@ -1,25 +1,15 @@
-// Character kits. Visual identity only. All fighters share physics
-// (see arena/sim/constants.ts STATS) and all fighters share the same hitbox.
-// Weapons are a separate, orthogonal list (see ./weapons.ts) — a character
-// does not own its weapon at the schema level; loadouts pair them at match
-// time.
+// Character visual kits only. Names, labels, archetypes, and voice lines live
+// in content/game-copy.v1.json. All fighters share physics and hitboxes.
+// Weapons are a separate visual layer (see ./weapons.ts).
 
 import type { SpriteSheet, TextureRef } from "./assets.js";
 
 export interface CharacterKit {
   id: string;
-  name: string;          // in-game display name (parody)
-  label: string;         // parody company affiliation
-  archetype: string;     // design role description
   colors: {
     primary: string;     // main fighter color (UI, HP bar, damage numbers)
     trim: string;        // light accent
     shadow: string;      // dark outline
-  };
-  voice: {
-    victory: string;
-    defeat: string;
-    taunt?: string;
   };
   sprite: SpriteSheet;   // body animations; weapon is rendered as a separate layer
   portraits: {
@@ -32,8 +22,8 @@ export interface CharacterKit {
 }
 
 // Asset stubs. URLs are empty until art lands; shape is the contract.
-const emptySprite = (): SpriteSheet => ({
-  url: "",
+const emptySprite = (url = ""): SpriteSheet => ({
+  url,
   frameW: 64,
   frameH: 64,
   anims: {
@@ -57,15 +47,8 @@ const emptyPortrait = (w = 96, h = 96): TextureRef => ({ url: "", w, h });
 export const CHARACTER_KITS: CharacterKit[] = [
   {
     id: "sama",
-    name: "Sama",
-    label: "OpenAL",
-    archetype: "the optimist",
     colors: { primary: "#6ee7b7", trim: "#d1fae5", shadow: "#047857" },
-    voice: {
-      victory: "shipping is a feature.",
-      defeat:  "we're just getting started.",
-    },
-    sprite: emptySprite(),
+    sprite: emptySprite("assets/chars/sama/monastic_infra/sprite.png"),
     portraits: {
       neutral: emptyPortrait(),
       hurt:    emptyPortrait(),
@@ -76,15 +59,8 @@ export const CHARACTER_KITS: CharacterKit[] = [
   },
   {
     id: "darrius",
-    name: "Darrius",
-    label: "Anthropos",
-    archetype: "the steward",
     colors: { primary: "#fb923c", trim: "#fed7aa", shadow: "#9a3412" },
-    voice: {
-      victory: "this aligns with our values.",
-      defeat:  "we should consider the implications.",
-    },
-    sprite: emptySprite(),
+    sprite: emptySprite("assets/chars/darrius/legal_department_midnight/sprite.png"),
     portraits: {
       neutral: emptyPortrait(),
       hurt:    emptyPortrait(),
@@ -95,14 +71,7 @@ export const CHARACTER_KITS: CharacterKit[] = [
   },
   {
     id: "demis",
-    name: "Demis",
-    label: "DeepThought",
-    archetype: "the grandmaster",
     colors: { primary: "#60a5fa", trim: "#dbeafe", shadow: "#1e3a8a" },
-    voice: {
-      victory: "as anticipated in move twelve.",
-      defeat:  "the tree was insufficiently deep.",
-    },
     sprite: emptySprite(),
     portraits: {
       neutral: emptyPortrait(),
@@ -114,14 +83,7 @@ export const CHARACTER_KITS: CharacterKit[] = [
   },
   {
     id: "mark",
-    name: "Mark",
-    label: "Metabrain",
-    archetype: "the bruiser",
     colors: { primary: "#c084fc", trim: "#ede9fe", shadow: "#5b21b6" },
-    voice: {
-      victory: "the metaverse prevails.",
-      defeat:  "we need to connect more people.",
-    },
     sprite: emptySprite(),
     portraits: {
       neutral: emptyPortrait(),

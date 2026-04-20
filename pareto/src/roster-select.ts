@@ -18,8 +18,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import {
-  STAGES, STRATEGIES, STRATEGY_NAMES,
-  type BrainConfig,
+  RANGES, STAGES, STRATEGIES, STRATEGY_NAMES, USER_KNOBS,
+  type BrainConfig, type ParamKey,
 } from "@m3t4/sim";
 import { featureVector } from "./novelty.js";
 import { computeSignatures, signatureDistance, type Signature } from "./matchup-signature.js";
@@ -60,25 +60,18 @@ function attrDist(a: BrainConfig, b: BrainConfig): number {
 }
 
 // Per-attribute coverage, with extra weight on under-explored axes.
-const WEAK_AXIS_BOOST: Record<string, number> = {
+const WEAK_AXIS_BOOST: Partial<Record<ParamKey, number>> = {
   burnRate: 1.5, moat: 1.5, shipRate: 1.5, foresight: 1.5, pivotSpeed: 1.3,
   spite: 1.3, leverage: 1.0, networking: 1.0, greed: 1.0, pacing: 1.0, cunning: 1.0,
+  lift: 1.2, parry: 1.2, chase: 1.2, discipline: 1.2,
 };
 
 function attributeCoverage(roster: Candidate[]): number {
-  const attrs = [
-    "burnRate", "moat", "shipRate", "foresight", "pivotSpeed",
-    "leverage", "networking", "spite", "greed", "pacing", "cunning",
-  ] as const;
-  const ranges: Record<string, [number, number]> = {
-    burnRate: [0, 1], moat: [0, 300], shipRate: [0, 1], foresight: [0, 0.25],
-    pivotSpeed: [0, 1], leverage: [-1, 1], networking: [0, 1], spite: [-1, 1],
-    greed: [0, 1], pacing: [0, 1], cunning: [0, 1],
-  };
+  const attrs = USER_KNOBS;
   let sum = 0;
   let weightSum = 0;
   for (const k of attrs) {
-    const [lo, hi] = ranges[k];
+    const [lo, hi] = RANGES[k];
     const vals = roster.map((r) => {
       const v = r.config.attributes[k];
       if (typeof v === "number") return v;

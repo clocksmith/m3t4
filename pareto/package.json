@@ -7,7 +7,8 @@
     "build": "tsc",
     "sweep": "tsc && node dist/sweep.js",
     "evolve": "tsc && node dist/evolve.js",
-    "phantom-gate": "tsc && node dist/phantom-gate.js"
+    "phantom-gate": "tsc && node dist/phantom-gate.js",
+    "trace-nav": "tsc && node dist/trace-nav.js"
   },
   "dependencies": {
     "@m3t4/sim": "file:../sim",

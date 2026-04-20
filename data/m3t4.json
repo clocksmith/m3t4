@@ -1,0 +1,600 @@
+{
+  "stables": {
+    "system:standby": {
+      "userId": "system:standby",
+      "handle": "sys_standby",
+      "slots": [
+        {
+          "slotId": "sys-standby",
+          "config": {
+            "id": "standby",
+            "attributes": {
+              "burnRate": 1,
+              "moat": 150,
+              "shipRate": 0.45,
+              "foresight": 0,
+              "pivotSpeed": 0.15,
+              "leverage": -0.9,
+              "networking": 0.05,
+              "hallucination": 0,
+              "spite": 0.1,
+              "greed": 0.15,
+              "pacing": 0.36,
+              "cunning": 0
+            }
+          },
+          "name": "standby",
+          "submittedAt": 1776701873198,
+          "rateLockedUntil": 0,
+          "elo": 1000,
+          "wins": 0,
+          "losses": 0,
+          "draws": 0,
+          "lastPlayedAt": 1776701873198
+        }
+      ],
+      "createdAt": 1776701873198,
+      "updatedAt": 1776703159329
+    },
+    "system:blitz": {
+      "userId": "system:blitz",
+      "handle": "sys_blitz",
+      "slots": [
+        {
+          "slotId": "sys-blitz",
+          "config": {
+            "id": "blitz",
+            "attributes": {
+              "burnRate": 0,
+              "moat": 126,
+              "shipRate": 0.27,
+              "foresight": 0.0075,
+              "pivotSpeed": 0.8,
+              "leverage": 1,
+              "networking": 0.15,
+              "hallucination": 0,
+              "spite": -0.32,
+              "greed": 0,
+              "pacing": 0.25,
+              "cunning": 0.03
+            }
+          },
+          "name": "blitz",
+          "submittedAt": 1776701873198,
+          "rateLockedUntil": 0,
+          "elo": 1000,
+          "wins": 0,
+          "losses": 0,
+          "draws": 0,
+          "lastPlayedAt": 1776701873198
+        }
+      ],
+      "createdAt": 1776701873198,
+      "updatedAt": 1776703159329
+    },
+    "system:incumbent": {
+      "userId": "system:incumbent",
+      "handle": "sys_incumbent",
+      "slots": [
+        {
+          "slotId": "sys-incumbent",
+          "config": {
+            "id": "incumbent",
+            "attributes": {
+              "burnRate": 0.42,
+              "moat": 123,
+              "shipRate": 0,
+              "foresight": 0.0125,
+              "pivotSpeed": 0.56,
+              "leverage": -1,
+              "networking": 1,
+              "hallucination": 0,
+              "spite": -1,
+              "greed": 0,
+              "pacing": 1,
+              "cunning": 0
+            }
+          },
+          "name": "incumbent",
+          "submittedAt": 1776701873198,
+          "rateLockedUntil": 0,
+          "elo": 1000,
+          "wins": 0,
+          "losses": 0,
+          "draws": 0,
+          "lastPlayedAt": 1776701873198
+        }
+      ],
+      "createdAt": 1776701873198,
+      "updatedAt": 1776703159329
+    },
+    "system:pivot": {
+      "userId": "system:pivot",
+      "handle": "sys_pivot",
+      "slots": [
+        {
+          "slotId": "sys-pivot",
+          "config": {
+            "id": "pivot",
+            "attributes": {
+              "burnRate": 0.63,
+              "moat": 0,
+              "shipRate": 0.82,
+              "foresight": 0.185,
+              "pivotSpeed": 0,
+              "leverage": -1,
+              "networking": 0.61,
+              "hallucination": 0,
+              "spite": -1,
+              "greed": 0.7,
+              "pacing": 0.1,
+              "cunning": 0
+            }
+          },
+          "name": "pivot",
+          "submittedAt": 1776701873198,
+          "rateLockedUntil": 0,
+          "elo": 1000,
+          "wins": 0,
+          "losses": 0,
+          "draws": 0,
+          "lastPlayedAt": 1776701873198
+        }
+      ],
+      "createdAt": 1776701873198,
+      "updatedAt": 1776703159329
+    },
+    "system:unicorn": {
+      "userId": "system:unicorn",
+      "handle": "sys_unicorn",
+      "slots": [
+        {
+          "slotId": "sys-unicorn",
+          "config": {
+            "id": "unicorn",
+            "attributes": {
+              "burnRate": 1,
+              "moat": 0,
+              "shipRate": 0,
+              "foresight": 0.0175,
+              "pivotSpeed": 0.92,
+              "leverage": -0.9,
+              "networking": 0.1,
+              "hallucination": 0,
+              "spite": -1,
+              "greed": 0.67,
+              "pacing": 0,
+              "cunning": 0
+            }
+          },
+          "name": "unicorn",
+          "submittedAt": 1776701873198,
+          "rateLockedUntil": 0,
+          "elo": 1000,
+          "wins": 0,
+          "losses": 0,
+          "draws": 0,
+          "lastPlayedAt": 1776701873198
+        }
+      ],
+      "createdAt": 1776701873198,
+      "updatedAt": 1776703159329
+    },
+    "system:disruptor": {
+      "userId": "system:disruptor",
+      "handle": "sys_disruptor",
+      "slots": [
+        {
+          "slotId": "sys-disruptor",
+          "config": {
+            "id": "disruptor",
+            "attributes": {
+              "burnRate": 0.4402,
+              "moat": 0,
+              "shipRate": 0.8707,
+              "foresight": 0,
+              "pivotSpeed": 0.0293,
+              "leverage": -1,
+              "networking": 0.0293,
+              "hallucination": 0,
+              "spite": -0.6478,
+              "greed": 0.9783,
+              "pacing": 0.9783,
+              "cunning": 0.0978
+            }
+          },
+          "name": "disruptor",
+          "submittedAt": 1776701873198,
+          "rateLockedUntil": 0,
+          "elo": 1000,
+          "wins": 0,
+          "losses": 0,
+          "draws": 0,
+          "lastPlayedAt": 1776701873198
+        }
+      ],
+      "createdAt": 1776701873198,
+      "updatedAt": 1776703159329
+    },
+    "system:operator": {
+      "userId": "system:operator",
+      "handle": "sys_operator",
+      "slots": [
+        {
+          "slotId": "sys-operator",
+          "config": {
+            "id": "operator",
+            "attributes": {
+              "burnRate": 0.58,
+              "moat": 9,
+              "shipRate": 0,
+              "foresight": 0.25,
+              "pivotSpeed": 0,
+              "leverage": -0.94,
+              "networking": 0,
+              "hallucination": 0,
+              "spite": 0.46,
+              "greed": 0,
+              "pacing": 0,
+              "cunning": 0
+            }
+          },
+          "name": "operator",
+          "submittedAt": 1776701873198,
+          "rateLockedUntil": 0,
+          "elo": 1000,
+          "wins": 0,
+          "losses": 0,
+          "draws": 0,
+          "lastPlayedAt": 1776701873198
+        }
+      ],
+      "createdAt": 1776701873198,
+      "updatedAt": 1776703159329
+    },
+    "system:oracle": {
+      "userId": "system:oracle",
+      "handle": "sys_oracle",
+      "slots": [
+        {
+          "slotId": "sys-oracle",
+          "config": {
+            "id": "oracle",
+            "attributes": {
+              "burnRate": 0.11,
+              "moat": 0,
+              "shipRate": 0,
+              "foresight": 0,
+              "pivotSpeed": 0,
+              "leverage": 0.24,
+              "networking": 0.47,
+              "hallucination": 0,
+              "spite": 0.6,
+              "greed": 0.15,
+              "pacing": 0.88,
+              "cunning": 0
+            }
+          },
+          "name": "oracle",
+          "submittedAt": 1776701873198,
+          "rateLockedUntil": 0,
+          "elo": 1000,
+          "wins": 0,
+          "losses": 0,
+          "draws": 0,
+          "lastPlayedAt": 1776701873198
+        }
+      ],
+      "createdAt": 1776701873198,
+      "updatedAt": 1776703159329
+    },
+    "system:shipper": {
+      "userId": "system:shipper",
+      "handle": "sys_shipper",
+      "slots": [
+        {
+          "slotId": "sys-shipper",
+          "config": {
+            "id": "shipper",
+            "attributes": {
+              "burnRate": 0.94,
+              "moat": 12,
+              "shipRate": 0,
+              "foresight": 0,
+              "pivotSpeed": 0.11,
+              "leverage": -1,
+              "networking": 1,
+              "hallucination": 0,
+              "spite": -0.84,
+              "greed": 0,
+              "pacing": 0,
+              "cunning": 0
+            }
+          },
+          "name": "shipper",
+          "submittedAt": 1776701873198,
+          "rateLockedUntil": 0,
+          "elo": 1000,
+          "wins": 0,
+          "losses": 0,
+          "draws": 0,
+          "lastPlayedAt": 1776701873198
+        }
+      ],
+      "createdAt": 1776701873198,
+      "updatedAt": 1776703159329
+    },
+    "system:moonshot": {
+      "userId": "system:moonshot",
+      "handle": "sys_moonshot",
+      "slots": [
+        {
+          "slotId": "sys-moonshot",
+          "config": {
+            "id": "moonshot",
+            "attributes": {
+              "burnRate": 0.9,
+              "moat": 0,
+              "shipRate": 0.97,
+              "foresight": 0.025,
+              "pivotSpeed": 1,
+              "leverage": -1,
+              "networking": 0,
+              "hallucination": 0,
+              "spite": -0.32,
+              "greed": 0,
+              "pacing": 0.02,
+              "cunning": 0
+            }
+          },
+          "name": "moonshot",
+          "submittedAt": 1776701873198,
+          "rateLockedUntil": 0,
+          "elo": 1000,
+          "wins": 0,
+          "losses": 0,
+          "draws": 0,
+          "lastPlayedAt": 1776701873198
+        }
+      ],
+      "createdAt": 1776701873198,
+      "updatedAt": 1776703159329
+    },
+    "system:regulatory": {
+      "userId": "system:regulatory",
+      "handle": "sys_regulatory",
+      "slots": [
+        {
+          "slotId": "sys-regulatory",
+          "config": {
+            "id": "regulatory",
+            "attributes": {
+              "burnRate": 0.74,
+              "moat": 195,
+              "shipRate": 0,
+              "foresight": 0.1625,
+              "pivotSpeed": 0.92,
+              "leverage": -0.78,
+              "networking": 0,
+              "hallucination": 0,
+              "spite": -0.22,
+              "greed": 0,
+              "pacing": 0.03,
+              "cunning": 0
+            }
+          },
+          "name": "regulatory",
+          "submittedAt": 1776701873198,
+          "rateLockedUntil": 0,
+          "elo": 1000,
+          "wins": 0,
+          "losses": 0,
+          "draws": 0,
+          "lastPlayedAt": 1776701873198
+        }
+      ],
+      "createdAt": 1776701873198,
+      "updatedAt": 1776703159329
+    },
+    "system:founder": {
+      "userId": "system:founder",
+      "handle": "sys_founder",
+      "slots": [
+        {
+          "slotId": "sys-founder",
+          "config": {
+            "id": "founder",
+            "attributes": {
+              "burnRate": 0.4402,
+              "moat": 0,
+              "shipRate": 0.8707,
+              "foresight": 0,
+              "pivotSpeed": 0,
+              "leverage": -1,
+              "networking": 0.0293,
+              "hallucination": 0,
+              "spite": 0.46,
+              "greed": 0.9783,
+              "pacing": 0,
+              "cunning": 0.0978
+            }
+          },
+          "name": "founder",
+          "submittedAt": 1776701873198,
+          "rateLockedUntil": 0,
+          "elo": 1000,
+          "wins": 0,
+          "losses": 0,
+          "draws": 0,
+          "lastPlayedAt": 1776701873198
+        }
+      ],
+      "createdAt": 1776701873198,
+      "updatedAt": 1776703159329
+    },
+    "system:acolyte": {
+      "userId": "system:acolyte",
+      "handle": "sys_acolyte",
+      "slots": [
+        {
+          "slotId": "sys-acolyte",
+          "config": {
+            "id": "acolyte",
+            "attributes": {
+              "burnRate": 0.89,
+              "moat": 9,
+              "shipRate": 0.27,
+              "foresight": 0.1525,
+              "pivotSpeed": 0.1,
+              "leverage": -1,
+              "networking": 0.43,
+              "hallucination": 0,
+              "spite": -1,
+              "greed": 0,
+              "pacing": 0.83,
+              "cunning": 0
+            }
+          },
+          "name": "acolyte",
+          "submittedAt": 1776701873198,
+          "rateLockedUntil": 0,
+          "elo": 1000,
+          "wins": 0,
+          "losses": 0,
+          "draws": 0,
+          "lastPlayedAt": 1776701873198
+        }
+      ],
+      "createdAt": 1776701873198,
+      "updatedAt": 1776703159329
+    },
+    "system:intern": {
+      "userId": "system:intern",
+      "handle": "sys_intern",
+      "slots": [
+        {
+          "slotId": "sys-intern",
+          "config": {
+            "id": "intern",
+            "attributes": {
+              "burnRate": 0.1,
+              "moat": 96,
+              "shipRate": 0.36,
+              "foresight": 0.085,
+              "pivotSpeed": 0.27,
+              "leverage": -0.28,
+              "networking": 0.54,
+              "hallucination": 0,
+              "spite": -0.4,
+              "greed": 0.4,
+              "pacing": 0.27,
+              "cunning": 0.27
+            }
+          },
+          "name": "intern",
+          "submittedAt": 1776701873198,
+          "rateLockedUntil": 0,
+          "elo": 1000,
+          "wins": 0,
+          "losses": 0,
+          "draws": 0,
+          "lastPlayedAt": 1776701873198
+        }
+      ],
+      "createdAt": 1776701873198,
+      "updatedAt": 1776703159329
+    },
+    "system:troll": {
+      "userId": "system:troll",
+      "handle": "sys_troll",
+      "slots": [
+        {
+          "slotId": "sys-troll",
+          "config": {
+            "id": "troll",
+            "attributes": {
+              "burnRate": 0.48,
+              "moat": 111,
+              "shipRate": 0.98,
+              "foresight": 0.145,
+              "pivotSpeed": 0.38,
+              "leverage": -1,
+              "networking": 0,
+              "hallucination": 0,
+              "spite": 0.6,
+              "greed": 0,
+              "pacing": 0,
+              "cunning": 0
+            }
+          },
+          "name": "troll",
+          "submittedAt": 1776701873198,
+          "rateLockedUntil": 0,
+          "elo": 1000,
+          "wins": 0,
+          "losses": 0,
+          "draws": 0,
+          "lastPlayedAt": 1776701873198
+        }
+      ],
+      "createdAt": 1776701873198,
+      "updatedAt": 1776703159329
+    },
+    "system:acquirer": {
+      "userId": "system:acquirer",
+      "handle": "sys_acquirer",
+      "slots": [
+        {
+          "slotId": "sys-acquirer",
+          "config": {
+            "id": "acquirer",
+            "attributes": {
+              "burnRate": 0.58,
+              "moat": 222,
+              "shipRate": 0.69,
+              "foresight": 0,
+              "pivotSpeed": 0,
+              "leverage": -1,
+              "networking": 0.71,
+              "hallucination": 0,
+              "spite": -1,
+              "greed": 0.8,
+              "pacing": 0,
+              "cunning": 0.08
+            }
+          },
+          "name": "acquirer",
+          "submittedAt": 1776701873198,
+          "rateLockedUntil": 0,
+          "elo": 1000,
+          "wins": 0,
+          "losses": 0,
+          "draws": 0,
+          "lastPlayedAt": 1776701873198
+        }
+      ],
+      "createdAt": 1776701873198,
+      "updatedAt": 1776703159329
+    }
+  },
+  "handles": {
+    "sys_standby": "system:standby",
+    "sys_blitz": "system:blitz",
+    "sys_incumbent": "system:incumbent",
+    "sys_pivot": "system:pivot",
+    "sys_unicorn": "system:unicorn",
+    "sys_disruptor": "system:disruptor",
+    "sys_operator": "system:operator",
+    "sys_oracle": "system:oracle",
+    "sys_shipper": "system:shipper",
+    "sys_moonshot": "system:moonshot",
+    "sys_regulatory": "system:regulatory",
+    "sys_founder": "system:founder",
+    "sys_acolyte": "system:acolyte",
+    "sys_intern": "system:intern",
+    "sys_troll": "system:troll",
+    "sys_acquirer": "system:acquirer"
+  },
+  "replays": {},
+  "version": 1
+}

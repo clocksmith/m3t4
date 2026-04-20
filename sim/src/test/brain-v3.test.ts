@@ -54,8 +54,8 @@ function defaultParams(overrides: Partial<Params> = {}): Params {
 
 // --- Tests ---
 
-test("BEHAVIOR_VERSION is 7", () => {
-  assert.equal(BEHAVIOR_VERSION, 7);
+test("BEHAVIOR_VERSION is 8", () => {
+  assert.equal(BEHAVIOR_VERSION, 8);
 });
 
 test("createBrainState initializes neutral with empty buffers", () => {
@@ -217,6 +217,87 @@ test("objective-deliver can fight a blocker instead of always jumping over", () 
   assert.equal(state.substate, "deliver");
   assert.equal(action.action, true, "carrier should resolve a close blocker with a swing");
   assert.notEqual(action.up, true, "carrier should not take the old jump-over branch");
+});
+
+test("v8 lift commits to a reachable high-goal jump instead of platform detour", () => {
+  const obs = baseObs({
+    tick: 200,
+    self: { ...baseObs().self, hasToken: true, x: 600, y: 600, onGround: true },
+    opp: { ...baseObs().opp, x: 900, y: 600 },
+    token: { exists: true, x: 600, y: 548, carrier: 0, dwellT: 0 },
+    goal: { exists: true, x: 660, y: 500, label: "g1", timer: 8 },
+    platforms: [{ x: 100, y: 520, w: 100, h: 14, solid: false }],
+    dx: 300, absDx: 300, dy: 0,
+  });
+
+  const low = createBrainState(0);
+  const lowAction = runParamBrain(obs, defaultParams({ lift: 0 }), low);
+  assert.notEqual(lowAction.up, true, "low lift preserves platform-routing behavior");
+
+  const high = createBrainState(0);
+  const highAction = runParamBrain(obs, defaultParams({ lift: 1 }), high);
+  assert.equal(highAction.up, true, "high lift takes the direct high-goal jump");
+  assert.equal(highAction.right, true, "high lift still drives toward the goal x");
+});
+
+test("v8 parry is silent at zero and counter-swings only in foil windows", () => {
+  const obs = baseObs({
+    tick: 200,
+    self: { ...baseObs().self, x: 600, y: 600, swipeCD: 0, invuln: 0.2, lastAttackStartTick: 190 },
+    opp: { ...baseObs().opp, x: 670, y: 600, swipeT: 0, diveT: 0 },
+    dx: 70, absDx: 70, dy: 0,
+  });
+
+  const low = createBrainState(0);
+  low.mode = "offense";
+  low.substate = "press";
+  low.modeEnterTick = 150;
+  const lowAction = runParamBrain(obs, defaultParams({ burnRate: 0, parry: 0 }), low);
+  assert.notEqual(lowAction.action, true, "zero parry does not create a new counter-swing");
+
+  const high = createBrainState(0);
+  high.mode = "offense";
+  high.substate = "press";
+  high.modeEnterTick = 150;
+  const highAction = runParamBrain(obs, defaultParams({ burnRate: 0, parry: 1 }), high);
+  assert.equal(highAction.action, true, "high parry counter-swings inside passive-foil range");
+});
+
+test("v8 chase pressures opponent respawn after a kill", () => {
+  const obs = baseObs({
+    tick: 200,
+    self: { ...baseObs().self, id: 0, x: 600, y: 600, lastKillTick: 140 },
+    opp: { ...baseObs().opp, x: 700, y: 600, vx: 300, dead: true },
+    dx: 100, absDx: 100, dy: 0,
+  });
+
+  const low = createBrainState(0);
+  const lowAction = runParamBrain(obs, defaultParams({ moat: 120, greed: 0, cunning: 0, chase: 0 }), low);
+  assert.notEqual(lowAction.right, true, "zero chase keeps the old neutral spacing response");
+
+  const high = createBrainState(0);
+  const highAction = runParamBrain(obs, defaultParams({ moat: 120, greed: 0, cunning: 0, chase: 1 }), high);
+  assert.equal(highAction.right, true, "high chase moves toward the opponent home side");
+});
+
+test("v8 discipline commits to route instead of early jump-over detour", () => {
+  const obs = baseObs({
+    tick: 200,
+    self: { ...baseObs().self, hasToken: true, x: 600, y: 600, swipeCD: 1 },
+    opp: { ...baseObs().opp, x: 710, y: 600 },
+    token: { exists: true, x: 600, y: 548, carrier: 0, dwellT: 0 },
+    goal: { exists: true, x: 900, y: 574, label: "g1", timer: 8 },
+    dx: 110, absDx: 110, dy: 0,
+  });
+
+  const low = createBrainState(0);
+  const lowAction = runParamBrain(obs, defaultParams({ shipRate: 1, discipline: 0 }), low);
+  assert.equal(lowAction.up, true, "low discipline may detour over a medium-distance blocker");
+
+  const high = createBrainState(0);
+  const highAction = runParamBrain(obs, defaultParams({ shipRate: 1, discipline: 1 }), high);
+  assert.notEqual(highAction.up, true, "high discipline keeps the shortest route until blocker is closer");
+  assert.equal(highAction.right, true, "high discipline continues toward the goal");
 });
 
 test("determinism: same seed produces identical log hashes with v4", () => {

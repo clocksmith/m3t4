@@ -12,6 +12,10 @@ export const PARAM_KEYS = [
     "greed", //  0..1:  how hard to push through danger to deliver
     "pacing", //  0..1:  rhythmic burst pattern on burnRate
     "cunning", //  0..1:  swing timing — patient counter vs reckless
+    "lift", //  0..1:  direct vertical commitment toward reachable objectives
+    "parry", //  0..1:  counter-swing reflex in foil/clash windows
+    "chase", //  0..1:  post-kill pursuit pressure
+    "discipline", //  0..1:  route commitment and plan adherence
     // -------------------------------------------------------------
     "hallucination",
 ];
@@ -27,6 +31,10 @@ export const DEFAULT_PARAMS = {
     greed: 0.5,
     pacing: 0.0,
     cunning: 0.5,
+    lift: 0.0,
+    parry: 0.0,
+    chase: 0.0,
+    discipline: 0.0,
     hallucination: 0,
 };
 function emptyModeRecord() {

@@ -1,13 +1,11 @@
-// Stage visual kits. Game-logic layout lives in @m3t4/sim/stage.ts;
-// this file declares only backgrounds, palettes, parallax layers, and
-// ambient visuals. Launch ships one playable stage; the others are marked
-// preview so the UI can render coming-soon thumbnails.
+// Stage visual kits. Game-logic layout lives in @m3t4/sim/stage.ts.
+// This file declares only backgrounds, palettes, parallax layers, particles,
+// and textures. Copy/audio/goal labels live outside theming.
 
 import type { TextureRef, AssetStatus } from "./assets.js";
 
 export interface StageVisual {
   id: string;
-  name: string;
   status: AssetStatus;
   palette: {
     skyTop: string;
@@ -18,8 +16,6 @@ export interface StageVisual {
     ambient: string;
   };
   backdropMotif: "server-racks" | "boardroom-table" | "stage-with-crowd";
-  audioLoop: string;               // track id resolved by client audio manifest
-  voiceLineMix: "boardroom" | "demoday" | "datacenter";
 
   // Populated for status: "playable". Empty URLs for preview/hidden entries.
   layers: {
@@ -61,7 +57,6 @@ const emptyTextures = () => ({
 export const STAGE_VISUALS: Record<string, StageVisual> = {
   datacenter: {
     id: "datacenter",
-    name: "Datacenter",
     status: "playable",
     palette: {
       skyTop: "#141020",
@@ -72,15 +67,12 @@ export const STAGE_VISUALS: Record<string, StageVisual> = {
       ambient: "rgba(255,255,255,0.015)",
     },
     backdropMotif: "server-racks",
-    audioLoop: "amb_hum_low",
-    voiceLineMix: "datacenter",
     layers: emptyLayers(),
     textures: emptyTextures(),
     particles: ["particle-dust", "particle-spark", "particle-datacenter-packet"],
   },
   boardroom: {
     id: "boardroom",
-    name: "Boardroom",
     status: "preview",
     palette: {
       skyTop: "#1a1220",
@@ -91,8 +83,6 @@ export const STAGE_VISUALS: Record<string, StageVisual> = {
       ambient: "rgba(240,220,180,0.02)",
     },
     backdropMotif: "boardroom-table",
-    audioLoop: "amb_paper_rustle",
-    voiceLineMix: "boardroom",
     layers: emptyLayers(),
     textures: emptyTextures(),
     particles: [],
@@ -100,7 +90,6 @@ export const STAGE_VISUALS: Record<string, StageVisual> = {
   },
   demoday: {
     id: "demoday",
-    name: "Demo Day",
     status: "preview",
     palette: {
       skyTop: "#1a1030",
@@ -111,8 +100,6 @@ export const STAGE_VISUALS: Record<string, StageVisual> = {
       ambient: "rgba(168,85,247,0.03)",
     },
     backdropMotif: "stage-with-crowd",
-    audioLoop: "amb_crowd_murmur",
-    voiceLineMix: "demoday",
     layers: emptyLayers(),
     textures: emptyTextures(),
     particles: [],

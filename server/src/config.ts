@@ -70,5 +70,11 @@ export const CONFIG = {
     communityVerify: envFlag("FEATURE_COMMUNITY_VERIFY", false),
     proofLab: envFlag("FEATURE_PROOF_LAB", false),
     zk: envFlag("FEATURE_ZK", false),
+    // Plasma-style opt-in distributed compute. Off by default. When on,
+    // registers /api/compute/* routes and the spectator UI shows a
+    // "donate idle cycles" panel. Task definition is the limiting
+    // factor for real workloads; the transport + receipt + quorum
+    // pipeline exists whether or not any task is defined.
+    distributedCompute: envFlag("FEATURE_DISTRIBUTED_COMPUTE", false),
   },
 } as const;

@@ -47,7 +47,9 @@ const dumbShipper: BrainConfig = {
   id: "dumb-shipper-control",
   attributes: {
     burnRate: 0, moat: 0, shipRate: 1.0, foresight: 0,
-    pivotSpeed: 0, leverage: 0, networking: 0, hallucination: 0,
+    pivotSpeed: 0, leverage: 0, networking: 0, spite: 0,
+    greed: 0, pacing: 0, cunning: 0, lift: 0,
+    parry: 0, chase: 0, discipline: 0, hallucination: 0,
   },
 };
 

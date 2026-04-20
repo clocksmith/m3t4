@@ -1,5 +1,4 @@
 // Submit mode — auth + handle claim + slot management.
-// Dev-mode auth: pick a UID, bearer token IS that UID (matches server).
 
 import { auth } from "../lib/auth.js";
 import * as api from "../lib/api.js";
@@ -29,6 +28,9 @@ function render() {
 
 function renderSignIn() {
   setStatus("submit · not signed in");
+  const authError = auth.error?.();
+  if (auth.mode === "firebase") return renderFirebaseSignIn(authError);
+
   root.innerHTML = `
     <div class="page">
       <div class="page-header">
@@ -58,6 +60,40 @@ function renderSignIn() {
   root.querySelector("#uid-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter") root.querySelector("#signin-btn").click();
   });
+}
+
+function renderFirebaseSignIn(authError) {
+  root.innerHTML = `
+    <div class="page">
+      <div class="page-header">
+        <h1>Submit <small>— sign in first</small></h1>
+      </div>
+      <div class="panel">
+        <h3>Sign in</h3>
+        <p class="tight" style="margin-bottom:12px;">
+          Ranked submissions require Firebase auth. Production builds must
+          provide window.__M3T4_FIREBASE_CONFIG__ before app.js loads.
+        </p>
+        <div class="row">
+          <button id="signin-google" class="primary">sign in with Google</button>
+          <button id="signin-github">sign in with GitHub</button>
+        </div>
+        <div class="error" id="signin-err">${authError ? escapeHtml(authError) : ""}</div>
+      </div>
+    </div>`;
+
+  async function doSignIn(provider) {
+    const err = root.querySelector("#signin-err");
+    err.textContent = "";
+    try {
+      await auth.signIn(provider);
+    } catch (e) {
+      err.textContent = e.message;
+    }
+  }
+
+  root.querySelector("#signin-google").addEventListener("click", () => doSignIn("google"));
+  root.querySelector("#signin-github").addEventListener("click", () => doSignIn("github"));
 }
 
 async function renderDashboard(user) {
@@ -129,7 +165,7 @@ function wireClaimHandle() {
     const err = root.querySelector("#handle-err");
     err.textContent = "";
     try {
-      const r = await api.claimHandle(auth.token(), input.value.trim());
+      const r = await api.claimHandle(await auth.token(), input.value.trim());
       auth.setHandle(r.handle);
     } catch (e) { err.textContent = e.message; }
   });
@@ -146,7 +182,7 @@ function wireSubmit(user) {
       const nameInput = root.querySelector("#slot-name").value.trim();
       const text = root.querySelector("#config-json").value;
       const cfg = JSON.parse(text);
-      const r = await api.submitSlot(auth.token(), slotIdx, cfg, nameInput || undefined);
+      const r = await api.submitSlot(await auth.token(), slotIdx, cfg, nameInput || undefined);
       msg.className = "ok";
       msg.textContent = `submitted · slotId=${r.slotId}`;
       sessionStorage.removeItem("m3t4:pendingSubmit");
@@ -180,4 +216,14 @@ async function loadStable(user) {
     if (e.status === 404) el.textContent = "no slots yet — submit your first config below";
     else el.textContent = `error: ${e.message}`;
   }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  }[c]));
 }

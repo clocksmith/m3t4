@@ -35,6 +35,9 @@
     if (!window.__M3T4_API_ORIGIN__ && !["localhost", "127.0.0.1"].includes(location.hostname)) {
       window.__M3T4_API_ORIGIN__ = "https://api.m3t4.ai";
     }
+    if (!window.__M3T4_AUTH_MODE__) {
+      window.__M3T4_AUTH_MODE__ = ["localhost", "127.0.0.1"].includes(location.hostname) ? "dev" : "firebase";
+    }
   </script>
   <script type="module" src="app.js"></script>
 </body>

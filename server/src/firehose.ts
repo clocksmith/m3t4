@@ -14,6 +14,7 @@ import type { WebSocket } from "ws";
 import { CONFIG } from "./config.js";
 import type { StableStore, Stable, Slot } from "./stable.js";
 import { updatePair } from "./elo.js";
+import { shouldLogWatchlist, summarizeWatchlistMatch, watchlistTagsForSlot, type WatchlistTag } from "./watchlist.js";
 
 export interface Client {
   ws: WebSocket;
@@ -35,6 +36,7 @@ export class Firehose {
     a: { userId: string; handle: string; slotId: string; name: string; elo: number };
     b: { userId: string; handle: string; slotId: string; name: string; elo: number };
     stageId: string;
+    watchlist?: { a: WatchlistTag[]; b: WatchlistTag[] };
   } | null = null;
 
   constructor(private store: StableStore) {}
@@ -117,11 +119,16 @@ export class Firehose {
     const matchId = `${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
     const stage = STAGES[p.stageId as keyof typeof STAGES];
     const seed = (Date.now() ^ (p.aSlot.elo << 3) ^ p.bSlot.elo) >>> 0;
+    const watchlistTags = {
+      a: watchlistTagsForSlot(p.aSlot),
+      b: watchlistTagsForSlot(p.bSlot),
+    };
     this.currentMatch = {
       matchId,
       a: { userId: p.a.userId, handle: p.a.handle, slotId: p.aSlot.slotId, name: p.aSlot.name, elo: p.aSlot.elo },
       b: { userId: p.b.userId, handle: p.b.handle, slotId: p.bSlot.slotId, name: p.bSlot.name, elo: p.bSlot.elo },
       stageId: p.stageId,
+      watchlist: watchlistTags,
     };
 
     this.broadcast({
@@ -186,6 +193,10 @@ export class Firehose {
     // ELO + score update
     const { a: newA, b: newB } = updatePair(p.aSlot.elo, p.bSlot.elo, trace.result.winner);
     const now = Date.now();
+    const watchlist = summarizeWatchlistMatch(trace.result, watchlistTags);
+    if (shouldLogWatchlist(watchlist)) {
+      console.log("[watchlist]", JSON.stringify({ matchId, ...watchlist }));
+    }
     await this.store.archiveReplay(replay);
     await this.store.updateAfterMatch({
       aUserId: p.a.userId, aSlotId: p.aSlot.slotId, aEloBefore: p.aSlot.elo, aEloAfter: newA,
@@ -204,6 +215,7 @@ export class Firehose {
       replayArchived: true,
       eloBefore: [p.aSlot.elo, p.bSlot.elo],
       eloAfter: [newA, newB],
+      watchlist,
     });
     this.currentMatch = null;
   }

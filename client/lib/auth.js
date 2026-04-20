@@ -1,12 +1,21 @@
-// Auth wrapper. Dev mode: user picks a UID, stored in localStorage. Prod
-// mode (later): Firebase Auth with Google + GitHub providers.
+// Auth wrapper. Local dev can pick a UID. Production uses Firebase Auth
+// when window.__M3T4_FIREBASE_CONFIG__ is supplied by deploy-time config.
 
 const KEY_UID = "m3t4:uid";
 const KEY_HANDLE = "m3t4:handle";
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", ""]);
+const IS_LOCAL = typeof location === "undefined" || LOCAL_HOSTS.has(location.hostname);
+
+function configuredAuthMode() {
+  const requested = window.__M3T4_AUTH_MODE__ || (IS_LOCAL ? "dev" : "firebase");
+  if (!IS_LOCAL && requested === "dev") return "firebase";
+  return requested;
+}
 
 class DevAuth {
   constructor() {
     this._listeners = new Set();
+    this.mode = "dev";
   }
 
   user() {
@@ -33,16 +42,94 @@ class DevAuth {
     this._emit();
   }
 
-  token() {
+  async token() {
     // Dev mode: bearer token IS the UID. Server's dev-mode verifier accepts it.
     return localStorage.getItem(KEY_UID) || "";
   }
 
+  error() { return null; }
   onChange(cb) { this._listeners.add(cb); return () => this._listeners.delete(cb); }
   _emit() { for (const cb of this._listeners) try { cb(); } catch {} }
 }
 
-// Single instance
-export const auth = new DevAuth();
+class FirebaseAuth {
+  constructor(config) {
+    this.mode = "firebase";
+    this._listeners = new Set();
+    this._user = null;
+    this._error = null;
+    this._auth = null;
+    this._sdk = null;
+    this._ready = this._init(config);
+  }
 
-// Future: wire Firebase here, swap via window.__M3T4_AUTH_MODE__
+  async _init(config) {
+    try {
+      if (!config?.apiKey || !config?.authDomain || !config?.projectId || !config?.appId) {
+        throw new Error("Firebase client config missing");
+      }
+      const version = window.__M3T4_FIREBASE_SDK_VERSION__ || "10.13.2";
+      const [appSdk, authSdk] = await Promise.all([
+        import(`https://www.gstatic.com/firebasejs/${version}/firebase-app.js`),
+        import(`https://www.gstatic.com/firebasejs/${version}/firebase-auth.js`),
+      ]);
+      const app = appSdk.getApps().length ? appSdk.getApps()[0] : appSdk.initializeApp(config);
+      this._auth = authSdk.getAuth(app);
+      this._sdk = authSdk;
+      authSdk.onAuthStateChanged(this._auth, (user) => {
+        this._user = user;
+        this._emit();
+      });
+    } catch (e) {
+      this._error = e instanceof Error ? e : new Error(String(e));
+      this._emit();
+    }
+  }
+
+  user() {
+    if (!this._user) return null;
+    return {
+      uid: this._user.uid,
+      email: this._user.email || null,
+      displayName: this._user.displayName || null,
+      handle: localStorage.getItem(KEY_HANDLE) || null,
+    };
+  }
+
+  async signIn(provider = "google") {
+    await this._ready;
+    if (this._error) throw this._error;
+    const Provider = provider === "github"
+      ? this._sdk.GithubAuthProvider
+      : this._sdk.GoogleAuthProvider;
+    await this._sdk.signInWithPopup(this._auth, new Provider());
+    return this.user();
+  }
+
+  async signOut() {
+    await this._ready;
+    if (this._auth) await this._sdk.signOut(this._auth);
+    localStorage.removeItem(KEY_HANDLE);
+    this._emit();
+  }
+
+  setHandle(h) {
+    localStorage.setItem(KEY_HANDLE, h);
+    this._emit();
+  }
+
+  async token() {
+    await this._ready;
+    if (this._error) throw this._error;
+    if (!this._auth?.currentUser) throw new Error("not signed in");
+    return this._auth.currentUser.getIdToken();
+  }
+
+  error() { return this._error?.message || null; }
+  onChange(cb) { this._listeners.add(cb); return () => this._listeners.delete(cb); }
+  _emit() { for (const cb of this._listeners) try { cb(); } catch {} }
+}
+
+export const auth = configuredAuthMode() === "dev"
+  ? new DevAuth()
+  : new FirebaseAuth(window.__M3T4_FIREBASE_CONFIG__);

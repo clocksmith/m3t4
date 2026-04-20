@@ -284,6 +284,16 @@ export interface BrainState {
   // start or own death," not strictly per round.
   escapeEntriesThisRound: number;
 
+  // v5.2: cumulative ticks spent in ESCAPE / ZONE within the current
+  // round-or-respawn window. Capped by ESCAPE_MAX_TICKS_PER_ROUND /
+  // ZONE_MAX_TICKS_PER_ROUND respectively. Once exceeded, decideMode
+  // force-exits the mode to NEUTRAL and blocks re-entry until reset.
+  // Addresses "stuck in safe attractor" stalemate pattern where the
+  // escape-exit distance condition (absDist > 280) never fires because
+  // opp holds the bot at medium range indefinitely.
+  escapeTicksThisRound: number;
+  zoneTicksThisRound: number;
+
   // Debug hook — reason for last mode transition. Not used in decisions.
   lastTransitionReason: string;
 }

@@ -4,7 +4,7 @@ import { GOAL_DWELL_RADIUS, GOAL_DWELL_S, KILL_RESPAWN_S, RESPAWN_INVULN_S, STAT
 // commitment window. Replaces v2's per-tick reactive ladder. Params
 // bias mode transitions and tactical details within each mode; they no
 // longer drive behavior directly via a flat if/else.
-export const BEHAVIOR_VERSION = 6;
+export const BEHAVIOR_VERSION = 7;
 // ---------- Opp-model buffer sizing ----------
 //
 // Bounded ring: max 16 entries per stream, hard decay at 240 ticks (2 s).
@@ -47,6 +47,15 @@ const CLASH_LOOP_THRESHOLD = 10;
 // becomes commit-into-trade instead. Prevents indefinite mutual flight.
 const OFFENSE_COMMIT_TIMEOUT_TICKS = 90;
 const ESCAPE_LOOP_CAP = 4;
+// v5.2 max-duration caps. When cumulative ticks in a mode exceed these,
+// decideMode force-exits to NEUTRAL and blocks re-entry until round
+// reset. Addresses the "stuck in safe attractor" pattern where a bot
+// hides in ESCAPE or camps in ZONE indefinitely because the normal
+// exit conditions (distance > 280, opp aggression < 0.2) never fire.
+// Calibrated to let the mode DO its job in a real situation without
+// becoming a permanent resting state.
+const ESCAPE_MAX_TICKS_PER_ROUND = 540; // 4.5s — escape is emergency only
+const ZONE_MAX_TICKS_PER_ROUND = 720; // 6s — zone can be sustained longer
 // Distance band used by several modes' "close enough to commit"
 // thresholds. burnRate extends effective swing reach.
 function swingRange(params) {
@@ -66,6 +75,8 @@ export function createBrainState(id) {
         lastKnownSelfClashTick: -9999,
         deliveryPlan: null,
         escapeEntriesThisRound: 0,
+        escapeTicksThisRound: 0,
+        zoneTicksThisRound: 0,
         lastTransitionReason: "init",
     };
 }
@@ -79,6 +90,8 @@ export function resetBrainStateForRound(state, tick) {
     state.modeEnterTick = tick;
     state.deliveryPlan = null; // plan's timing estimates are stale across respawn
     state.escapeEntriesThisRound = 0; // escape cap resets per round
+    state.escapeTicksThisRound = 0; // max-duration cap resets per round
+    state.zoneTicksThisRound = 0;
     state.lastTransitionReason = "round-reset";
 }
 // ---------- Opp-model update ----------
@@ -253,6 +266,16 @@ function decideMode(obs, params, state, sig) {
     const tick = obs.tick;
     const t = ticksInMode(state, tick);
     const minDur = effectiveMinDuration(state.mode, params);
+    // v5.2 max-duration force-exit. Fires before anything else so a bot
+    // overhitting the escape/zone cap cannot remain even under emergency
+    // triggers — the whole point is that the cap is final. After exit,
+    // the usual transition logic runs this tick and picks a new mode.
+    if (state.mode === "escape" && state.escapeTicksThisRound >= ESCAPE_MAX_TICKS_PER_ROUND) {
+        enterMode(state, "neutral", null, tick, "escape-duration-exceeded");
+    }
+    else if (state.mode === "zone" && state.zoneTicksThisRound >= ZONE_MAX_TICKS_PER_ROUND) {
+        enterMode(state, "neutral", null, tick, "zone-duration-exceeded");
+    }
     // --- Emergency overrides (always fire) ---
     // Own respawn: mode should already have been reset externally; defensive.
     if (obs.self.dead) {
@@ -276,12 +299,14 @@ function decideMode(obs, params, state, sig) {
             obs.self.invuln <= 0 &&
             !canMatchCommit);
     if (hardDanger && state.mode !== "escape") {
-        // v5.1 escape cap: once we've entered ESCAPE ESCAPE_LOOP_CAP times
-        // in this round, stop fleeing and commit into the trade. This is
-        // the asymmetry that breaks mutual escape-spirals in the aerial
-        // family.
-        if (state.escapeEntriesThisRound >= ESCAPE_LOOP_CAP) {
-            enterMode(state, "offense", "punish", tick, "escape-cap-commit");
+        // v5.1 escape-entry cap AND v5.2 escape-duration cap: stop fleeing
+        // once either budget is exhausted for this round. Commit into the
+        // trade instead — the whole point is that escape-as-safe-attractor
+        // cannot be a permanent strategy.
+        const escapeExhausted = state.escapeEntriesThisRound >= ESCAPE_LOOP_CAP ||
+            state.escapeTicksThisRound >= ESCAPE_MAX_TICKS_PER_ROUND;
+        if (escapeExhausted) {
+            enterMode(state, "offense", "punish", tick, "escape-budget-commit");
         }
         else {
             enterMode(state, "escape", null, tick, "hard-danger");
@@ -319,8 +344,12 @@ function decideMode(obs, params, state, sig) {
         enterMode(state, "offense", "press", tick, "opp-open-or-altitude");
         return;
     }
-    // ZONE entry: opp is a spammer and we're not pressured.
-    if (state.mode === "neutral" && sig.oppAggression > 0.5 && sig.absDist > 120) {
+    // ZONE entry: opp is a spammer and we're not pressured. v5.2 caps
+    // cumulative zone time per round; once exceeded, denial posture is
+    // not available for the rest of the round and we fall through to
+    // other transitions (usually OFFENSE).
+    if (state.mode === "neutral" && sig.oppAggression > 0.5 && sig.absDist > 120 &&
+        state.zoneTicksThisRound < ZONE_MAX_TICKS_PER_ROUND) {
         enterMode(state, "zone", null, tick, "opp-spammer");
         return;
     }
@@ -339,8 +368,10 @@ function decideMode(obs, params, state, sig) {
     }
     // ZONE exit: opp stopped pressing OR we're no longer center-adjacent.
     if (state.mode === "zone" && (sig.oppAggression < 0.2 || sig.cornered)) {
-        // v5.1 escape cap applies here too.
-        if (sig.cornered && state.escapeEntriesThisRound < ESCAPE_LOOP_CAP) {
+        // v5.1 escape-entry cap AND v5.2 escape-duration cap apply here too.
+        const escapeExhausted = state.escapeEntriesThisRound >= ESCAPE_LOOP_CAP ||
+            state.escapeTicksThisRound >= ESCAPE_MAX_TICKS_PER_ROUND;
+        if (sig.cornered && !escapeExhausted) {
             enterMode(state, "escape", null, tick, "zone-cleared-cornered");
             state.escapeEntriesThisRound++;
         }
@@ -530,6 +561,30 @@ function runOffenseMode(obs, params, state, sig) {
         sig.passiveFoilDanger ||
         (!sig.oppCommittedAtUs) ||
         ((params.greed ?? 0.5) > 0.6 && sig.absDist < swingRange(params) * 0.7);
+    // v5.2 progress-stalled close-override. When a match has gone 900+
+    // ticks without a kill AND we're swinging but not hitting, we're in
+    // a spacing equilibrium where swings whiff at ~150px. The normal
+    // press logic keeps us at our natural spacing; we need to explicitly
+    // close INSIDE swingRange to land. Override: move aggressively toward
+    // opp until absDist < 70 (tight hit range), THEN swing. Id-asymmetric
+    // (only fighter 1 overrides) so we don't create mutual close-and-swing
+    // pressure that just produces new doubleKOs.
+    const progressStalled = state.id === 1 &&
+        obs.tick > 900 &&
+        (obs.tick - obs.self.lastKillTick) > 900 &&
+        obs.self.score === 0 && obs.opp.score === 0 &&
+        obs.self.rounds === 0 && obs.opp.rounds === 0 &&
+        obs.self.lastAttackStartTick > 0;
+    if (progressStalled) {
+        const tooFar = sig.absDist > 70;
+        return {
+            left: sig.absDir < 0,
+            right: sig.absDir > 0,
+            up: false,
+            down: false,
+            action: !tooFar && sig.canSwing,
+        };
+    }
     return {
         left: move < 0, right: move > 0, up: jump, down,
         action: sig.canSwing && safeCommit,
@@ -860,6 +915,14 @@ export function runParamBrain(obs, params, state) {
     updateOppModel(state, obs);
     const sig = deriveSignals(obs, params, state);
     decideMode(obs, params, state, sig);
+    // v5.2 mode-duration accumulation. Counts ticks spent in escape/zone
+    // mode after decideMode resolves for this tick. The counter is read
+    // by decideMode NEXT tick to decide whether to force-exit. Resets per
+    // round / own respawn via resetBrainStateForRound.
+    if (state.mode === "escape")
+        state.escapeTicksThisRound++;
+    else if (state.mode === "zone")
+        state.zoneTicksThisRound++;
     switch (state.mode) {
         case "neutral": return runNeutralMode(obs, params, sig);
         case "offense": return runOffenseMode(obs, params, state, sig);

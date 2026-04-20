@@ -54,8 +54,8 @@ function defaultParams(overrides: Partial<Params> = {}): Params {
 
 // --- Tests ---
 
-test("BEHAVIOR_VERSION is 6", () => {
-  assert.equal(BEHAVIOR_VERSION, 6);
+test("BEHAVIOR_VERSION is 7", () => {
+  assert.equal(BEHAVIOR_VERSION, 7);
 });
 
 test("createBrainState initializes neutral with empty buffers", () => {
@@ -389,5 +389,54 @@ test("v5.1: 8-bot aerial clique does NOT produce all-draw pairings", () => {
   assert.equal(
     failed.length, 0,
     `${failed.length} aerial-clique pairs still always-stalemate across 6 samples:\n  ${failed.slice(0, 10).join("\n  ")}${failed.length > 10 ? "\n  ..." : ""}`,
+  );
+});
+
+// ---- v5.2 residual-attractor regression ----
+
+test("v5.2: all 8 diagnostic residual pair-stages resolve within seeds 1-20", () => {
+  // The v5.1 patch cleared the 64-pair clique but left 8 map-specific
+  // inert attractors. v5.2 addresses both remaining patterns:
+  //   - safe-mode attractor (bots stuck in ESCAPE/ZONE at medium range):
+  //     cumulative max-duration caps force-exit those modes.
+  //   - OFFENSE spacing equilibrium (bots at ~150px swinging but never
+  //     hitting): progress-stalled close-override in press substate
+  //     forces fighter 1 inside hit range when match has gone 900+
+  //     ticks without a kill and no score yet.
+  const cases: Array<[string, string, keyof typeof STAGES]> = [
+    ["blitz", "oracle", "datacenter"],
+    ["blitz", "intern", "datacenter"],
+    ["unicorn", "unicorn", "datacenter"],
+    ["troll", "regulatory", "boardroom"],
+    ["oracle", "blitz", "demoday"],
+    ["moonshot", "intern", "demoday"],
+    ["intern", "moonshot", "demoday"],
+    ["intern", "blitz", "datacenter"],
+  ];
+
+  const failed: string[] = [];
+  for (const [a, b, stageId] of cases) {
+    let anyResolved = false;
+    for (let seed = 1; seed <= 20; seed++) {
+      const r = simulate({
+        stage: STAGES[stageId],
+        brainA: STRATEGIES[a as keyof typeof STRATEGIES],
+        brainB: STRATEGIES[b as keyof typeof STRATEGIES],
+        seed,
+      });
+      if (
+        r.winner !== -1 ||
+        r.finalScore[0] > 0 ||
+        r.finalScore[1] > 0 ||
+        r.finalRounds[0] > 0 ||
+        r.finalRounds[1] > 0
+      ) { anyResolved = true; break; }
+    }
+    if (!anyResolved) failed.push(`${a} vs ${b} @ ${stageId}`);
+  }
+
+  assert.equal(
+    failed.length, 0,
+    `${failed.length} safe-attractor pair-stages still stalemate across 20 seeds:\n  ${failed.join("\n  ")}`,
   );
 });

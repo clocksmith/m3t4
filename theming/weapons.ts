@@ -46,7 +46,7 @@ export const WEAPON_KITS: WeaponKit[] = [
     characterId: "sama",
     rarity: "common",
     status: "playable",
-    name: "glowing API key",
+    name: "Orb Mace",
     sprite: emptyWeaponSprite(),
     trail: { color: "#fde68a", width: 3, ttl: 0.12 },
     sound: "swing.light",
@@ -56,7 +56,7 @@ export const WEAPON_KITS: WeaponKit[] = [
     characterId: "darrius",
     rarity: "common",
     status: "playable",
-    name: "annotated research paper",
+    name: "Policy Club",
     sprite: emptyWeaponSprite(),
     trail: { color: "#fed7aa", width: 3, ttl: 0.12 },
     sound: "swing.paper",
@@ -66,7 +66,7 @@ export const WEAPON_KITS: WeaponKit[] = [
     characterId: "demis",
     rarity: "common",
     status: "playable",
-    name: "cryptic chess piece",
+    name: "Medal Mace",
     sprite: emptyWeaponSprite(),
     trail: { color: "#dbeafe", width: 3, ttl: 0.12 },
     sound: "swing.stone",
@@ -76,25 +76,29 @@ export const WEAPON_KITS: WeaponKit[] = [
     characterId: "mark",
     rarity: "common",
     status: "playable",
-    name: "VR controller nunchuck",
+    name: "Nunchuck Club",
     sprite: emptyWeaponSprite(),
     trail: { color: "#ede9fe", width: 3, ttl: 0.12 },
     sound: "swing.plastic",
   },
 
   // ---------------- Rares (preview — visible, not playable) ----------------
-  { id: "sama.rare",    characterId: "sama",    rarity: "rare",  status: "preview", name: "", sprite: emptyWeaponSprite(), trail: { color: "#22d3ee", width: 3, ttl: 0.15 }, sound: "" },
-  { id: "darrius.rare", characterId: "darrius", rarity: "rare",  status: "preview", name: "", sprite: emptyWeaponSprite(), trail: { color: "#22d3ee", width: 3, ttl: 0.15 }, sound: "" },
-  { id: "demis.rare",   characterId: "demis",   rarity: "rare",  status: "preview", name: "", sprite: emptyWeaponSprite(), trail: { color: "#22d3ee", width: 3, ttl: 0.15 }, sound: "" },
-  { id: "mark.rare",    characterId: "mark",    rarity: "rare",  status: "preview", name: "", sprite: emptyWeaponSprite(), trail: { color: "#22d3ee", width: 3, ttl: 0.15 }, sound: "" },
+  { id: "sama.rare",    characterId: "sama",    rarity: "rare",  status: "preview", name: "Airdrop Flail",   sprite: emptyWeaponSprite(), trail: { color: "#22d3ee", width: 3, ttl: 0.15 }, sound: "" },
+  { id: "darrius.rare", characterId: "darrius", rarity: "rare",  status: "preview", name: "Value Pike",      sprite: emptyWeaponSprite(), trail: { color: "#22d3ee", width: 3, ttl: 0.15 }, sound: "" },
+  { id: "demis.rare",   characterId: "demis",   rarity: "rare",  status: "preview", name: "Proof Hammer",     sprite: emptyWeaponSprite(), trail: { color: "#22d3ee", width: 3, ttl: 0.15 }, sound: "" },
+  { id: "mark.rare",    characterId: "mark",    rarity: "rare",  status: "preview", name: "Attention Axe",    sprite: emptyWeaponSprite(), trail: { color: "#22d3ee", width: 3, ttl: 0.15 }, sound: "" },
 
   // ---------------- Epics (preview — visible, not playable) ---------------
-  { id: "sama.epic",    characterId: "sama",    rarity: "epic",  status: "preview", name: "", sprite: emptyWeaponSprite(), trail: { color: "#a78bfa", width: 4, ttl: 0.18 }, sound: "" },
-  { id: "darrius.epic", characterId: "darrius", rarity: "epic",  status: "preview", name: "", sprite: emptyWeaponSprite(), trail: { color: "#a78bfa", width: 4, ttl: 0.18 }, sound: "" },
-  { id: "demis.epic",   characterId: "demis",   rarity: "epic",  status: "preview", name: "", sprite: emptyWeaponSprite(), trail: { color: "#a78bfa", width: 4, ttl: 0.18 }, sound: "" },
-  { id: "mark.epic",    characterId: "mark",    rarity: "epic",  status: "preview", name: "", sprite: emptyWeaponSprite(), trail: { color: "#a78bfa", width: 4, ttl: 0.18 }, sound: "" },
+  { id: "sama.epic",    characterId: "sama",    rarity: "epic",  status: "preview", name: "Protocol Gavel",   sprite: emptyWeaponSprite(), trail: { color: "#a78bfa", width: 4, ttl: 0.18 }, sound: "" },
+  { id: "darrius.epic", characterId: "darrius", rarity: "epic",  status: "preview", name: "Ethics Mace",      sprite: emptyWeaponSprite(), trail: { color: "#a78bfa", width: 4, ttl: 0.18 }, sound: "" },
+  { id: "demis.epic",   characterId: "demis",   rarity: "epic",  status: "preview", name: "Paradox Blade",     sprite: emptyWeaponSprite(), trail: { color: "#a78bfa", width: 4, ttl: 0.18 }, sound: "" },
+  { id: "mark.epic",    characterId: "mark",    rarity: "epic",  status: "preview", name: "Meta Halberd",      sprite: emptyWeaponSprite(), trail: { color: "#a78bfa", width: 4, ttl: 0.18 }, sound: "" },
 
-  // Legendaries deliberately omitted.
+  // ---------------- Legendaries (preview — visible, not yet available) -------
+  { id: "sama.legendary",    characterId: "sama",    rarity: "legendary",  status: "preview", name: "Orb Greatsword",   sprite: emptyWeaponSprite(), trail: { color: "#f472b6", width: 5, ttl: 0.2 }, sound: "" },
+  { id: "darrius.legendary", characterId: "darrius", rarity: "legendary",  status: "preview", name: "Oracle Mace",      sprite: emptyWeaponSprite(), trail: { color: "#f472b6", width: 5, ttl: 0.2 }, sound: "" },
+  { id: "demis.legendary",   characterId: "demis",   rarity: "legendary",  status: "preview", name: "Infinity Axe",      sprite: emptyWeaponSprite(), trail: { color: "#f472b6", width: 5, ttl: 0.2 }, sound: "" },
+  { id: "mark.legendary",    characterId: "mark",    rarity: "legendary",  status: "preview", name: "Brain Forge Hammer", sprite: emptyWeaponSprite(), trail: { color: "#f472b6", width: 5, ttl: 0.2 }, sound: "" },
 ];
 
 export const WEAPONS_BY_ID: Record<string, WeaponKit> =

@@ -423,6 +423,7 @@ export function verifyActionLog(input) {
         hashAcc = fnvByte(hashAcc, pb);
         stepWorld(world, unpackAction(pa), unpackAction(pb));
     }
+    settleWorldWinner(world);
     if (offset !== bytes.length) {
         const result = replayResultFromWorld(world, hashAcc.toString(16).padStart(8, "0"));
         return {

@@ -27,7 +27,7 @@ import { initZkVerifiers } from "./labs/proof/zk.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const STORE_PATH = process.env.STORE_PATH ?? path.join(__dirname, "..", "data", "m3t4.json");
+const STORE_PATH = CONFIG.storePath ?? path.join(__dirname, "..", "data", "m3t4.json");
 
 const store = CONFIG.storeBackend === "firestore"
   ? new FirestoreStableStore()

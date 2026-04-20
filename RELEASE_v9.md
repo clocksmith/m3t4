@@ -115,6 +115,17 @@ AUTH_PROVIDERS=google,github
 
 The server hard-fails if production tries to run `AUTH_MODE=dev`.
 
+Closed alpha may use:
+
+```env
+AUTH_MODE=alpha-token
+M3T4_ALPHA_TOKEN=<secret-manager>
+M3T4_ALPHA_ALLOWLIST=alice,bob
+```
+
+That mode accepts bearer tokens formatted as `<uid>:<token>` and rejects
+UIDs outside the allowlist when one is configured.
+
 Client requirements:
 
 - production host defaults to `firebase` auth mode
@@ -138,7 +149,12 @@ window.__M3T4_FIREBASE_CONFIG__ = {
 
 ## Remaining Cloud Caveat
 
-The game is meta-shippable, but durable production traffic still needs
-a non-file-backed store. `FileStableStore` is acceptable for a single
-smoke-test instance only. Real beta deployment should add or enable a
-Firestore-backed `StableStore` before opening public ranked submissions.
+The game is meta-shippable and now has a Firestore-backed `StableStore`
+for public beta. `FileStableStore` remains acceptable only for a
+single-instance closed-alpha smoke test with explicit data-loss-on-deploy
+risk. Public ranked submissions should deploy with:
+
+```env
+STORE_BACKEND=firestore
+CORS_ORIGINS=https://m3t4.ai
+```

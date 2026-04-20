@@ -56,7 +56,7 @@
   --arena-p2: #fb923c;
   --arena-p2-trim: #fed7aa;
   --arena-p2-shadow: #9a3412;
-  --arena-goal-normal: #60a5fa;
+  --arena-goal-normal: #d946ef;
   --arena-goal-urgent: #ef4444;
   --arena-token: #ffd700;
   --arena-token-glow: rgba(255,215,0,0.15);
@@ -164,10 +164,15 @@ a:hover {
 }
 
 /* --- main content area --- */
+/* No max-width cap: the dominant surfaces (arena canvas, build editor,
+ * spectator) benefit from filling the viewport on wide/ultrawide
+ * monitors. Text-heavy panels are short enough to read comfortably
+ * even at 2000+px line lengths, and grid layouts cap themselves
+ * where appropriate (e.g. .grid-3's middle column).
+ */
 #app {
   flex: 1;
   padding: 16px;
-  max-width: 1400px;
   margin: 0 auto;
   width: 100%;
 }
@@ -377,11 +382,38 @@ canvas {
   }
 }
 
+/* Build page: 3 columns. Middle (game canvas) gets extra weight so
+ * wider screens give the arena more room; side panels stay a fixed
+ * max-height and scroll their contents internally so they don't grow
+ * to match a tall canvas. On narrow screens the layout collapses.
+ */
 .grid-3 {
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) minmax(480px, 1.6fr) 340px;
+  grid-template-columns: minmax(280px, 1fr) minmax(480px, 2fr) 340px;
   gap: 14px;
-  align-items: start;
+  align-items: stretch;
+}
+
+.grid-3 > .panel {
+  min-height: 0;
+  height: 100%;
+}
+/* On very wide viewports give the arena even more runway. */
+@media (min-width: 1600px) {
+  .grid-3 {
+    grid-template-columns: minmax(300px, 1fr) minmax(640px, 3fr) 360px;
+  }
+}
+/* Keep the three build columns visually equal-height on desktop. CSS grid
+ * sizes the row to the tallest panel, then stretches the siblings; the max
+ * height prevents the builder from exceeding the viewport and scrolling the
+ * whole page.
+ */
+@media (min-width: 1024px) {
+  .grid-3 > .panel {
+    max-height: calc(100vh - 180px);
+    overflow-y: auto;
+  }
 }
 
 @media (max-width: 1200px) {
@@ -459,6 +491,53 @@ canvas {
   max-width: 100%;
 }
 
+.live-test-controls {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  padding-bottom: 2px;
+}
+
+.live-control {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 104px;
+  padding: 4px 6px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface-code);
+}
+
+.live-control span {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.live-control select {
+  min-width: 0;
+  max-width: 160px;
+}
+
+.live-control.role-build {
+  border-color: var(--ui-success);
+  box-shadow: inset 3px 0 0 var(--ui-success);
+}
+
+.live-control.role-preset {
+  border-color: var(--ui-blue);
+  box-shadow: inset 3px 0 0 var(--ui-blue);
+}
+
+.live-control.role-human {
+  border-color: var(--ui-warning);
+  box-shadow: inset 3px 0 0 var(--ui-warning);
+}
+
 .alpha-shell {
   max-width: 520px;
   margin: 12vh auto;
@@ -498,6 +577,10 @@ canvas {
   color: var(--ui-warning);
 }
 
+.metric-value.is-over {
+  color: var(--ui-red);
+}
+
 .meter-track {
   position: relative;
   height: 6px;
@@ -520,9 +603,12 @@ canvas {
   font-family: ui-monospace, Menlo, monospace;
   font-size: 10.5px;
   color: var(--ui-code-text);
-  white-space: pre;
-  overflow: auto;
-  max-height: 260px;
+  /* Let the JSON grow with its content. The outer Budget panel already
+   * has max-height + overflow-y on wide viewports, so the pre doesn't
+   * need its own scroll container. */
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .stream-log {
@@ -583,10 +669,54 @@ canvas {
   font-weight: 700;
 }
 
+/* Themed range input. Inactive track matches surface-code (dark),
+ * filled portion is blue. Cross-browser approach: draw the track as a
+ * linear-gradient on the input itself (Chrome/Safari don't expose a
+ * ::progress pseudo), driven by a --fill custom property that JS sets
+ * per slider based on its value.
+ */
 input[type="range"] {
+  --fill: 0%;
   width: 100%;
-  accent-color: var(--ui-blue);
-  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  height: 6px;
+  padding: 0;
+  margin: 0;
+  border-radius: 3px;
+  border: 1px solid var(--ui-border);
+  background:
+    linear-gradient(
+      to right,
+      var(--ui-blue) 0%,
+      var(--ui-blue) var(--fill),
+      var(--ui-surface-code) var(--fill),
+      var(--ui-surface-code) 100%
+    );
+  cursor: pointer;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-runnable-track { height: 6px; background: transparent; border: none; }
+input[type="range"]::-moz-range-track            { height: 6px; background: transparent; border: none; }
+/* Firefox progress portion renders natively — keep it aligned. */
+input[type="range"]::-moz-range-progress         { height: 6px; background: var(--ui-blue); border-radius: 3px; }
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--ui-blue);
+  border: 2px solid var(--ui-blue-ink);
+  border-radius: 50%;
+  margin-top: -5px;
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: var(--ui-blue);
+  border: 2px solid var(--ui-blue-ink);
+  border-radius: 50%;
+  cursor: pointer;
 }
 
 /* --- match hud --- */

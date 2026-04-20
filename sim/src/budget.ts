@@ -1,12 +1,13 @@
 import type { AttributeSpec, BrainConfig, ParamKey } from "./types.js";
 import { DEFAULT_PARAMS } from "./types.js";
 
-// User submissions spend UI-space points across these knobs. Ranked submissions
-// are hard-capped at USER_BUDGET; hallucination remains derived for legacy and
-// internal callers but cannot be used to buy extra player budget.
+// User submissions spend UI-space points across these knobs. Spending past
+// USER_BUDGET is allowed only through the derived hallucination penalty, and
+// ranked submissions stop at MAX_USER_SPEND where that penalty caps out.
 export const USER_BUDGET = 360;
 export const HALLUCINATION_PER_OVERAGE = 10;
 export const MAX_DERIVED_HALLUCINATION = 300;
+export const MAX_USER_SPEND = USER_BUDGET + Math.floor(MAX_DERIVED_HALLUCINATION / HALLUCINATION_PER_OVERAGE);
 export const USER_SUBMISSION_EPSILON = 1e-6;
 
 export const USER_KNOBS: ParamKey[] = [
@@ -110,8 +111,8 @@ export function validateUserSubmission(cfg: BrainConfig): UserSubmissionValidati
 
   const spent = errors.length === 0 ? budgetSpent({ attributes: attrs }) : 0;
   const hallucination = computedHallucinationForSpend(spent);
-  if (errors.length === 0 && spent > USER_BUDGET) {
-    errors.push(`total budget spend ${spent} exceeds hard cap ${USER_BUDGET}`);
+  if (errors.length === 0 && spent > MAX_USER_SPEND) {
+    errors.push(`total budget spend ${spent} exceeds hallucination cap ${MAX_USER_SPEND}`);
   }
   const rawHallucination = cfg.attributes?.hallucination;
   if (typeof rawHallucination !== "number" || !Number.isFinite(rawHallucination)) {

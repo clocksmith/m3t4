@@ -151,7 +151,7 @@ function collectCharacterSheets() {
           `Invisible cell boundaries are exact vertical cuts every ${shared.genCellW}px and exact horizontal cuts every ${shared.genCellH}px; no visible grid lines, no separators, no gutters, no margins, no contact sheet labels.`,
           "Same character, same outfit, same scale, same camera-facing-right orientation in every populated cell.",
           "Character-only animation frames: do not draw walls, floors, platforms, scenery, props, weapons, slash arcs, hit sparks, UI, or effects. Express actions through body pose only.",
-          `Character body must fit inside the central ${rawCoreW}x${rawCoreH} raw-pixel area inside each ${shared.genCellW}x${shared.genCellH} cell, leaving at least ${rawPadding}px pure magenta padding on all sides.`,
+          `Character silhouette is a TALL HUMAN FIGURE with aspect approximately 1:2 — in the final ${shared.cellW}x${shared.cellH} cell, the figure should read as ~${Math.round(shared.cellW * 0.44)} pixels wide by ~${Math.round(shared.cellH * 0.81)} pixels tall (matches the sim hitbox aspect). At the raw ${shared.genCellW}x${shared.genCellH} cell size, center the body with about ${Math.round((shared.genCellW - shared.genCellW * 0.44) / 2)}px pure magenta padding on each side and about ${Math.round((shared.genCellH - shared.genCellH * 0.81) / 2)}px magenta padding above the head and below the feet. Do NOT draw a square silhouette — human figures are roughly 1:2 tall.`,
           "Do not draw weapons on this strip.",
         ].filter(Boolean).join("\n"),
         grid: {

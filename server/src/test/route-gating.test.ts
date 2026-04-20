@@ -136,7 +136,7 @@ test("centralized route graph hides P2P routes by default", async (t) => {
   assert.equal(duel.status, 404);
 });
 
-test("ranked submit rejects over-budget configs before store write", async (t) => {
+test("ranked submit rejects configs past the hallucination cap before store write", async (t) => {
   const routes: RouteList = [];
   const store = new MemoryStableStore();
   registerCore(routes, store);
@@ -158,8 +158,8 @@ test("ranked submit rejects over-budget configs before store write", async (t) =
   assert.equal(resp.status, 400);
   assert.equal(resp.body.error, "invalid user config");
   assert.ok(
-    resp.body.details.some((detail: string) => detail.includes("exceeds")),
-    `expected over-budget error, got ${JSON.stringify(resp.body.details)}`,
+    resp.body.details.some((detail: string) => detail.includes("hallucination cap")),
+    `expected hallucination-cap error, got ${JSON.stringify(resp.body.details)}`,
   );
   assert.equal(store.submitted.length, 0);
 });

@@ -23,7 +23,7 @@ const LEGACY_HASH = { practice: "build" };
 const OPTIONAL_MODE_LOADERS = {
   duel: () => import("./modes/duel.js"),
 };
-const DEFAULT_MODE = "spectate";
+const DEFAULT_MODE = "build";
 
 const appEl = document.getElementById("app");
 const navLinks = Array.from(document.querySelectorAll("#topnav nav a"));

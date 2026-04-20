@@ -61,6 +61,7 @@ function assemble(stripDir, outPath) {
     const dstOffset = width * stripHeight * 4 * i;
     data.set(src, dstOffset);
   }
+  normalizeTransparentMatte(data);
 
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, encodePng(width, height, data));
@@ -70,6 +71,15 @@ function assemble(stripDir, outPath) {
 function fail(message) {
   process.stderr.write(`assemble-character-sheet: ${message}\n`);
   process.exit(1);
+}
+
+function normalizeTransparentMatte(data) {
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] !== 0) continue;
+    data[i] = 0;
+    data[i + 1] = 0;
+    data[i + 2] = 0;
+  }
 }
 
 function decodePng(buffer) {

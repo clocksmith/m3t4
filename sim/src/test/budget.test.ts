@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  MAX_DERIVED_HALLUCINATION,
+  MAX_USER_SPEND,
   USER_BUDGET,
   USER_KNOBS,
   computedHallucinationForSpend,
@@ -39,7 +41,23 @@ test("validateUserSubmission accepts configs at the hard budget", () => {
   assert.equal(validation.config?.attributes.hallucination, 0);
 });
 
-test("validateUserSubmission rejects over-budget configs even when hallucination matches", () => {
+test("validateUserSubmission accepts capped over-budget configs when hallucination matches", () => {
+  const cfg = cfgFromUi({
+    burnRate: 100,
+    moat: 100,
+    shipRate: 100,
+    foresight: 90,
+  });
+
+  const validation = validateUserSubmission(cfg);
+
+  assert.equal(validation.ok, true, validation.errors.join("; "));
+  assert.equal(validation.spent, MAX_USER_SPEND);
+  assert.equal(validation.hallucination, MAX_DERIVED_HALLUCINATION);
+  assert.equal(validation.config?.attributes.hallucination, MAX_DERIVED_HALLUCINATION);
+});
+
+test("validateUserSubmission rejects configs beyond the hallucination cap", () => {
   const spent = 400;
   const cfg = cfgFromUi({
     burnRate: 100,
@@ -52,8 +70,8 @@ test("validateUserSubmission rejects over-budget configs even when hallucination
 
   assert.equal(validation.ok, false);
   assert.ok(
-    validation.errors.some((error) => error.includes("exceeds")),
-    `expected an over-budget error, got ${JSON.stringify(validation.errors)}`,
+    validation.errors.some((error) => error.includes("hallucination cap")),
+    `expected a hallucination-cap error, got ${JSON.stringify(validation.errors)}`,
   );
   assert.equal(validation.config, undefined);
 });

@@ -1,15 +1,19 @@
-// Build mode - 15-knob hard-budget builder with live test stage.
-// Sliders hard-cap at USER_BUDGET so overspend is impossible; the
-// hallucination penalty is dead code from a former "pay over budget
-// with noise" design and stays 0 here. The live test stage below
-// plays your current config vs an empirical easy/medium/hard preset
-// picked from data/preset-ranking.v1.json (copied to client/data for the SPA).
+// Build mode - 15-knob builder with live deterministic test stage.
+// Base budget is USER_BUDGET; sliders may overspend only up to the
+// derived hallucination cap. The live test stage plays your current
+// config vs an empirical easy/medium/hard preset picked from
+// data/preset-ranking.v1.json (copied to client/data for the SPA).
 
 import {
   USER_BUDGET,
+  HALLUCINATION_PER_OVERAGE,
+  MAX_DERIVED_HALLUCINATION,
+  MAX_USER_SPEND,
   computedHallucinationForSpend,
+  nativeToUI,
   STAGES,
   STRATEGIES,
+  STRATEGY_NAMES,
   compileBrain,
   createStepperWorld,
   runBrainForWorld,
@@ -20,6 +24,10 @@ import { setupCanvas, drawFrame, W, H } from "../lib/render.js";
 import presetRanking from "../data/preset-ranking.v1.json" with { type: "json" };
 
 const BUDGET = USER_BUDGET;
+// Hallucination saturates at MAX_DERIVED_HALLUCINATION, reached at
+// BUDGET + MAX/COST total spend. Past this point every extra knob point
+// was free under the old design — cap sliders there.
+const HARD_CAP = MAX_USER_SPEND;
 
 const KNOBS = [
   { id: "burnRate",   label: "burn rate",   desc: "swing eagerness + range",          range: [0, 1],    init: 25 },
@@ -57,7 +65,7 @@ const GAME_KEYS = new Set([
 ]);
 const keyset = new Set();
 let stageId = STAGE_IDS[0];
-let difficulty = "medium";
+let presetName = presetRanking.tiers.medium;
 let world = null;
 let testCtx = null;
 let testCanvas = null;
@@ -71,6 +79,23 @@ let testOutcome = "";
 // Slot 0 defaults to user build (AI-compiled from current knobs); slot 1
 // defaults to the difficulty preset. Either can be swapped to human.
 let controllers = ["user", "preset"]; // "user" | "preset" | "human"
+const BENCHMARK_TIERS = ["easy", "medium", "hard"];
+const BENCHMARK_PRESETS = new Set(BENCHMARK_TIERS.map((tier) => presetRanking.tiers[tier]).filter(Boolean));
+
+function presetSelectOptions() {
+  const benchmark = BENCHMARK_TIERS
+    .map((tier) => {
+      const name = presetRanking.tiers[tier];
+      if (!name) return "";
+      return `<option value="${name}" ${name === presetName ? "selected" : ""}>${tier} - ${name}</option>`;
+    })
+    .join("");
+  const rest = STRATEGY_NAMES
+    .filter((name) => !BENCHMARK_PRESETS.has(name))
+    .map((name) => `<option value="${name}" ${name === presetName ? "selected" : ""}>${name}</option>`)
+    .join("");
+  return `<optgroup label="benchmarks">${benchmark}</optgroup><optgroup label="more presets">${rest}</optgroup>`;
+}
 
 function isTypingTarget(el) {
   if (!el) return false;
@@ -123,25 +148,21 @@ export function mount(root, { setStatus }) {
         </section>
         <section class="panel">
           <h3>Live test <small class="tight">- deterministic match</small></h3>
-          <div class="row mb-sm">
-            <div class="row" role="radiogroup" aria-label="difficulty">
-              <button data-diff="easy"   class="diff-btn">easy - ${presetRanking.tiers.easy}</button>
-              <button data-diff="medium" class="diff-btn">medium - ${presetRanking.tiers.medium}</button>
-              <button data-diff="hard"   class="diff-btn">hard - ${presetRanking.tiers.hard}</button>
-            </div>
-          </div>
-          <div class="row mb-sm">
-            <label>P1 <select id="p1ctrl">
-              <option value="user" selected>your build</option>
-              <option value="human">human (WASD+F)</option>
-              <option value="preset">preset opponent</option>
+          <div class="live-test-controls mb-sm">
+            <label class="live-control role-preset" id="preset-control"><span>preset</span>
+              <select id="opp-preset">${presetSelectOptions()}</select>
+            </label>
+            <label class="live-control role-build" id="p1-control"><span>P1</span><select id="p1ctrl">
+              <option value="user" selected>BUILD - your build</option>
+              <option value="preset">PRESET - opponent</option>
+              <option value="human">HUMAN - WASD+F</option>
             </select></label>
-            <label>P2 <select id="p2ctrl">
-              <option value="preset" selected>preset opponent</option>
-              <option value="human">human (PL;'+[)</option>
-              <option value="user">your build</option>
+            <label class="live-control role-preset" id="p2-control"><span>P2</span><select id="p2ctrl">
+              <option value="preset" selected>PRESET - opponent</option>
+              <option value="user">BUILD - your build</option>
+              <option value="human">HUMAN - PL;'+[</option>
             </select></label>
-            <label>stage
+            <label class="live-control"><span>stage</span>
               <select id="test-stage">${STAGE_IDS.map((s) => `<option value="${s}" ${s === stageId ? "selected" : ""}>${s}</option>`).join("")}</select>
             </label>
             <button id="test-reset">reset match</button>
@@ -149,22 +170,31 @@ export function mount(root, { setStatus }) {
           </div>
           <canvas id="test-canvas" class="u-canvas-fill" width="${W}" height="${H}" tabindex="0"></canvas>
           <div class="tight mt-xs" id="test-hud"></div>
-          <div class="tight mt-xs">tiers from round-robin (${presetRanking.totalMatches} matches, ${presetRanking.seedsPerPairing} seeds): easy=worst, medium=median, hard=top-25%. P1: W/A/S/D move, F attack. P2: P/L/;/' move, [ attack.</div>
         </section>
         <section class="panel">
-          <h3>Budget <small class="tight">hard cap ${BUDGET}</small></h3>
+          <h3>Budget <small class="tight">soft ${BUDGET} · hard cap ${HARD_CAP}</small></h3>
           <div id="budget-row" class="metric-row">
-            <span class="tight">spent / ${BUDGET}</span>
+            <span class="tight">spent / ${HARD_CAP}</span>
             <span id="budget-spent" class="metric-value">0</span>
           </div>
-          <div id="budget-track" class="meter-track">
+          <div id="budget-track" class="meter-track" style="position:relative;">
             <div id="budget-bar" class="meter-bar"></div>
+            <div id="budget-over" class="meter-bar over" style="position:absolute; left:100%; top:0; height:100%; background:var(--ui-red); width:0%;"></div>
           </div>
           <div id="remaining-row" class="metric-row loose">
             <span class="tight">remaining</span>
             <span id="budget-remaining" class="metric-value compact">${BUDGET}</span>
           </div>
-          <div class="tight mb-md">sliders stop at total ${BUDGET}; submitted JSON over that limit is rejected by the server.</div>
+          <div id="hallucination-block" hidden style="margin-top:10px;">
+            <div class="metric-row">
+              <span class="tight">hallucination (overspend × ${HALLUCINATION_PER_OVERAGE})</span>
+              <span id="hallucination-val" class="metric-value" style="color:var(--ui-red);">0</span>
+            </div>
+            <div class="meter-track" style="background:#2a1014;">
+              <div id="hallucination-bar" class="meter-bar" style="background:var(--ui-red);"></div>
+            </div>
+          </div>
+          <div class="tight mb-md">over ${BUDGET}: ${HALLUCINATION_PER_OVERAGE} hallucination per extra point. sliders stop at ${HARD_CAP} where hallucination saturates at ${MAX_DERIVED_HALLUCINATION}.</div>
           <div class="toolbar">
             <button id="reset-build">reset</button>
             <button id="randomize">randomize</button>
@@ -184,20 +214,24 @@ export function mount(root, { setStatus }) {
     for (const k of KNOBS) state[k.id] = k.init;
     renderKnobs();
     update();
+    rebuildUserBrainAndReset();
   });
   root.querySelector("#randomize").addEventListener("click", () => {
+    // Stay at/under BUDGET by default — randomize shouldn't auto-burn
+    // hallucination on the user.
     let remaining = BUDGET;
     const ids = KNOBS.map((k) => k.id);
     for (let i = 0; i < ids.length; i++) {
       const nLeft = ids.length - i;
       const cap = Math.min(100, remaining);
-      const avg = remaining / nLeft;
+      const avg = remaining / Math.max(1, nLeft);
       const v = Math.max(0, Math.min(cap, Math.round(avg + (Math.random() - 0.5) * avg * 0.8)));
       state[ids[i]] = v;
       remaining -= v;
     }
     renderKnobs();
     update();
+    rebuildUserBrainAndReset();
   });
   root.querySelector("#copy-json").addEventListener("click", async () => {
     const out = document.getElementById("export").textContent;
@@ -217,19 +251,33 @@ export function mount(root, { setStatus }) {
   testCanvas = root.querySelector("#test-canvas");
   const { ctx: c } = setupCanvas(testCanvas);
   testCtx = c;
-  const diffButtons = Array.from(root.querySelectorAll(".diff-btn"));
-  const syncDiffHighlight = () => diffButtons.forEach((b) => b.classList.toggle("primary", b.dataset.diff === difficulty));
-  diffButtons.forEach((b) => b.addEventListener("click", () => {
-    difficulty = b.dataset.diff;
-    syncDiffHighlight();
-    rebuildOppBrainAndReset();
-  }));
-  syncDiffHighlight();
+  const presetSelect = root.querySelector("#opp-preset");
   const p1ctrl = root.querySelector("#p1ctrl");
   const p2ctrl = root.querySelector("#p2ctrl");
   const refocus = () => { keyset.clear(); testCanvas.focus(); };
-  p1ctrl.addEventListener("change", () => { controllers[0] = p1ctrl.value; refocus(); });
-  p2ctrl.addEventListener("change", () => { controllers[1] = p2ctrl.value; refocus(); });
+  presetSelect.addEventListener("change", () => {
+    presetName = presetSelect.value;
+    // Changing the difficulty/preset pulls that bot's config into the
+    // sliders so the user can inspect and tune from it. Their previous
+    // edits overwrite; this is explicit load behavior. Human slots are
+    // unaffected (they don't have a config).
+    loadPresetIntoSliders(presetName);
+    renderKnobs();
+    update();
+    syncLiveControls();
+    rebuildUserBrainAndReset(); // sliders changed, so user-brain changed too
+    refocus();
+  });
+  p1ctrl.addEventListener("change", () => {
+    controllers[0] = p1ctrl.value;
+    syncLiveControls();
+    refocus();
+  });
+  p2ctrl.addEventListener("change", () => {
+    controllers[1] = p2ctrl.value;
+    syncLiveControls();
+    refocus();
+  });
   root.querySelector("#test-stage").addEventListener("change", (e) => {
     stageId = e.target.value;
     resetMatch();
@@ -242,6 +290,7 @@ export function mount(root, { setStatus }) {
   addEventListener("keyup", onKeyUp);
   addEventListener("blur", onBlur);
 
+  syncLiveControls();
   rebuildUserBrainAndReset();
   startLoop();
 }
@@ -261,8 +310,24 @@ export function unmount() {
 // — we clamp the value instead — so the thumb always shows
 // value/100 and siblings don't visually jump when you're near budget.
 function remainingCeiling(id) {
+  // Sliders cap at the HARD_CAP (390 default = 360 budget + 30 points
+  // of overage before hallucination saturates). Total spend above
+  // BUDGET (360) is legal but activates the hallucination penalty.
   const spentWithoutThis = currentSpent() - (state[id] ?? 0);
-  return Math.max(0, Math.min(100, BUDGET - spentWithoutThis));
+  return Math.max(0, Math.min(100, HARD_CAP - spentWithoutThis));
+}
+
+// Reverse-map a preset's native attributes back to the UI slider
+// 0-100 space, so picking "easy · unicorn" or "hard · acolyte" loads
+// that preset into the knobs as a starting point the user can tune.
+function loadPresetIntoSliders(name) {
+  const preset = STRATEGIES[name];
+  if (!preset) return;
+  for (const k of KNOBS) {
+    const raw = preset.attributes?.[k.id];
+    if (typeof raw !== "number" || !Number.isFinite(raw)) continue;
+    state[k.id] = Math.round(nativeToUI(k.id, raw));
+  }
 }
 
 function renderKnobs() {
@@ -287,6 +352,7 @@ function renderKnobs() {
       const ceiling = remainingCeiling(id);
       const next = Math.max(0, Math.min(ceiling, requested));
       if (next !== requested) e.target.value = String(next);
+      e.target.style.setProperty("--fill", `${next}%`);
       state[id] = next;
       const display = document.querySelector(`[data-val="${id}"]`);
       if (display) display.textContent = next;
@@ -299,38 +365,79 @@ function renderKnobs() {
 }
 
 function syncKnobControls() {
-  // Only sync the displayed VALUE + number label — never the `max`.
-  // Changing max on every tick is what made the thumbs appear to
+  // Only sync the displayed VALUE + --fill custom prop + number label.
+  // Never update the `max` — that was what made the thumbs appear to
   // "move together" when one slider was dragged near budget.
   document.querySelectorAll("input[type=range][data-knob]").forEach((inp) => {
     const id = inp.dataset.knob;
-    inp.value = String(state[id]);
+    const v = state[id];
+    inp.value = String(v);
+    // Drives the themed linear-gradient track fill in app.css.
+    inp.style.setProperty("--fill", `${v}%`);
     const display = document.querySelector(`[data-val="${id}"]`);
-    if (display) display.textContent = state[id];
+    if (display) display.textContent = v;
   });
 }
 
 function update() {
   const spent = currentSpent();
+  const over = Math.max(0, spent - BUDGET);
   const remaining = Math.max(0, BUDGET - spent);
+  const hallucination = computedHallucinationForSpend(spent);
   syncKnobControls();
 
   const spentEl = document.getElementById("budget-spent");
   spentEl.textContent = spent;
   spentEl.classList.toggle("is-full", remaining === 0);
+  spentEl.classList.toggle("is-over", over > 0);
 
-  document.getElementById("budget-bar").style.width = Math.min(100, (spent / BUDGET) * 100) + "%";
+  // Green bar fills the legal slider range. Crossing BUDGET switches the
+  // value text to red and also extends the small overflow marker.
+  document.getElementById("budget-bar").style.width = Math.min(100, (spent / HARD_CAP) * 100) + "%";
+  const overEl = document.getElementById("budget-over");
+  if (overEl) overEl.style.width = ((over / BUDGET) * 100) + "%";
 
   const remainingEl = document.getElementById("budget-remaining");
-  remainingEl.textContent = remaining;
+  remainingEl.textContent = over > 0 ? `over by ${over}` : remaining;
   remainingEl.classList.toggle("is-full", remaining === 0);
+  remainingEl.classList.toggle("is-over", over > 0);
+
+  // Hallucination row: hidden until overspend, then fills 0..MAX.
+  const hallBlock = document.getElementById("hallucination-block");
+  const hallBar = document.getElementById("hallucination-bar");
+  const hallVal = document.getElementById("hallucination-val");
+  if (hallBlock && hallBar && hallVal) {
+    const showHall = over > 0;
+    hallBlock.hidden = !showHall;
+    hallBar.style.width = ((hallucination / MAX_DERIVED_HALLUCINATION) * 100) + "%";
+    hallVal.textContent = `${hallucination} / ${MAX_DERIVED_HALLUCINATION}`;
+  }
 
   document.getElementById("export").textContent = JSON.stringify(currentConfig(), null, 2);
 }
 
 // ---------------- Live test helpers ----------------
 
-function oppName() { return presetRanking.tiers[difficulty] ?? presetRanking.tiers.medium; }
+function oppName() { return STRATEGIES[presetName] ? presetName : presetRanking.tiers.medium; }
+
+function roleClass(ctrl) {
+  if (ctrl === "human") return "role-human";
+  if (ctrl === "preset") return "role-preset";
+  return "role-build";
+}
+
+function syncLiveControls() {
+  const preset = document.getElementById("opp-preset");
+  const p1 = document.getElementById("p1-control");
+  const p2 = document.getElementById("p2-control");
+  if (preset) preset.value = oppName();
+  for (const el of [p1, p2]) {
+    if (!el) continue;
+    el.classList.remove("role-build", "role-preset", "role-human");
+  }
+  p1?.classList.add(roleClass(controllers[0]));
+  p2?.classList.add(roleClass(controllers[1]));
+}
 
 function rebuildUserBrainAndReset() {
   try { compiledUser = compileBrain(currentConfig()); }
@@ -352,8 +459,8 @@ function readSlot(idx) {
 }
 function labelForSlot(idx) {
   const ctrl = controllers[idx];
-  if (ctrl === "human") return idx === 0 ? "human P1" : "human P2";
-  return ctrl === "user" ? "your build" : oppName();
+  if (ctrl === "human") return `HUMAN P${idx + 1}`;
+  return ctrl === "user" ? "BUILD" : `PRESET ${oppName()}`;
 }
 function resetMatch() {
   world = createStepperWorld({
@@ -389,7 +496,7 @@ function loopTest() {
   if (world && testCtx) {
     drawFrame(testCtx, world.stage, worldToFrame(world), { p1: labelForSlot(0), p2: labelForSlot(1) });
     const hud = document.getElementById("test-hud");
-    if (hud) hud.textContent = `tick ${world.tick}  -  ${world.matchWinner === -1 ? "live" : testOutcome}`;
+    if (hud) hud.textContent = `${labelForSlot(0)} vs ${labelForSlot(1)}  -  ${stageId}  -  tick ${world.tick}  -  ${world.matchWinner === -1 ? "live" : testOutcome}`;
   }
   testRafId = requestAnimationFrame(loopTest);
 }

@@ -44,6 +44,9 @@ const tolerance = parseInteger(arg("--tolerance") ?? "24", "--tolerance");
 const edgeConnectedKey = args.includes("--edge-connected-key");
 const keepGridLines = args.includes("--keep-grid-lines");
 const gridLineRadius = parseInteger(arg("--grid-line-radius") ?? "1", "--grid-line-radius");
+const despillKey = args.includes("--despill-key");
+const despillPasses = parseInteger(arg("--despill-passes") ?? "2", "--despill-passes");
+const scrubKey = args.includes("--scrub-key");
 
 const decoded = decodePng(fs.readFileSync(inputPath));
 const crop = cropRect(decoded.width, decoded.height, target.width, target.height);
@@ -52,6 +55,9 @@ const keyed = keyToAlpha(resized, keyColor, tolerance, edgeConnectedKey);
 const grid = keepGridLines ? null : inferGrid(inputPath);
 const clearedUnusedPixels = grid ? clearUnusedCells(resized, grid, keyColor) : 0;
 const clearedGridPixels = grid ? clearGridLines(resized, grid, gridLineRadius, keyColor) : 0;
+const despilledPixels = despillKey ? despillKeyFringe(resized, despillPasses, keyColor) : 0;
+const scrubbedKeyPixels = scrubKey ? scrubKeyArtifacts(resized, keyColor) : 0;
+const normalizedTransparentPixels = normalizeTransparentMatte(resized);
 const encoded = encodePng(target.width, target.height, resized.data);
 
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
@@ -66,10 +72,13 @@ process.stdout.write(`output: ${target.width}x${target.height} -> ${relOut}\n`);
 process.stdout.write(`keyed transparent pixels: ${keyed}\n`);
 if (grid) process.stdout.write(`cleared unused-cell pixels: ${clearedUnusedPixels}\n`);
 if (grid) process.stdout.write(`cleared grid separator pixels: ${clearedGridPixels}\n`);
+if (despilledPixels) process.stdout.write(`despilled key-fringe pixels: ${despilledPixels}\n`);
+if (scrubbedKeyPixels) process.stdout.write(`scrubbed key-artifact pixels: ${scrubbedKeyPixels}\n`);
+if (normalizedTransparentPixels) process.stdout.write(`normalized transparent matte pixels: ${normalizedTransparentPixels}\n`);
 
 function printUsage() {
   process.stdout.write(`Usage:
-  node tools/postprocess-generation.mjs <raw-png> [--target 384x192] [--out path] [--key #FF00FF] [--tolerance 24] [--edge-connected-key] [--keep-grid-lines] [--grid-line-radius 1]
+  node tools/postprocess-generation.mjs <raw-png> [--target 384x192] [--out path] [--key #FF00FF] [--tolerance 24] [--edge-connected-key] [--despill-key] [--despill-passes 2] [--scrub-key] [--keep-grid-lines] [--grid-line-radius 1]
 
 Examples:
   node tools/postprocess-generation.mjs generations/raw/assets/chars/sama/monastic_infra/row-strips/rows-00-02.png
@@ -157,12 +166,12 @@ function inferGrid(inputPathAbs) {
 function inferExactPromptTarget(assetPath) {
   const doc = readTheme();
   const prompts = doc.prompts ?? {};
-  const directGroups = ["stages", "objectives", "portraitsLarge"];
+  const directGroups = ["stages", "objectives"];
   for (const groupName of directGroups) {
     const found = findDirectGroupTarget(prompts[groupName], assetPath);
     if (found) return found;
   }
-  const sharedGroups = ["portraitSheets", "weaponSheetsLaunch", "weaponSheetsDeferred", "lockedSlot"];
+  const sharedGroups = ["portraitSheets", "portraitsLarge", "weaponSheetsLaunch", "weaponSheetsDeferred", "lockedSlot"];
   for (const groupName of sharedGroups) {
     const found = findSharedGroupTarget(prompts[groupName], assetPath);
     if (found) return found;
@@ -354,10 +363,84 @@ function edgeConnectedKeyToAlpha(image, key, tolerance) {
 }
 
 function makeTransparent(data, offset, key) {
-  data[offset] = key.r;
-  data[offset + 1] = key.g;
-  data[offset + 2] = key.b;
+  // Store a neutral matte under fully-transparent pixels. Keeping the
+  // original magenta RGB is technically valid PNG, but it can leak in
+  // alpha-unsafe previews or later resampling passes as pink fringe.
+  data[offset] = 0;
+  data[offset + 1] = 0;
+  data[offset + 2] = 0;
   data[offset + 3] = 0;
+}
+
+function normalizeTransparentMatte(image) {
+  let changed = 0;
+  const { data } = image;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] !== 0) continue;
+    if (data[i] || data[i + 1] || data[i + 2]) changed += 1;
+    data[i] = 0;
+    data[i + 1] = 0;
+    data[i + 2] = 0;
+  }
+  return changed;
+}
+
+function despillKeyFringe(image, passes, key) {
+  const { width, height, data } = image;
+  let total = 0;
+  for (let pass = 0; pass < passes; pass += 1) {
+    const clearOffsets = [];
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const offset = (y * width + x) * 4;
+        if (data[offset + 3] === 0) continue;
+        if (!isMagentaFringe(data, offset)) continue;
+        if (!touchesTransparent(data, width, height, x, y)) continue;
+        clearOffsets.push(offset);
+      }
+    }
+    if (!clearOffsets.length) break;
+    for (const offset of clearOffsets) makeTransparent(data, offset, key);
+    total += clearOffsets.length;
+  }
+  return total;
+}
+
+function scrubKeyArtifacts(image, key) {
+  const { data } = image;
+  let scrubbed = 0;
+  for (let offset = 0; offset < data.length; offset += 4) {
+    if (data[offset + 3] === 0) continue;
+    if (!isMagentaFringe(data, offset)) continue;
+    makeTransparent(data, offset, key);
+    scrubbed += 1;
+  }
+  return scrubbed;
+}
+
+function isMagentaFringe(data, offset) {
+  const r = data[offset];
+  const g = data[offset + 1];
+  const b = data[offset + 2];
+  const maxRB = Math.max(r, b);
+  return maxRB >= 36
+    && Math.abs(r - b) <= 96
+    && r >= g + 18
+    && b >= g + 18
+    && g <= maxRB * 0.68;
+}
+
+function touchesTransparent(data, width, height, x, y) {
+  for (let dy = -1; dy <= 1; dy += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      if (data[(ny * width + nx) * 4 + 3] === 0) return true;
+    }
+  }
+  return false;
 }
 
 function isNearKey(data, offset, key, tolerance) {

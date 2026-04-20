@@ -30,6 +30,11 @@ arena/server/data/
 generations/raw/
 theming/generated-prompts/
 
+# Intermediate sprite-sheet strips. Composed into sprite.png by
+# tools/assemble-character-sheet.mjs; the game only loads sprite.png.
+# Strips are regenerable from generations/raw/ so they don't ship.
+client/assets/**/row-strips/
+
 # deploy artifacts
 .firebase/
 .firebaserc

@@ -62,6 +62,11 @@ const WEAPON_SHEETS = [
   { url: "assets/weapons/darrius/launch.png", frameW: 48, frameH: 48, cell: 0 },
 ];
 
+const PORTRAIT_SHEETS = [
+  { url: "assets/chars/sama/monastic_infra/portraits/sheet.png", cellW: 96, cellH: 96 },
+  { url: "assets/chars/darrius/legal_department_midnight/portraits/sheet.png", cellW: 96, cellH: 96 },
+];
+
 const spriteState = CHARACTER_SPRITES.map((kit) => ({
   kit,
   image: null,
@@ -79,9 +84,27 @@ const weaponState = WEAPON_SHEETS.map((kit) => ({
   kit,
 }));
 
+const portraitState = PORTRAIT_SHEETS.map((kit) => ({
+  ...imageState(kit.url),
+  kit,
+}));
+
 const OBJECTIVE_IMAGES = {
   payload: imageState("assets/objectives/proof_core/payload.png"),
   target: imageState("assets/objectives/demand_node/target.png"),
+};
+
+const STAGE_ASSETS = {
+  datacenter: {
+    sky: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/sky.png"),
+    farParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/far_parallax.png"),
+    midParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/mid_parallax.png"),
+    nearParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/near_parallax.png"),
+    platform: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/platform.png"),
+    platformEdge: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/platform_edge.png"),
+    wall: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/wall.png"),
+    floorDetail: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/floor_detail.png"),
+  },
 };
 
 function imageState(url) {
@@ -163,7 +186,7 @@ export function drawFrame(ctx, stage, frame, labels) {
   const p2 = fighterPalette(1);
   ctx.fillStyle = cssColor("--arena-bg");
   ctx.fillRect(0, 0, W, H);
-  drawStage(ctx, stage);
+  drawStage(ctx, stage, frame);
   drawGoal(ctx, frame.goal);
   drawToken(ctx, frame.token);
   drawFighter(ctx, frame.p0, p1.body, p1.trim, p1.shadow, 0, frame);
@@ -171,31 +194,119 @@ export function drawFrame(ctx, stage, frame, labels) {
   drawHUD(ctx, frame, labels, p1.body, p2.body);
 }
 
-function drawStage(ctx, stage) {
+function drawStage(ctx, stage, frame) {
+  const pack = STAGE_ASSETS[stage.id];
+  drawStageGradient(ctx);
+  drawStageBackdrop(ctx, pack, frame);
+  for (const p of stage.platforms) drawPlatform(ctx, p, pack);
+}
+
+function drawStageGradient(ctx) {
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, cssColor("--arena-sky-top"));
   g.addColorStop(0.5, cssColor("--arena-sky-mid"));
   g.addColorStop(1, cssColor("--arena-sky-bottom"));
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
-  for (const p of stage.platforms) {
+}
+
+function drawStageBackdrop(ctx, pack, frame) {
+  if (!pack) return;
+  const sky = loadImage(pack.sky);
+  if (sky) {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(sky, 0, 0, W, H);
+  }
+
+  const tick = frame?.tick ?? 0;
+  const far = loadImage(pack.farParallax);
+  if (far) drawTiledImage(ctx, far, 0, 0, W, H, parallaxOffset(tick, 0.035), 0);
+  const mid = loadImage(pack.midParallax);
+  if (mid) drawTiledImage(ctx, mid, 0, 0, W, H, parallaxOffset(tick, 0.07), 0);
+  const near = loadImage(pack.nearParallax);
+  if (near) drawTiledImage(ctx, near, 0, 0, W, H, parallaxOffset(tick, 0.12), 0);
+}
+
+function parallaxOffset(tick, pxPerTick) {
+  // Pixel art backdrops shimmer when canvas draws them at subpixel x
+  // positions. Snap to integer pixels and let depth come from speed.
+  return -Math.floor(tick * pxPerTick);
+}
+
+function drawPlatform(ctx, p, pack) {
+  const platform = pack ? loadImage(pack.platform) : null;
+  const edge = pack ? loadImage(pack.platformEdge) : null;
+  const wall = pack ? loadImage(pack.wall) : null;
+  const detail = pack ? loadImage(pack.floorDetail) : null;
+
+  if (p.solid && wall && p.h > 18) {
+    drawTiledImage(ctx, wall, p.x, p.y + 16, p.w, p.h - 16);
+  } else {
     ctx.fillStyle = p.solid ? cssColor("--arena-platform-solid") : cssColor("--arena-platform-soft");
     ctx.fillRect(p.x, p.y, p.w, p.h);
+  }
+
+  if (platform) {
+    drawTiledImage(ctx, platform, p.x, p.y, p.w, p.solid ? Math.min(36, p.h) : p.h);
+  }
+
+  if (edge) {
+    drawTiledImage(ctx, edge, p.x, p.y, p.w, Math.min(16, p.h));
+  } else {
     ctx.fillStyle = cssColor("--arena-platform-highlight", "white");
     ctx.fillRect(p.x, p.y, p.w, 3);
   }
+
+  if (detail && p.solid && p.w > 260) {
+    ctx.save();
+    ctx.globalAlpha = 0.75;
+    ctx.imageSmoothingEnabled = false;
+    const w = Math.min(256, p.w);
+    ctx.drawImage(detail, 0, 0, w, Math.min(64, p.h), p.x + (p.w - w) / 2, p.y + 4, w, Math.min(64, p.h));
+    ctx.restore();
+  }
+}
+
+function drawTiledImage(ctx, img, x, y, w, h, offsetX = 0, offsetY = 0) {
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  if (!iw || !ih || w <= 0 || h <= 0) return;
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+
+  const stepX = iw;
+  const stepY = ih;
+  let startX = Math.round(x - positiveMod(offsetX, stepX));
+  let startY = Math.round(y - positiveMod(offsetY, stepY));
+  while (startX > x) startX -= stepX;
+  while (startY > y) startY -= stepY;
+
+  for (let yy = startY; yy < y + h; yy += stepY) {
+    for (let xx = startX; xx < x + w; xx += stepX) {
+      ctx.drawImage(img, 0, 0, stepX, stepY, Math.round(xx), Math.round(yy), stepX, stepY);
+    }
+  }
+  ctx.restore();
+}
+
+function positiveMod(value, mod) {
+  return ((value % mod) + mod) % mod;
 }
 
 // Goal ring = radial countdown. Starts full, sweeps down as the
-// GOAL_TIMER_START-second window drains. Theme blue until the last
+// GOAL_TIMER_START-second window drains. Theme purple until the last
 // 20% (2s at the default 10s window), then interpolates to red so
 // the player can feel a close deadline without reading numbers.
 const GOAL_URGENT_FRAC = 0.20;
-const GOAL_NORMAL_RGB = [96, 165, 250];
+const GOAL_NORMAL_RGB = [217, 70, 239];
 const GOAL_URGENT_RGB = [239, 68, 68];
 
 function goalRingColor(fracRemaining) {
-  // Constant blue until we enter the urgent window, then lerp blue -> red
+  // Constant purple until we enter the urgent window, then lerp purple -> red
   // as the remaining fraction goes from GOAL_URGENT_FRAC -> 0.
   const normal = cssRgb("--arena-goal-normal", GOAL_NORMAL_RGB);
   const urgent = cssRgb("--arena-goal-urgent", GOAL_URGENT_RGB);
@@ -266,22 +377,43 @@ function drawGoal(ctx, goal) {
   ctx.restore();
 }
 
+// Render-only smoothing for the Proof Core's displayed position. The
+// sim still springs the token at k=28 above the carrier's head, which
+// reads as visible jiggle with every walk-bob or jump. We keep the sim
+// untouched (no BEHAVIOR_VERSION impact) and low-pass the rendered xy
+// at the draw layer. SMOOTH = 1 restores raw sim position; lower values
+// calm the bounce without breaking determinism.
+// Lower = calmer (more heavy-handed client-side low-pass on the sim's
+// spring-attached token position). 0.22 still read as springy; 0.12
+// dampens walk-bob jitter and jump overshoot visibly without making
+// the token feel laggy. Pure render smoothing — sim is untouched.
+const TOKEN_SMOOTH = 0.12;
+let tokenRenderX = null;
+let tokenRenderY = null;
+export function resetTokenSmoothing() { tokenRenderX = tokenRenderY = null; }
+
 function drawToken(ctx, t) {
-  if (!t.exists) return;
+  if (!t.exists) { tokenRenderX = tokenRenderY = null; return; }
+  if (tokenRenderX === null) { tokenRenderX = t.x; tokenRenderY = t.y; }
+  tokenRenderX += (t.x - tokenRenderX) * TOKEN_SMOOTH;
+  tokenRenderY += (t.y - tokenRenderY) * TOKEN_SMOOTH;
   ctx.save();
-  ctx.translate(t.x, t.y);
+  ctx.translate(tokenRenderX, tokenRenderY);
+  // 30% reduction vs. the previous 18px glow + 14x20 diamond + 48px PNG.
+  // Keeps the source PNG asset 48x48 (future-proof for HUD/collection
+  // slots) but renders it at 34x34 in-world.
   ctx.fillStyle = cssColor("--arena-token-glow", "yellow");
   ctx.beginPath();
-  ctx.arc(0, 0, 18, 0, Math.PI * 2);
+  ctx.arc(0, 0, 13, 0, Math.PI * 2);
   ctx.fill();
   const payloadImg = loadImage(OBJECTIVE_IMAGES.payload);
   if (payloadImg) {
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(payloadImg, -24, -24, 48, 48);
+    ctx.drawImage(payloadImg, -17, -17, 34, 34);
   } else {
     ctx.fillStyle = cssColor("--arena-token", "gold");
     ctx.beginPath();
-    ctx.moveTo(0, -10); ctx.lineTo(7, 0); ctx.lineTo(0, 10); ctx.lineTo(-7, 0);
+    ctx.moveTo(0, -7); ctx.lineTo(5, 0); ctx.lineTo(0, 7); ctx.lineTo(-5, 0);
     ctx.closePath(); ctx.fill();
   }
   ctx.restore();
@@ -298,6 +430,11 @@ function drawFighter(ctx, f, col, trim, shadow, side, frame) {
   drawSword(ctx, f, shadow, side);
   updateSpriteMotion(side, f, frame);
 }
+
+// Visual scale for character sprites. Sim hitbox is sim-authoritative
+// at bodyW=26, bodyH=52; the rendered sprite is just art. 1.25x reads
+// at ~11% of stage height vs. 8.9% at 1:1, closer to genre norm.
+const SPRITE_RENDER_SCALE = 1.25;
 
 function drawSpriteFighter(ctx, f, side, frame) {
   const state = spriteState[side];
@@ -321,11 +458,18 @@ function drawSpriteFighter(ctx, f, side, frame) {
   // Source sheets face camera-right. Facing left is a horizontal flip.
   // Do not flip Y; canvas Y grows downward and a Y flip would invert the body.
   if (f.facing < 0) ctx.scale(-1, 1);
+  // Render scale: draw the 64x64 sprite cell at ~1.25x so fighters read
+  // at a closer-to-genre-norm stage proportion (~11% of stage height
+  // vs. 8.9% at 1:1). The hitbox stays sim-authoritative — visual only.
+  // Combined with the narrow-silhouette prompt update, the visible body
+  // stays aligned with the 26x52 hitbox even after upscaling.
+  const renderW = state.kit.frameW * SPRITE_RENDER_SCALE;
+  const renderH = state.kit.frameH * SPRITE_RENDER_SCALE;
   ctx.drawImage(
     img,
     sx, sy, state.kit.frameW, state.kit.frameH,
-    -state.kit.frameW / 2, -state.kit.frameH / 2,
-    state.kit.frameW, state.kit.frameH
+    -renderW / 2, -renderH / 2,
+    renderW, renderH
   );
   ctx.restore();
   return true;
@@ -469,20 +613,23 @@ function drawWeaponSprite(ctx, side, bx, by, tx, ty, active) {
 
 function drawHUD(ctx, frame, labels, p1Color, p2Color) {
   const L = labels || {};
+  drawHudPortrait(ctx, 0, frame.p0, frame, 36, 20, p1Color);
+  drawHudPortrait(ctx, 1, frame.p1, frame, W - 100, 20, p2Color);
+
   ctx.font = "700 20px monospace";
   ctx.fillStyle = p1Color;
   ctx.textAlign = "left";
-  ctx.fillText(L.p1 || "P1", 40, 36);
+  ctx.fillText(L.p1 || "P1", 112, 38);
   ctx.fillStyle = p2Color;
   ctx.textAlign = "right";
-  ctx.fillText(L.p2 || "P2", W - 40, 36);
+  ctx.fillText(L.p2 || "P2", W - 112, 38);
 
   ctx.font = "700 44px monospace";
   ctx.fillStyle = cssColor("--arena-hud-text", "white");
   ctx.textAlign = "left";
-  ctx.fillText(String(frame.scoreboard[0]), 48, 88);
+  ctx.fillText(String(frame.scoreboard[0]), 114, 88);
   ctx.textAlign = "right";
-  ctx.fillText(String(frame.scoreboard[1]), W - 48, 88);
+  ctx.fillText(String(frame.scoreboard[1]), W - 114, 88);
 
   // Round dots
   ctx.font = "600 14px monospace";
@@ -490,9 +637,9 @@ function drawHUD(ctx, frame, labels, p1Color, p2Color) {
   const dots0 = Array.from({ length: 2 }, (_, i) => (i < frame.rounds[0] ? "\u25CF" : "\u25CB")).join(" ");
   const dots1 = Array.from({ length: 2 }, (_, i) => (i < frame.rounds[1] ? "\u25CF" : "\u25CB")).join(" ");
   ctx.textAlign = "left";
-  ctx.fillText(dots0, 50, 108);
+  ctx.fillText(dots0, 116, 108);
   ctx.textAlign = "right";
-  ctx.fillText(dots1, W - 50, 108);
+  ctx.fillText(dots1, W - 116, 108);
 
   if (L.tick !== undefined) {
     ctx.font = "500 12px monospace";
@@ -500,4 +647,36 @@ function drawHUD(ctx, frame, labels, p1Color, p2Color) {
     ctx.textAlign = "center";
     ctx.fillText(`tick ${frame.tick ?? L.tick}`, W / 2, 24);
   }
+}
+
+function drawHudPortrait(ctx, side, fighter, frame, x, y, accent) {
+  const state = portraitState[side];
+  const img = state ? loadImage(state) : null;
+  const size = 64;
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.42)";
+  ctx.fillRect(x - 4, y - 4, size + 8, size + 8);
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x - 4, y - 4, size + 8, size + 8);
+
+  if (img && state) {
+    const idx = portraitIndex(side, fighter, frame);
+    const sx = (idx % 2) * state.kit.cellW;
+    const sy = Math.floor(idx / 2) * state.kit.cellH;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, sx, sy, state.kit.cellW, state.kit.cellH, x, y, size, size);
+  } else {
+    ctx.fillStyle = accent;
+    ctx.globalAlpha = 0.18;
+    ctx.fillRect(x, y, size, size);
+  }
+  ctx.restore();
+}
+
+function portraitIndex(side, fighter, frame) {
+  if (frame.rounds?.[side] >= 2) return 3; // victory
+  if (fighter.dead) return 2;              // ko
+  if ((fighter.stun ?? 0) > 0) return 1;   // hurt
+  return 0;                                // neutral
 }

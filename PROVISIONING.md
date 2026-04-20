@@ -51,12 +51,14 @@ Closed alpha can also set:
 
 ```js
 window.__M3T4_AUTH_MODE__ = "alpha-token";
-window.__M3T4_ALPHA_TOKEN__ = "<shared alpha token>";
 window.__M3T4_ALPHA_PASSWORD_SHA256__ = "<sha256(password)>";
 ```
 
 That password gate is a convenience gate for the static app, not a
-security boundary. Server-side auth is still required.
+security boundary. The plaintext password is sent as the alpha token only
+after a successful gate; do not put `M3T4_ALPHA_TOKEN` in
+`client/config.js`. Server-side auth and optional UID allowlisting are
+still required.
 
 ## 3. Auth providers
 
@@ -217,9 +219,11 @@ curl https://api.m3t4.ai/api/leaderboard
 Auth check: visit `https://m3t4.ai`, click "Sign in with Google", confirm
 callback succeeds.
 
-Closed alpha auth check: set `window.__M3T4_AUTH_MODE__="alpha-token"` in
-`client/config.js`, enter the alpha password gate, pick an invited UID, and
-submit a config. Production must still reject `AUTH_MODE=dev`.
+Closed alpha auth check: set `window.__M3T4_AUTH_MODE__="alpha-token"` and
+`window.__M3T4_ALPHA_PASSWORD_SHA256__` in `client/config.js`, enter the
+alpha password gate, pick an invited UID, and submit a config. The server
+secret `M3T4_ALPHA_TOKEN` must match that password. Production must still
+reject `AUTH_MODE=dev`.
 
 WebSocket check: from browser console,
 `new WebSocket("wss://api.m3t4.ai/ws").onopen = () => console.log("ok")`.

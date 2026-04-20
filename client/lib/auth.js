@@ -1,6 +1,8 @@
 // Auth wrapper. Local dev can pick a UID. Production uses Firebase Auth
 // when window.__M3T4_FIREBASE_CONFIG__ is supplied by deploy-time config.
 
+import { ALPHA_TOKEN_KEY } from "./alpha-gate.js";
+
 const KEY_UID = "m3t4:uid";
 const KEY_HANDLE = "m3t4:handle";
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", ""]);
@@ -60,8 +62,8 @@ class AlphaTokenAuth extends DevAuth {
 
   async token() {
     const uid = localStorage.getItem(KEY_UID) || "";
-    const secret = window.__M3T4_ALPHA_TOKEN__;
-    if (!secret) throw new Error("alpha token missing from deploy config");
+    const secret = sessionStorage.getItem(ALPHA_TOKEN_KEY);
+    if (!secret) throw new Error("alpha token missing; pass the alpha password gate first");
     return `${uid}:${secret}`;
   }
 }

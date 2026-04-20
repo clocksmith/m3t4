@@ -16,4 +16,3 @@ window.__M3T4_FIREBASE_CONFIG__ = {
 // substitute for server-side auth.
 // window.__M3T4_ALPHA_PASSWORD_SHA256__ = "";
 // window.__M3T4_AUTH_MODE__ = "alpha-token";
-// window.__M3T4_ALPHA_TOKEN__ = "";

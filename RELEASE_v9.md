@@ -125,6 +125,9 @@ M3T4_ALPHA_ALLOWLIST=alice,bob
 
 That mode accepts bearer tokens formatted as `<uid>:<token>` and rejects
 UIDs outside the allowlist when one is configured.
+For closed alpha, `client/config.js` should expose only the SHA-256 gate
+hash. The browser sends the entered password as the token after the gate;
+do not publish `M3T4_ALPHA_TOKEN` as static client config.
 
 Client requirements:
 

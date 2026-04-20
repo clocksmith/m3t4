@@ -34,6 +34,46 @@ test("alpha-token auth requires an alpha token secret", () => {
   assert.match(child.stderr, /M3T4_ALPHA_TOKEN is required/);
 });
 
+test("alpha-token auth enforces invite allowlist", () => {
+  const child = spawnSync(process.execPath, [
+    "--input-type=module",
+    "-e",
+    "import('./dist/auth.js').then(async (m) => { await m.verifyAuth('Bearer bob:secret'); }).then(() => process.exit(0)).catch((e) => { console.error(e.message); process.exit(42); })",
+  ], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      NODE_ENV: "production",
+      AUTH_MODE: "alpha-token",
+      M3T4_ALPHA_TOKEN: "secret",
+      M3T4_ALPHA_ALLOWLIST: "alice",
+    },
+    encoding: "utf8",
+  });
+  assert.equal(child.status, 42);
+  assert.match(child.stderr, /alpha uid not invited/);
+});
+
+test("alpha-token auth accepts invited uid with shared token", () => {
+  const child = spawnSync(process.execPath, [
+    "--input-type=module",
+    "-e",
+    "import('./dist/auth.js').then(async (m) => { const r = await m.verifyAuth('Bearer alice:secret'); console.log(r.uid); })",
+  ], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      NODE_ENV: "production",
+      AUTH_MODE: "alpha-token",
+      M3T4_ALPHA_TOKEN: "secret",
+      M3T4_ALPHA_ALLOWLIST: "alice",
+    },
+    encoding: "utf8",
+  });
+  assert.equal(child.status, 0);
+  assert.equal(child.stdout.trim(), "alice");
+});
+
 test("production duel/proof token signing requires M3T4_MATCH_TOKEN_SECRET", () => {
   const child = runImport("./dist/verify.js", {
     NODE_ENV: "production",

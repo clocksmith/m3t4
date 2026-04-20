@@ -1,4 +1,5 @@
 const KEY = "m3t4:alphaGate";
+export const ALPHA_TOKEN_KEY = "m3t4:alphaToken";
 
 export async function installAlphaGate() {
   const expected = window.__M3T4_ALPHA_PASSWORD_SHA256__;
@@ -33,6 +34,7 @@ export async function installAlphaGate() {
         return;
       }
       sessionStorage.setItem(KEY, expected);
+      sessionStorage.setItem(ALPHA_TOKEN_KEY, input.value);
       document.body.innerHTML = `
         <header id="topnav">
           <div class="brand">

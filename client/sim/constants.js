@@ -37,6 +37,12 @@ export const POINTS_TO_WIN_ROUND = 3;
 export const ROUNDS_TO_WIN_MATCH = 2;
 export const GOAL_TIMER_START = 10;
 export const ROUND_TIMER_MAX_TICKS = 60 * 120; // safety cap: 60 s per round
-// Carrier must stay within 32 px of the goal for this long to score.
-// Gives defenders a window to contest delivery; nerfs pure-delivery bots.
-export const GOAL_DWELL_S = 0.5;
+// Carrier must keep their body top within this goal radius long enough to score.
+// Shorter than kill respawn so winning combat near goal can convert.
+export const GOAL_DWELL_S = 0.35;
+export const GOAL_DWELL_RADIUS = 40;
+export const KILL_RESPAWN_S = 0.5;
+export const DOUBLE_KO_RESPAWN_S = 0.6;
+// Respawn invulnerability must be shorter than dwell, or every fresh defender
+// can safely walk through a carrier's scoring window and force objective loops.
+export const RESPAWN_INVULN_S = 0.3;

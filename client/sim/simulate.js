@@ -1,12 +1,13 @@
 // Deterministic match simulator. Given two compiled brains + stage + seed,
 // runs a complete match tick-by-tick and returns a full MatchResult with
 // an input-log that's sufficient to re-render the match anywhere.
-import { ARENA_L, ARENA_R, ARENA_T, CLASH_FREEZE, COYOTE_TIME, FLOOR_Y, GOAL_DWELL_S, GOAL_TIMER_START, GRAVITY, HIT_FREEZE, JUMP_BUFFER_TIME, POINTS_TO_WIN_ROUND, ROUNDS_TO_WIN_MATCH, ROUND_TIMER_MAX_TICKS, STATS, STEP, WALL_SLIDE, } from "./constants.js";
+import { ARENA_L, ARENA_R, ARENA_T, CLASH_FREEZE, COYOTE_TIME, FLOOR_Y, GOAL_DWELL_RADIUS, GOAL_DWELL_S, GOAL_TIMER_START, GRAVITY, HIT_FREEZE, JUMP_BUFFER_TIME, DOUBLE_KO_RESPAWN_S, KILL_RESPAWN_S, POINTS_TO_WIN_ROUND, RESPAWN_INVULN_S, ROUNDS_TO_WIN_MATCH, ROUND_TIMER_MAX_TICKS, STATS, STEP, WALL_SLIDE, } from "./constants.js";
 import { createBrainState, resetBrainStateForRound, runParamBrain } from "./brain.js";
 import { RANGES } from "./budget.js";
 import { compileBrain, evaluateParams } from "./dsl.js";
 import { makeRng } from "./rng.js";
 import { PARAM_KEYS } from "./types.js";
+import { emptyFighterTelemetry } from "./types.js";
 // ---------- Characters (visual only; stats identical) ----------
 export const DEFAULT_CHARS = [
     { name: "Sama", label: "OpenAL", col: "#6ee7b7", trim: "#d1fae5", shadow: "#047857" },
@@ -253,10 +254,24 @@ function tickFighter(f, opp, input, w) {
     // Dive requires an explicit down-press while airborne — otherwise an
     // airborne attack is the upward aerial swipe.
     if (input.action && f.stun <= 0 && f.diveT <= 0 && f.swipeT <= 0) {
-        if (!f.onGround && input.down && f.diveCD <= 0)
+        if (!f.onGround && input.down && f.diveCD <= 0) {
             startAttack(f, "dive", w.tick);
-        else if (f.swipeCD <= 0)
+            if (w.telemetry) {
+                const t = w.telemetry[f.id];
+                const m = w.brainStates[f.id].mode;
+                t.dives++;
+                t.modeDives[m]++;
+            }
+        }
+        else if (f.swipeCD <= 0) {
             startAttack(f, "swipe", w.tick);
+            if (w.telemetry) {
+                const t = w.telemetry[f.id];
+                const m = w.brainStates[f.id].mode;
+                t.swipes++;
+                t.modeSwipes[m]++;
+            }
+        }
     }
     if (!f.onGround && input.down)
         f.vy += 1200 * STEP;
@@ -353,6 +368,12 @@ function resolveCombat(w) {
         b.swipeT = 0;
         a.lastClashTick = w.tick;
         b.lastClashTick = w.tick;
+        if (w.telemetry) {
+            w.telemetry[0].clashes++;
+            w.telemetry[1].clashes++;
+            w.telemetry[0].modeClashes[w.brainStates[0].mode]++;
+            w.telemetry[1].modeClashes[w.brainStates[1].mode]++;
+        }
         w.freeze = Math.max(w.freeze, CLASH_FREEZE);
         return;
     }
@@ -375,6 +396,12 @@ function resolveCombat(w) {
             b.stun = 0.09;
             a.lastClashTick = w.tick;
             b.lastClashTick = w.tick;
+            if (w.telemetry) {
+                w.telemetry[0].clashes++;
+                w.telemetry[1].clashes++;
+                w.telemetry[0].modeClashes[w.brainStates[0].mode]++;
+                w.telemetry[1].modeClashes[w.brainStates[1].mode]++;
+            }
             w.freeze = Math.max(w.freeze, CLASH_FREEZE);
             return;
         }
@@ -403,7 +430,7 @@ function respawn(f, w) {
     f.vx = 0;
     f.vy = 0;
     f.dead = false;
-    f.invuln = 0.6;
+    f.invuln = RESPAWN_INVULN_S;
     f.swipeT = 0;
     f.diveT = 0;
     f.coyote = 0;
@@ -426,13 +453,17 @@ function killPlayer(w, vid, kid) {
     if (v.dead || k.dead)
         return;
     v.dead = true;
-    v.respawnT = 0.5;
+    v.respawnT = KILL_RESPAWN_S;
     v.vx = 0;
     v.vy = 0;
     v.swipeT = 0;
     v.diveT = 0;
     v.hp = 0;
     k.lastKillTick = w.tick;
+    if (w.telemetry) {
+        w.telemetry[kid].kills++;
+        w.telemetry[vid].deaths++;
+    }
     w.freeze = Math.max(w.freeze, HIT_FREEZE);
     if (!w.goal)
         pickGoal(w);
@@ -452,10 +483,14 @@ function killPlayer(w, vid, kid) {
 function doubleKO(w) {
     for (const p of w.fighters) {
         p.dead = true;
-        p.respawnT = 0.6;
+        p.respawnT = DOUBLE_KO_RESPAWN_S;
         p.vx = 0;
         p.vy = 0;
         p.hp = 0;
+    }
+    if (w.telemetry) {
+        w.telemetry[0].deaths++;
+        w.telemetry[1].deaths++;
     }
     w.gold = null;
     w.goal = null;
@@ -464,6 +499,8 @@ function doubleKO(w) {
 function scorePoint(w, pid) {
     const p = w.fighters[pid];
     p.score += 1;
+    if (w.telemetry)
+        w.telemetry[pid].deliveries++;
     if (p.score >= POINTS_TO_WIN_ROUND) {
         p.rounds += 1;
         w.roundWinner = pid;
@@ -502,7 +539,7 @@ function updateGold(w) {
     if (!c.dead) {
         const dx = c.x - w.goal.x;
         const dy = c.y - STATS.bodyH * 0.5 - w.goal.y;
-        const atGoal = Math.hypot(dx, dy) < 32;
+        const atGoal = Math.hypot(dx, dy) < GOAL_DWELL_RADIUS;
         if (atGoal) {
             w.gold.dwellT += STEP;
             if (w.gold.dwellT >= GOAL_DWELL_S)
@@ -549,12 +586,59 @@ function unpackAction(byte) {
         action: !!(byte & 16),
     };
 }
+// Opt-in per-tick telemetry. Reads BrainState.mode + substate for both
+// fighters; increments mode/substate tick counters + mode-switch counter
+// + zone/objective/escape entry counters when mode changes transition.
+// Pure read — no behavior change.
+function tallyBrainTurn(telemetry, brainStates, prevMode) {
+    for (let i = 0; i < 2; i++) {
+        const st = brainStates[i];
+        const t = telemetry[i];
+        t.ticks++;
+        t.modeTicks[st.mode]++;
+        // Substate tallying: normalize intercept-block / intercept-kill to
+        // one "intercept" bucket since both serve the same diagnostic
+        // question ("was time spent defending goal?").
+        const sub = st.substate;
+        if (sub === "press" || sub === "bait" || sub === "punish")
+            t.substateTicks[sub]++;
+        else if (sub === "deliver")
+            t.substateTicks.deliver++;
+        else if (sub === "intercept-block" || sub === "intercept-kill")
+            t.substateTicks.intercept++;
+        else if (sub === "pickup")
+            t.substateTicks.pickup++;
+        const prev = prevMode[i];
+        if (prev !== null && prev !== st.mode) {
+            t.modeSwitches++;
+            if (st.mode === "zone")
+                t.zoneEntries++;
+            else if (st.mode === "objective")
+                t.objectiveEntries++;
+            else if (st.mode === "escape")
+                t.escapeEntries++;
+        }
+        else if (prev === null) {
+            // First observation of each mode counts as entry.
+            if (st.mode === "zone")
+                t.zoneEntries++;
+            else if (st.mode === "objective")
+                t.objectiveEntries++;
+            else if (st.mode === "escape")
+                t.escapeEntries++;
+        }
+        prevMode[i] = st.mode;
+    }
+}
 export function simulate(opts) {
     const stage = opts.stage;
     const chars = opts.chars ?? DEFAULT_CHARS;
     const maxTicks = opts.maxTicks ?? ROUND_TIMER_MAX_TICKS * ROUNDS_TO_WIN_MATCH * 2;
     const rng = makeRng(opts.seed);
     const noiseSeed = noiseSeedFromMatchSeed(opts.seed);
+    const telemetry = opts.telemetry
+        ? [emptyFighterTelemetry(), emptyFighterTelemetry()]
+        : undefined;
     const w = {
         tick: 0,
         stage,
@@ -572,9 +656,12 @@ export function simulate(opts) {
         rng,
         noiseSeed,
         brainStates: [createBrainState(0), createBrainState(1)],
+        telemetry,
     };
     const brainA = compileBrain(opts.brainA);
     const brainB = compileBrain(opts.brainB);
+    // Track previous mode per fighter for switch/entry counting.
+    const prevMode = [null, null];
     // Frame log: 2 bytes per tick (one per fighter), packed Action bitmasks
     const log = [];
     let hashAcc = 2166136261 >>> 0;
@@ -624,6 +711,8 @@ export function simulate(opts) {
         const paramsB = applyHallucinationNoise(evaluateParams(brainB, obsB), w.tick, 1, w.noiseSeed);
         const actA = runParamBrain(obsA, paramsA, w.brainStates[0]);
         const actB = runParamBrain(obsB, paramsB, w.brainStates[1]);
+        if (telemetry)
+            tallyBrainTurn(telemetry, w.brainStates, prevMode);
         const pa = packAction(actA);
         const pb = packAction(actB);
         log.push(pa, pb);
@@ -658,6 +747,7 @@ export function simulate(opts) {
         seed: opts.seed,
         logHash: hashAcc.toString(16).padStart(8, "0"),
         frameLog: Uint8Array.from(log),
+        ...(telemetry ? { telemetry } : {}),
     };
 }
 export { unpackAction, packAction };

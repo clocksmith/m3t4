@@ -33,6 +33,7 @@ export interface SignedMatchTokenRec {
   issuedAt: string;
   expiresAt: string;
   stateHashCadenceTicks: number;
+  maxTicks?: number;
   signature: string;
 }
 
@@ -56,7 +57,8 @@ export interface CommunityWorkerRec {
 export interface CommunityAttestationRec {
   matchId: string;
   workerId: string;
-  computedLogHash: string;
+  computedLogHash?: string;
+  computedActionSha256?: string;
   agreed: boolean;
   postedAt: string;
 }

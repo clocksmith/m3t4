@@ -222,7 +222,7 @@ for (const o of outcomes) {
 }
 
 for (const s of stats) {
-  s.winRate = s.matches > 0 ? s.wins / s.matches : 0;
+  s.winRate = s.matches > 0 ? (s.wins + s.draws * 0.5) / s.matches : 0;
   s.avgTicks = s.matches > 0 ? s.avgTicks / s.matches : 0;
   s.avgScoreDiff = s.matches > 0 ? s.avgScoreDiff / s.matches : 0;
 }

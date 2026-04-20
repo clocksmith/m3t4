@@ -37,7 +37,7 @@ import {
 } from "../sim/index.js";
 
 const API = (() => {
-  const envOrigin = window.ARENA_API_ORIGIN || "";
+  const envOrigin = window.__M3T4_API_ORIGIN__ || window.ARENA_API_ORIGIN || "";
   return envOrigin || window.location.origin;
 })();
 
@@ -75,6 +75,10 @@ function bytesToBase64(bytes) {
   return btoa(bin);
 }
 
+function matchTokenHeader(token) {
+  return token ? { "x-m3t4-match-token": btoa(JSON.stringify(token)) } : {};
+}
+
 // FNV-1a over a Uint8Array — matches sim's logHash mechanism.
 function fnv1a(bytes) {
   let h = 2166136261 >>> 0;
@@ -97,6 +101,8 @@ async function pollUntil(fn, { intervalMs = 400, timeoutMs = 30000 } = {}) {
 }
 
 // ---------------------------- RTC setup ----------------------------
+
+let currentTokenForSignal = null;
 
 // Create a peer connection + open a data channel.
 // role: "initiator" or "acceptor"
@@ -145,7 +151,7 @@ function makePeer(matchId, role, myPlayerId, onAction, onHash, onOpen, onClose, 
       await api("POST", `/api/duel/signal/${matchId}`, {
         ice: ev.candidate.toJSON(),
         fromPlayerId: myPlayerId,
-      });
+      }, matchTokenHeader(currentTokenForSignal));
     }
   };
 
@@ -263,6 +269,7 @@ export function renderDuel(root) {
 
   async function establishPeerAndRun(role) {
     const matchId = state.token.matchId;
+    currentTokenForSignal = state.token;
     let peerReady;
     const peerReadyP = new Promise((r) => { peerReady = r; });
 
@@ -281,10 +288,11 @@ export function renderDuel(root) {
       const offer = await state.peer.pc.createOffer();
       await state.peer.pc.setLocalDescription(offer);
       await api("POST", `/api/duel/signal/${matchId}`,
-        { role: "offer", sdp: offer.sdp, fromPlayerId: state.myUid });
+        { role: "offer", sdp: offer.sdp, fromPlayerId: state.myUid },
+        matchTokenHeader(state.token));
       log("posted SDP offer; waiting for answer");
       const resp = await pollUntil(async () => {
-        const r = await api("GET", `/api/duel/signal/${matchId}?role=answer`);
+        const r = await api("GET", `/api/duel/signal/${matchId}?role=answer`, undefined, matchTokenHeader(state.token));
         return r.body?.sdp;
       });
       await state.peer.pc.setRemoteDescription({ type: "answer", sdp: resp.sdp });
@@ -294,14 +302,15 @@ export function renderDuel(root) {
     } else {
       log("polling for SDP offer");
       const resp = await pollUntil(async () => {
-        const r = await api("GET", `/api/duel/signal/${matchId}?role=offer`);
+        const r = await api("GET", `/api/duel/signal/${matchId}?role=offer`, undefined, matchTokenHeader(state.token));
         return r.body?.sdp;
       });
       await state.peer.pc.setRemoteDescription({ type: "offer", sdp: resp.sdp });
       const answer = await state.peer.pc.createAnswer();
       await state.peer.pc.setLocalDescription(answer);
       await api("POST", `/api/duel/signal/${matchId}`,
-        { role: "answer", sdp: answer.sdp, fromPlayerId: state.myUid });
+        { role: "answer", sdp: answer.sdp, fromPlayerId: state.myUid },
+        matchTokenHeader(state.token));
       log("posted SDP answer");
       pollIceCandidates(matchId);
     }
@@ -315,7 +324,7 @@ export function renderDuel(root) {
   async function pollIceCandidates(matchId) {
     let since = new Date(0).toISOString();
     while (!icePollStop && !state.matchDone) {
-      const r = await api("GET", `/api/duel/signal/${matchId}?sinceIce=${encodeURIComponent(since)}`);
+      const r = await api("GET", `/api/duel/signal/${matchId}?sinceIce=${encodeURIComponent(since)}`, undefined, matchTokenHeader(state.token));
       if (r.body?.ice) {
         for (const c of r.body.ice) {
           if (c.fromPlayerId === state.myUid) continue;
@@ -341,7 +350,7 @@ export function renderDuel(root) {
     const world = createStepperWorld({ stage, seed: state.token.seed });
     const myBrain = compileBrain(myCfg);
 
-    const MAX_TICKS = 28800;
+    const MAX_TICKS = state.token.maxTicks || 28800;
     const STATE_HASH_EVERY = state.token.stateHashCadenceTicks || 120;
     const actionBytes = []; // paired p0/p1, order-preserving
 

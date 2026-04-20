@@ -1,10 +1,10 @@
-import { STATS, STEP } from "./constants.js";
+import { GOAL_DWELL_RADIUS, GOAL_DWELL_S, KILL_RESPAWN_S, RESPAWN_INVULN_S, STATS, STEP, } from "./constants.js";
 // v3: Intent state machine. Five modes — neutral, offense, zone,
 // objective, escape — each with its own behavior loop and minimum
 // commitment window. Replaces v2's per-tick reactive ladder. Params
 // bias mode transitions and tactical details within each mode; they no
 // longer drive behavior directly via a flat if/else.
-export const BEHAVIOR_VERSION = 3;
+export const BEHAVIOR_VERSION = 5;
 // ---------- Opp-model buffer sizing ----------
 //
 // Bounded ring: max 16 entries per stream, hard decay at 240 ticks (2 s).
@@ -33,6 +33,8 @@ const SWIPE_ACTIVE_TICKS = Math.ceil(STATS.swipeTime / STEP);
 const SWIPE_FULL_CD_TICKS = Math.ceil(STATS.swipeTime * 1.6 / STEP);
 const RECOVERY_WINDOW_START = SWIPE_ACTIVE_TICKS;
 const RECOVERY_WINDOW_END = SWIPE_FULL_CD_TICKS + 2; // small slack
+const PASSIVE_FOIL_DANGER_RANGE = STATS.sword + STATS.bodyW;
+const CLASH_LOOP_THRESHOLD = 10;
 // Distance band used by several modes' "close enough to commit"
 // thresholds. burnRate extends effective swing reach.
 function swingRange(params) {
@@ -48,6 +50,9 @@ export function createBrainState(id) {
         recentOppSwipeTicks: [],
         recentOppDiveTicks: [],
         lastKnownOppAttackStartTick: -9999,
+        recentSelfClashTicks: [],
+        lastKnownSelfClashTick: -9999,
+        deliveryPlan: null,
         lastTransitionReason: "init",
     };
 }
@@ -59,6 +64,7 @@ export function resetBrainStateForRound(state, tick) {
     state.mode = "neutral";
     state.substate = null;
     state.modeEnterTick = tick;
+    state.deliveryPlan = null; // plan's timing estimates are stale across respawn
     state.lastTransitionReason = "round-reset";
 }
 // ---------- Opp-model update ----------
@@ -74,6 +80,7 @@ function decayBuffer(buf, now) {
 function updateOppModel(state, obs) {
     decayBuffer(state.recentOppSwipeTicks, obs.tick);
     decayBuffer(state.recentOppDiveTicks, obs.tick);
+    decayBuffer(state.recentSelfClashTicks, obs.tick);
     const oppAttackStart = obs.opp.lastAttackStartTick;
     if (oppAttackStart !== state.lastKnownOppAttackStartTick && oppAttackStart >= 0) {
         // Classify: dive started mid-air, swipe started on ground. We don't
@@ -84,6 +91,15 @@ function updateOppModel(state, obs) {
         else
             pushBounded(state.recentOppSwipeTicks, oppAttackStart);
         state.lastKnownOppAttackStartTick = oppAttackStart;
+    }
+    // Self-clash detection: obs.self.lastClashTick advances when sim
+    // resolves a clash (both committed collinear, or both passive-foil
+    // collinear). We record each advance into the buffer so v4.1 can
+    // detect clash loops without the brain computing geometry itself.
+    const selfClashTick = obs.self.lastClashTick;
+    if (selfClashTick !== state.lastKnownSelfClashTick && selfClashTick >= 0) {
+        pushBounded(state.recentSelfClashTicks, selfClashTick);
+        state.lastKnownSelfClashTick = selfClashTick;
     }
 }
 function deriveSignals(obs, params, state) {
@@ -100,17 +116,22 @@ function deriveSignals(obs, params, state) {
     const canSwing = obs.self.swipeCD <= 0 && inReach;
     const oppActive = obs.opp.swipeT > 0 || obs.opp.diveT > 0;
     const oppCommittedAtUs = oppActive && Math.abs(obs.dy) < 80 && absDist < reach + 60;
+    const passiveFoilDanger = !oppActive &&
+        Math.abs(obs.dy) < STATS.bodyH &&
+        absDist < PASSIVE_FOIL_DANGER_RANGE;
     const ticksSinceOppAttack = obs.tick - obs.opp.lastAttackStartTick;
     const oppRecovering = ticksSinceOppAttack >= RECOVERY_WINDOW_START &&
         ticksSinceOppAttack <= RECOVERY_WINDOW_END &&
         !oppActive;
-    const oppOpen = obs.opp.stun > 0 || (!oppActive && Math.abs(obs.opp.vx) < 120 && Math.abs(obs.opp.vy) < 80);
+    const oppOpen = obs.opp.stun > 0 ||
+        (!oppActive && !passiveFoilDanger && Math.abs(obs.opp.vx) < 120 && Math.abs(obs.opp.vy) < 80);
     // Opp closing fast: their velocity component toward us is significant
     // AND they're within one swing-range of contact.
     const oppClosingFast = Math.sign(obs.opp.vx) === -absDir &&
         Math.abs(obs.opp.vx) > 260 &&
         absDist < reach + 80;
     const oppAggression = Math.min(1, state.recentOppSwipeTicks.length / (OPP_BUFFER_DECAY_TICKS / 120));
+    const clashLoop = state.recentSelfClashTicks.length >= CLASH_LOOP_THRESHOLD;
     const oppDivingAtUs = obs.opp.diveT > 0 && absDist < 110 && obs.opp.y < obs.self.y + 20;
     const selfBehindOpp = (obs.self.x - obs.opp.x) * obs.opp.facing < 0 && absDist < 100;
     const verticalAdvantage = obs.self.y < obs.opp.y - 30 && absDist < 140;
@@ -129,7 +150,7 @@ function deriveSignals(obs, params, state) {
         predDist, predDir, absDist, absDir, altitudeOff,
         inReach, canSwing,
         oppActive, oppCommittedAtUs, oppRecovering, oppOpen, oppClosingFast,
-        oppAggression, freeSwing, cornered,
+        oppAggression, passiveFoilDanger, clashLoop, freeSwing, cornered,
         ticksSinceOppAttack, ticksSinceClash, ticksSinceKill, stuck,
     };
 }
@@ -190,6 +211,12 @@ function navigateTo(obs, tx, ty) {
     const dx = tx - obs.self.x;
     return { left: dx < -10, right: dx > 10 };
 }
+function goalBodyY(obs) {
+    return obs.goal.y + STATS.bodyH * 0.5;
+}
+function dwellDistance(obs) {
+    return Math.hypot(obs.self.x - obs.goal.x, obs.self.y - STATS.bodyH * 0.5 - obs.goal.y);
+}
 // ---------- Mode transition ----------
 function enterMode(state, mode, substate, tick, reason) {
     state.mode = mode;
@@ -222,12 +249,18 @@ function decideMode(obs, params, state, sig) {
     // Hard danger: opp committed at close range, we're not committed and
     // can't match. ESCAPE regardless of min-duration. Invuln is a free pass.
     const canMatchCommit = obs.self.swipeCD <= 0 && sig.inReach;
-    const hardDanger = sig.oppCommittedAtUs &&
-        sig.absDist < swingRange(params) + 20 &&
+    const passiveWalkInDanger = sig.passiveFoilDanger &&
         obs.self.swipeT <= 0 &&
         obs.self.diveT <= 0 &&
         obs.self.invuln <= 0 &&
         !canMatchCommit;
+    const hardDanger = passiveWalkInDanger ||
+        (sig.oppCommittedAtUs &&
+            sig.absDist < swingRange(params) + 20 &&
+            obs.self.swipeT <= 0 &&
+            obs.self.diveT <= 0 &&
+            obs.self.invuln <= 0 &&
+            !canMatchCommit);
     if (hardDanger && state.mode !== "escape") {
         enterMode(state, "escape", null, tick, "hard-danger");
         return;
@@ -299,6 +332,8 @@ function runNeutralMode(obs, params, sig) {
         move = sig.predDir;
     else if (sig.predDist < params.moat - 15)
         move = -sig.predDir;
+    if (sig.passiveFoilDanger)
+        move = -sig.absDir;
     let jump = false;
     let down = false;
     const stillRising = !obs.self.onGround && obs.self.vy < -150;
@@ -317,8 +352,41 @@ function runNeutralMode(obs, params, sig) {
         action: takeFreeSwing,
     };
 }
+function dominantAntiLoopTrait(params) {
+    const entries = [
+        ["greed", params.greed ?? 0.5],
+        ["cunning", params.cunning ?? 0.5],
+        ["pivotSpeed", params.pivotSpeed ?? 0.5],
+        ["shipRate", params.shipRate ?? 0.5],
+    ];
+    entries.sort((a, b) => b[1] - a[1]);
+    return entries[0][0];
+}
 function runOffenseMode(obs, params, state, sig) {
     const sub = state.substate ?? "press";
+    if (sig.clashLoop && ticksInMode(state, obs.tick) > 60) {
+        const trait = dominantAntiLoopTrait(params);
+        if (trait === "pivotSpeed")
+            return runEscapeMode(obs, params, sig);
+        if (trait === "shipRate" && (obs.token.exists || obs.self.hasToken || obs.opp.hasToken)) {
+            enterMode(state, "objective", null, obs.tick, "anti-loop-objective");
+            return runObjectiveMode(obs, params, state, sig);
+        }
+        if (trait === "greed") {
+            return {
+                left: sig.absDir < 0,
+                right: sig.absDir > 0,
+                action: sig.canSwing,
+            };
+        }
+        const drop = onDropThroughPlatform(obs);
+        return {
+            left: sig.absDir > 0,
+            right: sig.absDir < 0,
+            up: obs.self.onGround,
+            down: !!drop,
+        };
+    }
     // Shared close-gap movement.
     let move = sig.predDir;
     let jump = false;
@@ -370,6 +438,7 @@ function runOffenseMode(obs, params, state, sig) {
     const safeCommit = sig.freeSwing ||
         sig.oppRecovering ||
         sig.oppOpen ||
+        sig.passiveFoilDanger ||
         (!sig.oppCommittedAtUs) ||
         ((params.greed ?? 0.5) > 0.6 && sig.absDist < swingRange(params) * 0.7);
     return {
@@ -396,7 +465,7 @@ function runZoneMode(obs, params, sig) {
     if (sig.altitudeOff < -100)
         down = true;
     // Wall-climb-jump for altitude recovery when wall-bound and opp below.
-    if (obs.self.wall !== 0 && sig.altitudeOff > 40) {
+    if (obs.self.wall !== 0 && sig.altitudeOff > 40 && (params.networking ?? 0) > 0.25) {
         return { left: obs.self.wall < 0, right: obs.self.wall > 0, up: true };
     }
     const zoneStrike = sig.canSwing && (sig.freeSwing || sig.oppRecovering);
@@ -405,16 +474,132 @@ function runZoneMode(obs, params, sig) {
         action: zoneStrike,
     };
 }
-function runObjectiveMode(obs, params, sig) {
-    // Token state drives the sub-behavior.
+// ---------- Delivery planner (v4.2) ----------
+//
+// When the bot is carrying the token and the goal exists, pick ONE of a
+// small set of tactical programs to execute for the next ~12 ticks
+// instead of re-deciding per-tick. This is the narrow "objective
+// conversion planner" from the v4.2 design. Deterministic closed-form
+// scoring — no recursive bot-vs-bot simulation.
+//
+// Tactics (more can be added later):
+//   direct      — sprint straight to goal, dwell when arrived
+//   kill-first  — commit a swipe on the blocker first, then deliver
+//   feint       — step back 18 ticks to bait opp commitment, then sprint
+//
+// Scoring compares each tactic's expected dwell-completion tick against
+// the opp's interception tick. Trait weights bias which tactic is
+// preferred (shipRate → direct; greed → kill-first; cunning → feint).
+const PLAN_HORIZON_TICKS = 12;
+const DWELL_COMPLETION_TICKS = Math.ceil(GOAL_DWELL_S / STEP);
+const FEINT_DURATION_TICKS = 18;
+const FEINT_PLAN_HORIZON_TICKS = FEINT_DURATION_TICKS + PLAN_HORIZON_TICKS;
+const KILL_SETUP_TICKS = 20; // swipe commit + one recovery cycle
+function estimateTicksToGoal(obs) {
+    const dx = obs.goal.x - obs.self.x;
+    const dy = goalBodyY(obs) - obs.self.y;
+    const dist = Math.hypot(dx, dy);
+    // Rough: top speed 380 px/s at 120 Hz = ~3.17 px/tick. Use 3.0 for
+    // conservative estimate (covers accel ramp + platform detours).
+    return Math.ceil(dist / 3.0);
+}
+function estimateOppInterceptTicks(obs) {
+    // If opp is dead, they can't intercept until respawn + invuln is done.
+    if (obs.opp.dead) {
+        // Opp.dead in observation doesn't directly expose respawnT/invuln;
+        // use the ruleset timing constants rather than hidden state.
+        return Math.ceil((KILL_RESPAWN_S + RESPAWN_INVULN_S) / STEP);
+    }
+    // Alive opp: how long for them to reach the goal (upper bound on
+    // their intercept threat). Distance / speed estimate.
+    const dxG = obs.goal.x - obs.opp.x;
+    const dyG = goalBodyY(obs) - obs.opp.y;
+    const dist = Math.hypot(dxG, dyG);
+    return Math.max(1, Math.ceil(dist / 3.0));
+}
+function scoreTactic(kind, params, directTicks, oppInterceptTicks, sig) {
+    // Compute expected "time to dwell complete" for this tactic.
+    let tacticTicks;
+    switch (kind) {
+        case "direct":
+            tacticTicks = directTicks + DWELL_COMPLETION_TICKS;
+            break;
+        case "kill-first":
+            tacticTicks = KILL_SETUP_TICKS + directTicks + DWELL_COMPLETION_TICKS;
+            break;
+        case "feint":
+            tacticTicks = FEINT_DURATION_TICKS + directTicks + DWELL_COMPLETION_TICKS;
+            break;
+    }
+    // Success probability based on whether we finish before opp can
+    // intercept. Smooth rather than binary so trait weights still matter.
+    const margin = oppInterceptTicks - tacticTicks;
+    const success = 1 / (1 + Math.exp(-margin / 15)); // sigmoid, steep-ish
+    // Trait weights (argmax bias). Each trait pushes toward ONE tactic
+    // so there's no double-counting. shipRate/greed/cunning live here,
+    // fulfilling the "dead knob" rehab for OBJECTIVE.
+    let traitWeight = 1;
+    switch (kind) {
+        case "direct":
+            traitWeight += (params.shipRate ?? 0.5) * 0.8;
+            break;
+        case "kill-first":
+            // Only meaningful if blocker is actually close AND we can swing
+            if (!(sig.absDist < 200 && sig.canSwing))
+                return 0;
+            traitWeight += (params.greed ?? 0.5) * 1.0;
+            // Spite negative (prefers denial over delivery) also pushes kill
+            traitWeight += Math.max(0, -(params.spite ?? 0)) * 0.5;
+            break;
+        case "feint":
+            // Only meaningful if opp is close enough to be baitable
+            if (sig.absDist > 260)
+                return 0;
+            traitWeight += (params.cunning ?? 0.5) * 1.0;
+            break;
+    }
+    return success * traitWeight;
+}
+function planDeliveryTactic(obs, params, sig) {
+    const directTicks = estimateTicksToGoal(obs);
+    const oppInterceptTicks = estimateOppInterceptTicks(obs);
+    const kinds = ["direct", "kill-first", "feint"];
+    let best = "direct";
+    let bestScore = -Infinity;
+    for (const k of kinds) {
+        const s = scoreTactic(k, params, directTicks, oppInterceptTicks, sig);
+        if (s > bestScore) {
+            bestScore = s;
+            best = k;
+        }
+    }
+    return {
+        tactic: best,
+        startedAt: obs.tick,
+        expiresAt: obs.tick + (best === "feint" ? FEINT_PLAN_HORIZON_TICKS : PLAN_HORIZON_TICKS),
+        feintUntil: best === "feint" ? obs.tick + FEINT_DURATION_TICKS : undefined,
+        score: bestScore,
+    };
+}
+function runObjectiveMode(obs, params, state, sig) {
+    // Token state drives the sub-behavior. state.substate is written here
+    // so telemetry (v4.0-prep) can distinguish deliver vs intercept-block
+    // vs intercept-kill vs pickup time. No behavior change from setting —
+    // nothing in the brain branches on state.substate inside objective.
     const iHaveToken = obs.self.hasToken;
     const oppHasToken = obs.opp.hasToken;
     // DELIVER: I have the token. Route to goal. Once within 40px, stand
     // ground (the dwell window) and only swipe if opp tries to hit me.
     if (iHaveToken && obs.goal.exists) {
+        state.substate = "deliver";
+        const selfishBias = Math.max(0, Math.min(1, ((params.spite ?? 0) + 1) / 2));
+        const deliveryResolve = (params.shipRate ?? 0.5) * 0.45 +
+            (params.greed ?? 0.5) * 0.35 +
+            selfishBias * 0.20;
         const dxGoal = obs.goal.x - obs.self.x;
-        const dyGoal = obs.goal.y - obs.self.y;
-        const atGoal = Math.hypot(dxGoal, dyGoal) < 40;
+        const targetY = goalBodyY(obs);
+        const dyGoal = targetY - obs.self.y;
+        const atGoal = dwellDistance(obs) < GOAL_DWELL_RADIUS;
         if (atGoal) {
             // Dwell hold. Don't chase opp. Defensive swing if opp walks into
             // reach while we dwell. Small altitude adjust if opp above.
@@ -422,6 +607,8 @@ function runObjectiveMode(obs, params, sig) {
             if (sig.canSwing && sig.oppCommittedAtUs)
                 action = true;
             if (sig.canSwing && sig.freeSwing)
+                action = true;
+            if (sig.canSwing && sig.passiveFoilDanger && deliveryResolve > 0.45)
                 action = true;
             let jumpD = false;
             if (obs.opp.y < obs.self.y - 40 && obs.opp.diveT > 0)
@@ -433,34 +620,79 @@ function runObjectiveMode(obs, params, sig) {
         const oppInPath = Math.sign(dxGoal) === Math.sign(obs.opp.x - obs.self.x)
             && Math.abs(obs.opp.x - obs.self.x) < Math.abs(dxGoal);
         const goalTimerUrgent = obs.goal.timer < 3;
-        const shouldFight = oppInPath && sig.absDist < 120 &&
-            !goalTimerUrgent && (params.greed ?? 0.5) < 0.4 && !sig.oppCommittedAtUs;
+        // v4.2 delivery planner: pick a 12-tick tactical program. Re-plan
+        // if stale or missing. This addresses "brain makes same frame-local
+        // choice every tick → no temporal commitment → stall." The plan
+        // stays active across frames; each tick we only translate the
+        // active plan into an action.
+        if (!state.deliveryPlan || state.deliveryPlan.expiresAt <= obs.tick) {
+            state.deliveryPlan = planDeliveryTactic(obs, params, sig);
+        }
+        const plan = state.deliveryPlan;
+        // Feint tactic: back-step AWAY from goal for feintUntil ticks, then
+        // fall through to direct. Feint relies on opp reading the retreat
+        // and committing; when they commit and miss, we sprint past.
+        if (plan.tactic === "feint" && plan.feintUntil !== undefined && obs.tick < plan.feintUntil) {
+            const backSign = -Math.sign(dxGoal) || 1;
+            return {
+                left: backSign < 0,
+                right: backSign > 0,
+                // defensive swing if opp walks into our reach during the feint
+                action: sig.canSwing && (sig.oppCommittedAtUs || sig.passiveFoilDanger || sig.freeSwing),
+            };
+        }
+        // Kill-first tactic or (any plan + emergent fight condition): commit
+        // swipe when the blocker is close and we have the opportunity.
+        const wantKill = plan.tactic === "kill-first";
+        const shouldFight = (wantKill || oppInPath) && sig.absDist < 120 &&
+            sig.canSwing &&
+            !sig.oppCommittedAtUs &&
+            (sig.passiveFoilDanger ||
+                sig.oppRecovering ||
+                sig.oppOpen ||
+                sig.freeSwing ||
+                wantKill ||
+                deliveryResolve > (goalTimerUrgent ? 0.35 : 0.50));
+        if (shouldFight) {
+            return {
+                left: sig.absDir < 0,
+                right: sig.absDir > 0,
+                action: true,
+            };
+        }
         if (oppInPath && sig.absDist < 120 && obs.self.onGround) {
             // Jump over blocker.
             const toGoalSign = Math.sign(dxGoal) || 1;
             return { left: toGoalSign < 0, right: toGoalSign > 0, up: true };
         }
-        if (!shouldFight) {
-            return navigateTo(obs, obs.goal.x, obs.goal.y);
-        }
+        // Default (direct tactic, or fall-through): navigate to goal.
+        return navigateTo(obs, obs.goal.x, targetY);
     }
     // INTERCEPT: opp has token. Split on distance — far → block the goal
     // line; close → kill-for-reset.
     if (oppHasToken && obs.goal.exists) {
-        const dxGoal = obs.goal.x - obs.self.x;
-        const oppToGoal = Math.hypot(obs.goal.x - obs.opp.x, obs.goal.y - obs.opp.y);
+        const denyBias = Math.max(0, Math.min(1, (1 - (params.spite ?? 0)) / 2));
+        const targetY = goalBodyY(obs);
+        const oppToGoal = Math.hypot(obs.goal.x - obs.opp.x, targetY - obs.opp.y);
         const goalTimerUrgent = obs.goal.timer < 3;
-        if (sig.absDist < 200 && obs.self.onGround) {
+        const killRange = 150 + denyBias * 120;
+        if (sig.absDist < killRange && obs.self.onGround) {
             // Kill-for-reset. Close and commit.
+            state.substate = "intercept-kill";
             const move = sig.absDir;
-            const commit = sig.canSwing && (sig.freeSwing || sig.oppRecovering || sig.oppOpen || sig.absDist < 80);
+            const commit = sig.canSwing && (sig.freeSwing ||
+                sig.oppRecovering ||
+                sig.oppOpen ||
+                sig.passiveFoilDanger ||
+                sig.absDist < 70 + denyBias * 35);
             return { left: move < 0, right: move > 0, action: commit };
         }
+        state.substate = "intercept-block";
         // Block the goal. Position between opp and goal.
         // Target: a point closer to the goal than opp is.
         const blockX = obs.goal.x + Math.sign(obs.opp.x - obs.goal.x) * Math.max(60, Math.min(140, oppToGoal * 0.5));
         const tx = blockX;
-        const ty = obs.goal.y;
+        const ty = targetY;
         if (goalTimerUrgent) {
             // Urgent: commit to swipe opp if close.
             if (sig.absDist < 120)
@@ -470,11 +702,13 @@ function runObjectiveMode(obs, params, sig) {
     }
     // PICKUP: token on ground, neither holds. Race.
     if (obs.token.exists && obs.token.carrier === -1) {
+        state.substate = "pickup";
         const tx = obs.token.x;
         const ty = obs.token.y;
         const myDist = Math.hypot(tx - obs.self.x, ty - obs.self.y);
         const oppDist = Math.hypot(tx - obs.opp.x, ty - obs.opp.y);
-        if (myDist <= oppDist + 20) {
+        const pickupCommit = 20 + (params.shipRate ?? 0.5) * 90 + Math.max(0, params.spite ?? 0) * 30;
+        if (myDist <= oppDist + pickupCommit) {
             return navigateTo(obs, tx, ty);
         }
         // Opp will reach first. Preempt with a swipe if we can catch them.
@@ -490,7 +724,7 @@ function runObjectiveMode(obs, params, sig) {
 function runEscapeMode(obs, params, sig) {
     // Priority ladder. NEVER swipe.
     // 1. Wall-bound → wall-jump away.
-    if (obs.self.wall !== 0) {
+    if (obs.self.wall !== 0 && (params.networking ?? 0) > 0.2) {
         return { left: obs.self.wall > 0, right: obs.self.wall < 0, up: true };
     }
     // 2. On non-solid platform with opp on same level → drop-through.
@@ -541,7 +775,7 @@ export function runParamBrain(obs, params, state) {
         case "neutral": return runNeutralMode(obs, params, sig);
         case "offense": return runOffenseMode(obs, params, state, sig);
         case "zone": return runZoneMode(obs, params, sig);
-        case "objective": return runObjectiveMode(obs, params, sig);
+        case "objective": return runObjectiveMode(obs, params, state, sig);
         case "escape": return runEscapeMode(obs, params, sig);
     }
 }

@@ -1,8 +1,8 @@
 import {
   ARENA_L, ARENA_R, ARENA_T,
-  CLASH_FREEZE, COYOTE_TIME, FLOOR_Y, GOAL_DWELL_S, GOAL_TIMER_START,
-  GRAVITY, HIT_FREEZE, JUMP_BUFFER_TIME, POINTS_TO_WIN_ROUND,
-  ROUNDS_TO_WIN_MATCH, ROUND_TIMER_MAX_TICKS, STATS, STEP, WALL_SLIDE,
+  CLASH_FREEZE, COYOTE_TIME, DOUBLE_KO_RESPAWN_S, FLOOR_Y, GOAL_DWELL_RADIUS, GOAL_DWELL_S, GOAL_TIMER_START,
+  GRAVITY, HIT_FREEZE, JUMP_BUFFER_TIME, KILL_RESPAWN_S, POINTS_TO_WIN_ROUND,
+  RESPAWN_INVULN_S, ROUNDS_TO_WIN_MATCH, ROUND_TIMER_MAX_TICKS, STATS, STEP, WALL_SLIDE,
 } from "./constants.js";
 import { BEHAVIOR_VERSION } from "./brain.js";
 import type { BrainConfig, Character, MatchResult, Stage } from "./types.js";
@@ -20,7 +20,8 @@ export const REPLAY_CONSTANTS_HASH = (() => {
     HIT_FREEZE, CLASH_FREEZE,
     STATS,
     POINTS_TO_WIN_ROUND, ROUNDS_TO_WIN_MATCH, GOAL_TIMER_START,
-    ROUND_TIMER_MAX_TICKS, GOAL_DWELL_S,
+    ROUND_TIMER_MAX_TICKS, GOAL_DWELL_S, GOAL_DWELL_RADIUS, KILL_RESPAWN_S,
+    DOUBLE_KO_RESPAWN_S, RESPAWN_INVULN_S,
     ARENA_L, ARENA_R, ARENA_T, FLOOR_Y,
     BEHAVIOR_VERSION,
   };
@@ -53,6 +54,7 @@ export interface TrustLabelVerification {
   quorum?: TrustLabelQuorum;
   verifierIds?: string[];
   actionLogHash?: string;
+  actionLogSha256?: string;
   stateHashCadenceTicks?: number;
 }
 
@@ -121,6 +123,7 @@ export interface ReplayActionLogV1 {
   byteLength: number;
   decisionTicks: number;
   hash: string;
+  sha256?: string;
 }
 
 export interface ReplayFrameLogV1 {
@@ -144,6 +147,7 @@ export interface ReplayIntegrityV1 {
   charsHash: string;
   playerHashes: [string, string];
   actionLogHash: string;
+  actionLogSha256?: string;
   frameLogHash?: string;
 }
 
@@ -260,6 +264,80 @@ export function replayHashBytes(bytes: Uint8Array): string {
   return h.toString(16).padStart(8, "0");
 }
 
+export async function replaySha256Bytes(bytes: Uint8Array): Promise<string> {
+  const cryptoObj = globalThis.crypto;
+  if (cryptoObj?.subtle) {
+    const source = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    const digest = await cryptoObj.subtle.digest("SHA-256", source);
+    return bytesToHex(new Uint8Array(digest));
+  }
+  return replaySha256BytesSync(bytes);
+}
+
+export function replaySha256BytesSync(bytes: Uint8Array): string {
+  return sha256Hex(bytes);
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  let out = "";
+  for (const b of bytes) out += b.toString(16).padStart(2, "0");
+  return out;
+}
+
+const SHA256_K = new Uint32Array([
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+]);
+
+function rotr(x: number, n: number): number {
+  return (x >>> n) | (x << (32 - n));
+}
+
+function sha256Hex(input: Uint8Array): string {
+  const bitLenHi = Math.floor((input.length * 8) / 0x100000000);
+  const bitLenLo = (input.length * 8) >>> 0;
+  const paddedLen = (((input.length + 9 + 63) >> 6) << 6);
+  const msg = new Uint8Array(paddedLen);
+  msg.set(input);
+  msg[input.length] = 0x80;
+  const view = new DataView(msg.buffer);
+  view.setUint32(paddedLen - 8, bitLenHi, false);
+  view.setUint32(paddedLen - 4, bitLenLo, false);
+
+  let h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a;
+  let h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
+  const w = new Uint32Array(64);
+
+  for (let off = 0; off < paddedLen; off += 64) {
+    for (let i = 0; i < 16; i++) w[i] = view.getUint32(off + i * 4, false);
+    for (let i = 16; i < 64; i++) {
+      const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3);
+      const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+    }
+    let a = h0, b = h1, c = h2, d = h3, e = h4, f = h5, g = h6, h = h7;
+    for (let i = 0; i < 64; i++) {
+      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const ch = (e & f) ^ (~e & g);
+      const temp1 = (h + S1 + ch + SHA256_K[i] + w[i]) >>> 0;
+      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (S0 + maj) >>> 0;
+      h = g; g = f; f = e; e = (d + temp1) >>> 0;
+      d = c; c = b; b = a; a = (temp1 + temp2) >>> 0;
+    }
+    h0 = (h0 + a) >>> 0; h1 = (h1 + b) >>> 0; h2 = (h2 + c) >>> 0; h3 = (h3 + d) >>> 0;
+    h4 = (h4 + e) >>> 0; h5 = (h5 + f) >>> 0; h6 = (h6 + g) >>> 0; h7 = (h7 + h) >>> 0;
+  }
+  return [h0, h1, h2, h3, h4, h5, h6, h7].map((n) => n.toString(16).padStart(8, "0")).join("");
+}
+
 export function stableReplayJson(value: unknown): string {
   if (value === undefined) return "null";
   if (value === null || typeof value !== "object") {
@@ -304,6 +382,7 @@ export function createReplayArtifactV1(opts: CreateReplayArtifactV1Options): Rep
     ? createReplayFrameLog(opts.frames, opts.frameStride ?? 1)
     : undefined;
   const actionHash = replayHashBytes(opts.actionLog);
+  const actionSha256 = replaySha256BytesSync(opts.actionLog);
   const result = replayResultFrom(opts.result);
 
   const trust = normalizeTrustLabel(opts.trust, opts.mode);
@@ -331,6 +410,7 @@ export function createReplayArtifactV1(opts: CreateReplayArtifactV1Options): Rep
       byteLength: opts.actionLog.length,
       decisionTicks: opts.actionLog.length / 2,
       hash: actionHash,
+      sha256: actionSha256,
     },
     result,
     integrity: {
@@ -338,6 +418,7 @@ export function createReplayArtifactV1(opts: CreateReplayArtifactV1Options): Rep
       charsHash: replayHashJson(opts.chars),
       playerHashes: [replayHashJson(players[0]), replayHashJson(players[1])],
       actionLogHash: actionHash,
+      actionLogSha256: actionSha256,
       frameLogHash: frames?.hash,
     },
     trust,
@@ -386,6 +467,12 @@ export function decodeReplayActions(log: ReplayActionLogV1): Uint8Array {
   if (hash !== log.hash) {
     throw new Error(`replay action hash mismatch: ${hash} !== ${log.hash}`);
   }
+  if (log.sha256 !== undefined) {
+    const sha = replaySha256BytesSync(bytes);
+    if (sha !== log.sha256) {
+      throw new Error(`replay action sha256 mismatch: ${sha} !== ${log.sha256}`);
+    }
+  }
   return bytes;
 }
 
@@ -411,6 +498,15 @@ export function verifyReplayIntegrityV1(artifact: ReplayArtifactV1): void {
   }
   if (i.actionLogHash !== artifact.actions.hash) {
     throw new Error(`replay integrity.actionLogHash !== actions.hash`);
+  }
+  if (artifact.actions.sha256 !== undefined) {
+    const sha = replaySha256BytesSync(actionBytes);
+    if (sha !== artifact.actions.sha256) {
+      throw new Error(`replay actions.sha256 mismatch vs bytes: ${sha} !== ${artifact.actions.sha256}`);
+    }
+    if (i.actionLogSha256 !== undefined && i.actionLogSha256 !== artifact.actions.sha256) {
+      throw new Error(`replay integrity.actionLogSha256 !== actions.sha256`);
+    }
   }
   if (artifact.frames) {
     const want = artifact.frames.hash;
@@ -491,6 +587,7 @@ export interface VerifyActionLogInput {
   stage: Stage;
   chars: [Character, Character];
   actionLog: Uint8Array;
+  maxTicks?: number;
   expectedLogHash?: string;          // from the posted result, optional
   expectedResult?: ReplayResultV1;   // optional full result check
 }
@@ -513,20 +610,43 @@ export function verifyActionLog(input: VerifyActionLogInput): VerifyActionLogOut
     seed: input.seed,
     chars: input.chars,
   });
+  const maxTicks = input.maxTicks ?? ROUND_TIMER_MAX_TICKS * ROUNDS_TO_WIN_MATCH * 2;
   let offset = 0;
   let hashAcc = 2166136261 >>> 0;
   const empty = {};
-  // Run until the action log is exhausted OR the match concludes.
-  while (world.matchWinner === -1 && offset + 1 < bytes.length) {
+  // Run until the match concludes or reaches the agreed horizon. The log must
+  // cover every decision tick in that interval; otherwise a peer could submit
+  // only the prefix where they were ahead and get a false verified result.
+  while (world.matchWinner === -1 && world.tick < maxTicks) {
     if (world.freeze > 0 || world.roundPause > 0) {
       stepWorld(world, empty, empty);
       continue;
+    }
+    if (offset + 1 >= bytes.length) {
+      const result = replayResultFromWorld(world, hashAcc.toString(16).padStart(8, "0"));
+      return {
+        ok: false,
+        result,
+        reason: `action log ended early at tick ${world.tick}`,
+        simConstantsHash: REPLAY_CONSTANTS_HASH,
+        behaviorVersion: BEHAVIOR_VERSION,
+      };
     }
     const pa = bytes[offset++];
     const pb = bytes[offset++];
     hashAcc = fnvByte(hashAcc, pa);
     hashAcc = fnvByte(hashAcc, pb);
     stepWorld(world, unpackAction(pa), unpackAction(pb));
+  }
+  if (offset !== bytes.length) {
+    const result = replayResultFromWorld(world, hashAcc.toString(16).padStart(8, "0"));
+    return {
+      ok: false,
+      result,
+      reason: `action log has ${bytes.length - offset} trailing bytes`,
+      simConstantsHash: REPLAY_CONSTANTS_HASH,
+      behaviorVersion: BEHAVIOR_VERSION,
+    };
   }
   const result = replayResultFromWorld(world, hashAcc.toString(16).padStart(8, "0"));
   if (input.expectedLogHash !== undefined && input.expectedLogHash !== result.logHash) {

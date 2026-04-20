@@ -72,7 +72,7 @@ export function recordFromOutcomes(candidateId: string, outcomes: MatchOutcome[]
   return {
     id: candidateId,
     wins, losses, draws,
-    winRate: wins / n,
+    winRate: (wins + draws * 0.5) / n,
     avgScoreDiff: sd / n,
     avgTicks: ticks / n,
     deliveryCount: del,

@@ -54,8 +54,8 @@ function defaultParams(overrides: Partial<Params> = {}): Params {
 
 // --- Tests ---
 
-test("BEHAVIOR_VERSION is 3", () => {
-  assert.equal(BEHAVIOR_VERSION, 3);
+test("BEHAVIOR_VERSION is 5", () => {
+  assert.equal(BEHAVIOR_VERSION, 5);
 });
 
 test("createBrainState initializes neutral with empty buffers", () => {
@@ -65,6 +65,7 @@ test("createBrainState initializes neutral with empty buffers", () => {
   assert.equal(s.substate, null);
   assert.deepEqual(s.recentOppSwipeTicks, []);
   assert.deepEqual(s.recentOppDiveTicks, []);
+  assert.deepEqual(s.recentSelfClashTicks, []);
 });
 
 test("resetBrainStateForRound zeroes mode but preserves opp buffers", () => {
@@ -73,6 +74,7 @@ test("resetBrainStateForRound zeroes mode but preserves opp buffers", () => {
   s.substate = "press";
   s.recentOppSwipeTicks.push(10, 20, 30);
   s.recentOppDiveTicks.push(40);
+  s.recentSelfClashTicks.push(55);
 
   resetBrainStateForRound(s, 500);
   assert.equal(s.mode, "neutral");
@@ -81,6 +83,7 @@ test("resetBrainStateForRound zeroes mode but preserves opp buffers", () => {
   // Opp buffers preserved (cross-life adaptation).
   assert.deepEqual(s.recentOppSwipeTicks, [10, 20, 30]);
   assert.deepEqual(s.recentOppDiveTicks, [40]);
+  assert.deepEqual(s.recentSelfClashTicks, [55]);
 });
 
 test("opp-model buffer decays entries older than 240 ticks", () => {
@@ -186,7 +189,37 @@ test("hard-danger emergency overrides min-duration and enters escape", () => {
   assert.equal(state.mode, "escape", "hard-danger must override min-duration");
 });
 
-test("determinism: same seed produces identical log hashes with v3", () => {
+test("passive foil range is treated as danger when swipe is unavailable", () => {
+  const state = createBrainState(0);
+  state.mode = "neutral";
+  const obs = baseObs({
+    tick: 120,
+    self: { ...baseObs().self, swipeCD: 0.1, x: 600, invuln: 0 },
+    opp: { ...baseObs().opp, x: 655, y: 600, swipeT: 0, diveT: 0 },
+    dx: 55, absDx: 55, dy: 0,
+  });
+  runParamBrain(obs, defaultParams(), state);
+  assert.equal(state.mode, "escape", "passive foil body range should trigger escape if we cannot match");
+});
+
+test("objective-deliver can fight a blocker instead of always jumping over", () => {
+  const state = createBrainState(0);
+  const obs = baseObs({
+    tick: 200,
+    self: { ...baseObs().self, hasToken: true, x: 600, y: 600, swipeCD: 0 },
+    opp: { ...baseObs().opp, x: 660, y: 600, swipeT: 0, diveT: 0 },
+    token: { exists: true, x: 600, y: 548, carrier: 0, dwellT: 0 },
+    goal: { exists: true, x: 800, y: 600, label: "g1", timer: 5 },
+    dx: 60, absDx: 60, dy: 0,
+  });
+  const action = runParamBrain(obs, defaultParams({ shipRate: 0.9, greed: 0.7 }), state);
+  assert.equal(state.mode, "objective");
+  assert.equal(state.substate, "deliver");
+  assert.equal(action.action, true, "carrier should resolve a close blocker with a swing");
+  assert.notEqual(action.up, true, "carrier should not take the old jump-over branch");
+});
+
+test("determinism: same seed produces identical log hashes with v4", () => {
   const stage = STAGES.datacenter;
   const a = STRATEGIES.blitz;
   const b = STRATEGIES.incumbent;
@@ -219,4 +252,91 @@ test("brain state mode transitions are stateful across ticks", () => {
     state.mode !== modeAfterT1 || state.modeEnterTick >= 0,
     "brain state should evolve across ticks",
   );
+});
+
+// ---- v4.2 delivery planner ----
+
+test("delivery planner sets a plan when carrying token with goal active", () => {
+  const state = createBrainState(0);
+  const obs = baseObs({
+    tick: 200,
+    self: { ...baseObs().self, hasToken: true, x: 300, y: 500 },
+    opp: { ...baseObs().opp, x: 900, y: 500 },
+    token: { exists: true, x: 300, y: 500, carrier: 0, dwellT: 0 },
+    goal: { exists: true, x: 1100, y: 500, label: "g1", timer: 8 },
+    dx: 600, absDx: 600, dy: 0,
+  });
+  runParamBrain(obs, defaultParams(), state);
+  assert.equal(state.mode, "objective");
+  assert.ok(state.deliveryPlan, "plan should be set when delivering");
+  assert.ok(
+    ["direct", "kill-first", "feint"].includes(state.deliveryPlan!.tactic),
+    `plan.tactic should be a known kind: ${state.deliveryPlan!.tactic}`,
+  );
+  assert.equal(state.deliveryPlan!.startedAt, 200);
+  assert.equal(state.deliveryPlan!.expiresAt, 212);
+});
+
+test("delivery planner persists tactic within horizon (no per-tick thrashing)", () => {
+  const state = createBrainState(0);
+  const params = defaultParams();
+  const obs = baseObs({
+    tick: 100,
+    self: { ...baseObs().self, hasToken: true, x: 300, y: 500 },
+    opp: { ...baseObs().opp, x: 900, y: 500 },
+    token: { exists: true, x: 300, y: 500, carrier: 0, dwellT: 0 },
+    goal: { exists: true, x: 1100, y: 500, label: "g1", timer: 8 },
+    dx: 600, absDx: 600, dy: 0,
+  });
+  runParamBrain(obs, params, state);
+  const firstTactic = state.deliveryPlan!.tactic;
+  const firstExpiresAt = state.deliveryPlan!.expiresAt;
+
+  // Tick forward within horizon — plan must not change
+  const obs2 = { ...obs, tick: 105 };
+  runParamBrain(obs2, params, state);
+  assert.equal(state.deliveryPlan!.tactic, firstTactic, "tactic held within horizon");
+  assert.equal(state.deliveryPlan!.expiresAt, firstExpiresAt, "expiry held within horizon");
+});
+
+test("delivery planner can hold feint through its back-step window", () => {
+  const state = createBrainState(0);
+  state.mode = "objective";
+  state.modeEnterTick = 100;
+  state.deliveryPlan = {
+    tactic: "feint",
+    startedAt: 100,
+    expiresAt: 130,
+    feintUntil: 118,
+    score: 1,
+  };
+  const obs = baseObs({
+    tick: 115,
+    self: { ...baseObs().self, hasToken: true, x: 600, y: 500 },
+    opp: { ...baseObs().opp, x: 700, y: 500 },
+    token: { exists: true, x: 600, y: 500, carrier: 0, dwellT: 0 },
+    goal: { exists: true, x: 900, y: 500, label: "g1", timer: 8 },
+    dx: 100, absDx: 100, dy: 0,
+  });
+  const action = runParamBrain(obs, defaultParams({ cunning: 0.9 }), state);
+  assert.equal(state.deliveryPlan!.tactic, "feint");
+  assert.equal(state.deliveryPlan!.expiresAt, 130);
+  assert.equal(action.left, true, "feint should keep back-stepping before feintUntil");
+  assert.notEqual(action.right, true);
+});
+
+test("high-shipRate config prefers direct tactic", () => {
+  const state = createBrainState(0);
+  const params = defaultParams({ shipRate: 0.95, greed: 0.1, cunning: 0.1 });
+  const obs = baseObs({
+    tick: 200,
+    self: { ...baseObs().self, hasToken: true, x: 300, y: 500 },
+    opp: { ...baseObs().opp, x: 900, y: 500 }, // far — kill-first unattractive
+    token: { exists: true, x: 300, y: 500, carrier: 0, dwellT: 0 },
+    goal: { exists: true, x: 1100, y: 500, label: "g1", timer: 8 },
+    dx: 600, absDx: 600, dy: 0,
+  });
+  runParamBrain(obs, params, state);
+  assert.equal(state.deliveryPlan!.tactic, "direct",
+    "shipRate-dominant config with far opp should pick direct");
 });

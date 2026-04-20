@@ -122,8 +122,35 @@ export interface World {
     rng: Rng;
     noiseSeed: number;
     brainStates: [BrainState, BrainState];
+    telemetry?: [FighterTelemetry, FighterTelemetry];
 }
 export type BrainMode = "neutral" | "offense" | "zone" | "objective" | "escape";
+export interface FighterTelemetry {
+    modeTicks: Record<BrainMode, number>;
+    substateTicks: {
+        press: number;
+        bait: number;
+        punish: number;
+        deliver: number;
+        intercept: number;
+        pickup: number;
+    };
+    modeSwitches: number;
+    zoneEntries: number;
+    objectiveEntries: number;
+    escapeEntries: number;
+    swipes: number;
+    dives: number;
+    kills: number;
+    deaths: number;
+    clashes: number;
+    deliveries: number;
+    ticks: number;
+    modeSwipes: Record<BrainMode, number>;
+    modeDives: Record<BrainMode, number>;
+    modeClashes: Record<BrainMode, number>;
+}
+export declare function emptyFighterTelemetry(): FighterTelemetry;
 export interface BrainState {
     id: 0 | 1;
     mode: BrainMode;
@@ -132,7 +159,18 @@ export interface BrainState {
     recentOppSwipeTicks: number[];
     recentOppDiveTicks: number[];
     lastKnownOppAttackStartTick: number;
+    recentSelfClashTicks: number[];
+    lastKnownSelfClashTick: number;
+    deliveryPlan: DeliveryPlan | null;
     lastTransitionReason: string;
+}
+export type DeliveryTacticKind = "direct" | "kill-first" | "feint";
+export interface DeliveryPlan {
+    tactic: DeliveryTacticKind;
+    startedAt: number;
+    expiresAt: number;
+    feintUntil?: number;
+    score: number;
 }
 export interface Observation {
     self: {
@@ -218,4 +256,5 @@ export interface MatchResult {
     seed: number;
     logHash: string;
     frameLog: Uint8Array;
+    telemetry?: [FighterTelemetry, FighterTelemetry];
 }

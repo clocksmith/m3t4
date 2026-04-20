@@ -4,7 +4,10 @@
 //
 // Select via AUTH_MODE env var.
 
-const MODE = process.env.AUTH_MODE ?? "dev";
+const MODE = process.env.AUTH_MODE ?? (process.env.NODE_ENV === "production" ? "firebase" : "dev");
+if (process.env.NODE_ENV === "production" && MODE === "dev") {
+  throw new Error("AUTH_MODE=dev is not allowed in production");
+}
 
 let verifyFn: ((token: string) => Promise<{ uid: string; email?: string }>) | null = null;
 

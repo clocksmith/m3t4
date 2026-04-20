@@ -29,3 +29,26 @@ export const DEFAULT_PARAMS = {
     cunning: 0.5,
     hallucination: 0,
 };
+function emptyModeRecord() {
+    return { neutral: 0, offense: 0, zone: 0, objective: 0, escape: 0 };
+}
+export function emptyFighterTelemetry() {
+    return {
+        modeTicks: emptyModeRecord(),
+        substateTicks: { press: 0, bait: 0, punish: 0, deliver: 0, intercept: 0, pickup: 0 },
+        modeSwitches: 0,
+        zoneEntries: 0,
+        objectiveEntries: 0,
+        escapeEntries: 0,
+        swipes: 0,
+        dives: 0,
+        kills: 0,
+        deaths: 0,
+        clashes: 0,
+        deliveries: 0,
+        ticks: 0,
+        modeSwipes: emptyModeRecord(),
+        modeDives: emptyModeRecord(),
+        modeClashes: emptyModeRecord(),
+    };
+}

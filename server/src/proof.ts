@@ -16,7 +16,7 @@ import http from "node:http";
 import crypto from "node:crypto";
 import {
   BEHAVIOR_VERSION, DEFAULT_CHARS, REPLAY_CONSTANTS_HASH, STAGES,
-  createReplayArtifactV1, verifyActionLog,
+  createReplayArtifactV1, validateUserSubmission, verifyActionLog,
   type BrainConfig, type Stage, type TrustLabel,
 } from "@m3t4/sim";
 import type { StableStore } from "./stable.js";
@@ -58,23 +58,6 @@ function sha256Hex(s: string | Buffer | Uint8Array): string {
   if (typeof s === "string") h.update(s);
   else h.update(Buffer.from(s));
   return h.digest("hex");
-}
-
-// Legal-budget check for revealed configs. A real ranked submission
-// re-runs the schema+budget validator from submit.ts; we inline a
-// minimal check here so this file is self-contained. Any drift is
-// intentional — reveal must match the ranked validator, not a subset.
-const BUDGET_CAP = 360;
-
-function budgetOf(config: BrainConfig): number {
-  const attrs = config.attributes ?? {};
-  let sum = 0;
-  for (const k of Object.keys(attrs)) {
-    const v = (attrs as any)[k];
-    const n = typeof v === "number" ? v : typeof v === "object" && v && "base" in v ? v.base : 0;
-    sum += Math.abs(Number(n) || 0);
-  }
-  return Math.round(sum);
 }
 
 // ---------------------------- L1: commit-reveal ----------------------------
@@ -189,9 +172,13 @@ export async function handleProofReveal(
   }
 
   // Verify budget legality
-  const spent = budgetOf(config as BrainConfig);
-  if (spent > BUDGET_CAP) {
-    return json(res, 400, { ok: false, reason: `illegal config: budget ${spent} > ${BUDGET_CAP}` });
+  const validation = validateUserSubmission(config as BrainConfig);
+  if (!validation.ok || !validation.config) {
+    return json(res, 400, {
+      ok: false,
+      reason: "illegal config",
+      details: validation.errors,
+    });
   }
 
   vstore.markCommitmentRevealed(commitmentId, new Date().toISOString());
@@ -201,12 +188,12 @@ export async function handleProofReveal(
     subtier: "L1-commit-reveal",
     commitmentId,
     commitmentHash: rec.commitmentHash,
-    budgetSpent: spent,
+    budgetSpent: validation.spent,
   };
 
   // If this reveal came with match context, verify the action log.
   if (matchContext && typeof matchContext === "object") {
-    const { matchId, opponentConfig, stageId, seed, actionLogB64, expectedResult } = matchContext;
+      const { matchId, opponentConfig, stageId, seed, actionLogB64, expectedResult, maxTicks } = matchContext;
 
     // Case A: bound to an archived server-authoritative match — compare
     // revealed config hash to the archived player's configHash.
@@ -242,13 +229,20 @@ export async function handleProofReveal(
       let actionLog: Uint8Array;
       try { actionLog = base64ToBytes(actionLogB64); }
       catch { return json(res, 400, { ok: false, reason: "actionLogB64 malformed" }); }
-      const opSpent = budgetOf(opponentConfig as BrainConfig);
-      if (opSpent > BUDGET_CAP) {
-        return json(res, 400, { ok: false, reason: `illegal opponent config: budget ${opSpent} > ${BUDGET_CAP}` });
+      const opponentValidation = validateUserSubmission(opponentConfig as BrainConfig);
+      if (!opponentValidation.ok || !opponentValidation.config) {
+        return json(res, 400, {
+          ok: false,
+          reason: "illegal opponent config",
+          details: opponentValidation.errors,
+        });
       }
       const out = verifyActionLog({
         seed: seed >>> 0, stage, chars: DEFAULT_CHARS,
         actionLog,
+        maxTicks: typeof maxTicks === "number" && Number.isFinite(maxTicks)
+          ? Math.max(0, Math.floor(maxTicks))
+          : undefined,
         expectedResult,
       });
       if (!out.ok) {
@@ -485,7 +479,8 @@ export async function handleProofZkSubmit(
 
   const replay = await store.getReplay(matchId);
   if (!replay) return json(res, 404, { ok: false, reason: "replay not found" });
-  if (replay.actions.hash !== actionLogHash) {
+  const archivedActionLogHash = replay.actions.sha256 ?? replay.actions.hash;
+  if (archivedActionLogHash !== actionLogHash) {
     return json(res, 409, { ok: false, reason: "actionLogHash does not match archived replay" });
   }
 
@@ -546,28 +541,28 @@ const DEV_MOCK_SECRET: string =
   process.env.M3T4_PROOF_DEV_MOCK_SECRET
   ?? "dev-mock-zk-accept-any-signed-envelope-do-not-ship";
 
-registerProofVerifier({
-  name: "unknown" as ProofSystem,  // overwritten on self-register below
-  async verify(env) {
-    const payload = [
-      env.proofSystem, env.matchId, env.actionLogHash,
-      env.simConstantsHash, String(env.behaviorVersion),
-    ].join("|");
-    const want = crypto.createHmac("sha256", DEV_MOCK_SECRET).update(payload).digest();
-    let got: Buffer;
-    try { got = Buffer.from(env.proofBytesB64, "base64"); }
-    catch { return { ok: false, reason: "proofBytesB64 malformed" }; }
-    if (want.length !== got.length) return { ok: false, reason: "signature length" };
-    if (!crypto.timingSafeEqual(want, got)) return { ok: false, reason: "signature mismatch" };
-    return { ok: true };
-  },
-});
+if (process.env.NODE_ENV !== "production") {
+  registerProofVerifier({
+    name: "unknown" as ProofSystem,  // overwritten on self-register below
+    async verify(env) {
+      const payload = [
+        env.proofSystem, env.matchId, env.actionLogHash,
+        env.simConstantsHash, String(env.behaviorVersion),
+      ].join("|");
+      const want = crypto.createHmac("sha256", DEV_MOCK_SECRET).update(payload).digest();
+      let got: Buffer;
+      try { got = Buffer.from(env.proofBytesB64, "base64"); }
+      catch { return { ok: false, reason: "proofBytesB64 malformed" }; }
+      if (want.length !== got.length) return { ok: false, reason: "signature length" };
+      if (!crypto.timingSafeEqual(want, got)) return { ok: false, reason: "signature mismatch" };
+      return { ok: true };
+    },
+  });
 
-// Rename the entry to "dev-mock" properly. The constructor above assigns
-// `name: "unknown"` because the type demands a ProofSystem literal and
-// "dev-mock" isn't in the union. We overwrite post-register so the map
-// key is correct without widening the public type.
-{
+  // Rename the entry to "dev-mock" properly. The constructor above assigns
+  // `name: "unknown"` because the type demands a ProofSystem literal and
+  // "dev-mock" isn't in the union. We overwrite post-register so the map
+  // key is correct without widening the public type.
   const entry = proofVerifiers.get("unknown" as ProofSystem);
   proofVerifiers.delete("unknown" as ProofSystem);
   if (entry) proofVerifiers.set("dev-mock" as ProofSystem, { ...entry, name: "dev-mock" as ProofSystem });

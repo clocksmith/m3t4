@@ -147,6 +147,7 @@ test("verify/replay: re-simulates action log and confirms result", async (t) => 
   const r = await req(srv.port, "POST", "/api/verify/replay", {
     seed: 999, stageId: "datacenter",
     actionLogB64,
+    maxTicks: 240,
     expectedLogHash: result.logHash,
   });
   assert.equal(r.status, 200);
@@ -165,6 +166,7 @@ test("verify/replay: rejects wrong expected hash", async (t) => {
   const r = await req(srv.port, "POST", "/api/verify/replay", {
     seed: 1000, stageId: "datacenter",
     actionLogB64: Buffer.from(result.frameLog).toString("base64"),
+    maxTicks: 240,
     expectedLogHash: "00000000",
   });
   assert.equal(r.status, 200);
@@ -217,7 +219,7 @@ test("duel flow: challenge → accept → submit archives p2p-action-verified re
   const result = simulate({
     stage: STAGES.datacenter,
     brainA: STRATEGIES.blitz, brainB: STRATEGIES.shipper,
-    seed: token.seed, maxTicks: 240,
+    seed: token.seed,
   });
   const actionLogB64 = Buffer.from(result.frameLog).toString("base64");
   const sub = await req(srv.port, "POST", "/api/duel/submit", {
@@ -281,12 +283,13 @@ test("community verification: register → attest → quorum reached upgrades la
     return r.body as { workerId: string; sharedSecret: string };
   }));
 
-  // Each worker attests with the correct logHash
+  // Each worker attests with the strong action-log hash.
   for (const w of workers) {
-    const payload = `c1:${result.logHash}`;
+    const actionSha = art.actions.sha256!;
+    const payload = `c1:${actionSha}`;
     const signature = crypto.createHmac("sha256", w.sharedSecret).update(payload).digest("hex");
     const r = await req(srv.port, "POST", "/api/community/attest", {
-      matchId: "c1", workerId: w.workerId, computedLogHash: result.logHash, signature,
+      matchId: "c1", workerId: w.workerId, computedActionSha256: actionSha, signature,
     });
     assert.equal(r.status, 200);
   }
@@ -366,7 +369,7 @@ test("proof L3: no verifier registered for unknown proof system returns 501-like
   const r = await req(srv.port, "POST", "/api/proof/zk/submit", {
     proofSystem: "groth16",
     matchId: "zk1",
-    actionLogHash: art.actions.hash,
+    actionLogHash: art.actions.sha256!,
     simConstantsHash: REPLAY_CONSTANTS_HASH,
     behaviorVersion: BEHAVIOR_VERSION,
     proofBytesB64: Buffer.from("fake-proof-bytes").toString("base64"),
@@ -394,12 +397,12 @@ test("proof L3 dev-mock: HMAC signature over envelope accepted", async (t) => {
   });
   await srv.store.archiveReplay(art);
   const proofSystem = "dev-mock";
-  const payload = [proofSystem, "zk2", art.actions.hash, REPLAY_CONSTANTS_HASH, String(BEHAVIOR_VERSION)].join("|");
+  const payload = [proofSystem, "zk2", art.actions.sha256!, REPLAY_CONSTANTS_HASH, String(BEHAVIOR_VERSION)].join("|");
   const secret = "dev-mock-zk-accept-any-signed-envelope-do-not-ship";
   const sig = crypto.createHmac("sha256", secret).update(payload).digest();
   const r = await req(srv.port, "POST", "/api/proof/zk/submit", {
     proofSystem, matchId: "zk2",
-    actionLogHash: art.actions.hash,
+    actionLogHash: art.actions.sha256!,
     simConstantsHash: REPLAY_CONSTANTS_HASH,
     behaviorVersion: BEHAVIOR_VERSION,
     proofBytesB64: sig.toString("base64"),

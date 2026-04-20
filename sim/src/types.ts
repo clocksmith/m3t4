@@ -213,11 +213,21 @@ export interface FighterTelemetry {
   clashes: number;
   deliveries: number; // goal-dwell completions credited
   ticks: number;      // decision ticks for this fighter (excludes freeze/roundPause)
+  // Per-mode action/collision counters — diagnostic for v4.1. Lets
+  // trace-stalls answer "was OFFENSE mode actually attacking, or
+  // passive-foiling?" and "did OBJECTIVE mode convert to dwell?".
+  modeSwipes: Record<BrainMode, number>;
+  modeDives: Record<BrainMode, number>;
+  modeClashes: Record<BrainMode, number>;
+}
+
+function emptyModeRecord(): Record<BrainMode, number> {
+  return { neutral: 0, offense: 0, zone: 0, objective: 0, escape: 0 };
 }
 
 export function emptyFighterTelemetry(): FighterTelemetry {
   return {
-    modeTicks: { neutral: 0, offense: 0, zone: 0, objective: 0, escape: 0 },
+    modeTicks: emptyModeRecord(),
     substateTicks: { press: 0, bait: 0, punish: 0, deliver: 0, intercept: 0, pickup: 0 },
     modeSwitches: 0,
     zoneEntries: 0,
@@ -230,6 +240,9 @@ export function emptyFighterTelemetry(): FighterTelemetry {
     clashes: 0,
     deliveries: 0,
     ticks: 0,
+    modeSwipes: emptyModeRecord(),
+    modeDives: emptyModeRecord(),
+    modeClashes: emptyModeRecord(),
   };
 }
 
@@ -245,8 +258,35 @@ export interface BrainState {
   recentOppDiveTicks: number[];
   lastKnownOppAttackStartTick: number;
 
+  // Self-clash rolling buffer. Populated by reading obs.self.lastClashTick
+  // each brain tick and pushing when it advances. Used by v4.1 to detect
+  // passive-foil clash loops (high clash rate with low attack rate).
+  // Bounded the same way as opp buffers. Preserved across own respawn
+  // within a round so pattern detection survives death.
+  recentSelfClashTicks: number[];
+  lastKnownSelfClashTick: number;
+
+  // Delivery plan — v4.2 addition. Deterministic macro-tactic chosen
+  // when bot enters OBJECTIVE-deliver, held for N ticks so the brain
+  // doesn't thrash tactics per-frame. Cleared on token loss, death, or
+  // expiry. See planDeliveryTactic() for scoring. Replay-safe.
+  deliveryPlan: DeliveryPlan | null;
+
   // Debug hook — reason for last mode transition. Not used in decisions.
   lastTransitionReason: string;
+}
+
+// One of a small set of hand-authored delivery tactics, chosen by
+// deterministic timing + trait-weighted scoring. Each tactic is a
+// mini-program runObjectiveMode executes tick-by-tick until expiry.
+export type DeliveryTacticKind = "direct" | "kill-first" | "feint";
+
+export interface DeliveryPlan {
+  tactic: DeliveryTacticKind;
+  startedAt: number;
+  expiresAt: number;      // re-plan when tick >= expiresAt
+  feintUntil?: number;    // for "feint": tick at which back-step ends
+  score: number;          // diagnostic: chosen tactic's utility score
 }
 
 // ============ Observation (passed to brains) ============

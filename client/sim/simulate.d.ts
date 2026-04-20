@@ -11,6 +11,7 @@ export interface SimulateOptions {
     seed: number;
     chars?: [Character, Character];
     maxTicks?: number;
+    telemetry?: boolean;
 }
 export declare function simulate(opts: SimulateOptions): MatchResult;
 export { unpackAction, packAction };

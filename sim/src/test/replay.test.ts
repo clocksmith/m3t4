@@ -245,14 +245,15 @@ test("REPLAY_CONSTANTS_HASH includes BEHAVIOR_VERSION", async () => {
 
 test("REPLAY_CONSTANTS_HASH includes nested STATS fields", async () => {
   const { replayHashJson } = await import("../replay.js");
-  const { STATS, STEP, GRAVITY, GOAL_DWELL_S } = await import("../constants.js");
+  const { STATS, STEP, GRAVITY, GOAL_DWELL_S, GOAL_DWELL_RADIUS } = await import("../constants.js");
   const withCurrent = replayHashJson({
-    STEP, GRAVITY, STATS, GOAL_DWELL_S,
+    STEP, GRAVITY, STATS, GOAL_DWELL_S, GOAL_DWELL_RADIUS,
   });
   const withTweakedSwipe = replayHashJson({
     STEP, GRAVITY,
     STATS: { ...STATS, swipeTime: STATS.swipeTime + 0.001 },
     GOAL_DWELL_S,
+    GOAL_DWELL_RADIUS,
   });
   assert.notEqual(withCurrent, withTweakedSwipe,
     "changing STATS.swipeTime must bump the constants hash");
@@ -260,9 +261,31 @@ test("REPLAY_CONSTANTS_HASH includes nested STATS fields", async () => {
     STEP, GRAVITY,
     STATS: { ...STATS, sword: STATS.sword + 1 },
     GOAL_DWELL_S,
+    GOAL_DWELL_RADIUS,
   });
   assert.notEqual(withCurrent, withTweakedSword,
     "changing STATS.sword must bump the constants hash");
+  const withTweakedDwellRadius = replayHashJson({
+    STEP, GRAVITY, STATS, GOAL_DWELL_S,
+    GOAL_DWELL_RADIUS: GOAL_DWELL_RADIUS + 1,
+  });
+  assert.notEqual(withCurrent, withTweakedDwellRadius,
+    "changing GOAL_DWELL_RADIUS must bump the constants hash");
+});
+
+test("REPLAY_CONSTANTS_HASH includes respawn timing constants", async () => {
+  const { replayHashJson } = await import("../replay.js");
+  const { RESPAWN_INVULN_S, KILL_RESPAWN_S, DOUBLE_KO_RESPAWN_S } = await import("../constants.js");
+  const withCurrent = replayHashJson({
+    RESPAWN_INVULN_S, KILL_RESPAWN_S, DOUBLE_KO_RESPAWN_S,
+  });
+  const withTweakedInvuln = replayHashJson({
+    RESPAWN_INVULN_S: RESPAWN_INVULN_S + 0.1,
+    KILL_RESPAWN_S,
+    DOUBLE_KO_RESPAWN_S,
+  });
+  assert.notEqual(withCurrent, withTweakedInvuln,
+    "changing respawn invulnerability must bump the constants hash");
 });
 
 test("verifyReplayIntegrityV1 recomputes action hash from bytes (tamper without decode)", () => {
@@ -373,6 +396,7 @@ test("verifyActionLog re-simulates action log and confirms result", async () => 
     stage,
     chars: DEFAULT_CHARS,
     actionLog: result.frameLog,
+    maxTicks: 240,
     expectedLogHash: result.logHash,
   });
   assert.equal(out.ok, true);
@@ -392,8 +416,28 @@ test("verifyActionLog detects logHash mismatch (tampered expectation)", async ()
     stage,
     chars: DEFAULT_CHARS,
     actionLog: result.frameLog,
+    maxTicks: 240,
     expectedLogHash: "00000000", // wrong
   });
   assert.equal(out.ok, false);
   assert.ok(out.reason && out.reason.includes("logHash mismatch"));
+});
+
+test("verifyActionLog rejects logs that end before the agreed horizon", async () => {
+  const { verifyActionLog } = await import("../replay.js");
+  const stage = STAGES.datacenter;
+  const result = simulate({
+    stage, brainA: STRATEGIES.blitz, brainB: STRATEGIES.shipper,
+    seed: 222, maxTicks: 240,
+  });
+  const truncated = result.frameLog.slice(0, Math.max(0, result.frameLog.length - 2));
+  const out = verifyActionLog({
+    seed: 222,
+    stage,
+    chars: DEFAULT_CHARS,
+    actionLog: truncated,
+    maxTicks: 240,
+  });
+  assert.equal(out.ok, false);
+  assert.ok(out.reason && out.reason.includes("ended early"));
 });

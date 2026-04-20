@@ -9,12 +9,16 @@ import {
   CLASH_FREEZE,
   COYOTE_TIME,
   FLOOR_Y,
+  GOAL_DWELL_RADIUS,
   GOAL_DWELL_S,
   GOAL_TIMER_START,
   GRAVITY,
   HIT_FREEZE,
   JUMP_BUFFER_TIME,
+  DOUBLE_KO_RESPAWN_S,
+  KILL_RESPAWN_S,
   POINTS_TO_WIN_ROUND,
+  RESPAWN_INVULN_S,
   ROUNDS_TO_WIN_MATCH,
   ROUND_TIMER_MAX_TICKS,
   STATS,
@@ -328,10 +332,20 @@ function tickFighter(f: Fighter, opp: Fighter, input: Action, w: World): void {
   if (input.action && f.stun <= 0 && f.diveT <= 0 && f.swipeT <= 0) {
     if (!f.onGround && input.down && f.diveCD <= 0) {
       startAttack(f, "dive", w.tick);
-      if (w.telemetry) w.telemetry[f.id].dives++;
+      if (w.telemetry) {
+        const t = w.telemetry[f.id];
+        const m = w.brainStates[f.id].mode;
+        t.dives++;
+        t.modeDives[m]++;
+      }
     } else if (f.swipeCD <= 0) {
       startAttack(f, "swipe", w.tick);
-      if (w.telemetry) w.telemetry[f.id].swipes++;
+      if (w.telemetry) {
+        const t = w.telemetry[f.id];
+        const m = w.brainStates[f.id].mode;
+        t.swipes++;
+        t.modeSwipes[m]++;
+      }
     }
   }
 
@@ -435,7 +449,12 @@ function resolveCombat(w: World): void {
     b.swipeT = 0;
     a.lastClashTick = w.tick;
     b.lastClashTick = w.tick;
-    if (w.telemetry) { w.telemetry[0].clashes++; w.telemetry[1].clashes++; }
+    if (w.telemetry) {
+      w.telemetry[0].clashes++;
+      w.telemetry[1].clashes++;
+      w.telemetry[0].modeClashes[w.brainStates[0].mode]++;
+      w.telemetry[1].modeClashes[w.brainStates[1].mode]++;
+    }
     w.freeze = Math.max(w.freeze, CLASH_FREEZE);
     return;
   }
@@ -460,7 +479,12 @@ function resolveCombat(w: World): void {
       b.stun = 0.09;
       a.lastClashTick = w.tick;
       b.lastClashTick = w.tick;
-      if (w.telemetry) { w.telemetry[0].clashes++; w.telemetry[1].clashes++; }
+      if (w.telemetry) {
+        w.telemetry[0].clashes++;
+        w.telemetry[1].clashes++;
+        w.telemetry[0].modeClashes[w.brainStates[0].mode]++;
+        w.telemetry[1].modeClashes[w.brainStates[1].mode]++;
+      }
       w.freeze = Math.max(w.freeze, CLASH_FREEZE);
       return;
     }
@@ -489,7 +513,7 @@ function respawn(f: Fighter, w: World): void {
   f.vx = 0;
   f.vy = 0;
   f.dead = false;
-  f.invuln = 0.6;
+  f.invuln = RESPAWN_INVULN_S;
   f.swipeT = 0;
   f.diveT = 0;
   f.coyote = 0;
@@ -512,7 +536,7 @@ function killPlayer(w: World, vid: 0 | 1, kid: 0 | 1): void {
   const k = w.fighters[kid];
   if (v.dead || k.dead) return;
   v.dead = true;
-  v.respawnT = 0.5;
+  v.respawnT = KILL_RESPAWN_S;
   v.vx = 0;
   v.vy = 0;
   v.swipeT = 0;
@@ -539,7 +563,7 @@ function killPlayer(w: World, vid: 0 | 1, kid: 0 | 1): void {
 function doubleKO(w: World): void {
   for (const p of w.fighters) {
     p.dead = true;
-    p.respawnT = 0.6;
+    p.respawnT = DOUBLE_KO_RESPAWN_S;
     p.vx = 0;
     p.vy = 0;
     p.hp = 0;
@@ -592,7 +616,7 @@ function updateGold(w: World): void {
   if (!c.dead) {
     const dx = c.x - w.goal.x;
     const dy = c.y - STATS.bodyH * 0.5 - w.goal.y;
-    const atGoal = Math.hypot(dx, dy) < 32;
+    const atGoal = Math.hypot(dx, dy) < GOAL_DWELL_RADIUS;
     if (atGoal) {
       w.gold.dwellT += STEP;
       if (w.gold.dwellT >= GOAL_DWELL_S) scorePoint(w, w.gold.carrier);

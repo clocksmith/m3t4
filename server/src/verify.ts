@@ -5,8 +5,11 @@ import http from "node:http";
 import crypto from "node:crypto";
 import {
   BEHAVIOR_VERSION,
+  ROUND_TIMER_MAX_TICKS,
   REPLAY_CONSTANTS_HASH,
+  ROUNDS_TO_WIN_MATCH,
   STAGES,
+  replaySha256BytesSync,
   type Stage,
   type TrustLabel,
   verifyActionLog,
@@ -45,12 +48,19 @@ function base64ToBytes(b64: string): Uint8Array {
   return new Uint8Array(Buffer.from(b64, "base64"));
 }
 
+const DEFAULT_MAX_TICKS = ROUND_TIMER_MAX_TICKS * ROUNDS_TO_WIN_MATCH * 2;
+const IS_PROD = process.env.NODE_ENV === "production";
+
 // Match tokens are HMAC-signed by the server so peers cannot forge them.
 // The secret is derived from env (rotate on deploy). For dev/test, a
 // stable but non-production default is used — never ship this default.
 const TOKEN_SECRET: string =
-  process.env.M3T4_MATCH_TOKEN_SECRET
-  ?? "dev-only-m3t4-match-token-secret-replace-in-prod";
+  process.env.M3T4_MATCH_TOKEN_SECRET ??
+  (IS_PROD ? "" : "dev-only-m3t4-match-token-secret-replace-in-prod");
+
+if (!TOKEN_SECRET) {
+  throw new Error("M3T4_MATCH_TOKEN_SECRET is required in production");
+}
 
 function hmacSign(payload: string): string {
   return crypto.createHmac("sha256", TOKEN_SECRET).update(payload).digest("hex");
@@ -89,7 +99,7 @@ export async function handleVerifyReplay(
   try { body = await readJsonBody(req); }
   catch { return json(res, 400, { ok: false, reason: "invalid json body" }); }
 
-  const { seed, stageId, actionLogB64, expectedLogHash, expectedResult } = body ?? {};
+  const { seed, stageId, actionLogB64, expectedLogHash, expectedResult, maxTicks } = body ?? {};
   if (typeof seed !== "number" || !Number.isFinite(seed)) {
     return json(res, 400, { ok: false, reason: "seed must be a number" });
   }
@@ -112,6 +122,9 @@ export async function handleVerifyReplay(
     stage,
     chars: (await import("@m3t4/sim")).DEFAULT_CHARS,
     actionLog,
+    maxTicks: typeof maxTicks === "number" && Number.isFinite(maxTicks)
+      ? Math.max(0, Math.floor(maxTicks))
+      : DEFAULT_MAX_TICKS,
     expectedLogHash: typeof expectedLogHash === "string" ? expectedLogHash : undefined,
     expectedResult,
   });
@@ -178,6 +191,7 @@ export interface MatchTokenPayload {
   issuedAt: string;
   expiresAt: string;
   stateHashCadenceTicks: number;
+  maxTicks: number;
 }
 
 export interface SignedMatchToken extends MatchTokenPayload {
@@ -192,6 +206,26 @@ function issueMatchToken(payload: MatchTokenPayload): SignedMatchToken {
 function verifyMatchToken(token: SignedMatchToken): boolean {
   const { signature, ...payload } = token;
   return hmacVerify(JSON.stringify(payload), signature);
+}
+
+function tokenFromHeader(req: http.IncomingMessage): SignedMatchToken | null {
+  const raw = req.headers["x-m3t4-match-token"];
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    return JSON.parse(Buffer.from(raw, "base64").toString("utf8")) as SignedMatchToken;
+  } catch {
+    return null;
+  }
+}
+
+function signalAuthorized(
+  req: http.IncomingMessage, matchId: string, fromPlayerId?: string,
+): boolean {
+  if (!IS_PROD) return true;
+  const token = tokenFromHeader(req);
+  if (!token || token.matchId !== matchId || !verifyMatchToken(token)) return false;
+  if (new Date(token.expiresAt) < new Date()) return false;
+  return fromPlayerId === undefined || token.playerIds.includes(fromPlayerId);
 }
 
 // POST /api/duel/challenge  { toUid, stageId? }
@@ -254,6 +288,7 @@ export async function handleDuelAccept(
     issuedAt: now.toISOString(),
     expiresAt: exp.toISOString(),
     stateHashCadenceTicks: 120,
+    maxTicks: DEFAULT_MAX_TICKS,
   });
   vstore.updateChallenge(challengeId, { token });
   return json(res, 200, { token });
@@ -306,6 +341,7 @@ export async function handleDuelSubmit(
     stage,
     chars: sim.DEFAULT_CHARS,
     actionLog,
+    maxTicks: t.maxTicks ?? DEFAULT_MAX_TICKS,
     expectedLogHash: typeof result?.logHash === "string" ? result.logHash : undefined,
     expectedResult: result,
   });
@@ -316,6 +352,7 @@ export async function handleDuelSubmit(
 
   // Build + archive the replay artifact with p2p-action-verified label.
   // Player refs carry only public identifiers (uid) — configs stay private.
+  const actionLogSha256 = replaySha256BytesSync(actionLog);
   const trust: TrustLabel = {
     tier: "p2p-action-verified",
     simConstantsHash: REPLAY_CONSTANTS_HASH,
@@ -325,6 +362,7 @@ export async function handleDuelSubmit(
     proofIssuer: "server",
     verification: {
       actionLogHash: result.logHash,
+      actionLogSha256,
       stateHashCadenceTicks: t.stateHashCadenceTicks,
       verifierIds: Array.isArray(peerSignatures) ? (peerSignatures as string[]).slice(0, 2) : undefined,
     },
@@ -382,11 +420,14 @@ export async function handleDuelSignalPost(
   try { body = await readJsonBody(req); }
   catch { return json(res, 400, { ok: false, reason: "invalid json body" }); }
 
-  const slot = vstore.ensureSignalSlot(matchId);
   const { role, sdp, ice, fromPlayerId } = body ?? {};
   if (typeof fromPlayerId !== "string" || !fromPlayerId) {
     return json(res, 400, { ok: false, reason: "fromPlayerId required" });
   }
+  if (!signalAuthorized(req, matchId, fromPlayerId)) {
+    return json(res, 403, { ok: false, reason: "valid match token required" });
+  }
+  const slot = vstore.ensureSignalSlot(matchId);
 
   // ICE candidate deposit
   if (ice !== undefined) {
@@ -418,6 +459,9 @@ export async function handleDuelSignalGet(
   vstore.sweepSignalSlots(SIGNAL_TTL_MS);
   const slot = vstore.getSignalSlot(matchId);
   if (!slot) return json(res, 404, { ok: false, reason: "signal slot not found" });
+  if (!signalAuthorized(req, matchId)) {
+    return json(res, 403, { ok: false, reason: "valid match token required" });
+  }
 
   const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
   const wantRole = url.searchParams.get("role") as SdpRole | null;
@@ -484,8 +528,9 @@ export async function handleCommunityRegister(
 // Body: {
 //   matchId: string,
 //   workerId: string,
-//   computedLogHash: string,
-//   signature: string,   // HMAC-SHA256 over `${matchId}:${computedLogHash}`
+//   computedActionSha256: string, // preferred
+//   computedLogHash?: string,     // legacy FNV logHash compatibility
+//   signature: string,            // HMAC-SHA256 over `${matchId}:${hash}`
 // }
 //
 // Server flow:
@@ -503,15 +548,17 @@ export async function handleCommunityAttest(
   try { body = await readJsonBody(req); }
   catch { return json(res, 400, { ok: false, reason: "invalid json body" }); }
 
-  const { matchId, workerId, computedLogHash, signature } = body ?? {};
+  const { matchId, workerId, computedLogHash, computedActionSha256, signature } = body ?? {};
   if (typeof matchId !== "string" || !matchId) {
     return json(res, 400, { ok: false, reason: "matchId required" });
   }
   if (typeof workerId !== "string" || !workerId) {
     return json(res, 400, { ok: false, reason: "workerId required" });
   }
-  if (typeof computedLogHash !== "string" || !computedLogHash) {
-    return json(res, 400, { ok: false, reason: "computedLogHash required" });
+  const hasSha = typeof computedActionSha256 === "string" && /^[0-9a-f]{64}$/i.test(computedActionSha256);
+  const hasLegacyHash = typeof computedLogHash === "string" && !!computedLogHash;
+  if (!hasSha && !hasLegacyHash) {
+    return json(res, 400, { ok: false, reason: "computedActionSha256 required" });
   }
   if (typeof signature !== "string" || !signature) {
     return json(res, 400, { ok: false, reason: "signature required" });
@@ -525,7 +572,8 @@ export async function handleCommunityAttest(
     return json(res, 403, { ok: false, reason: "worker delisted due to repeated disagreements" });
   }
 
-  const payload = `${matchId}:${computedLogHash}`;
+  const attestedHash = hasSha ? computedActionSha256 as string : computedLogHash as string;
+  const payload = `${matchId}:${attestedHash}`;
   const expectedSig = crypto.createHmac("sha256", worker.sharedSecret).update(payload).digest("hex");
   try {
     const sigBuf = Buffer.from(signature, "hex");
@@ -540,9 +588,14 @@ export async function handleCommunityAttest(
   const replay = await store.getReplay(matchId);
   if (!replay) return json(res, 404, { ok: false, reason: "replay not found" });
 
-  const agreed = replay.result.logHash === computedLogHash;
+  const agreed = hasSha
+    ? replay.actions.sha256 === computedActionSha256
+    : replay.result.logHash === computedLogHash;
   const list = vstore.upsertAttestation({
-    matchId, workerId, computedLogHash, agreed,
+    matchId, workerId,
+    computedLogHash: hasLegacyHash ? computedLogHash : undefined,
+    computedActionSha256: hasSha ? computedActionSha256 : undefined,
+    agreed,
     postedAt: new Date().toISOString(),
   });
 
@@ -577,6 +630,7 @@ export async function handleCommunityAttest(
       },
       verifierIds: Array.from(agreeingWorkers),
       actionLogHash: replay.result.logHash,
+      actionLogSha256: replay.actions.sha256,
     };
     await store.archiveReplay(replay);
   }

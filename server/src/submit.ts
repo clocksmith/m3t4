@@ -5,6 +5,10 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { validateUserSubmission, type BrainConfig } from "@m3t4/sim";
 import type { StableStore } from "./stable.js";
 import { verifyAuth } from "./auth.js";
+import { CONFIG } from "./config.js";
+import { corsHeaders } from "./http-utils.js";
+
+const submitLimiter = new Map<string, { count: number; resetAt: number }>();
 
 async function readBody(req: IncomingMessage): Promise<string> {
   let buf = "";
@@ -13,12 +17,17 @@ async function readBody(req: IncomingMessage): Promise<string> {
 }
 
 function send(res: ServerResponse, code: number, body: unknown): void {
-  res.writeHead(code, { "content-type": "application/json", "access-control-allow-origin": "*" });
+  res.writeHead(code, { "content-type": "application/json", ...corsHeaders() });
   res.end(JSON.stringify(body));
 }
 
 export async function handleSubmit(req: IncomingMessage, res: ServerResponse, store: StableStore): Promise<void> {
   try {
+    const rate = checkSubmitRateLimit(req);
+    if (!rate.ok) {
+      res.setHeader("retry-after", String(Math.ceil(rate.retryAfterMs / 1000)));
+      return send(res, 429, { error: "rate limited", retryAfterMs: rate.retryAfterMs });
+    }
     const auth = await verifyAuth(req.headers.authorization);
     const raw = await readBody(req);
     const body = JSON.parse(raw || "{}") as {
@@ -42,6 +51,29 @@ export async function handleSubmit(req: IncomingMessage, res: ServerResponse, st
   } catch (e) {
     send(res, 400, { error: (e as Error).message });
   }
+}
+
+function checkSubmitRateLimit(req: IncomingMessage): { ok: true } | { ok: false; retryAfterMs: number } {
+  const limit = Math.max(1, CONFIG.submitIpRateLimitMax);
+  const windowMs = Math.max(1000, CONFIG.submitIpRateLimitWindowMs);
+  const ip = clientIp(req);
+  const now = Date.now();
+  const rec = submitLimiter.get(ip);
+  if (!rec || rec.resetAt <= now) {
+    submitLimiter.set(ip, { count: 1, resetAt: now + windowMs });
+    return { ok: true };
+  }
+  rec.count++;
+  if (rec.count <= limit) return { ok: true };
+  return { ok: false, retryAfterMs: rec.resetAt - now };
+}
+
+function clientIp(req: IncomingMessage): string {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    return forwarded.split(",")[0].trim();
+  }
+  return req.socket.remoteAddress ?? "unknown";
 }
 
 export async function handleClaimHandle(req: IncomingMessage, res: ServerResponse, store: StableStore): Promise<void> {

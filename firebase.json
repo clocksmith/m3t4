@@ -1,4 +1,7 @@
 {
+  "firestore": {
+    "rules": "infra/firestore.rules"
+  },
   "hosting": {
     "public": "client",
     "ignore": [

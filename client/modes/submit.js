@@ -30,6 +30,7 @@ function renderSignIn() {
   setStatus("submit · not signed in");
   const authError = auth.error?.();
   if (auth.mode === "firebase") return renderFirebaseSignIn(authError);
+  const isAlpha = auth.mode === "alpha-token";
 
   root.innerHTML = `
     <div class="page">
@@ -37,10 +38,11 @@ function renderSignIn() {
         <h1>Submit <small>— sign in first</small></h1>
       </div>
       <div class="panel">
-        <h3>Dev mode</h3>
+        <h3>${isAlpha ? "Closed alpha" : "Dev mode"}</h3>
         <p class="tight" style="margin-bottom:12px;">
-          Local dev auth: pick any UID; the server accepts it as your identity.
-          Firebase Google/GitHub auth ships with the prod build.
+          ${isAlpha
+            ? "Closed alpha auth: pick your invited UID. The deploy config signs it with the shared alpha token."
+            : "Local dev auth: pick any UID; the server accepts it as your identity."}
         </p>
         <div class="row">
           <input type="text" id="uid-input" placeholder="pick a uid (3-64 chars, a-z 0-9 _ -)" style="flex:1;">

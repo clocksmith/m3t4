@@ -16,13 +16,14 @@ import {
 } from "@m3t4/sim";
 import type { StableStore } from "./stable.js";
 import type { VerifyStore } from "./verify-store.js";
+import { corsHeaders } from "./http-utils.js";
 
 // ---------------------------- helpers ----------------------------
 
 function json(res: http.ServerResponse, code: number, body: unknown): void {
   res.writeHead(code, {
     "content-type": "application/json",
-    "access-control-allow-origin": "*",
+    ...corsHeaders(),
   });
   res.end(JSON.stringify(body));
 }

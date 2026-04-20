@@ -52,6 +52,20 @@ class DevAuth {
   _emit() { for (const cb of this._listeners) try { cb(); } catch {} }
 }
 
+class AlphaTokenAuth extends DevAuth {
+  constructor() {
+    super();
+    this.mode = "alpha-token";
+  }
+
+  async token() {
+    const uid = localStorage.getItem(KEY_UID) || "";
+    const secret = window.__M3T4_ALPHA_TOKEN__;
+    if (!secret) throw new Error("alpha token missing from deploy config");
+    return `${uid}:${secret}`;
+  }
+}
+
 class FirebaseAuth {
   constructor(config) {
     this.mode = "firebase";
@@ -130,6 +144,9 @@ class FirebaseAuth {
   _emit() { for (const cb of this._listeners) try { cb(); } catch {} }
 }
 
-export const auth = configuredAuthMode() === "dev"
+const mode = configuredAuthMode();
+export const auth = mode === "dev"
   ? new DevAuth()
-  : new FirebaseAuth(window.__M3T4_FIREBASE_CONFIG__);
+  : mode === "alpha-token"
+    ? new AlphaTokenAuth()
+    : new FirebaseAuth(window.__M3T4_FIREBASE_CONFIG__);

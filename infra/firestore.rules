@@ -1,0 +1,51 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Private canonical state. Contains submitted bot configs and Elo stats.
+    // Only the Cloud Run service account should access this through the Admin
+    // SDK. Browser clients use API endpoints instead.
+    match /stables/{uid} {
+      allow read, write: if false;
+    }
+
+    // Handle uniqueness index. Also server-only because handle claims are
+    // mediated by POST /api/handle.
+    match /handles/{handle} {
+      allow read, write: if false;
+    }
+
+    // Public projection. No bot configs, no private submission payloads.
+    match /publicStables/{uid} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Full replay artifacts may include private configs. Spectators should
+    // fetch sanitized tuples from /api/spectate/tuple/:matchId instead.
+    match /replays/{matchId} {
+      allow read, write: if false;
+    }
+
+    // Reserved if we later split replay blobs from match metadata.
+    match /rankedMatches/{matchId} {
+      allow read, write: if false;
+    }
+
+    // Optional verification/proof surfaces are off for beta and server-only
+    // when enabled.
+    match /duel/{doc=**} {
+      allow read, write: if false;
+    }
+    match /community/{doc=**} {
+      allow read, write: if false;
+    }
+    match /proof/{doc=**} {
+      allow read, write: if false;
+    }
+  }
+}

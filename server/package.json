@@ -11,13 +11,13 @@
   },
   "dependencies": {
     "@m3t4/sim": "file:../sim",
+    "firebase-admin": "^13.8.0",
     "snarkjs": "^0.7.6",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.13",
-    "firebase-admin": "^13.8.0",
     "typescript": "^5.4.0"
   }
 }

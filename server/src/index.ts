@@ -12,9 +12,10 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { CONFIG } from "./config.js";
 import { FileStableStore } from "./stable.js";
+import { FirestoreStableStore } from "./firestore-store.js";
 import { Firehose } from "./firehose.js";
 import { defaultVerifyStorePath, VerifyStore } from "./verify-store.js";
-import { json } from "./http-utils.js";
+import { corsHeaders, json } from "./http-utils.js";
 import type { RouteList } from "./routes/types.js";
 import { registerRankedRoutes } from "./routes/ranked.js";
 import { registerReplayVerifyRoutes } from "./routes/replay.js";
@@ -28,7 +29,9 @@ const __dirname = path.dirname(__filename);
 
 const STORE_PATH = process.env.STORE_PATH ?? path.join(__dirname, "..", "data", "m3t4.json");
 
-const store = new FileStableStore(STORE_PATH);
+const store = CONFIG.storeBackend === "firestore"
+  ? new FirestoreStableStore()
+  : new FileStableStore(STORE_PATH);
 const firehose = new Firehose(store);
 
 if (CONFIG.features.proofLab && CONFIG.features.zk) {
@@ -58,7 +61,7 @@ if (CONFIG.features.proofLab) {
 const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
-      "access-control-allow-origin": "*",
+      ...corsHeaders(),
       "access-control-allow-methods": "GET,POST,OPTIONS",
       "access-control-allow-headers": "content-type,authorization,x-m3t4-match-token",
     });
@@ -81,7 +84,8 @@ wss.on("connection", (ws) => {
 });
 
 server.listen(CONFIG.port, () => {
-  console.log(`m3t4 server on :${CONFIG.port}  (store=${STORE_PATH})`);
+  const storeLabel = CONFIG.storeBackend === "firestore" ? "firestore" : STORE_PATH;
+  console.log(`m3t4 server on :${CONFIG.port}  (store=${storeLabel})`);
   console.log(`  firehose: close-ELO ±${CONFIG.eloTolerance}, active pool ${CONFIG.activePoolMs / 86400000}d`);
   console.log(`  features: ${JSON.stringify(CONFIG.features)}`);
   firehose.start().catch((e) => console.error("firehose crashed:", e));

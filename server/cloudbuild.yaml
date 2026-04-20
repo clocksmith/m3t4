@@ -1,0 +1,11 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - server/Dockerfile
+      - -t
+      - gcr.io/$PROJECT_ID/arena-server
+      - .
+images:
+  - gcr.io/$PROJECT_ID/arena-server

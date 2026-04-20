@@ -9,9 +9,11 @@ export interface RankedRouteDeps {
   features: Record<string, boolean>;
   config: {
     activePoolMs: number;
+    authMode?: string;
     authProviders: readonly string[];
     cycleMs: number;
     maxSlots: number;
+    storeBackend?: string;
   };
 }
 
@@ -24,7 +26,9 @@ export function registerRankedRoutes(routes: RouteList, deps: RankedRouteDeps): 
         ok: true,
         cycleMs: config.cycleMs,
         maxSlots: config.maxSlots,
+        authMode: config.authMode,
         authProviders: config.authProviders,
+        storeBackend: config.storeBackend,
         features,
       });
       return true;
@@ -71,4 +75,3 @@ export function registerRankedRoutes(routes: RouteList, deps: RankedRouteDeps): 
     return false;
   });
 }
-

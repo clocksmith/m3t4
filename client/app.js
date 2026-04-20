@@ -5,10 +5,20 @@ import * as spectate from "./modes/spectate.js";
 import * as practice from "./modes/practice.js";
 import * as build from "./modes/build.js";
 import * as submit from "./modes/submit.js";
-import * as duel from "./modes/duel.js";
+import { status as getStatus } from "./lib/api.js";
 import { auth } from "./lib/auth.js";
 
-const MODES = { spectate, practice, build, submit, duel };
+const FEATURES = {
+  p2pDuel: false,
+  communityVerify: false,
+  proofLab: false,
+  zk: false,
+};
+
+const MODES = { spectate, practice, build, submit };
+const OPTIONAL_MODE_LOADERS = {
+  duel: () => import("./modes/duel.js"),
+};
 const DEFAULT_MODE = "spectate";
 
 const appEl = document.getElementById("app");
@@ -18,13 +28,31 @@ const statusEl = document.getElementById("status");
 
 let current = null;
 
+function featureForRoute(route) {
+  if (route === "duel") return "p2pDuel";
+  return null;
+}
+
+function routeEnabled(route) {
+  const feature = featureForRoute(route);
+  return !feature || FEATURES[feature] === true;
+}
+
+function syncNavVisibility() {
+  navLinks.forEach((a) => {
+    const route = a.dataset.route;
+    a.hidden = route ? !routeEnabled(route) : false;
+  });
+}
+
 function render() {
   const hash = (window.location.hash || "#" + DEFAULT_MODE).slice(1);
   const [name] = hash.split("?");
-  const mode = MODES[name] ?? MODES[DEFAULT_MODE];
+  const activeName = name in MODES && routeEnabled(name) ? name : DEFAULT_MODE;
+  const mode = MODES[activeName] ?? MODES[DEFAULT_MODE];
 
   navLinks.forEach((a) => {
-    a.classList.toggle("active", a.dataset.route === (name in MODES ? name : DEFAULT_MODE));
+    a.classList.toggle("active", a.dataset.route === activeName);
   });
 
   if (current && current.unmount) current.unmount();
@@ -47,8 +75,32 @@ function renderWhoami() {
   }
 }
 
+async function loadFeatures() {
+  try {
+    const s = await getStatus();
+    Object.assign(FEATURES, s.features ?? {});
+  } catch {
+    // Static/local client without a reachable API keeps optional surfaces hidden.
+  }
+
+  syncNavVisibility();
+
+  if (FEATURES.p2pDuel && !MODES.duel) {
+    MODES.duel = await OPTIONAL_MODE_LOADERS.duel();
+  }
+
+  const [route] = (window.location.hash || "#" + DEFAULT_MODE).slice(1).split("?");
+  if (!routeEnabled(route)) {
+    window.location.hash = "#" + DEFAULT_MODE;
+  } else {
+    render();
+  }
+}
+
 auth.onChange(renderWhoami);
 renderWhoami();
+syncNavVisibility();
 
 window.addEventListener("hashchange", render);
 render();
+loadFeatures();

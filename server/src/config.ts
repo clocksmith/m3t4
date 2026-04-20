@@ -1,6 +1,12 @@
 // Environment-driven settings. All production values come from env vars so
 // the same image deploys to any GCP/Firebase project.
 
+function envFlag(name: string, fallback = false): boolean {
+  const raw = process.env[name];
+  if (raw === undefined) return fallback;
+  return /^(1|true|yes|on)$/i.test(raw.trim());
+}
+
 export const CONFIG = {
   port: parseInt(process.env.PORT ?? "7777", 10),
   publicDomain: process.env.ARENA_PUBLIC_DOMAIN ?? "localhost",
@@ -33,4 +39,14 @@ export const CONFIG = {
   storePath: process.env.STORE_PATH ?? "./data/m3t4.json",
   replayArchiveLimit: parseInt(process.env.REPLAY_ARCHIVE_LIMIT ?? "100", 10),
   simSourceHash: process.env.SIM_SOURCE_HASH,
+
+  // Optional authority surfaces. The beta product path is centralized:
+  // ranked/practice/spectate/replay-verify. Exhibition and proof surfaces
+  // are present in the repo but hidden unless explicitly enabled.
+  features: {
+    p2pDuel: envFlag("FEATURE_P2P_DUEL", false),
+    communityVerify: envFlag("FEATURE_COMMUNITY_VERIFY", false),
+    proofLab: envFlag("FEATURE_PROOF_LAB", false),
+    zk: envFlag("FEATURE_ZK", false),
+  },
 } as const;

@@ -17,6 +17,9 @@ that states exactly what was proven.
 
 - The sim is deterministic for a fixed rules hash, stage, seed, players,
   and action log.
+- `sim/` is the only shared core. It knows deterministic mechanics and
+  replay primitives only; it must not import auth, Elo, WebRTC, P2P,
+  proof systems, storage, or ranked product code.
 - Ranked meta authority stays centralized. Elo, match registry, seed
   issuance, account identity, and canonical roster releases are not
   decentralized.
@@ -26,6 +29,42 @@ that states exactly what was proven.
   `REPLAY_CONSTANTS_HASH` must not silently claim validity under another.
 - Offline search, RL, and community verification are allowed to discover
   pressure, but ranked play remains constrained by the legal knob system.
+
+## Authority Boundaries
+
+The product is separated by authority model, not by transport:
+
+| System | Authority | Inputs | Output | Trust label |
+| --- | --- | --- | --- | --- |
+| Ranked / presets / ladder | server | bot configs | match result + replay | `ranked-server` |
+| Practice | client-local | local configs | local sim only | `local-practice` |
+| Spectate | server | server tuple or frame stream | view/replay | `ranked-server` or `tuple-verified` |
+| P2P duel | peers + server verifier | action log only | verified exhibition replay | `p2p-action-verified` |
+
+Code should follow the same boundary:
+
+- `server/src/routes/ranked.ts` owns the centralized product routes:
+  status, leaderboard, stable lookup, submit, handle claim, Elo decay.
+- `server/src/routes/replay.ts` owns reusable replay verification and
+  spectate tuple lookup.
+- `server/src/p2p/` owns exhibition duel route registration: challenge,
+  signaling, and action-log submission.
+- `server/src/community/` owns optional community attestation routes.
+- `server/src/labs/proof/` owns optional proof-carrying research routes.
+
+Optional surfaces are feature-gated at route-registration time:
+
+```env
+FEATURE_P2P_DUEL=false
+FEATURE_COMMUNITY_VERIFY=false
+FEATURE_PROOF_LAB=false
+FEATURE_ZK=false
+```
+
+Centralized beta deploys should leave all four disabled unless a launch
+checklist explicitly promotes one of those surfaces. Disabled optional
+routes should behave like absent product surfaces, not half-enabled
+features.
 
 ## Trust Labels
 

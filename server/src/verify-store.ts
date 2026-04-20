@@ -1,8 +1,10 @@
-// Persistent state for verify.ts + proof.ts surface.
+// Persistent state for optional verification surfaces.
 //
 // Single JSON file, sync read/write on mutations (mirrors the pattern
 // in stable.ts — good enough for dev/small deployments; production
-// swaps for Firestore or equivalent). Replaces the in-memory Maps.
+// swaps for Firestore or equivalent). Runtime wiring should instantiate
+// separate stores per authority surface (duel/community/proof) even though
+// this dev implementation can back each with the same schema.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -242,7 +244,20 @@ export class VerifyStore {
   }
 }
 
+export type VerifyStoreSurface = "verify" | "duel" | "community" | "proof";
+
+const SURFACE_ENV: Record<VerifyStoreSurface, string> = {
+  verify: "VERIFY_STORE_PATH",
+  duel: "DUEL_STORE_PATH",
+  community: "COMMUNITY_VERIFY_STORE_PATH",
+  proof: "PROOF_STORE_PATH",
+};
+
 // Default store path. Tests can construct their own with a temp file.
-export function defaultVerifyStorePath(): string {
-  return process.env.VERIFY_STORE_PATH ?? path.join(__dirname, "..", "data", "verify.json");
+export function defaultVerifyStorePath(surface: VerifyStoreSurface = "verify"): string {
+  const specific = process.env[SURFACE_ENV[surface]];
+  if (specific) return specific;
+  if (surface !== "verify" && process.env.VERIFY_STORE_PATH) return process.env.VERIFY_STORE_PATH;
+  const filename = surface === "verify" ? "verify.json" : `${surface}.json`;
+  return path.join(__dirname, "..", "data", filename);
 }

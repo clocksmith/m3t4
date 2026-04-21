@@ -17,7 +17,7 @@ import {
 // Bots still see the same platform rectangles, but vertical routing now
 // chooses the next surface on a route instead of greedily picking one
 // platform above.
-export const BEHAVIOR_VERSION = 15;
+export const BEHAVIOR_VERSION = 16;
 
 // ---------- Opp-model buffer sizing ----------
 //

@@ -9,7 +9,7 @@ import { GOAL_DWELL_RADIUS, GOAL_DWELL_S, KILL_RESPAWN_S, GRAVITY, RESPAWN_INVUL
 // Bots still see the same platform rectangles, but vertical routing now
 // chooses the next surface on a route instead of greedily picking one
 // platform above.
-export const BEHAVIOR_VERSION = 15;
+export const BEHAVIOR_VERSION = 16;
 // ---------- Opp-model buffer sizing ----------
 //
 // Bounded ring: max 16 entries per stream, hard decay at 240 ticks (2 s).

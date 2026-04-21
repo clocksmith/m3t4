@@ -81,9 +81,9 @@ function noiseUnit(seed, tick, fighterId, paramIndex) {
     return mix32(x) / 0x100000000;
 }
 const NOISE_KEYS = PARAM_KEYS.filter((k) => k !== "hallucination");
-const MICRO_DRIFT_WINDOW_TICKS = 30;
-const MICRO_DRIFT_UI_STEP = 2;
-const MICRO_DRIFT_TOTAL_UI_CAP = 16;
+const MICRO_DRIFT_WINDOW_TICKS = 120;
+const MICRO_DRIFT_UI_STEP = 4;
+const MICRO_DRIFT_TOTAL_UI_CAP = 32;
 const MICRO_DRIFT_SLOTS = Math.floor(MICRO_DRIFT_TOTAL_UI_CAP / MICRO_DRIFT_UI_STEP);
 export function applyMicroAttributeDrift(params, tick, fighterId, noiseSeed) {
     const driftTick = Math.floor(Math.max(0, tick) / MICRO_DRIFT_WINDOW_TICKS);

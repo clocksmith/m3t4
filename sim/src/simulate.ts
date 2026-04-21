@@ -134,9 +134,9 @@ function noiseUnit(seed: number, tick: number, fighterId: 0 | 1, paramIndex: num
 }
 
 const NOISE_KEYS = PARAM_KEYS.filter((k): k is Exclude<ParamKey, "hallucination"> => k !== "hallucination");
-const MICRO_DRIFT_WINDOW_TICKS = 30;
-const MICRO_DRIFT_UI_STEP = 2;
-const MICRO_DRIFT_TOTAL_UI_CAP = 16;
+const MICRO_DRIFT_WINDOW_TICKS = 120;
+const MICRO_DRIFT_UI_STEP = 4;
+const MICRO_DRIFT_TOTAL_UI_CAP = 32;
 const MICRO_DRIFT_SLOTS = Math.floor(MICRO_DRIFT_TOTAL_UI_CAP / MICRO_DRIFT_UI_STEP);
 
 export function applyMicroAttributeDrift(

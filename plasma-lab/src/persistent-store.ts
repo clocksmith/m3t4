@@ -7,6 +7,7 @@ import {
   type ExecutionReceipt,
   type StoreOptions,
   type ValidationRecord,
+  type WebRtcPairRecord,
   type WebRtcSessionRecord,
   type WorkerRecord,
   type WorkerSession,
@@ -93,6 +94,36 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     minAgreeing?: number;
   }): ComputeTask {
     const out = super.seedPrimeTask(input);
+    this.persist();
+    return out;
+  }
+
+  seedDeviceWitnessWebGpuTask(input: {
+    seed?: number;
+    count?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+  } = {}): ComputeTask {
+    const out = super.seedDeviceWitnessWebGpuTask(input);
+    this.persist();
+    return out;
+  }
+
+  seedDeviceWitnessRenderTask(input: {
+    minExecutions?: number;
+    minAgreeing?: number;
+  } = {}): ComputeTask {
+    const out = super.seedDeviceWitnessRenderTask(input);
+    this.persist();
+    return out;
+  }
+
+  seedDeviceWitnessWebRtcTask(input: {
+    timeoutMs?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+  } = {}): ComputeTask {
+    const out = super.seedDeviceWitnessWebRtcTask(input);
     this.persist();
     return out;
   }
@@ -195,6 +226,45 @@ export class PersistentComputeLabStore extends ComputeLabStore {
 
   closeWebRtcSession(input: { sessionId: string; token: string }): WebRtcSessionRecord {
     const out = super.closeWebRtcSession(input);
+    this.persist();
+    return out;
+  }
+
+  joinWebRtcPair(input: {
+    workerId: string;
+    workerSessionId: string;
+    workerSessionToken: string;
+  }): { pair: WebRtcPairRecord; role: "offerer" | "answerer" } {
+    const out = super.joinWebRtcPair(input);
+    this.persist();
+    return out;
+  }
+
+  setWebRtcPairOffer(input: { pairId: string; token: string; offer: unknown }): WebRtcPairRecord {
+    const out = super.setWebRtcPairOffer(input);
+    this.persist();
+    return out;
+  }
+
+  setWebRtcPairAnswer(input: { pairId: string; token: string; answer: unknown }): WebRtcPairRecord {
+    const out = super.setWebRtcPairAnswer(input);
+    this.persist();
+    return out;
+  }
+
+  addWebRtcPairCandidates(input: {
+    pairId: string;
+    token: string;
+    peerId?: string;
+    candidates: unknown[];
+  }): WebRtcPairRecord {
+    const out = super.addWebRtcPairCandidates(input);
+    this.persist();
+    return out;
+  }
+
+  closeWebRtcPair(input: { pairId: string; token: string }): WebRtcPairRecord {
+    const out = super.closeWebRtcPair(input);
     this.persist();
     return out;
   }

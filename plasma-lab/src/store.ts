@@ -1,4 +1,14 @@
 import {
+  DEVICE_WITNESS_RENDER_KERNEL_HASH,
+  DEVICE_WITNESS_RENDER_KERNEL_ID,
+  DEVICE_WITNESS_WEBRTC_KERNEL_HASH,
+  DEVICE_WITNESS_WEBRTC_KERNEL_ID,
+  DEVICE_WITNESS_WEBGPU_KERNEL_HASH,
+  DEVICE_WITNESS_WEBGPU_KERNEL_ID,
+  runDeviceWitnessRenderReference,
+  runDeviceWitnessWebGpuReference,
+} from "./kernels/device-witness.js";
+import {
   PRIME_SEARCH_KERNEL_HASH,
   PRIME_SEARCH_KERNEL_ID,
   runPrimeSearch,
@@ -39,12 +49,21 @@ export const COMPUTE_COLLECTIONS = {
   artifactExports: "compute_artifact_exports",
   sessions: "compute_sessions",
   webrtcSessions: "compute_webrtc_sessions",
+  webrtcPairs: "compute_webrtc_pairs",
   capabilityObservations: "compute_capability_observations",
   connectivityObservations: "compute_connectivity_observations",
+  workerProfiles: "compute_worker_profiles",
+  deviceClasses: "compute_device_classes",
+  networkClasses: "compute_network_classes",
+  publicStats: "compute_public_stats",
+  replayBadges: "compute_replay_badges",
 } as const;
 
 const KNOWN_KERNELS = [
   PRIME_SEARCH_KERNEL_ID,
+  DEVICE_WITNESS_WEBGPU_KERNEL_ID,
+  DEVICE_WITNESS_RENDER_KERNEL_ID,
+  DEVICE_WITNESS_WEBRTC_KERNEL_ID,
   PUBLIC_ARTIFACT_VERIFY_KERNEL_ID,
   SEED_SWEEP_KERNEL_ID,
 ];
@@ -122,6 +141,21 @@ export interface WebRtcSessionRecord {
   createdAt: number;
   expiresAt: number;
   status: "open" | "closed";
+  offer?: unknown;
+  answer?: unknown;
+  candidates: WebRtcCandidateRecord[];
+}
+
+export interface WebRtcPairRecord {
+  pairId: string;
+  token: string;
+  createdAt: number;
+  expiresAt: number;
+  status: "waiting" | "matched" | "closed";
+  offererWorkerId: string;
+  offererSessionId: string;
+  answererWorkerId?: string;
+  answererSessionId?: string;
   offer?: unknown;
   answer?: unknown;
   candidates: WebRtcCandidateRecord[];
@@ -210,6 +244,73 @@ export interface ReputationRecord {
   disagreements: number;
 }
 
+export interface WorkerProfile {
+  workerId: string;
+  lastSeenAt: number;
+  browserFamily: string;
+  deviceClass: string;
+  adapterClass: string;
+  webgpuAvailable: boolean;
+  webgpuCorrectnessScore: number | null;
+  renderFixtureScore: number | null;
+  webrtcDirectSuccessRate: number | null;
+  turnRequiredRate: number | null;
+  avgKernelMs: number | null;
+  p95KernelMs: number | null;
+  avgFrameRegressionMs: number | null;
+  allowedWorkloadTier: "observe-only" | "cpu-light" | "webgpu-light";
+  acceptedReceipts: number;
+  rejectedReceipts: number;
+  timeoutAssignments: number;
+  failureBuckets: Record<string, number>;
+}
+
+export interface ClassProfile {
+  classId: string;
+  workers: number;
+  activeWorkers: number;
+  avgKernelMs: number | null;
+  p95KernelMs: number | null;
+  webgpuCorrectnessScore: number | null;
+  renderFixtureScore: number | null;
+  webrtcDirectSuccessRate: number | null;
+  turnRequiredRate: number | null;
+}
+
+export interface PublicComputeStats {
+  generatedAt: number;
+  privacy: "full" | "suppressed";
+  minWorkers: number;
+  totalWorkers: number;
+  activeWorkers: number;
+  totalReceipts: number;
+  acceptedReceiptPct: number | null;
+  webgpuSupportedPct: number | null;
+  webgpuCorrectnessPct: number | null;
+  renderFixturePct: number | null;
+  webrtcDirectSuccessPct: number | null;
+  turnRequiredPct: number | null;
+  medianKernelMs: number | null;
+  p95KernelMs: number | null;
+  allowedTierBuckets: Record<string, number>;
+  adapterBuckets: Record<string, number>;
+  failureBuckets: Record<string, number>;
+}
+
+export interface ReplayVerificationBadge {
+  matchId: string;
+  status: "verified" | "pending" | "failed";
+  agreedReceipts: number;
+  requiredReceipts: number;
+  artifactHash?: string;
+  artifactSha256?: string;
+  rulesHash?: string;
+  stageHash?: string;
+  verifiedAt?: number;
+  taskId: string;
+  chunkId: string;
+}
+
 export interface StoreOptions {
   now?: () => number;
   assignmentTimeoutMs?: number;
@@ -227,6 +328,7 @@ export interface ComputeLabSnapshot {
   validations: ValidationRecord[];
   reputation: ReputationRecord[];
   webrtcSessions: WebRtcSessionRecord[];
+  webrtcPairs: WebRtcPairRecord[];
   capabilityObservations: CapabilityObservation[];
   connectivityObservations: ConnectivityObservation[];
 }
@@ -240,6 +342,7 @@ export class ComputeLabStore {
   private readonly validations = new Map<string, ValidationRecord>();
   private readonly reputation = new Map<string, ReputationRecord>();
   private readonly webrtcSessions = new Map<string, WebRtcSessionRecord>();
+  private readonly webrtcPairs = new Map<string, WebRtcPairRecord>();
   private readonly capabilityObservations = new Map<string, CapabilityObservation>();
   private readonly connectivityObservations = new Map<string, ConnectivityObservation>();
   private readonly now: () => number;
@@ -270,6 +373,7 @@ export class ComputeLabStore {
       validations: Array.from(this.validations.values()),
       reputation: Array.from(this.reputation.values()),
       webrtcSessions: Array.from(this.webrtcSessions.values()),
+      webrtcPairs: Array.from(this.webrtcPairs.values()),
       capabilityObservations: Array.from(this.capabilityObservations.values()),
       connectivityObservations: Array.from(this.connectivityObservations.values()),
     };
@@ -284,6 +388,7 @@ export class ComputeLabStore {
     this.validations.clear();
     this.reputation.clear();
     this.webrtcSessions.clear();
+    this.webrtcPairs.clear();
     this.capabilityObservations.clear();
     this.connectivityObservations.clear();
     for (const worker of snapshot.workers ?? []) this.workers.set(worker.workerId, worker);
@@ -294,6 +399,7 @@ export class ComputeLabStore {
     for (const validation of snapshot.validations ?? []) this.validations.set(validation.validationId, validation);
     for (const rep of snapshot.reputation ?? []) this.reputation.set(rep.workerId, rep);
     for (const session of snapshot.webrtcSessions ?? []) this.webrtcSessions.set(session.sessionId, session);
+    for (const pair of snapshot.webrtcPairs ?? []) this.webrtcPairs.set(pair.pairId, pair);
     for (const obs of snapshot.capabilityObservations ?? []) this.capabilityObservations.set(obs.observationId, obs);
     for (const obs of snapshot.connectivityObservations ?? []) this.connectivityObservations.set(obs.observationId, obs);
   }
@@ -450,6 +556,134 @@ export class ComputeLabStore {
       createdAt: this.now(),
       validationPolicy,
       chunks,
+    };
+    this.tasks.set(taskId, task);
+    return task;
+  }
+
+  seedDeviceWitnessWebGpuTask(input: {
+    seed?: number;
+    count?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+  } = {}): ComputeTask {
+    const seed = asInt(input.seed ?? 1, "seed");
+    const count = asInt(input.count ?? 256, "count");
+    if (count <= 0 || count > 4096) throw new Error("count must be 1..4096");
+    const taskId = randomId("task");
+    const minExecutions = Math.max(1, input.minExecutions ?? 1);
+    const minAgreeing = Math.min(minExecutions, Math.max(1, input.minAgreeing ?? 1));
+    const params = { seed, count };
+    const expectedOutputHash = runDeviceWitnessWebGpuReference(params).outputHash;
+    const chunk: ComputeChunk = {
+      chunkId: `${taskId}-chunk-0`,
+      taskId,
+      ordinal: 0,
+      kind: DEVICE_WITNESS_WEBGPU_KERNEL_ID,
+      params,
+      kernelId: DEVICE_WITNESS_WEBGPU_KERNEL_ID,
+      kernelHash: DEVICE_WITNESS_WEBGPU_KERNEL_HASH,
+      inputHash: hashCanonical({ kind: DEVICE_WITNESS_WEBGPU_KERNEL_ID, params }),
+      expectedOutputHash,
+      status: "pending",
+    };
+    const task: ComputeTask = {
+      taskId,
+      kind: DEVICE_WITNESS_WEBGPU_KERNEL_ID,
+      status: "running",
+      createdAt: this.now(),
+      validationPolicy: {
+        determinismClass: "bit-exact",
+        validationMode: "expected-hash",
+        minExecutions,
+        minAgreeing,
+        expectedOutputHash,
+      },
+      chunks: [chunk],
+    };
+    this.tasks.set(taskId, task);
+    return task;
+  }
+
+  seedDeviceWitnessRenderTask(input: {
+    minExecutions?: number;
+    minAgreeing?: number;
+  } = {}): ComputeTask {
+    const taskId = randomId("task");
+    const minExecutions = Math.max(1, input.minExecutions ?? 1);
+    const minAgreeing = Math.min(minExecutions, Math.max(1, input.minAgreeing ?? 1));
+    const params = { fixture: "canvas2d-alpha-samples-v1" };
+    const expectedOutputHash = runDeviceWitnessRenderReference().outputHash;
+    const chunk: ComputeChunk = {
+      chunkId: `${taskId}-chunk-0`,
+      taskId,
+      ordinal: 0,
+      kind: DEVICE_WITNESS_RENDER_KERNEL_ID,
+      params,
+      kernelId: DEVICE_WITNESS_RENDER_KERNEL_ID,
+      kernelHash: DEVICE_WITNESS_RENDER_KERNEL_HASH,
+      inputHash: hashCanonical({ kind: DEVICE_WITNESS_RENDER_KERNEL_ID, params }),
+      expectedOutputHash,
+      status: "pending",
+    };
+    const task: ComputeTask = {
+      taskId,
+      kind: DEVICE_WITNESS_RENDER_KERNEL_ID,
+      status: "running",
+      createdAt: this.now(),
+      validationPolicy: {
+        determinismClass: "bit-exact",
+        validationMode: "expected-hash",
+        minExecutions,
+        minAgreeing,
+        expectedOutputHash,
+      },
+      chunks: [chunk],
+    };
+    this.tasks.set(taskId, task);
+    return task;
+  }
+
+  seedDeviceWitnessWebRtcTask(input: {
+    timeoutMs?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+  } = {}): ComputeTask {
+    const timeoutMs = asInt(input.timeoutMs ?? 1800, "timeoutMs");
+    if (timeoutMs < 250 || timeoutMs > 10_000) throw new Error("timeoutMs must be 250..10000");
+    const taskId = randomId("task");
+    const challengeId = randomId("rtc-chal");
+    const minExecutions = Math.max(1, input.minExecutions ?? 1);
+    const minAgreeing = Math.min(minExecutions, Math.max(1, input.minAgreeing ?? 1));
+    const params = {
+      challengeId,
+      fixture: "local-datachannel-transcript-v1",
+      timeoutMs,
+    };
+    const chunk: ComputeChunk = {
+      chunkId: `${taskId}-chunk-0`,
+      taskId,
+      ordinal: 0,
+      kind: DEVICE_WITNESS_WEBRTC_KERNEL_ID,
+      params,
+      kernelId: DEVICE_WITNESS_WEBRTC_KERNEL_ID,
+      kernelHash: DEVICE_WITNESS_WEBRTC_KERNEL_HASH,
+      inputHash: hashCanonical({ kind: DEVICE_WITNESS_WEBRTC_KERNEL_ID, params }),
+      expectedOutputHash: hashCanonical({ kind: DEVICE_WITNESS_WEBRTC_KERNEL_ID, params, validation: "measurement" }),
+      status: "pending",
+    };
+    const task: ComputeTask = {
+      taskId,
+      kind: DEVICE_WITNESS_WEBRTC_KERNEL_ID,
+      status: "running",
+      createdAt: this.now(),
+      validationPolicy: {
+        determinismClass: "replicated-quorum",
+        validationMode: "measurement",
+        minExecutions,
+        minAgreeing,
+      },
+      chunks: [chunk],
     };
     this.tasks.set(taskId, task);
     return task;
@@ -686,6 +920,24 @@ export class ComputeLabStore {
       return { receipt };
     }
 
+    if (task.validationPolicy.validationMode === "measurement") {
+      const transcript = measurementTranscript(input.adapterInfo);
+      const measurementInput = { ...input, adapterInfo: transcript };
+      const expected = measurementReceiptHash(chunk, transcript);
+      const decision: ReceiptDecision = expected && hashesEqual(input.outputHash, expected)
+        ? "pending"
+        : "malformed";
+      const receipt = this.makeReceipt(measurementInput, decision, decision === "malformed" ? "measurement transcript hash mismatch" : undefined);
+      this.receipts.set(receipt.receiptId, receipt);
+      assignment.status = "receipted";
+      if (decision === "malformed") {
+        this.bumpReputation(input.workerId, "rejected");
+        return { receipt };
+      }
+      const validation = this.evaluateMeasurementChunk(task, chunk);
+      return { receipt: this.receipts.get(receipt.receiptId) ?? receipt, validation };
+    }
+
     const decision: ReceiptDecision = hashesEqual(input.outputHash, chunk.expectedOutputHash)
       ? "pending"
       : "output-mismatch";
@@ -770,6 +1022,84 @@ export class ComputeLabStore {
     return session;
   }
 
+  joinWebRtcPair(input: {
+    workerId: string;
+    workerSessionId: string;
+    workerSessionToken: string;
+  }): { pair: WebRtcPairRecord; role: "offerer" | "answerer" } {
+    this.requireSession(input.workerId, input.workerSessionId, input.workerSessionToken);
+    this.expireWebRtcPairs();
+    const waiting = Array.from(this.webrtcPairs.values())
+      .filter((pair) =>
+        pair.status === "waiting" &&
+        pair.expiresAt > this.now() &&
+        pair.offererWorkerId !== input.workerId
+      )
+      .sort((a, b) => a.createdAt - b.createdAt)[0];
+    if (waiting) {
+      waiting.status = "matched";
+      waiting.answererWorkerId = input.workerId;
+      waiting.answererSessionId = input.workerSessionId;
+      return { pair: waiting, role: "answerer" };
+    }
+    const now = this.now();
+    const pair: WebRtcPairRecord = {
+      pairId: randomId("rtcpair"),
+      token: randomToken("ptok"),
+      createdAt: now,
+      expiresAt: now + this.webrtcSessionTtlMs,
+      status: "waiting",
+      offererWorkerId: input.workerId,
+      offererSessionId: input.workerSessionId,
+      candidates: [],
+    };
+    this.webrtcPairs.set(pair.pairId, pair);
+    return { pair, role: "offerer" };
+  }
+
+  setWebRtcPairOffer(input: { pairId: string; token: string; offer: unknown }): WebRtcPairRecord {
+    const pair = this.requireWebRtcPair(input.pairId, input.token);
+    pair.offer = input.offer;
+    return pair;
+  }
+
+  setWebRtcPairAnswer(input: { pairId: string; token: string; answer: unknown }): WebRtcPairRecord {
+    const pair = this.requireWebRtcPair(input.pairId, input.token);
+    pair.answer = input.answer;
+    return pair;
+  }
+
+  addWebRtcPairCandidates(input: {
+    pairId: string;
+    token: string;
+    peerId?: string;
+    candidates: unknown[];
+  }): WebRtcPairRecord {
+    const pair = this.requireWebRtcPair(input.pairId, input.token);
+    const now = this.now();
+    for (const payload of input.candidates.slice(0, 16)) {
+      pair.candidates.push({
+        candidateId: randomId("ice"),
+        sessionId: pair.pairId,
+        peerId: stringBucket(input.peerId),
+        payload,
+        createdAt: now,
+      });
+    }
+    if (pair.candidates.length > 128) pair.candidates.splice(0, pair.candidates.length - 128);
+    return pair;
+  }
+
+  getWebRtcPair(input: { pairId: string; token: string }): WebRtcPairRecord {
+    return this.requireWebRtcPair(input.pairId, input.token);
+  }
+
+  closeWebRtcPair(input: { pairId: string; token: string }): WebRtcPairRecord {
+    const pair = this.requireWebRtcPair(input.pairId, input.token);
+    pair.status = "closed";
+    return pair;
+  }
+
   summary(): {
     acceptAssignments: boolean;
     collections: typeof COMPUTE_COLLECTIONS;
@@ -783,6 +1113,7 @@ export class ComputeLabStore {
     connectivityObservations: number;
     chunks: { pending: number; accepted: number; rejected: number; timeout: number };
     webrtcSessions: number;
+    webrtcPairs: number;
   } {
     const chunks = { pending: 0, accepted: 0, rejected: 0, timeout: 0 };
     for (const task of this.tasks.values()) {
@@ -806,6 +1137,7 @@ export class ComputeLabStore {
       connectivityObservations: this.connectivityObservations.size,
       chunks,
       webrtcSessions: this.webrtcSessions.size,
+      webrtcPairs: this.webrtcPairs.size,
     };
   }
 
@@ -827,16 +1159,97 @@ export class ComputeLabStore {
     };
   }
 
+  workerProfiles(): WorkerProfile[] {
+    return buildWorkerProfiles({
+      now: this.now(),
+      workers: Array.from(this.workers.values()),
+      receipts: Array.from(this.receipts.values()),
+      assignments: Array.from(this.assignments.values()),
+      capabilityObservations: Array.from(this.capabilityObservations.values()),
+      connectivityObservations: Array.from(this.connectivityObservations.values()),
+    });
+  }
+
+  deviceClassProfiles(): ClassProfile[] {
+    return classProfiles(this.workerProfiles(), this.now(), (profile) => profile.deviceClass || "unknown");
+  }
+
+  networkClassProfiles(): ClassProfile[] {
+    const latestByWorker = latestConnectivityByWorker(Array.from(this.connectivityObservations.values()));
+    return classProfiles(this.workerProfiles(), this.now(), (profile) =>
+      latestByWorker.get(profile.workerId)?.networkTypeBucket ?? "unknown",
+    );
+  }
+
+  publicStats(options: { minWorkers?: number; suppressSmall?: boolean } = {}): PublicComputeStats {
+    const minWorkers = options.minWorkers ?? 5;
+    const profiles = this.workerProfiles();
+    const suppressed = options.suppressSmall !== false && profiles.length < minWorkers;
+    return summarizePublicStats({
+      generatedAt: this.now(),
+      minWorkers,
+      suppressed,
+      profiles,
+      receipts: Array.from(this.receipts.values()),
+    });
+  }
+
+  replayBadges(): ReplayVerificationBadge[] {
+    const validationsByChunk = new Map<string, ValidationRecord[]>();
+    for (const validation of this.validations.values()) {
+      const list = validationsByChunk.get(validation.chunkId) ?? [];
+      list.push(validation);
+      validationsByChunk.set(validation.chunkId, list);
+    }
+    const out: ReplayVerificationBadge[] = [];
+    for (const task of this.tasks.values()) {
+      if (task.kind !== PUBLIC_ARTIFACT_VERIFY_KERNEL_ID) continue;
+      for (const chunk of task.chunks) {
+        const matchId = String(chunk.params.matchId ?? "");
+        if (!matchId) continue;
+        const accepted = (validationsByChunk.get(chunk.chunkId) ?? [])
+          .filter((validation) => validation.status === "accepted")
+          .sort((a, b) => b.recordedAt - a.recordedAt)[0];
+        const receipts = this.receiptsFor(chunk.chunkId);
+        const parsed = publicArtifactSummary(chunk.params.artifactJson);
+        out.push({
+          matchId,
+          status: accepted ? "verified" : chunk.status === "disagreement" || chunk.status === "rejected" ? "failed" : "pending",
+          agreedReceipts: accepted?.acceptedReceiptIds.length ?? receipts.filter((receipt) => receipt.decision === "accepted").length,
+          requiredReceipts: task.validationPolicy.minAgreeing,
+          artifactHash: String(chunk.params.artifactHash ?? parsed.artifactHash ?? ""),
+          artifactSha256: chunk.artifactHash?.value,
+          rulesHash: parsed.rulesHash,
+          stageHash: parsed.stageHash,
+          verifiedAt: accepted?.recordedAt,
+          taskId: task.taskId,
+          chunkId: chunk.chunkId,
+        });
+      }
+    }
+    return out.sort((a, b) => (b.verifiedAt ?? 0) - (a.verifiedAt ?? 0));
+  }
+
+  replayBadge(matchId: string): ReplayVerificationBadge | null {
+    return this.replayBadges().find((badge) => badge.matchId === matchId) ?? null;
+  }
+
   dashboard() {
     const assignments = Array.from(this.assignments.values());
     const receipts = Array.from(this.receipts.values());
     const validations = Array.from(this.validations.values());
     const workers = Array.from(this.workers.values());
+    const workerProfiles = this.workerProfiles();
     return {
       ...this.summary(),
       capabilityMap: capabilityMap(workers),
       capabilityObservationMap: this.publicCapabilityMap().map,
       connectivityMap: this.publicConnectivityMap().map,
+      workerProfiles,
+      deviceClassProfiles: this.deviceClassProfiles(),
+      networkClassProfiles: this.networkClassProfiles(),
+      publicStats: this.publicStats({ suppressSmall: false }),
+      replayBadges: this.replayBadges().slice(0, 50),
       workerList: workers.map((worker) => ({
         workerId: worker.workerId,
         label: worker.label,
@@ -1004,6 +1417,22 @@ export class ComputeLabStore {
     return undefined;
   }
 
+  private evaluateMeasurementChunk(task: ComputeTask, chunk: ComputeChunk): ValidationRecord | undefined {
+    const receipts = this.receiptsFor(chunk.chunkId);
+    const valid = receipts.filter((receipt) => receipt.decision === "pending");
+    if (valid.length >= task.validationPolicy.minAgreeing && receipts.length >= task.validationPolicy.minExecutions) {
+      for (const receipt of valid) {
+        receipt.decision = "accepted";
+        this.bumpReputation(receipt.workerId, "accepted");
+      }
+      chunk.status = "accepted";
+      const validation = this.recordValidation(task, chunk, "accepted", receipts, valid, "measurement transcript accepted");
+      this.maybeCompleteTask(task);
+      return validation;
+    }
+    return undefined;
+  }
+
   private recordValidation(
     task: ComputeTask,
     chunk: ComputeChunk,
@@ -1050,6 +1479,22 @@ export class ComputeLabStore {
     return session;
   }
 
+  private requireWebRtcPair(pairId: string, token: string): WebRtcPairRecord {
+    this.expireWebRtcPairs();
+    const pair = this.webrtcPairs.get(pairId);
+    if (!pair || pair.token !== token) throw new Error("unknown WebRTC pair");
+    if (pair.expiresAt <= this.now()) throw new Error("WebRTC pair expired");
+    if (pair.status === "closed") throw new Error("WebRTC pair closed");
+    return pair;
+  }
+
+  private expireWebRtcPairs(): void {
+    const now = this.now();
+    for (const pair of this.webrtcPairs.values()) {
+      if (pair.status !== "closed" && pair.expiresAt <= now) pair.status = "closed";
+    }
+  }
+
   private assignmentsFor(chunkId: string): Assignment[] {
     return Array.from(this.assignments.values()).filter((assignment) => assignment.chunkId === chunkId);
   }
@@ -1092,6 +1537,47 @@ function receiptMismatch(
 
 function hashesEqual(a: ContentHash | undefined, b: ContentHash | undefined): boolean {
   return !!a && !!b && a.algorithm === b.algorithm && a.value.toLowerCase() === b.value.toLowerCase();
+}
+
+function measurementReceiptHash(chunk: ComputeChunk, adapterInfo: Record<string, unknown> | undefined): ContentHash | null {
+  if (chunk.kind !== DEVICE_WITNESS_WEBRTC_KERNEL_ID) return null;
+  const transcript = measurementTranscript(adapterInfo);
+  if (!transcript.status) return null;
+  return hashCanonical({ kind: chunk.kind, params: chunk.params, transcript });
+}
+
+function measurementTranscript(adapterInfo: Record<string, unknown> | undefined): Record<string, string> {
+  const source = adapterInfo ?? {};
+  const out: Record<string, string> = {};
+  for (const key of [
+    "status",
+    "mode",
+    "browserFamily",
+    "deviceClass",
+    "networkTypeBucket",
+    "downlinkBucket",
+    "rttBucket",
+    "webrtcOpenMsBucket",
+    "iceGatherMsBucket",
+    "iceHostBucket",
+    "iceSrflxBucket",
+    "iceRelayBucket",
+    "stunSuccessBucket",
+    "turnNeedBucket",
+    "visibilityBucket",
+    "batteryBucket",
+  ]) {
+    const bucket = measurementBucket(source[key]);
+    if (bucket) out[key] = bucket;
+  }
+  return out;
+}
+
+function measurementBucket(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  const raw = String(value).trim().toLowerCase();
+  if (!raw) return undefined;
+  return /^[a-z0-9<>=][a-z0-9_.:+/<>=-]{0,63}$/.test(raw) ? raw : "other";
 }
 
 function capabilityMap(workers: WorkerRecord[]): Record<string, Record<string, number>> {
@@ -1171,6 +1657,263 @@ function connectivityObservationMap(observations: ConnectivityObservation[]): Re
     inc(out, "batteryBucket", bucketOrUnknown(observation.batteryBucket));
   }
   return out;
+}
+
+function buildWorkerProfiles(input: {
+  now: number;
+  workers: WorkerRecord[];
+  receipts: ExecutionReceipt[];
+  assignments: Assignment[];
+  capabilityObservations: CapabilityObservation[];
+  connectivityObservations: ConnectivityObservation[];
+}): WorkerProfile[] {
+  const caps = latestCapabilityByWorker(input.capabilityObservations);
+  const conn = latestConnectivityByWorker(input.connectivityObservations);
+  return input.workers.map((worker) => {
+    const adapter = worker.capability.adapterInfo ?? caps.get(worker.workerId)?.adapterInfo ?? {};
+    const workerReceipts = input.receipts.filter((receipt) => receipt.workerId === worker.workerId);
+    const workerAssignments = input.assignments.filter((assignment) => assignment.workerId === worker.workerId);
+    const webgpuReceipts = workerReceipts.filter((receipt) => receipt.kernelId === DEVICE_WITNESS_WEBGPU_KERNEL_ID);
+    const renderReceipts = workerReceipts.filter((receipt) => receipt.kernelId === DEVICE_WITNESS_RENDER_KERNEL_ID);
+    const connectivity = input.connectivityObservations.filter((observation) => observation.workerId === worker.workerId);
+    const webrtc = connectivity.filter((observation) =>
+      observation.transport === "webrtc-local" || observation.transport === "webrtc-signaling"
+    );
+    const kernelTimes = workerReceipts
+      .map((receipt) => receipt.computeMs)
+      .filter((ms) => Number.isFinite(ms) && ms >= 0);
+    const acceptedReceipts = workerReceipts.filter((receipt) => receipt.decision === "accepted").length;
+    const rejectedReceipts = workerReceipts.filter((receipt) => isRejectedDecision(receipt.decision)).length;
+    const failureBuckets: Record<string, number> = {};
+    for (const receipt of workerReceipts) {
+      if (isRejectedDecision(receipt.decision)) incFlat(failureBuckets, receipt.reason ?? receipt.decision);
+    }
+    for (const observation of connectivity) {
+      if (observation.status !== "ok") incFlat(failureBuckets, `${observation.transport}:${observation.status}`);
+    }
+    const browserFamily = stringBucket(adapter.userAgentBucket) ?? caps.get(worker.workerId)?.clientVersion ?? "unknown";
+    const deviceClass = worker.capability.deviceClass ?? caps.get(worker.workerId)?.deviceClass ?? "unknown";
+    const gpuVendor = stringBucket(adapter.gpuVendorBucket) ?? "unknown";
+    const webgpuAvailable = adapter.webgpu === "available" || worker.capability.runtimeSurfaces.includes("browser-webgpu");
+    const webgpuCorrectnessScore = ratio(
+      webgpuReceipts.filter((receipt) => receipt.decision === "accepted").length,
+      webgpuReceipts.length,
+      adapter.webgpuCorrectness === "ok" ? 1 : adapter.webgpuCorrectness === "mismatch" ? 0 : null,
+    );
+    const renderFixtureScore = ratio(
+      renderReceipts.filter((receipt) => receipt.decision === "accepted").length,
+      renderReceipts.length,
+      adapter.canvas2dFixture === "ok" ? 1 : adapter.canvas2dFixture === "mismatch" || adapter.canvas2dFixture === "failed" ? 0 : null,
+    );
+    const directSuccess = webrtc.filter((observation) =>
+      observation.status === "ok" && observation.iceRelayBucket !== "yes"
+    ).length;
+    const turnRequired = webrtc.filter((observation) =>
+      observation.iceRelayBucket === "yes" ||
+      observation.turnNeedBucket === "relay-available" ||
+      observation.turnNeedBucket === "required"
+    ).length;
+    const p95KernelMs = percentile(kernelTimes, 0.95);
+    const tier = allowedWorkloadTier({
+      webgpuAvailable,
+      webgpuCorrectnessScore,
+      renderFixtureScore,
+      p95KernelMs,
+    });
+    return {
+      workerId: worker.workerId,
+      lastSeenAt: worker.lastSeenAt,
+      browserFamily,
+      deviceClass,
+      adapterClass: `${deviceClass}:${gpuVendor}`,
+      webgpuAvailable,
+      webgpuCorrectnessScore,
+      renderFixtureScore,
+      webrtcDirectSuccessRate: ratio(directSuccess, webrtc.length, null),
+      turnRequiredRate: ratio(turnRequired, webrtc.length, null),
+      avgKernelMs: average(kernelTimes),
+      p95KernelMs,
+      avgFrameRegressionMs: null,
+      allowedWorkloadTier: tier,
+      acceptedReceipts,
+      rejectedReceipts,
+      timeoutAssignments: workerAssignments.filter((assignment) => assignment.status === "timeout").length,
+      failureBuckets,
+    };
+  }).sort((a, b) => b.lastSeenAt - a.lastSeenAt);
+}
+
+function latestCapabilityByWorker(observations: CapabilityObservation[]): Map<string, CapabilityObservation> {
+  const out = new Map<string, CapabilityObservation>();
+  for (const observation of observations) {
+    const prev = out.get(observation.workerId);
+    if (!prev || observation.observedAt > prev.observedAt) out.set(observation.workerId, observation);
+  }
+  return out;
+}
+
+function latestConnectivityByWorker(observations: ConnectivityObservation[]): Map<string, ConnectivityObservation> {
+  const out = new Map<string, ConnectivityObservation>();
+  for (const observation of observations) {
+    const prev = out.get(observation.workerId);
+    if (!prev || observation.observedAt > prev.observedAt) out.set(observation.workerId, observation);
+  }
+  return out;
+}
+
+function classProfiles(profiles: WorkerProfile[], now: number, keyFor: (profile: WorkerProfile) => string): ClassProfile[] {
+  const groups = new Map<string, WorkerProfile[]>();
+  for (const profile of profiles) {
+    const key = stringBucket(keyFor(profile)) ?? "unknown";
+    const group = groups.get(key) ?? [];
+    group.push(profile);
+    groups.set(key, group);
+  }
+  return Array.from(groups.entries())
+    .map(([classId, group]) => {
+      const kernelTimes = group.map((profile) => profile.p95KernelMs).filter(isNumber);
+      return {
+        classId,
+        workers: group.length,
+        activeWorkers: group.filter((profile) => now - profile.lastSeenAt < 10 * 60 * 1000).length,
+        avgKernelMs: average(kernelTimes),
+        p95KernelMs: percentile(kernelTimes, 0.95),
+        webgpuCorrectnessScore: average(group.map((profile) => profile.webgpuCorrectnessScore).filter(isNumber)),
+        renderFixtureScore: average(group.map((profile) => profile.renderFixtureScore).filter(isNumber)),
+        webrtcDirectSuccessRate: average(group.map((profile) => profile.webrtcDirectSuccessRate).filter(isNumber)),
+        turnRequiredRate: average(group.map((profile) => profile.turnRequiredRate).filter(isNumber)),
+      };
+    })
+    .sort((a, b) => b.workers - a.workers);
+}
+
+function summarizePublicStats(input: {
+  generatedAt: number;
+  minWorkers: number;
+  suppressed: boolean;
+  profiles: WorkerProfile[];
+  receipts: ExecutionReceipt[];
+}): PublicComputeStats {
+  const profiles = input.suppressed ? [] : input.profiles;
+  const kernelTimes = profiles.map((profile) => profile.p95KernelMs).filter(isNumber);
+  const accepted = input.receipts.filter((receipt) => receipt.decision === "accepted").length;
+  const adapterBuckets: Record<string, number> = {};
+  const allowedTierBuckets: Record<string, number> = {};
+  const failureBuckets: Record<string, number> = {};
+  for (const profile of profiles) {
+    incFlat(adapterBuckets, profile.adapterClass);
+    incFlat(allowedTierBuckets, profile.allowedWorkloadTier);
+    for (const [key, count] of Object.entries(profile.failureBuckets)) {
+      failureBuckets[key] = (failureBuckets[key] ?? 0) + count;
+    }
+  }
+  return {
+    generatedAt: input.generatedAt,
+    privacy: input.suppressed ? "suppressed" : "full",
+    minWorkers: input.minWorkers,
+    totalWorkers: input.profiles.length,
+    activeWorkers: profiles.filter((profile) => input.generatedAt - profile.lastSeenAt < 10 * 60 * 1000).length,
+    totalReceipts: input.suppressed ? 0 : input.receipts.length,
+    acceptedReceiptPct: input.suppressed ? null : percent(accepted, input.receipts.length),
+    webgpuSupportedPct: input.suppressed ? null : percent(profiles.filter((profile) => profile.webgpuAvailable).length, profiles.length),
+    webgpuCorrectnessPct: input.suppressed ? null : percent(
+      profiles.filter((profile) => profile.webgpuCorrectnessScore !== null && profile.webgpuCorrectnessScore >= 1).length,
+      profiles.filter((profile) => profile.webgpuCorrectnessScore !== null).length,
+    ),
+    renderFixturePct: input.suppressed ? null : percent(
+      profiles.filter((profile) => profile.renderFixtureScore !== null && profile.renderFixtureScore >= 1).length,
+      profiles.filter((profile) => profile.renderFixtureScore !== null).length,
+    ),
+    webrtcDirectSuccessPct: input.suppressed ? null : percent(
+      profiles.filter((profile) => profile.webrtcDirectSuccessRate !== null && profile.webrtcDirectSuccessRate > 0).length,
+      profiles.filter((profile) => profile.webrtcDirectSuccessRate !== null).length,
+    ),
+    turnRequiredPct: input.suppressed ? null : percent(
+      profiles.filter((profile) => profile.turnRequiredRate !== null && profile.turnRequiredRate > 0).length,
+      profiles.filter((profile) => profile.turnRequiredRate !== null).length,
+    ),
+    medianKernelMs: input.suppressed ? null : percentile(kernelTimes, 0.5),
+    p95KernelMs: input.suppressed ? null : percentile(kernelTimes, 0.95),
+    allowedTierBuckets,
+    adapterBuckets,
+    failureBuckets,
+  };
+}
+
+function publicArtifactSummary(raw: unknown): { artifactHash?: string; rulesHash?: string; stageHash?: string } {
+  if (typeof raw !== "string" || !raw) return {};
+  try {
+    const artifact = JSON.parse(raw) as {
+      artifactHash?: string;
+      payload?: {
+        artifactHash?: string;
+        tuple?: { simConstantsHash?: string };
+        integrity?: { stageHash?: string };
+      };
+      tuple?: { simConstantsHash?: string };
+      integrity?: { stageHash?: string };
+    };
+    return {
+      artifactHash: stringBucket(artifact.artifactHash ?? artifact.payload?.artifactHash),
+      rulesHash: stringBucket(artifact.payload?.tuple?.simConstantsHash ?? artifact.tuple?.simConstantsHash),
+      stageHash: stringBucket(artifact.payload?.integrity?.stageHash ?? artifact.integrity?.stageHash),
+    };
+  } catch {
+    return {};
+  }
+}
+
+function allowedWorkloadTier(input: {
+  webgpuAvailable: boolean;
+  webgpuCorrectnessScore: number | null;
+  renderFixtureScore: number | null;
+  p95KernelMs: number | null;
+}): WorkerProfile["allowedWorkloadTier"] {
+  if (
+    input.webgpuAvailable &&
+    input.webgpuCorrectnessScore !== null &&
+    input.webgpuCorrectnessScore >= 1 &&
+    (input.p95KernelMs === null || input.p95KernelMs < 100)
+  ) {
+    return "webgpu-light";
+  }
+  if (input.renderFixtureScore !== null && input.renderFixtureScore >= 1) return "cpu-light";
+  return "observe-only";
+}
+
+function isRejectedDecision(decision: ReceiptDecision): boolean {
+  return decision !== "pending" && decision !== "accepted";
+}
+
+function average(values: number[]): number | null {
+  if (!values.length) return null;
+  return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 100) / 100;
+}
+
+function percentile(values: number[], p: number): number | null {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * p)));
+  return Math.round(sorted[idx] * 100) / 100;
+}
+
+function percent(numerator: number, denominator: number): number | null {
+  if (denominator <= 0) return null;
+  return Math.round((numerator / denominator) * 1000) / 10;
+}
+
+function ratio(numerator: number, denominator: number, fallback: number | null): number | null {
+  if (denominator <= 0) return fallback;
+  return Math.round((numerator / denominator) * 1000) / 1000;
+}
+
+function isNumber(value: number | null): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function incFlat(out: Record<string, number>, bucket: string): void {
+  const clean = stringBucket(bucket) ?? "other";
+  out[clean] = (out[clean] ?? 0) + 1;
 }
 
 function sanitizeBucketRecord(input: Record<string, unknown> | undefined): Record<string, unknown> | undefined {

@@ -105,7 +105,7 @@ gcloud run deploy arena-worker \
   --image "gcr.io/$PROJECT_ID/arena-server" \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars "^|^SERVER_ROLE=worker|NODE_ENV=production|STORE_BACKEND=firestore|AUTH_MODE=firebase|ARENA_API_ORIGIN=https://m3t4.ai|CORS_ORIGINS=https://m3t4.ai,https://www.m3t4.ai,https://m3ta-ai.web.app,https://m3ta-ai.firebaseapp.com|CYCLE_MS=60000|WS_CLIENT_SOFT_LIMIT=50|AUTH_PROVIDERS=google,github|FEATURE_P2P_DUEL=false|FEATURE_COMMUNITY_VERIFY=false|FEATURE_PROOF_LAB=false|FEATURE_ZK=false|FEATURE_DISTRIBUTED_COMPUTE=false|FEATURE_COMPUTE_TASK_ADMIN=false" \
+  --set-env-vars "^|^SERVER_ROLE=worker|NODE_ENV=production|STORE_BACKEND=firestore|AUTH_MODE=firebase|ARENA_API_ORIGIN=https://m3t4.ai|CORS_ORIGINS=https://m3t4.ai,https://www.m3t4.ai,https://m3ta-ai.web.app,https://m3ta-ai.firebaseapp.com|CYCLE_MS=20000|WS_CLIENT_SOFT_LIMIT=50|AUTH_PROVIDERS=google,github|FEATURE_P2P_DUEL=false|FEATURE_COMMUNITY_VERIFY=false|FEATURE_PROOF_LAB=false|FEATURE_ZK=false|FEATURE_DISTRIBUTED_COMPUTE=false|FEATURE_COMPUTE_TASK_ADMIN=false" \
   --set-secrets "M3T4_MATCH_TOKEN_SECRET=m3t4-match-token-secret:latest,M3T4_INTERNAL_TOKEN=m3t4-internal-cron-token:latest" \
   --min-instances 1 \
   --max-instances 1 \
@@ -121,7 +121,7 @@ gcloud run deploy arena-server \
   --image "gcr.io/$PROJECT_ID/arena-server" \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars "^|^SERVER_ROLE=api|FIREHOSE_WS_ORIGIN=wss://arena-worker-789525635095.us-central1.run.app|NODE_ENV=production|STORE_BACKEND=firestore|AUTH_MODE=firebase|ARENA_API_ORIGIN=https://m3t4.ai|ARENA_WS_ORIGIN=wss://arena-server-789525635095.us-central1.run.app|CORS_ORIGINS=https://m3t4.ai,https://www.m3t4.ai,https://m3ta-ai.web.app,https://m3ta-ai.firebaseapp.com|CYCLE_MS=60000|WS_CLIENT_SOFT_LIMIT=450|AUTH_PROVIDERS=google,github|FEATURE_P2P_DUEL=false|FEATURE_COMMUNITY_VERIFY=false|FEATURE_PROOF_LAB=false|FEATURE_ZK=false|FEATURE_DISTRIBUTED_COMPUTE=false|FEATURE_COMPUTE_TASK_ADMIN=false" \
+  --set-env-vars "^|^SERVER_ROLE=api|FIREHOSE_WS_ORIGIN=wss://arena-worker-789525635095.us-central1.run.app|NODE_ENV=production|STORE_BACKEND=firestore|AUTH_MODE=firebase|ARENA_API_ORIGIN=https://m3t4.ai|ARENA_WS_ORIGIN=wss://arena-server-789525635095.us-central1.run.app|CORS_ORIGINS=https://m3t4.ai,https://www.m3t4.ai,https://m3ta-ai.web.app,https://m3ta-ai.firebaseapp.com|CYCLE_MS=20000|WS_CLIENT_SOFT_LIMIT=450|AUTH_PROVIDERS=google,github|FEATURE_P2P_DUEL=false|FEATURE_COMMUNITY_VERIFY=false|FEATURE_PROOF_LAB=false|FEATURE_ZK=false|FEATURE_DISTRIBUTED_COMPUTE=false|FEATURE_COMPUTE_TASK_ADMIN=false" \
   --set-secrets "M3T4_MATCH_TOKEN_SECRET=m3t4-match-token-secret:latest,M3T4_INTERNAL_TOKEN=m3t4-internal-cron-token:latest" \
   --min-instances 1 \
   --max-instances 10 \
@@ -138,7 +138,7 @@ gcloud run deploy arena-server \
   --image "gcr.io/$PROJECT_ID/arena-server" \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars "NODE_ENV=production,STORE_BACKEND=file,AUTH_MODE=alpha-token,M3T4_ALPHA_ALLOWLIST=alice,bob,ARENA_API_ORIGIN=https://m3t4.ai,CORS_ORIGINS=https://m3t4.ai,CYCLE_MS=60000,FEATURE_P2P_DUEL=false,FEATURE_COMMUNITY_VERIFY=false,FEATURE_PROOF_LAB=false,FEATURE_ZK=false,FEATURE_DISTRIBUTED_COMPUTE=false,FEATURE_COMPUTE_TASK_ADMIN=false" \
+  --set-env-vars "NODE_ENV=production,STORE_BACKEND=file,AUTH_MODE=alpha-token,M3T4_ALPHA_ALLOWLIST=alice,bob,ARENA_API_ORIGIN=https://m3t4.ai,CORS_ORIGINS=https://m3t4.ai,CYCLE_MS=20000,FEATURE_P2P_DUEL=false,FEATURE_COMMUNITY_VERIFY=false,FEATURE_PROOF_LAB=false,FEATURE_ZK=false,FEATURE_DISTRIBUTED_COMPUTE=false,FEATURE_COMPUTE_TASK_ADMIN=false" \
   --set-secrets "M3T4_ALPHA_TOKEN=m3t4-alpha-token:latest,M3T4_MATCH_TOKEN_SECRET=m3t4-match-token-secret:latest,M3T4_INTERNAL_TOKEN=m3t4-internal-cron-token:latest" \
   --min-instances 1 \
   --max-instances 1 \
@@ -168,7 +168,7 @@ gcloud run deploy plasma-lab \
   --image "gcr.io/$PROJECT_ID/plasma-lab" \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars "^|^NODE_ENV=production|FEATURE_COMPUTE_LAB_ROUTES=true|FEATURE_COMPUTE_TASK_ADMIN=true|COMPUTE_ACCEPT_ASSIGNMENTS=false|PLASMA_LAB_STORE_BACKEND=firestore|FEATURE_COMPUTE_WEBRTC_SIGNALING=false|FEATURE_COMPUTE_WEBRTC_DATA=false" \
+  --set-env-vars "^|^NODE_ENV=production|FEATURE_COMPUTE_LAB_ROUTES=true|FEATURE_COMPUTE_TASK_ADMIN=true|COMPUTE_ACCEPT_ASSIGNMENTS=false|PLASMA_LAB_STORE_BACKEND=firestore|FEATURE_COMPUTE_WEBRTC_SIGNALING=false|FEATURE_COMPUTE_WEBRTC_DATA=false|FEATURE_COMPUTE_WEBRTC_TURN=false|COMPUTE_STUN_URLS=stun:stun.l.google.com:19302" \
   --set-secrets "PLASMA_LAB_ADMIN_TOKEN=plasma-lab-admin-token:latest" \
   --min-instances 0 \
   --max-instances 2 \
@@ -193,7 +193,19 @@ staging smoke or staff alpha. After deploy, the admin dashboard is available at
 `/compute/admin/dashboard.html`; it can toggle assignment intake and seed
 public-artifact or public seed-sweep tasks without redeploying env vars. It
 also shows admin-only Device Witness maps for bucketed WebGPU correctness,
-WebRTC/ICE connectivity, and rendering fixture observations.
+WebRTC/ICE connectivity, and rendering fixture observations. The dashboard can
+also seed assignment-bound Device Witness WebGPU, rendering fixture, and WebRTC
+measurement tasks; those return normal `compute_receipts` and are admin-only.
+It also derives worker/device/network profiles, privacy-suppressed public stats,
+and replay verification badges from accepted public-artifact receipts.
+
+Two-browser WebRTC measurement is available only when
+`FEATURE_COMPUTE_WEBRTC_SIGNALING=true`. It uses `/compute/webrtc/pairs/*` for
+short-lived offer/answer/candidate exchange, then stores only bucketed
+connectivity observations. TURN remains off unless
+`FEATURE_COMPUTE_WEBRTC_TURN=true` plus `COMPUTE_TURN_URLS`,
+`COMPUTE_TURN_USERNAME`, and `COMPUTE_TURN_CREDENTIAL` are set. Treat TURN as a
+measured fallback with cost/abuse monitoring, not a default.
 
 To run the receipt-path smoke against the deploy:
 
@@ -213,7 +225,7 @@ The deployed game should only point at the lab after that sidecar is healthy:
 gcloud run services update arena-server \
   --project "$PROJECT_ID" \
   --region us-central1 \
-  --update-env-vars "COMPUTE_LAB_ORIGIN=https://<plasma-lab-cloud-run-url>,FEATURE_COMPUTE_SLACK_WORKER=false,COMPUTE_STUN_URLS=stun:stun.l.google.com:19302"
+  --update-env-vars "COMPUTE_LAB_ORIGIN=https://<plasma-lab-cloud-run-url>,FEATURE_COMPUTE_SLACK_WORKER=false,FEATURE_COMPUTE_LIVE_BADGES=false,COMPUTE_STUN_URLS=stun:stun.l.google.com:19302"
 ```
 
 `COMPUTE_STUN_URLS` is optional. Leaving it empty still measures HTTP RTT and
@@ -310,7 +322,7 @@ the Scheduler header value must match the deployed secret value.
 
 ```bash
 curl https://m3t4.ai/api/status
-# expect: { "ok": true, "cycleMs": 60000, "features": { all optional false } }
+# expect: { "ok": true, "cycleMs": 20000, "features": { all optional false } }
 
 curl https://m3t4.ai/api/leaderboard
 # expect: array of public stable summaries

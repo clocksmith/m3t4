@@ -24,7 +24,8 @@ export type ValidationMode =
   | "expected-hash"
   | "quorum"
   | "tolerance"
-  | "human-review";
+  | "human-review"
+  | "measurement";
 
 export type TransportKind = "http" | "webrtc" | "local";
 
@@ -34,6 +35,9 @@ export type ExecutionMode = "cpu" | "webgpu";
 
 export type TaskKind =
   | "prime-search.v0"
+  | "device_witness.webgpu.v0"
+  | "device_witness.render_fixture.v0"
+  | "device_witness.webrtc.v0"
   | "m3t4.public_artifact_verify.v0"
   | "m3t4.seed_sweep.v0"
   | "m3t4.replay_verify.v1";

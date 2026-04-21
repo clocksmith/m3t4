@@ -12,7 +12,7 @@ import {
 // commitment window. Replaces v2's per-tick reactive ladder. Params
 // bias mode transitions and tactical details within each mode; they no
 // longer drive behavior directly via a flat if/else.
-export const BEHAVIOR_VERSION = 12;
+export const BEHAVIOR_VERSION = 13;
 
 // ---------- Opp-model buffer sizing ----------
 //
@@ -69,6 +69,8 @@ const ESCAPE_LOOP_CAP = 4;
 // becoming a permanent resting state.
 const ESCAPE_MAX_TICKS_PER_ROUND = 540; // 4.5s — escape is emergency only
 const ZONE_MAX_TICKS_PER_ROUND = 720;   // 6s — zone can be sustained longer
+const INITIAL_IDLE_PRESSURE_TICKS: Record<0 | 1, number> = { 0: 500, 1: 400 };
+const INITIAL_IDLE_PRESSURE_MIN_MOAT = 120;
 
 // Distance band used by several modes' "close enough to commit"
 // thresholds. burnRate extends effective swing reach.
@@ -275,8 +277,11 @@ function onDropThroughPlatform(obs: Observation): Platform | null {
   return null;
 }
 
-function directJumpReachable(obs: Observation, tx: number, ty: number, lift: number): boolean {
-  if (lift <= 0.05 || !obs.self.onGround) return false;
+function directJumpReachable(
+  obs: Observation, tx: number, ty: number, lift: number,
+  forceEligible = false,
+): boolean {
+  if ((!forceEligible && lift <= 0.05) || !obs.self.onGround) return false;
   const height = obs.self.y - ty;
   const maxHeight = (STATS.jump * STATS.jump) / (2 * GRAVITY);
   if (height < 35 || height > maxHeight - 8) return false;
@@ -290,14 +295,17 @@ function directJumpReachable(obs: Observation, tx: number, ty: number, lift: num
   return dx <= plumbLine || dx <= airControl;
 }
 
-function navigateTo(obs: Observation, tx: number, ty: number, params?: Params): Action {
+function navigateTo(
+  obs: Observation, tx: number, ty: number, params?: Params,
+  forceDirectJumpEligible = false,
+): Action {
   if (ty > obs.self.y + 80) {
     const dx = tx - obs.self.x;
     return { left: dx < -10, right: dx > 10, down: true };
   }
   if (ty < obs.self.y - 50) {
     const lift = unit(params?.lift);
-    if (directJumpReachable(obs, tx, ty, lift)) {
+    if (directJumpReachable(obs, tx, ty, lift, forceDirectJumpEligible)) {
       const dx = tx - obs.self.x;
       return { left: dx < -10, right: dx > 10, up: true };
     }
@@ -527,6 +535,24 @@ function runNeutralMode(obs: Observation, params: Params, sig: Signals): Action 
       left: dx < -10,
       right: dx > 10,
       action: nearLiveOpp && sig.canSwing && chase > 0.35,
+    };
+  }
+
+  const noTokenIdle =
+    !obs.token.exists && !obs.self.hasToken && !obs.opp.hasToken &&
+    obs.self.score === 0 && obs.opp.score === 0 &&
+    obs.self.rounds === 0 && obs.opp.rounds === 0 &&
+    params.moat >= INITIAL_IDLE_PRESSURE_MIN_MOAT &&
+    obs.tick > INITIAL_IDLE_PRESSURE_TICKS[obs.self.id] &&
+    obs.self.lastAttackStartTick < 0 &&
+    obs.opp.lastAttackStartTick < 0 &&
+    obs.self.lastClashTick < 0 &&
+    obs.self.lastKillTick < 0;
+  if (noTokenIdle) {
+    return {
+      left: sig.absDir < 0,
+      right: sig.absDir > 0,
+      action: sig.canSwing,
     };
   }
 
@@ -969,7 +995,7 @@ function runObjectiveMode(
       && Math.abs(obs.opp.x - obs.self.x) < Math.abs(dxGoal);
     const goalTimerUrgent = obs.goal.timer < 3;
 
-    // v4.2 delivery planner: pick a 12-tick tactical program. Re-plan
+    // v4.2 delivery planner: pick a short tactical program. Re-plan
     // if stale or missing. This addresses "brain makes same frame-local
     // choice every tick → no temporal commitment → stall." The plan
     // stays active across frames; each tick we only translate the
@@ -1024,12 +1050,13 @@ function runObjectiveMode(
     }
 
     // Default (direct tactic, or fall-through): navigate to goal.
-    return navigateTo(obs, obs.goal.x, targetY, params);
+    return navigateTo(obs, obs.goal.x, targetY, params, plan.tactic === "direct");
   }
 
   // INTERCEPT: opp has token. Split on distance — far → block the goal
   // line; close → kill-for-reset.
   if (oppHasToken && obs.goal.exists) {
+    state.deliveryPlan = null;
     const denyBias = Math.max(0, Math.min(1, (1 - (params.spite ?? 0)) / 2));
     const targetY = goalBodyY(obs);
     const oppToGoal = Math.hypot(obs.goal.x - obs.opp.x, targetY - obs.opp.y);
@@ -1065,6 +1092,7 @@ function runObjectiveMode(
 
   // PICKUP: token on ground, neither holds. Race.
   if (obs.token.exists && obs.token.carrier === -1) {
+    state.deliveryPlan = null;
     state.substate = "pickup";
     const tx = obs.token.x;
     const ty = obs.token.y;

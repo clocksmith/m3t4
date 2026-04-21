@@ -366,6 +366,10 @@ class ComputeClient {
   }
 
   runAssignment({ assignment, chunk, task }) {
+    if (chunk.kind === "device_witness.webrtc.v0") {
+      this.runWebRtcAssignment({ assignment, chunk, task });
+      return;
+    }
     this.current = {
       assignmentId: assignment.assignmentId,
       assignmentToken: assignment.assignmentToken,
@@ -379,6 +383,72 @@ class ComputeClient {
     this.emit();
     if (!this.worker) this.worker = this.spawnWorker();
     this.worker.postMessage({ type: "run", assignmentId: assignment.assignmentId, chunk });
+  }
+
+  async runWebRtcAssignment({ assignment, chunk, task }) {
+    this.current = {
+      assignmentId: assignment.assignmentId,
+      assignmentToken: assignment.assignmentToken,
+      chunkId: chunk.chunkId,
+      taskId: task.taskId,
+      kind: chunk.kind,
+      startedAt: performance.now(),
+    };
+    this.health.assignmentsStarted++;
+    this.state = `running ${chunk.kind}`;
+    this.emit();
+    try {
+      const t0 = performance.now();
+      const probe = await localWebRtcProbe(Number(chunk.params?.timeoutMs) || 1800);
+      const transcript = webRtcTranscript(this, probe);
+      const outputHash = await hashText(stableJson({
+        kind: chunk.kind,
+        params: chunk.params,
+        transcript,
+      }));
+      const receipt = {
+        workerId: this.workerId,
+        workerSessionId: this.workerSessionId,
+        workerSessionToken: this.workerSessionToken,
+        assignmentId: assignment.assignmentId,
+        assignmentToken: assignment.assignmentToken,
+        taskId: task.taskId,
+        chunkId: chunk.chunkId,
+        kernelId: chunk.kernelId,
+        kernelHash: chunk.kernelHash,
+        inputHash: chunk.inputHash,
+        outputHash: { algorithm: "sha256", value: outputHash },
+        determinismClass: "replicated-quorum",
+        validationMode: "measurement",
+        executionMode: "cpu",
+        transport: "webrtc",
+        governorMode: this.mode,
+        deviceClass: this.capability?.deviceClass || deviceClass(),
+        adapterInfo: transcript,
+        computeMs: performance.now() - t0,
+        clientVersion: CLIENT_VERSION,
+      };
+      const res = await fetch(computeLabOrigin() + "/compute/receipts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(receipt),
+      });
+      if (!res.ok) throw new Error(`receipt failed: ${res.status}`);
+      const body = await res.json();
+      this.health.receiptsSubmitted++;
+      const decision = body.receipt?.decision ?? "pending";
+      if (decision === "accepted") this.totals.accepted++;
+      else if (decision === "pending") this.totals.pending++;
+      else this.totals.rejected++;
+      this.state = `receipt: ${decision}`;
+    } catch (e) {
+      this.state = `receipt error: ${message(e)}`;
+      this.totals.rejected++;
+    } finally {
+      this.current = null;
+      this.schedule(MODE_PROFILE[this.mode].cooldownMs);
+      this.emit();
+    }
   }
 
   spawnWorker() {
@@ -420,7 +490,7 @@ class ComputeClient {
         outputHash: { algorithm: "sha256", value: msg.outputHash },
         determinismClass: "bit-exact",
         validationMode: "expected-hash",
-        executionMode: "cpu",
+        executionMode: msg.executionMode || "cpu",
         transport: "http",
         governorMode: this.mode,
         deviceClass: this.capability?.deviceClass || deviceClass(),
@@ -533,6 +603,12 @@ async function buildCapability(runtimeInfo = {}, opts = {}) {
   const deviceWitness = await workerDeviceWitnessBucket(opts.benchmark === true);
   const runtimeSurfaces = ["browser-js"];
   if (webgpu.webgpu === "available") runtimeSurfaces.push("browser-webgpu");
+  const kernels = ["m3t4.public_artifact_verify.v0", "prime-search.v0"];
+  if (deviceWitness.canvas2dFixture === "ok" || deviceWitness.canvas2dFixture === "mismatch") {
+    kernels.push("device_witness.render_fixture.v0");
+  }
+  if (webgpu.webgpu === "available") kernels.push("device_witness.webgpu.v0");
+  if (typeof RTCPeerConnection !== "undefined") kernels.push("device_witness.webrtc.v0");
   const adapterInfo = {
     ...adapterInfoBucket(),
     ...webgpu,
@@ -540,7 +616,7 @@ async function buildCapability(runtimeInfo = {}, opts = {}) {
     ...runtimeInfo,
   };
   const capability = {
-    kernels: ["m3t4.public_artifact_verify.v0", "prime-search.v0"],
+    kernels,
     runtimeSurfaces,
     maxChunkBytes: 64 * 1024,
     maxConcurrentChunks: 1,
@@ -681,14 +757,257 @@ async function buildConnectivityObservations(client) {
     batteryBucket: batteryBucket(client.battery),
     ...networkInfoBucket(),
   };
-  const [http, webrtc] = await Promise.all([
+  const [status, http, webrtc] = await Promise.all([
+    computeLabStatus(),
     httpRttProbe(),
     localWebRtcProbe(1800),
   ]);
-  return [
+  const observations = [
     { ...common, transport: "http", ...http },
     { ...common, transport: "webrtc-local", ...webrtc },
   ];
+  if (status?.webrtcSignalingEnabled && client.currentGate() === null) {
+    const signaled = await signaledWebRtcProbe(client, 4500).catch((e) => ({
+      status: "failed",
+      webrtcOpenMsBucket: "failed",
+      iceGatherMsBucket: "failed",
+      iceHostBucket: "unknown",
+      iceSrflxBucket: "unknown",
+      iceRelayBucket: "unknown",
+      stunSuccessBucket: "unknown",
+      turnNeedBucket: "unknown",
+      notes: message(e),
+    }));
+    observations.push({ ...common, transport: "webrtc-signaling", ...signaled });
+  }
+  return observations;
+}
+
+function webRtcTranscript(client, probe) {
+  return cleanTranscript({
+    mode: client.mode,
+    browserFamily: adapterInfoBucket().userAgentBucket,
+    deviceClass: client.capability?.deviceClass || deviceClass(),
+    visibilityBucket: document.visibilityState === "visible" ? "visible" : "hidden",
+    batteryBucket: batteryBucket(client.battery),
+    ...networkInfoBucket(),
+    ...probe,
+  });
+}
+
+function cleanTranscript(input) {
+  const out = {};
+  for (const key of [
+    "status",
+    "mode",
+    "browserFamily",
+    "deviceClass",
+    "networkTypeBucket",
+    "downlinkBucket",
+    "rttBucket",
+    "webrtcOpenMsBucket",
+    "iceGatherMsBucket",
+    "iceHostBucket",
+    "iceSrflxBucket",
+    "iceRelayBucket",
+    "stunSuccessBucket",
+    "turnNeedBucket",
+    "visibilityBucket",
+    "batteryBucket",
+  ]) {
+    const value = transcriptBucket(input[key]);
+    if (value) out[key] = value;
+  }
+  return out;
+}
+
+let labStatusCache = null;
+let labStatusAt = 0;
+
+async function computeLabStatus() {
+  const now = performance.now();
+  if (labStatusCache && now - labStatusAt < 60000) return labStatusCache;
+  try {
+    const res = await fetch(computeLabOrigin() + "/compute/status", { cache: "no-store" });
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    const body = await res.json();
+    if (Array.isArray(body.iceServers)) window.__M3T4_COMPUTE_ICE_SERVERS__ = body.iceServers;
+    labStatusCache = body;
+    labStatusAt = now;
+    return body;
+  } catch {
+    labStatusCache = null;
+    labStatusAt = now;
+    return null;
+  }
+}
+
+async function signaledWebRtcProbe(client, timeoutMs) {
+  if (typeof RTCPeerConnection === "undefined") return { status: "unsupported", webrtcOpenMsBucket: "unsupported" };
+  const join = await fetch(computeLabOrigin() + "/compute/webrtc/pairs/join", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      workerId: client.workerId,
+      workerSessionId: client.workerSessionId,
+      workerSessionToken: client.workerSessionToken,
+    }),
+  });
+  if (!join.ok) return { status: join.status === 404 ? "unsupported" : "failed", webrtcOpenMsBucket: "failed" };
+  const joined = await join.json();
+  const pairId = joined.pairId;
+  const pairToken = joined.pairToken;
+  const role = joined.role;
+  const peerId = client.workerId;
+  const candidateTypes = { host: false, srflx: false, relay: false };
+  const seenRemoteCandidates = new Set();
+  let pc = null;
+  let channel = null;
+  let iceGatherMs = null;
+  let pumpTimer = null;
+  const t0 = performance.now();
+  const iceStart = performance.now();
+
+  const pairFetch = async (path = "") => {
+    const res = await fetch(computeLabOrigin() + `/compute/webrtc/pairs/${pairId}${path}`, {
+      headers: { "x-webrtc-pair-token": pairToken },
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`pair fetch ${res.status}`);
+    return res.json();
+  };
+  const pairPost = async (path, body) => {
+    const res = await fetch(computeLabOrigin() + `/compute/webrtc/pairs/${pairId}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-webrtc-pair-token": pairToken },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`pair post ${path} ${res.status}`);
+    return res.json();
+  };
+  const markCandidate = (candidate) => {
+    const raw = String(candidate?.candidate || "");
+    if (raw.includes(" typ host")) candidateTypes.host = true;
+    if (raw.includes(" typ srflx")) candidateTypes.srflx = true;
+    if (raw.includes(" typ relay")) candidateTypes.relay = true;
+  };
+  const maybeGathered = () => {
+    if (iceGatherMs !== null) return;
+    if (pc?.iceGatheringState === "complete") iceGatherMs = performance.now() - iceStart;
+  };
+  const addRemoteCandidates = async () => {
+    const latest = await pairFetch();
+    for (const candidate of latest.candidates || []) {
+      if (!candidate || candidate.peerId === peerId || seenRemoteCandidates.has(candidate.candidateId)) continue;
+      try {
+        await pc?.addIceCandidate(candidate.payload);
+        seenRemoteCandidates.add(candidate.candidateId);
+      } catch {
+        // Remote candidates may arrive before the remote description in some browsers.
+      }
+    }
+    return latest;
+  };
+
+  try {
+    pc = new RTCPeerConnection({ iceServers: configuredIceServers() });
+    pc.onicegatheringstatechange = maybeGathered;
+    pc.onicecandidate = (ev) => {
+      if (ev.candidate) {
+        markCandidate(ev.candidate);
+        pairPost("/candidates", {
+          peerId,
+          candidates: [typeof ev.candidate.toJSON === "function" ? ev.candidate.toJSON() : ev.candidate],
+        }).catch(() => {});
+      }
+      maybeGathered();
+    };
+    const opened = new Promise((resolve) => {
+      if (role === "offerer") {
+        channel = pc.createDataChannel("plasma-data", { ordered: true });
+        channel.onopen = () => resolve(true);
+      } else {
+        pc.ondatachannel = (ev) => {
+          channel = ev.channel;
+          channel.onopen = () => resolve(true);
+          channel.onmessage = () => {};
+        };
+      }
+    });
+    pumpTimer = setInterval(() => { addRemoteCandidates().catch(() => {}); }, 250);
+
+    if (role === "offerer") {
+      await pc.setLocalDescription(await pc.createOffer());
+      await pairPost("/offer", { offer: pc.localDescription });
+      const answered = await waitFor(async () => {
+        const latest = await addRemoteCandidates();
+        return latest.answer ? latest : null;
+      }, timeoutMs);
+      if (!answered?.answer) throw new Error("answer timeout");
+      await pc.setRemoteDescription(answered.answer);
+    } else {
+      const offered = await waitFor(async () => {
+        const latest = await addRemoteCandidates();
+        return latest.offer ? latest : null;
+      }, timeoutMs);
+      if (!offered?.offer) throw new Error("offer timeout");
+      await pc.setRemoteDescription(offered.offer);
+      await pc.setLocalDescription(await pc.createAnswer());
+      await pairPost("/answer", { answer: pc.localDescription });
+    }
+
+    const ok = await Promise.race([opened, delay(timeoutMs).then(() => false)]);
+    maybeGathered();
+    if (ok) {
+      try { channel?.send?.("witness"); } catch {}
+      await delay(40);
+    }
+    return {
+      status: ok ? "ok" : "timeout",
+      webrtcOpenMsBucket: ok ? bucketMs(performance.now() - t0) : "timeout",
+      iceGatherMsBucket: iceGatherMs === null ? "incomplete" : bucketMs(iceGatherMs),
+      iceHostBucket: yesNo(candidateTypes.host),
+      iceSrflxBucket: yesNo(candidateTypes.srflx),
+      iceRelayBucket: yesNo(candidateTypes.relay),
+      stunSuccessBucket: configuredIceServers().length ? yesNo(candidateTypes.srflx) : "unconfigured",
+      turnNeedBucket: candidateTypes.relay ? "relay-available" : ok ? "unknown" : "maybe-required",
+      signalingRttBucket: bucketMs(performance.now() - t0),
+    };
+  } catch {
+    return {
+      status: "failed",
+      webrtcOpenMsBucket: "failed",
+      iceGatherMsBucket: iceGatherMs === null ? "failed" : bucketMs(iceGatherMs),
+      iceHostBucket: yesNo(candidateTypes.host),
+      iceSrflxBucket: yesNo(candidateTypes.srflx),
+      iceRelayBucket: yesNo(candidateTypes.relay),
+      stunSuccessBucket: configuredIceServers().length ? yesNo(candidateTypes.srflx) : "unconfigured",
+      turnNeedBucket: candidateTypes.relay ? "relay-available" : "maybe-required",
+      signalingRttBucket: bucketMs(performance.now() - t0),
+    };
+  } finally {
+    if (pumpTimer) clearInterval(pumpTimer);
+    try { channel?.close?.(); } catch {}
+    try { pc?.close?.(); } catch {}
+    if (pairId && pairToken) pairPost("/close", {}).catch(() => {});
+  }
+}
+
+async function waitFor(fn, timeoutMs) {
+  const end = performance.now() + timeoutMs;
+  while (performance.now() < end) {
+    const value = await fn();
+    if (value) return value;
+    await delay(200);
+  }
+  return null;
+}
+
+function transcriptBucket(value) {
+  if (value === undefined || value === null) return undefined;
+  const raw = String(value).trim().toLowerCase();
+  if (!raw) return undefined;
+  return /^[a-z0-9<>=][a-z0-9_.:+/<>=-]{0,63}$/.test(raw) ? raw : "other";
 }
 
 async function httpRttProbe() {
@@ -806,6 +1125,21 @@ function networkInfoBucket() {
 }
 
 function configuredIceServers() {
+  if (Array.isArray(window.__M3T4_COMPUTE_ICE_SERVERS__) && window.__M3T4_COMPUTE_ICE_SERVERS__.length > 0) {
+    return window.__M3T4_COMPUTE_ICE_SERVERS__
+      .filter((server) => server && typeof server === "object")
+      .map((server) => ({
+        urls: Array.isArray(server.urls)
+          ? server.urls.filter((url) => typeof url === "string" && /^(stuns?|turns?):/i.test(url)).slice(0, 4)
+          : typeof server.urls === "string" && /^(stuns?|turns?):/i.test(server.urls)
+            ? server.urls
+            : [],
+        ...(typeof server.username === "string" ? { username: server.username } : {}),
+        ...(typeof server.credential === "string" ? { credential: server.credential } : {}),
+      }))
+      .filter((server) => Array.isArray(server.urls) ? server.urls.length > 0 : !!server.urls)
+      .slice(0, 4);
+  }
   const urls = Array.isArray(window.__M3T4_COMPUTE_STUN_URLS__)
     ? window.__M3T4_COMPUTE_STUN_URLS__.filter((url) => typeof url === "string" && /^stuns?:/i.test(url)).slice(0, 4)
     : [];

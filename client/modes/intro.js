@@ -5,12 +5,14 @@
 
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
 
-const TICK_MS_FAST = 22;        // headers, tagline, tail, stinger
-const TICK_MS_SLOW = 38;        // prologue paragraphs
+const REVEAL_SPEED_MULTIPLIER = 1.5;
+const TICK_MS_FAST = Math.round(22 / REVEAL_SPEED_MULTIPLIER); // headers, tagline, tail, stinger
+const TICK_MS_SLOW = Math.round(38 / REVEAL_SPEED_MULTIPLIER); // prologue paragraphs
 const CHARS_PER_TICK_FAST = 2;
 const CHARS_PER_TICK_SLOW = 1;
-const PAUSE_BETWEEN_BLOCKS_MS = 1300;
-const PAUSE_AFTER_STINGER_MS = 1700;
+const PAUSE_BETWEEN_BLOCKS_MS = Math.round(1300 / REVEAL_SPEED_MULTIPLIER);
+const PAUSE_AFTER_STINGER_MS = Math.round(1700 / REVEAL_SPEED_MULTIPLIER);
+const PAUSE_BETWEEN_STINGER_LINES_MS = Math.round(420 / REVEAL_SPEED_MULTIPLIER);
 
 function blockCadence(kind) {
   if (kind === "paragraph") {
@@ -167,7 +169,7 @@ export function mount(mountEl, { setStatus }) {
           next.className = "intro-stinger-line";
           currentEl.appendChild(next);
           charPos = 0;
-          pausedUntil = now + 420;
+          pausedUntil = now + PAUSE_BETWEEN_STINGER_LINES_MS;
         } else {
           idx++;
           currentEl = null;

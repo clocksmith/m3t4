@@ -4,6 +4,12 @@ function envFlag(name: string, fallback = false): boolean {
   return /^(1|true|yes|on)$/i.test(raw.trim());
 }
 
+function envList(name: string): string[] {
+  const raw = process.env[name];
+  if (!raw) return [];
+  return raw.split(",").map((value) => value.trim()).filter(Boolean);
+}
+
 export interface PlasmaLabConfig {
   port: number;
   storeBackend: "memory" | "firestore";
@@ -12,6 +18,11 @@ export interface PlasmaLabConfig {
   acceptAssignments: boolean;
   webrtcSignalingEnabled: boolean;
   webrtcDataEnabled: boolean;
+  webrtcTurnEnabled: boolean;
+  stunUrls: string[];
+  turnUrls: string[];
+  turnUsername?: string;
+  turnCredential?: string;
   adminToken?: string;
   assignmentTimeoutMs: number;
   workerSessionTtlMs: number;
@@ -26,6 +37,11 @@ export const CONFIG: PlasmaLabConfig = {
   acceptAssignments: envFlag("COMPUTE_ACCEPT_ASSIGNMENTS", false),
   webrtcSignalingEnabled: envFlag("FEATURE_COMPUTE_WEBRTC_SIGNALING", false),
   webrtcDataEnabled: envFlag("FEATURE_COMPUTE_WEBRTC_DATA", false),
+  webrtcTurnEnabled: envFlag("FEATURE_COMPUTE_WEBRTC_TURN", false),
+  stunUrls: envList("COMPUTE_STUN_URLS"),
+  turnUrls: envList("COMPUTE_TURN_URLS"),
+  turnUsername: process.env.COMPUTE_TURN_USERNAME,
+  turnCredential: process.env.COMPUTE_TURN_CREDENTIAL,
   adminToken: process.env.PLASMA_LAB_ADMIN_TOKEN,
   assignmentTimeoutMs: parseInt(process.env.COMPUTE_ASSIGNMENT_TIMEOUT_MS ?? "60000", 10),
   workerSessionTtlMs: parseInt(process.env.COMPUTE_WORKER_SESSION_TTL_MS ?? "3600000", 10),

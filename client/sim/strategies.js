@@ -21,13 +21,14 @@ export const STRATEGY_NAMES = [
     "acquirer",
 ];
 export const STRATEGIES = {
-    // evolved id=r0 spent=326 counters=4 internalWr=60.0% vsOldMeta=78.8%
+    // evolved id=r0 spent=346 counters=4 internalWr=60.0% vsOldMeta=78.8%
     standby: {
         id: "standby",
         attributes: {
             burnRate: 1, moat: 150, shipRate: 0.45, foresight: 0,
             pivotSpeed: 0.15, leverage: -0.9, networking: 0.05, hallucination: 0,
             spite: 0.1, greed: 0.15, pacing: 0.36, cunning: 0,
+            lift: 0.2,
         },
     },
     // evolved id=r1 spent=329 counters=12 internalWr=34.0% vsOldMeta=67.2%
@@ -102,13 +103,14 @@ export const STRATEGIES = {
             spite: -0.84, greed: 0, pacing: 0, cunning: 0,
         },
     },
-    // evolved id=r9 spent=333 counters=2 internalWr=50.0% vsOldMeta=66.8%
+    // evolved id=r9 spent=353 counters=2 internalWr=50.0% vsOldMeta=66.8%
     moonshot: {
         id: "moonshot",
         attributes: {
             burnRate: 0.9, moat: 0, shipRate: 0.97, foresight: 0.025,
             pivotSpeed: 1, leverage: -1, networking: 0, hallucination: 0,
             spite: -0.32, greed: 0, pacing: 0.02, cunning: 0,
+            lift: 0.2,
         },
     },
     // evolved id=r10 spent=349 counters=7 internalWr=48.0% vsOldMeta=67.0%
@@ -120,22 +122,24 @@ export const STRATEGIES = {
             spite: -0.22, greed: 0, pacing: 0.03, cunning: 0,
         },
     },
-    // evolved id=r11 spent=315 counters=3 internalWr=50.7% vsOldMeta=67.0%
+    // evolved id=r11 spent=340 counters=3 internalWr=50.7% vsOldMeta=67.0%
     founder: {
         id: "founder",
         attributes: {
             burnRate: 0.4402, moat: 0, shipRate: 0.8707, foresight: 0,
             pivotSpeed: 0, leverage: -1, networking: 0.0293, hallucination: 0,
             spite: 0.46, greed: 0.9783, pacing: 0, cunning: 0.0978,
+            lift: 0.25,
         },
     },
-    // evolved id=r12 spent=316 counters=1 internalWr=55.3% vsOldMeta=63.0%
+    // evolved id=r12 spent=341 counters=1 internalWr=55.3% vsOldMeta=63.0%
     acolyte: {
         id: "acolyte",
         attributes: {
             burnRate: 0.89, moat: 9, shipRate: 0.27, foresight: 0.1525,
             pivotSpeed: 0.1, leverage: -1, networking: 0.43, hallucination: 0,
             spite: -1, greed: 0, pacing: 0.83, cunning: 0,
+            lift: 0.25,
         },
     },
     // evolved id=r13 spent=353 counters=7 internalWr=44.6% vsOldMeta=62.8%

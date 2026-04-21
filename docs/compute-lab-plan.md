@@ -107,8 +107,14 @@ compute_reputation
 compute_artifact_exports
 compute_sessions
 compute_webrtc_sessions
+compute_webrtc_pairs
 compute_capability_observations
 compute_connectivity_observations
+compute_worker_profiles
+compute_device_classes
+compute_network_classes
+compute_public_stats
+compute_replay_badges
 ```
 
 The compute service may store references to public game artifacts:
@@ -211,6 +217,8 @@ POST /compute/assignments/accept
 POST /compute/receipts
 GET  /compute/status
 GET  /compute/use-cases
+GET  /compute/public/stats
+GET  /compute/public/replay-badges/:matchId
 ```
 
 Admin/debug endpoints behind admin auth:
@@ -218,6 +226,9 @@ Admin/debug endpoints behind admin auth:
 ```text
 POST /compute/admin/assignments
 POST /compute/admin/tasks/seed
+POST /compute/admin/tasks/device-witness-webgpu
+POST /compute/admin/tasks/device-witness-render
+POST /compute/admin/tasks/device-witness-webrtc
 POST /compute/admin/tasks/public-artifact
 POST /compute/admin/tasks/seed-sweep
 POST /compute/admin/tasks/:taskId/cancel
@@ -225,13 +236,18 @@ GET  /compute/admin/tasks/:taskId
 GET  /compute/admin/receipts/:receiptId
 GET  /compute/admin/dashboard
 GET  /compute/admin/dashboard.html
+GET  /compute/admin/worker-profiles
+GET  /compute/admin/public-stats
+GET  /compute/admin/replay-badges/:matchId
 GET  /compute/admin/capability-map
 GET  /compute/admin/connectivity-map
 ```
 
-Device Witness data is admin-only in this phase. Raw workers, receipts,
-capabilities, connectivity observations, and aggregate maps should not be
-exposed publicly until privacy-safe public summaries are deliberately designed.
+Device Witness raw data is admin-only in this phase. Raw workers, receipts,
+capabilities, connectivity observations, and aggregate maps are not public.
+`/compute/public/stats` is privacy-suppressed until the worker count passes the
+configured anonymity floor. Replay badges expose artifact verification status,
+not who computed it.
 
 HTTP WebRTC signaling endpoints, enabled only by
 `FEATURE_COMPUTE_WEBRTC_SIGNALING=true`:
@@ -243,7 +259,21 @@ POST /compute/webrtc/sessions/:sessionId/answer
 POST /compute/webrtc/sessions/:sessionId/candidates
 GET  /compute/webrtc/sessions/:sessionId/candidates
 POST /compute/webrtc/sessions/:sessionId/close
+GET  /compute/webrtc/ice-config
+POST /compute/webrtc/pairs/join
+GET  /compute/webrtc/pairs/:pairId
+POST /compute/webrtc/pairs/:pairId/offer
+POST /compute/webrtc/pairs/:pairId/answer
+POST /compute/webrtc/pairs/:pairId/candidates
+POST /compute/webrtc/pairs/:pairId/close
 ```
+
+The `/pairs` routes are the first real two-browser measurement path. They are
+still advisory: clients submit only bucketed connectivity observations and the
+raw signaling payloads stay inside the short-lived signaling store. TURN is
+disabled unless `FEATURE_COMPUTE_WEBRTC_TURN=true` and explicit TURN credentials
+are configured; use it as a measured fallback with cost guards, not as the
+default path.
 
 ## Plasma WebRTC
 
@@ -520,6 +550,38 @@ Visibility:
 raw observations: admin-only
 aggregate maps: admin-only initially
 future public stats: counts only, no worker ids, no rare fingerprints
+```
+
+Phase 1.5 promotes all three Device Witness probes into assignment-bound
+receipts:
+
+```text
+device_witness.webgpu.v0
+  coordinator issues seed/count challenge
+  browser worker runs the u32 transform on WebGPU
+  receipt carries assignmentId, kernelHash, inputHash, outputHash, duration
+  validator checks expected output hash
+
+device_witness.render_fixture.v0
+  coordinator issues canvas2d-alpha-samples-v1 challenge
+  browser worker samples known pixels from OffscreenCanvas
+  receipt carries assignmentId, kernelHash, inputHash, outputHash, duration
+  validator checks expected sample-byte hash
+
+device_witness.webrtc.v0
+  coordinator issues local-datachannel-transcript-v1 challenge
+  browser performs local RTCPeerConnection/datachannel probe
+  receipt carries assignmentId, kernelHash, inputHash, transcript hash, duration
+  validator checks hash over issued challenge params and whitelisted buckets
+  raw SDP, raw ICE candidates, IPs, ISP, and exact location are not stored
+```
+
+Admin seed routes:
+
+```text
+POST /compute/admin/tasks/device-witness-webgpu
+POST /compute/admin/tasks/device-witness-render
+POST /compute/admin/tasks/device-witness-webrtc
 ```
 
 `prime-search.v0` is plumbing only. Timebox it. It proves:
@@ -809,6 +871,9 @@ frame-time impact
 Device Witness WebGPU correctness buckets
 Device Witness WebRTC/ICE buckets
 Device Witness rendering fixture buckets
+derived worker/device/network profiles
+privacy-suppressed public stats
+verified replay badges
 ```
 
 Core product metric:
@@ -831,12 +896,14 @@ Rollout order:
 5. admin receipt dashboard
 6. same-browser WebRTC loopback
 7. two-browser LAN/WebRTC test
-8. closed alpha WebRTC lab
-9. hidden client opt-in panel behind flag
-10. staff/friends alpha on Live
-11. replay verification tasks only
-12. public opt-in compute panel
-13. public volunteer-verified replay badge
+8. derived worker/device/network profiles
+9. replay verification badge endpoint
+10. closed alpha WebRTC lab
+11. hidden client opt-in panel behind flag
+12. staff/friends alpha on Live
+13. replay verification tasks only
+14. public opt-in compute panel
+15. public volunteer-verified replay badge
 ```
 
 Rollback options:
@@ -951,6 +1018,23 @@ WebGPU expected-output correctness probe
 optional COMPUTE_STUN_URLS exposed to the opt-in browser witness
 worker-side OffscreenCanvas rendering fixture probe
 WebRTC local datachannel and ICE bucket probe
+WebRTC two-browser pairing/signaling probe behind flag
+derived worker/device/network profiles
+privacy-suppressed public stats
+public replay badge endpoint for verified artifacts
+```
+
+The fifth slice promotes all three Device Witness probes to receipts:
+
+```text
+device_witness.webgpu.v0 task kind
+device_witness.render_fixture.v0 task kind
+device_witness.webrtc.v0 task kind
+server-side expected output reference kernels for WebGPU/render
+measurement validation for WebRTC transcript receipts
+browser execution for assignment-bound WebGPU/render/WebRTC challenges
+admin seeding for all three witness tasks
+compute_receipts validation for all three witness tasks
 ```
 
 The spectator GPU can be "double spent" only as slack. The arena always gets

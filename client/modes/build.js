@@ -304,7 +304,7 @@ export function mount(root, { setStatus }) {
       <div class="page-header-row">
         <div class="page-title-stack">
           <h1 class="page-title">Tune</h1>
-          <div class="page-subtitle tight">Set policy. Test once. Send it live.</div>
+          <div class="page-subtitle tight">Server preview. Not ranked until sent live.</div>
         </div>
         <label class="inline-control"><span class="tight">stage</span>
           <select id="test-stage">${STAGE_IDS.map((s) => `<option value="${s}" ${s === stageId ? "selected" : ""}>${s}</option>`).join("")}</select>
@@ -313,6 +313,10 @@ export function mount(root, { setStatus }) {
         <button id="test-resim" class="primary">test fight</button>
         <span class="tight" id="test-hud"></span>
       </div>
+      <section class="context-card build-context-card">
+        <div class="context-card-kicker">remote simulation</div>
+        <p>Tune policy tendencies here. Test fights run on the server and return replay frames; the browser only renders what comes back.</p>
+      </section>
 
       <div class="grid-3">
         ${playerPanelHtml(0)}

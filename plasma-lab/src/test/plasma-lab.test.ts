@@ -6,7 +6,7 @@ import { ComputeLabStore, type ComputeLabSnapshot, referencePrimeReceiptFields, 
 import type { PlasmaLabConfig } from "../config.js";
 import { json } from "../http.js";
 import type { WorkerCapability } from "../plasma/types.js";
-import { canonicalJson, sha256 } from "../plasma/hash.js";
+import { canonicalJson, hashCanonical, sha256 } from "../plasma/hash.js";
 import { PersistentComputeLabStore } from "../persistent-store.js";
 import { runSeedSweep } from "../kernels/seed-sweep.js";
 
@@ -18,6 +18,9 @@ const baseConfig: PlasmaLabConfig = {
   acceptAssignments: true,
   webrtcSignalingEnabled: false,
   webrtcDataEnabled: false,
+  webrtcTurnEnabled: false,
+  stunUrls: [],
+  turnUrls: [],
   assignmentTimeoutMs: 60_000,
   workerSessionTtlMs: 60_000,
   webrtcSessionTtlMs: 60_000,
@@ -34,6 +37,12 @@ const capability: WorkerCapability = {
 
 const webgpuCapability: WorkerCapability = {
   ...capability,
+  kernels: [
+    ...capability.kernels,
+    "device_witness.webgpu.v0",
+    "device_witness.render_fixture.v0",
+    "device_witness.webrtc.v0",
+  ],
   runtimeSurfaces: ["browser-js", "browser-webgpu"],
   deviceClass: "desktop-high",
   adapterInfo: {
@@ -182,6 +191,56 @@ test("public artifact verification receipts accept exported artifact hashes", ()
   assert.equal(second.validation?.status, "accepted");
 });
 
+test("public artifact verification produces replay badge summaries", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const payload = {
+    matchId: "badge-1",
+    tuple: { matchId: "badge-1", expectedLogHash: "abc123", simConstantsHash: "rules-1" },
+    integrity: { stageHash: "stage-1" },
+  };
+  const artifactJson = canonicalJson(payload);
+  store.seedPublicArtifactVerifyTask({
+    matchId: "badge-1",
+    artifactHash: "artifact-fnv",
+    artifactSha256: sha256(artifactJson).value,
+    artifactJson,
+  });
+  const w1 = store.registerWorker({ capability });
+  const w2 = store.registerWorker({ capability });
+  const a1 = store.assignNext(auth(w1))!;
+  const a2 = store.assignNext(auth(w2))!;
+  store.acceptAssignment({ ...auth(w1), assignmentId: a1.assignment.assignmentId, assignmentToken: a1.assignment.assignmentToken });
+  store.acceptAssignment({ ...auth(w2), assignmentId: a2.assignment.assignmentId, assignmentToken: a2.assignment.assignmentToken });
+  store.submitReceipt({
+    ...auth(w1),
+    assignmentId: a1.assignment.assignmentId,
+    assignmentToken: a1.assignment.assignmentToken,
+    taskId: a1.task.taskId,
+    chunkId: a1.chunk.chunkId,
+    ...referenceReceiptFields(a1.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 1,
+  });
+  store.submitReceipt({
+    ...auth(w2),
+    assignmentId: a2.assignment.assignmentId,
+    assignmentToken: a2.assignment.assignmentToken,
+    taskId: a2.task.taskId,
+    chunkId: a2.chunk.chunkId,
+    ...referenceReceiptFields(a2.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 1,
+  });
+
+  const badge = store.replayBadge("badge-1");
+  assert.equal(badge?.status, "verified");
+  assert.equal(badge?.agreedReceipts, 2);
+  assert.equal(badge?.rulesHash, "rules-1");
+  assert.equal(badge?.stageHash, "stage-1");
+});
+
 test("seed sweep receipts accept deterministic public preset batches", () => {
   const now = clock();
   const store = new ComputeLabStore({ now, acceptAssignments: true });
@@ -264,6 +323,36 @@ test("dashboard aggregates bucketed capability map", () => {
   assert.equal(dashboard.workerList[0].adapterInfo.webgpuBenchmark, "ok");
 });
 
+test("dashboard derives worker profiles, class profiles, and public-safe stats", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const worker = store.registerWorker({ capability: webgpuCapability });
+  store.submitConnectivityObservation({
+    ...auth(worker),
+    observation: {
+      transport: "webrtc-signaling",
+      status: "ok",
+      mode: "quiet",
+      networkTypeBucket: "4g",
+      webrtcOpenMsBucket: "10-20ms",
+      iceHostBucket: "yes",
+      iceSrflxBucket: "yes",
+      iceRelayBucket: "no",
+      stunSuccessBucket: "yes",
+      turnNeedBucket: "unknown",
+    },
+  });
+
+  const dashboard = store.dashboard() as any;
+  assert.equal(dashboard.workerProfiles.length, 1);
+  assert.equal(dashboard.workerProfiles[0].allowedWorkloadTier, "webgpu-light");
+  assert.equal(dashboard.workerProfiles[0].webrtcDirectSuccessRate, 1);
+  assert.equal(dashboard.deviceClassProfiles[0].classId, "desktop-high");
+  assert.equal(dashboard.networkClassProfiles[0].classId, "4g");
+  assert.equal(dashboard.publicStats.privacy, "full");
+  assert.equal(dashboard.publicStats.webgpuSupportedPct, 100);
+  assert.equal(dashboard.publicStats.webrtcDirectSuccessPct, 100);
+});
+
 test("device witness connectivity observations stay bucketed and aggregate for admin", () => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const worker = store.registerWorker({ capability: webgpuCapability });
@@ -294,6 +383,132 @@ test("device witness connectivity observations stay bucketed and aggregate for a
   assert.equal(dashboard.connectivityMap.transport["webrtc-local"], 1);
   assert.equal(dashboard.connectivityMap.iceHostBucket.yes, 1);
   assert.equal(dashboard.connectivityMap.networkTypeBucket["4g"], 1);
+});
+
+test("Device Witness WebGPU challenge validates as an assignment-bound receipt", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const task = store.seedDeviceWitnessWebGpuTask({ seed: 7, count: 64 });
+  const worker = store.registerWorker({ capability: webgpuCapability });
+  const nextBody = store.assignNext(auth(worker))!;
+  assert.equal(nextBody.task.kind, "device_witness.webgpu.v0");
+  assert.equal(nextBody.chunk.chunkId, task.chunks[0].chunkId);
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const result = store.submitReceipt({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: nextBody.task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...referenceReceiptFields(nextBody.chunk),
+    executionMode: "webgpu",
+    transport: "http",
+    governorMode: "quiet",
+    deviceClass: "desktop-high",
+    adapterInfo: { webgpu: "available", webgpuCorrectness: "ok" },
+    computeMs: 3,
+  });
+  assert.equal(result.receipt.decision, "accepted");
+  assert.equal(result.validation?.status, "accepted");
+  assert.equal(store.getTask(task.taskId)?.status, "complete");
+});
+
+test("Device Witness render fixture validates as an assignment-bound receipt", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const task = store.seedDeviceWitnessRenderTask();
+  const worker = store.registerWorker({ capability: webgpuCapability });
+  const nextBody = store.assignNext(auth(worker))!;
+  assert.equal(nextBody.task.kind, "device_witness.render_fixture.v0");
+  assert.equal(nextBody.chunk.chunkId, task.chunks[0].chunkId);
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const result = store.submitReceipt({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: nextBody.task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...referenceReceiptFields(nextBody.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    governorMode: "quiet",
+    deviceClass: "desktop-high",
+    adapterInfo: { canvas2dFixture: "ok" },
+    computeMs: 2,
+  });
+  assert.equal(result.receipt.decision, "accepted");
+  assert.equal(result.validation?.status, "accepted");
+  assert.equal(store.getTask(task.taskId)?.status, "complete");
+});
+
+test("Device Witness WebRTC challenge validates as an assignment-bound measurement receipt", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const task = store.seedDeviceWitnessWebRtcTask({ timeoutMs: 500 });
+  const worker = store.registerWorker({ capability: webgpuCapability });
+  const nextBody = store.assignNext(auth(worker))!;
+  assert.equal(nextBody.task.kind, "device_witness.webrtc.v0");
+  assert.equal(nextBody.chunk.chunkId, task.chunks[0].chunkId);
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const transcript = {
+    status: "ok",
+    mode: "quiet",
+    browserFamily: "chromium",
+    deviceClass: "desktop-high",
+    networkTypeBucket: "4g",
+    downlinkBucket: "20-99mbps",
+    rttBucket: "20-50ms",
+    webrtcOpenMsBucket: "10-20ms",
+    iceGatherMsBucket: "20-50ms",
+    iceHostBucket: "yes",
+    iceSrflxBucket: "no",
+    iceRelayBucket: "no",
+    stunSuccessBucket: "unconfigured",
+    turnNeedBucket: "unknown",
+    visibilityBucket: "visible",
+    batteryBucket: "charging",
+  };
+  const outputHash = hashCanonical({
+    kind: nextBody.chunk.kind,
+    params: nextBody.chunk.params,
+    transcript,
+  });
+  const result = store.submitReceipt({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: nextBody.task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    kernelId: nextBody.chunk.kernelId,
+    kernelHash: nextBody.chunk.kernelHash,
+    inputHash: nextBody.chunk.inputHash,
+    outputHash,
+    determinismClass: "replicated-quorum",
+    validationMode: "measurement",
+    executionMode: "cpu",
+    transport: "webrtc",
+    governorMode: "quiet",
+    deviceClass: "desktop-high",
+    adapterInfo: {
+      ...transcript,
+      rawCandidate: "candidate:1 1 udp 123 192.168.1.2 54321 typ host",
+    },
+    computeMs: 12,
+  });
+  assert.equal(result.receipt.decision, "accepted");
+  assert.equal((result.receipt.adapterInfo as any).rawCandidate, undefined);
+  assert.equal(result.validation?.status, "accepted");
+  assert.equal(result.validation?.reason, "measurement transcript accepted");
+  assert.equal(store.getTask(task.taskId)?.status, "complete");
 });
 
 test("HTTP routes keep admin task creation behind the admin flag", async (t) => {
@@ -383,6 +598,47 @@ test("HTTP admin can seed public preset seed sweeps", async (t) => {
   const worker = await register(srv.port);
   const n = await next(srv.port, worker);
   assert.equal(n.task.kind, "m3t4.seed_sweep.v0");
+});
+
+test("HTTP admin can seed Device Witness receipt workloads", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const srv = await boot(store, { ...baseConfig, adminToken: "secret" });
+  t.after(() => srv.close());
+
+  const webgpu = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/device-witness-webgpu",
+    { seed: 11, count: 32 },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(webgpu.status, 200);
+  assert.equal(webgpu.body.chunks, 1);
+
+  const render = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/device-witness-render",
+    {},
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(render.status, 200);
+  assert.equal(render.body.chunks, 1);
+
+  const webrtc = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/device-witness-webrtc",
+    { timeoutMs: 500 },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(webrtc.status, 200);
+  assert.equal(webrtc.body.chunks, 1);
+  assert.equal(webrtc.body.validationPolicy.validationMode, "measurement");
+
+  const worker = await register(srv.port, webgpuCapability);
+  const first = await next(srv.port, worker);
+  assert.equal(first.task.kind, "device_witness.webgpu.v0");
 });
 
 test("HTTP admin can toggle assignment acceptance without redeploying", async (t) => {
@@ -497,6 +753,64 @@ test("HTTP device witness observations are collected but maps are admin-only", a
   assert.equal(adminMap.body.map.httpRttBucket["10-20ms"], 1);
 });
 
+test("HTTP public stats suppress detailed aggregates until enough workers exist", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const srv = await boot(store, baseConfig);
+  t.after(() => srv.close());
+
+  await register(srv.port, webgpuCapability);
+  const resp = await req(srv.port, "GET", "/compute/public/stats");
+  assert.equal(resp.status, 200);
+  assert.equal(resp.body.privacy, "suppressed");
+  assert.equal(resp.body.totalWorkers, 1);
+  assert.equal(resp.body.webgpuSupportedPct, null);
+});
+
+test("HTTP public replay badge route exposes verified artifact summaries only", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const payload = {
+    matchId: "route-badge-1",
+    tuple: { matchId: "route-badge-1", expectedLogHash: "abc123", simConstantsHash: "rules-route" },
+    integrity: { stageHash: "stage-route" },
+  };
+  const artifactJson = canonicalJson(payload);
+  store.seedPublicArtifactVerifyTask({
+    matchId: "route-badge-1",
+    artifactHash: "artifact-fnv",
+    artifactSha256: sha256(artifactJson).value,
+    artifactJson,
+  });
+  const w1 = store.registerWorker({ capability });
+  const w2 = store.registerWorker({ capability });
+  const a1 = store.assignNext(auth(w1))!;
+  const a2 = store.assignNext(auth(w2))!;
+  store.acceptAssignment({ ...auth(w1), assignmentId: a1.assignment.assignmentId, assignmentToken: a1.assignment.assignmentToken });
+  store.acceptAssignment({ ...auth(w2), assignmentId: a2.assignment.assignmentId, assignmentToken: a2.assignment.assignmentToken });
+  for (const [worker, nextBody] of [[w1, a1], [w2, a2]] as const) {
+    store.submitReceipt({
+      ...auth(worker),
+      assignmentId: nextBody.assignment.assignmentId,
+      assignmentToken: nextBody.assignment.assignmentToken,
+      taskId: nextBody.task.taskId,
+      chunkId: nextBody.chunk.chunkId,
+      ...referenceReceiptFields(nextBody.chunk),
+      executionMode: "cpu",
+      transport: "http",
+      computeMs: 1,
+    });
+  }
+  const srv = await boot(store, baseConfig);
+  t.after(() => srv.close());
+
+  const resp = await req(srv.port, "GET", "/compute/public/replay-badges/route-badge-1");
+  assert.equal(resp.status, 200);
+  assert.equal(resp.body.status, "verified");
+  assert.equal(resp.body.rulesHash, "rules-route");
+
+  const missing = await req(srv.port, "GET", "/compute/public/replay-badges/missing");
+  assert.equal(missing.status, 404);
+});
+
 test("WebRTC signaling routes are disabled behind the signaling flag", async (t) => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const srv = await boot(store, baseConfig);
@@ -551,6 +865,55 @@ test("WebRTC signaling stores opaque offer answer and candidate payloads", async
     "x-webrtc-session-token": "wrong",
   });
   assert.equal(bad.status, 400);
+});
+
+test("WebRTC pairing joins two workers and exchanges offer answer candidates", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true, webrtcSessionTtlMs: 60_000 });
+  const srv = await boot(store, {
+    ...baseConfig,
+    webrtcSignalingEnabled: true,
+    webrtcDataEnabled: true,
+    stunUrls: ["stun:stun.example.test:19302"],
+  });
+  t.after(() => srv.close());
+  const w1 = await register(srv.port, webgpuCapability);
+  const w2 = await register(srv.port, webgpuCapability);
+
+  const p1 = await req(srv.port, "POST", "/compute/webrtc/pairs/join", w1);
+  assert.equal(p1.status, 200);
+  assert.equal(p1.body.role, "offerer");
+  assert.equal(p1.body.status, "waiting");
+  assert.equal(p1.body.iceServers[0].urls[0], "stun:stun.example.test:19302");
+
+  const p2 = await req(srv.port, "POST", "/compute/webrtc/pairs/join", w2);
+  assert.equal(p2.status, 200);
+  assert.equal(p2.body.role, "answerer");
+  assert.equal(p2.body.status, "matched");
+  assert.equal(p2.body.pairId, p1.body.pairId);
+
+  const headers = { "x-webrtc-pair-token": p1.body.pairToken };
+  const offer = await req(srv.port, "POST", `/compute/webrtc/pairs/${p1.body.pairId}/offer`, {
+    offer: { type: "offer", sdp: "opaque-offer" },
+  }, headers);
+  assert.equal(offer.status, 200);
+  assert.equal(offer.body.offer.sdp, "opaque-offer");
+
+  const answer = await req(srv.port, "POST", `/compute/webrtc/pairs/${p1.body.pairId}/answer`, {
+    answer: { type: "answer", sdp: "opaque-answer" },
+  }, headers);
+  assert.equal(answer.status, 200);
+  assert.equal(answer.body.answer.sdp, "opaque-answer");
+
+  const candidates = await req(srv.port, "POST", `/compute/webrtc/pairs/${p1.body.pairId}/candidates`, {
+    peerId: w1.workerId,
+    candidates: [{ candidate: "candidate-a" }],
+  }, headers);
+  assert.equal(candidates.status, 200);
+  assert.equal(candidates.body.candidates[0].payload.candidate, "candidate-a");
+
+  const fetched = await req(srv.port, "GET", `/compute/webrtc/pairs/${p1.body.pairId}`, undefined, headers);
+  assert.equal(fetched.status, 200);
+  assert.equal(fetched.body.candidates.length, 1);
 });
 
 test("HTTP task assignment is disabled behind the assignment kill switch", async (t) => {
@@ -670,8 +1033,8 @@ async function req(port: number, method: string, path: string, body?: unknown, h
   });
 }
 
-async function register(port: number) {
-  const resp = await req(port, "POST", "/compute/workers/register", { capability });
+async function register(port: number, workerCapability: WorkerCapability = capability) {
+  const resp = await req(port, "POST", "/compute/workers/register", { capability: workerCapability });
   assert.equal(resp.status, 200);
   return resp.body as {
     workerId: string;

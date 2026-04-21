@@ -19,6 +19,8 @@ const FEATURES = {
   zk: false,
   distributedCompute: false,
   computeSlackWorker: false,
+  computeReceiptDashboard: false,
+  computeLiveBadges: false,
 };
 window.__M3T4_FEATURES__ = FEATURES;
 

@@ -37,5 +37,6 @@ server.listen(CONFIG.port, () => {
     acceptAssignments: CONFIG.acceptAssignments,
     webrtcSignalingEnabled: CONFIG.webrtcSignalingEnabled,
     webrtcDataEnabled: CONFIG.webrtcDataEnabled,
+    webrtcTurnEnabled: CONFIG.webrtcTurnEnabled,
   }));
 });

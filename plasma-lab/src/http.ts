@@ -5,7 +5,7 @@ export function json(res: ServerResponse, code: number, body: unknown): void {
     "content-type": "application/json",
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET,POST,OPTIONS",
-    "access-control-allow-headers": "content-type,authorization,x-plasma-admin-token,x-worker-session-token,x-webrtc-session-token",
+    "access-control-allow-headers": "content-type,authorization,x-plasma-admin-token,x-worker-session-token,x-webrtc-session-token,x-webrtc-pair-token",
   });
   res.end(JSON.stringify(body));
 }

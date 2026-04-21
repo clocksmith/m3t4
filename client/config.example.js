@@ -13,6 +13,7 @@ window.__M3T4_AUTH_MODE__ = "firebase";
 window.__M3T4_COMPUTE_SLACK_WORKER__ = false;
 window.__M3T4_COMPUTE_LAB_ORIGIN__ = "";
 window.__M3T4_COMPUTE_STUN_URLS__ = [];
+window.__M3T4_COMPUTE_ICE_SERVERS__ = [];
 window.__M3T4_FIREBASE_CONFIG__ = {
   apiKey: "",
   authDomain: "m3t4.ai",

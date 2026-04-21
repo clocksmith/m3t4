@@ -1,6 +1,6 @@
 import { applicationDefault, getApps, initializeApp, type AppOptions } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
-import { COMPUTE_COLLECTIONS, type ComputeLabSnapshot } from "./store.js";
+import { COMPUTE_COLLECTIONS, ComputeLabStore, type ComputeLabSnapshot } from "./store.js";
 import type { ComputeLabPersistence } from "./persistent-store.js";
 
 let configuredDb: Firestore | null = null;
@@ -32,6 +32,7 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
       validations,
       reputation,
       webrtcSessions,
+      webrtcPairs,
       capabilityObservations,
       connectivityObservations,
     ] = await Promise.all([
@@ -43,6 +44,7 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
       this.readCollection<ComputeLabSnapshot["validations"][number]>(COMPUTE_COLLECTIONS.validations),
       this.readCollection<ComputeLabSnapshot["reputation"][number]>(COMPUTE_COLLECTIONS.reputation),
       this.readCollection<ComputeLabSnapshot["webrtcSessions"][number]>(COMPUTE_COLLECTIONS.webrtcSessions),
+      this.readCollection<ComputeLabSnapshot["webrtcPairs"][number]>(COMPUTE_COLLECTIONS.webrtcPairs),
       this.readCollection<ComputeLabSnapshot["capabilityObservations"][number]>(COMPUTE_COLLECTIONS.capabilityObservations),
       this.readCollection<ComputeLabSnapshot["connectivityObservations"][number]>(COMPUTE_COLLECTIONS.connectivityObservations),
     ]);
@@ -55,18 +57,25 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
       validations,
       reputation,
       webrtcSessions,
+      webrtcPairs,
       capabilityObservations,
       connectivityObservations,
     };
   }
 
   async save(snapshot: ComputeLabSnapshot): Promise<void> {
+    const derived = new ComputeLabStore();
+    derived.loadSnapshot(snapshot);
     const chunks = snapshot.tasks.flatMap((task) => task.chunks);
+    const now = Date.now();
+    const liveWebRtcSessions = snapshot.webrtcSessions.filter((session) => session.status !== "closed" && session.expiresAt > now);
+    const liveWebRtcPairs = snapshot.webrtcPairs.filter((pair) => pair.status !== "closed" && pair.expiresAt > now);
     const capabilities = snapshot.workers.map((worker) => ({
       workerId: worker.workerId,
       capability: worker.capability,
       lastSeenAt: worker.lastSeenAt,
     }));
+    const publicStats = derived.publicStats({ suppressSmall: false });
     await Promise.all([
       this.replaceCollection(COMPUTE_COLLECTIONS.workers, snapshot.workers, (worker) => worker.workerId),
       this.replaceCollection(COMPUTE_COLLECTIONS.capabilities, capabilities, (capability) => capability.workerId),
@@ -76,9 +85,15 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
       this.replaceCollection(COMPUTE_COLLECTIONS.receipts, snapshot.receipts, (receipt) => receipt.receiptId),
       this.replaceCollection(COMPUTE_COLLECTIONS.validations, snapshot.validations, (validation) => validation.validationId),
       this.replaceCollection(COMPUTE_COLLECTIONS.reputation, snapshot.reputation, (rep) => rep.workerId),
-      this.replaceCollection(COMPUTE_COLLECTIONS.webrtcSessions, snapshot.webrtcSessions, (session) => session.sessionId),
+      this.replaceCollection(COMPUTE_COLLECTIONS.webrtcSessions, liveWebRtcSessions, (session) => session.sessionId),
+      this.replaceCollection(COMPUTE_COLLECTIONS.webrtcPairs, liveWebRtcPairs, (pair) => pair.pairId),
       this.replaceCollection(COMPUTE_COLLECTIONS.capabilityObservations, snapshot.capabilityObservations, (obs) => obs.observationId),
       this.replaceCollection(COMPUTE_COLLECTIONS.connectivityObservations, snapshot.connectivityObservations, (obs) => obs.observationId),
+      this.replaceCollection(COMPUTE_COLLECTIONS.workerProfiles, derived.workerProfiles(), (profile) => profile.workerId),
+      this.replaceCollection(COMPUTE_COLLECTIONS.deviceClasses, derived.deviceClassProfiles(), (profile) => profile.classId),
+      this.replaceCollection(COMPUTE_COLLECTIONS.networkClasses, derived.networkClassProfiles(), (profile) => profile.classId),
+      this.replaceCollection(COMPUTE_COLLECTIONS.publicStats, [publicStats], () => "latest"),
+      this.replaceCollection(COMPUTE_COLLECTIONS.replayBadges, derived.replayBadges(), (badge) => badge.matchId),
     ]);
   }
 

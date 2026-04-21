@@ -86,10 +86,28 @@ service cloud.firestore {
     match /compute_webrtc_sessions/{doc=**} {
       allow read, write: if false;
     }
+    match /compute_webrtc_pairs/{doc=**} {
+      allow read, write: if false;
+    }
     match /compute_capability_observations/{doc=**} {
       allow read, write: if false;
     }
     match /compute_connectivity_observations/{doc=**} {
+      allow read, write: if false;
+    }
+    match /compute_worker_profiles/{doc=**} {
+      allow read, write: if false;
+    }
+    match /compute_device_classes/{doc=**} {
+      allow read, write: if false;
+    }
+    match /compute_network_classes/{doc=**} {
+      allow read, write: if false;
+    }
+    match /compute_public_stats/{doc=**} {
+      allow read, write: if false;
+    }
+    match /compute_replay_badges/{doc=**} {
       allow read, write: if false;
     }
   }

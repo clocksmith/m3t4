@@ -42,7 +42,7 @@ export const CONFIG = {
   submitIpRateLimitMax: parseInt(process.env.SUBMIT_IP_RATE_LIMIT_MAX ?? "20", 10),
 
   // Firehose pacing. The code default is intentionally fast for local
-  // smoke runs; .env/prod provisioning pin this to 60000 for real traffic.
+  // smoke runs; .env/prod provisioning pin this to 20000 for real traffic.
   cycleMs: parseInt(process.env.CYCLE_MS ?? "1500", 10), // between-match pause
   activePoolMs: parseInt(process.env.ACTIVE_POOL_MS ?? "1209600000", 10), // 14 days
 
@@ -86,5 +86,7 @@ export const CONFIG = {
     distributedCompute: envFlag("FEATURE_DISTRIBUTED_COMPUTE", false),
     computeSlackWorker: envFlag("FEATURE_COMPUTE_SLACK_WORKER", false),
     computeTaskAdmin: envFlag("FEATURE_COMPUTE_TASK_ADMIN", false),
+    computeReceiptDashboard: envFlag("FEATURE_COMPUTE_RECEIPT_DASHBOARD", false),
+    computeLiveBadges: envFlag("FEATURE_COMPUTE_LIVE_BADGES", false),
   },
 } as const;

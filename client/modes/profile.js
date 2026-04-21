@@ -39,12 +39,8 @@ const SAMPLE_CONFIG_JSON = JSON.stringify(SAMPLE_CONFIG, null, 2);
 function rosterIntroPanelHtml() {
   const pending = sessionStorage.getItem("m3t4:pendingSubmit");
   return `
-    <section class="panel roster-intro-panel">
-      <div class="funnel-strip roster-funnel" aria-label="ranked flow">
-        <span class="is-blue">Tune</span>
-        <span class="is-purple">Test</span>
-        <span class="is-red">Live</span>
-      </div>
+    <section class="context-card roster-intro-panel">
+      <div class="context-card-kicker">ranked roster</div>
       <div class="roster-intro-copy">
         <strong>${pending ? "Bot ready for the live roster." : "Your live roster holds five bots."}</strong>
         <span>Tune one, test it, then send it into a seat. The server schedules matches. Live streams the current fight.</span>

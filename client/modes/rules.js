@@ -27,7 +27,7 @@ function aboutCardHtml(about) {
   const body = Array.isArray(about?.body) ? about.body : [];
   if (!body.length) return "";
   return `
-    <article class="rules-card rules-card-feature">
+    <article class="context-card rules-card-feature">
       <h2>${escapeHtml(about.title ?? "About")}</h2>
       ${body.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}
     </article>`;

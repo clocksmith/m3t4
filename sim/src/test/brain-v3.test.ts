@@ -54,8 +54,8 @@ function defaultParams(overrides: Partial<Params> = {}): Params {
 
 // --- Tests ---
 
-test("BEHAVIOR_VERSION is 12", () => {
-  assert.equal(BEHAVIOR_VERSION, 12);
+test("BEHAVIOR_VERSION is 13", () => {
+  assert.equal(BEHAVIOR_VERSION, 13);
 });
 
 test("createBrainState initializes neutral with empty buffers", () => {
@@ -240,6 +240,55 @@ test("lift commits to a reachable high-goal jump instead of platform detour", ()
   assert.equal(highAction.right, true, "high lift still drives toward the goal x");
 });
 
+test("low lift keeps platform routing outside committed direct delivery", () => {
+  const obs = baseObs({
+    tick: 200,
+    self: { ...baseObs().self, hasToken: true, x: 600, y: 600, onGround: true },
+    opp: { ...baseObs().opp, x: 900, y: 600 },
+    token: { exists: true, x: 600, y: 548, carrier: 0, dwellT: 0 },
+    goal: { exists: true, x: 645, y: 500, label: "g1", timer: 8 },
+    platforms: [{ x: 100, y: 520, w: 100, h: 14, solid: false }],
+    dx: 300, absDx: 300, dy: 0,
+  });
+  const state = createBrainState(0);
+  state.mode = "objective";
+  state.substate = "deliver";
+  state.modeEnterTick = 190;
+  state.deliveryPlan = {
+    tactic: "kill-first",
+    startedAt: 190,
+    expiresAt: 230,
+    score: 1,
+  };
+  const action = runParamBrain(obs, defaultParams({ lift: 0, greed: 0, shipRate: 0 }), state);
+  assert.notEqual(action.up, true, "non-direct delivery still preserves low-lift routing");
+});
+
+test("committed direct delivery can force an obvious low-lift high-goal jump", () => {
+  const obs = baseObs({
+    tick: 200,
+    self: { ...baseObs().self, hasToken: true, x: 600, y: 600, onGround: true },
+    opp: { ...baseObs().opp, x: 900, y: 600 },
+    token: { exists: true, x: 600, y: 548, carrier: 0, dwellT: 0 },
+    goal: { exists: true, x: 645, y: 500, label: "g1", timer: 8 },
+    platforms: [{ x: 100, y: 520, w: 100, h: 14, solid: false }],
+    dx: 300, absDx: 300, dy: 0,
+  });
+  const state = createBrainState(0);
+  state.mode = "objective";
+  state.substate = "deliver";
+  state.modeEnterTick = 190;
+  state.deliveryPlan = {
+    tactic: "direct",
+    startedAt: 190,
+    expiresAt: 230,
+    score: 1,
+  };
+  const action = runParamBrain(obs, defaultParams({ lift: 0 }), state);
+  assert.equal(action.up, true, "direct delivery takes the reachable jump even with low lift");
+  assert.equal(action.right, true, "direct delivery still drives toward the goal x");
+});
+
 test("parry is silent at zero and counter-swings only in foil windows", () => {
   const obs = baseObs({
     tick: 200,
@@ -403,6 +452,48 @@ test("delivery planner can hold feint through its back-step window", () => {
   assert.equal(state.deliveryPlan!.tactic, "feint");
   assert.equal(state.deliveryPlan!.expiresAt, 130);
   assert.equal(action.left, true, "feint should keep back-stepping before feintUntil");
+  assert.notEqual(action.right, true);
+});
+
+test("initial no-token idle pressure closes for high-moat no-contact cases", () => {
+  const obs = baseObs({
+    tick: 425,
+    self: { ...baseObs().self, id: 1, x: 600, y: 600 },
+    opp: { ...baseObs().opp, x: 880, y: 600 },
+    dx: 280,
+    absDx: 280,
+    dy: 0,
+  });
+  const action = runParamBrain(obs, defaultParams({ moat: 300, greed: 0, cunning: 0 }), createBrainState(1));
+  assert.equal(action.right, true, "idle pressure should close toward opponent after threshold");
+  assert.notEqual(action.left, true);
+});
+
+test("initial no-token idle pressure stays quiet before asymmetric threshold", () => {
+  const obs = baseObs({
+    tick: 350,
+    self: { ...baseObs().self, id: 1, x: 600, y: 600 },
+    opp: { ...baseObs().opp, x: 880, y: 600 },
+    dx: 280,
+    absDx: 280,
+    dy: 0,
+  });
+  const action = runParamBrain(obs, defaultParams({ moat: 300, greed: 0, cunning: 0 }), createBrainState(1));
+  assert.equal(action.left, true, "before threshold, moat spacing remains in control");
+  assert.notEqual(action.right, true);
+});
+
+test("initial no-token idle pressure does not override low-moat spacing", () => {
+  const obs = baseObs({
+    tick: 425,
+    self: { ...baseObs().self, id: 1, x: 600, y: 600 },
+    opp: { ...baseObs().opp, x: 640, y: 600 },
+    dx: 40,
+    absDx: 40,
+    dy: 0,
+  });
+  const action = runParamBrain(obs, defaultParams({ moat: 60, greed: 0, cunning: 0 }), createBrainState(1));
+  assert.equal(action.left, true, "low-moat neutral spacing remains in control after threshold");
   assert.notEqual(action.right, true);
 });
 

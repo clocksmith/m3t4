@@ -3,7 +3,7 @@ import type { PlasmaLabConfig } from "./config.js";
 import { header, html, json, readJson } from "./http.js";
 import { canonicalJson } from "./plasma/hash.js";
 import type { ContentHash, ExecutionMode, GovernorMode, TransportKind, WorkerCapability, WorkerRefusalReason } from "./plasma/types.js";
-import { ComputeLabStore, type WebRtcSessionRecord } from "./store.js";
+import { ComputeLabStore, type WebRtcPairRecord, type WebRtcSessionRecord } from "./store.js";
 import { COMPUTE_USE_CASES } from "./use-cases.js";
 
 export interface RouteDeps {
@@ -204,7 +204,7 @@ export async function handleComputeLabRequest(
       artifactHash?: ContentHash;
       outputHash?: ContentHash;
       determinismClass?: "bit-exact" | "tolerance-bounded" | "replicated-quorum";
-      validationMode?: "expected-hash" | "quorum" | "tolerance" | "human-review";
+      validationMode?: "expected-hash" | "quorum" | "tolerance" | "human-review" | "measurement";
       executionMode?: ExecutionMode;
       transport?: TransportKind;
       governorMode?: GovernorMode;
@@ -249,12 +249,31 @@ export async function handleComputeLabRequest(
   }
 
   if (req.method === "GET" && url.pathname === "/compute/status") {
-    json(res, 200, deps.store.summary());
+    json(res, 200, {
+      ...deps.store.summary(),
+      webrtcSignalingEnabled: deps.config.webrtcSignalingEnabled,
+      webrtcDataEnabled: deps.config.webrtcDataEnabled,
+      webrtcTurnEnabled: deps.config.webrtcTurnEnabled,
+      iceServers: publicIceServers(deps.config),
+    });
     return true;
   }
 
   if (req.method === "GET" && url.pathname === "/compute/use-cases") {
     json(res, 200, { useCases: COMPUTE_USE_CASES });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/compute/public/stats") {
+    json(res, 200, deps.store.publicStats());
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname.startsWith("/compute/public/replay-badges/")) {
+    const matchId = url.pathname.slice("/compute/public/replay-badges/".length);
+    const badge = deps.store.replayBadge(matchId);
+    if (!badge || badge.status !== "verified") json(res, 404, { error: "verified replay badge not found" });
+    else json(res, 200, badge);
     return true;
   }
 
@@ -268,6 +287,81 @@ export async function handleComputeLabRequest(
 async function handleWebRtc(req: IncomingMessage, res: ServerResponse, url: URL, deps: RouteDeps): Promise<boolean> {
   if (!deps.config.webrtcSignalingEnabled) {
     json(res, 404, { error: "WebRTC signaling disabled" });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/compute/webrtc/ice-config") {
+    json(res, 200, { iceServers: publicIceServers(deps.config), turnEnabled: deps.config.webrtcTurnEnabled });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/compute/webrtc/pairs/join") {
+    const body = await readJson<WorkerAuthBody>(req);
+    try {
+      const joined = deps.store.joinWebRtcPair(authFrom(body, req, {}));
+      json(res, 200, {
+        ...publicWebRtcPair(joined.pair, deps.config),
+        role: joined.role,
+        pairToken: joined.pair.token,
+      });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
+
+  const pairPrefix = "/compute/webrtc/pairs/";
+  if (url.pathname.startsWith(pairPrefix)) {
+    const [pairId, action] = url.pathname.slice(pairPrefix.length).split("/");
+    const body = req.method === "GET"
+      ? null
+      : await readJson<{
+        pairToken?: string;
+        offer?: unknown;
+        answer?: unknown;
+        candidate?: unknown;
+        candidates?: unknown[];
+        peerId?: string;
+      }>(req);
+    const token = body?.pairToken ?? header(req, "x-webrtc-pair-token");
+    try {
+      if (req.method === "GET" && !action) {
+        json(res, 200, publicWebRtcPair(deps.store.getWebRtcPair({ pairId, token }), deps.config));
+        return true;
+      }
+      if (req.method === "POST" && action === "offer") {
+        if (body?.offer === undefined) throw new Error("offer required");
+        json(res, 200, publicWebRtcPair(deps.store.setWebRtcPairOffer({ pairId, token, offer: body.offer }), deps.config));
+        return true;
+      }
+      if (req.method === "POST" && action === "answer") {
+        if (body?.answer === undefined) throw new Error("answer required");
+        json(res, 200, publicWebRtcPair(deps.store.setWebRtcPairAnswer({ pairId, token, answer: body.answer }), deps.config));
+        return true;
+      }
+      if (req.method === "POST" && action === "candidates") {
+        const candidates = Array.isArray(body?.candidates)
+          ? body.candidates
+          : body?.candidate === undefined
+            ? []
+            : [body.candidate];
+        if (candidates.length === 0) throw new Error("candidate or candidates required");
+        json(res, 200, publicWebRtcPair(deps.store.addWebRtcPairCandidates({
+          pairId,
+          token,
+          peerId: body?.peerId,
+          candidates,
+        }), deps.config));
+        return true;
+      }
+      if (req.method === "POST" && action === "close") {
+        json(res, 200, publicWebRtcPair(deps.store.closeWebRtcPair({ pairId, token }), deps.config));
+        return true;
+      }
+      json(res, 404, { error: "WebRTC pair route not found" });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
     return true;
   }
 
@@ -391,6 +485,60 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     }
     return true;
   }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/device-witness-webgpu") {
+    const body = await readJson<{
+      seed?: number;
+      count?: number;
+      minExecutions?: number;
+      minAgreeing?: number;
+    }>(req);
+    try {
+      const task = deps.store.seedDeviceWitnessWebGpuTask({
+        seed: body?.seed,
+        count: body?.count,
+        minExecutions: body?.minExecutions,
+        minAgreeing: body?.minAgreeing,
+      });
+      json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/device-witness-render") {
+    const body = await readJson<{
+      minExecutions?: number;
+      minAgreeing?: number;
+    }>(req);
+    try {
+      const task = deps.store.seedDeviceWitnessRenderTask({
+        minExecutions: body?.minExecutions,
+        minAgreeing: body?.minAgreeing,
+      });
+      json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/device-witness-webrtc") {
+    const body = await readJson<{
+      timeoutMs?: number;
+      minExecutions?: number;
+      minAgreeing?: number;
+    }>(req);
+    try {
+      const task = deps.store.seedDeviceWitnessWebRtcTask({
+        timeoutMs: body?.timeoutMs,
+        minExecutions: body?.minExecutions,
+        minAgreeing: body?.minAgreeing,
+      });
+      json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/public-artifact") {
     const body = await readJson<{
       artifact?: {
@@ -484,6 +632,21 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     json(res, 200, deps.store.dashboard());
     return true;
   }
+  if (req.method === "GET" && url.pathname === "/compute/admin/worker-profiles") {
+    json(res, 200, { generatedAt: Date.now(), profiles: deps.store.workerProfiles() });
+    return true;
+  }
+  if (req.method === "GET" && url.pathname === "/compute/admin/public-stats") {
+    json(res, 200, deps.store.publicStats({ suppressSmall: false }));
+    return true;
+  }
+  if (req.method === "GET" && url.pathname.startsWith("/compute/admin/replay-badges/")) {
+    const matchId = url.pathname.slice("/compute/admin/replay-badges/".length);
+    const badge = deps.store.replayBadge(matchId);
+    if (!badge) json(res, 404, { error: "replay badge not found" });
+    else json(res, 200, badge);
+    return true;
+  }
   if (req.method === "GET" && url.pathname === "/compute/admin/capability-map") {
     json(res, 200, deps.store.publicCapabilityMap());
     return true;
@@ -514,7 +677,44 @@ function publicWebRtcSession(session: WebRtcSessionRecord, config: PlasmaLabConf
       ? ["plasma-control", "plasma-data", "plasma-receipts"]
       : ["plasma-control", "plasma-receipts"],
     dataEnabled: config.webrtcDataEnabled,
+    iceServers: publicIceServers(config),
   };
+}
+
+function publicWebRtcPair(pair: WebRtcPairRecord, config: PlasmaLabConfig) {
+  return {
+    pairId: pair.pairId,
+    status: pair.status,
+    createdAt: pair.createdAt,
+    expiresAt: pair.expiresAt,
+    offererWorkerId: pair.offererWorkerId,
+    answererWorkerId: pair.answererWorkerId,
+    offer: pair.offer,
+    answer: pair.answer,
+    candidates: pair.candidates,
+    channels: config.webrtcDataEnabled
+      ? ["plasma-control", "plasma-data", "plasma-receipts"]
+      : ["plasma-control", "plasma-receipts"],
+    dataEnabled: config.webrtcDataEnabled,
+    iceServers: publicIceServers(config),
+  };
+}
+
+function publicIceServers(config: PlasmaLabConfig): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  const stun = config.stunUrls.filter((url) => /^stuns?:/i.test(url)).slice(0, 4);
+  if (stun.length) out.push({ urls: stun });
+  const turn = config.webrtcTurnEnabled
+    ? config.turnUrls.filter((url) => /^turns?:/i.test(url)).slice(0, 4)
+    : [];
+  if (turn.length && config.turnUsername && config.turnCredential) {
+    out.push({
+      urls: turn,
+      username: config.turnUsername,
+      credential: config.turnCredential,
+    });
+  }
+  return out;
 }
 
 function authFrom<T extends Record<string, unknown>>(
@@ -587,6 +787,19 @@ td,th{border-bottom:1px solid #252b3a;padding:7px;text-align:left;vertical-align
     </div>
   </div>
   <div class="card">
+    <div>device witness receipts</div>
+    <div class="muted">assignment-bound WebGPU/render/WebRTC probes</div>
+    <div class="row">
+      <input id="witnessSeed" value="1" aria-label="webgpu seed">
+      <input id="witnessCount" value="256" aria-label="webgpu count">
+    </div>
+    <div class="row">
+      <button id="seedWitnessWebgpu">seed WebGPU</button>
+      <button id="seedWitnessRender">seed render</button>
+      <button id="seedWitnessWebrtc">seed WebRTC</button>
+    </div>
+  </div>
+  <div class="card">
     <div>seed sweep</div>
     <div class="row">
       <input id="sweepStage" value="boardroom" aria-label="stage id">
@@ -616,6 +829,11 @@ td,th{border-bottom:1px solid #252b3a;padding:7px;text-align:left;vertical-align
   </div>
 </div>
 <h2>use cases</h2><div id="useCases"></div>
+<h2>public-safe stats</h2><div id="publicStats"></div>
+<h2>worker profiles</h2><div id="workerProfiles"></div>
+<h2>device classes</h2><div id="deviceClasses"></div>
+<h2>network classes</h2><div id="networkClasses"></div>
+<h2>replay badges</h2><div id="replayBadges"></div>
 <h2>current capability map</h2><div id="capabilityMap"></div>
 <h2>observed capability map</h2><div id="capabilityObservationMap"></div>
 <h2>connectivity map</h2><div id="connectivityMap"></div>
@@ -635,6 +853,12 @@ document.getElementById("seedPrime").onclick = () => adminPost("/compute/admin/t
   endExclusive: asNum("primeEnd"),
   chunkSize: asNum("primeChunk"),
 });
+document.getElementById("seedWitnessWebgpu").onclick = () => adminPost("/compute/admin/tasks/device-witness-webgpu", {
+  seed: asNum("witnessSeed"),
+  count: asNum("witnessCount"),
+});
+document.getElementById("seedWitnessRender").onclick = () => adminPost("/compute/admin/tasks/device-witness-render", {});
+document.getElementById("seedWitnessWebrtc").onclick = () => adminPost("/compute/admin/tasks/device-witness-webrtc", {});
 document.getElementById("seedSweep").onclick = () => adminPost("/compute/admin/tasks/seed-sweep", {
   stageId: val("sweepStage"),
   brainA: val("sweepA"),
@@ -692,9 +916,14 @@ async function adminPost(path, body) {
   }
 }
 function render(data, useCases) {
-  document.getElementById("summary").innerHTML = ["workers","activeSessions","tasks","assignments","receipts","validations","capabilityObservations","connectivityObservations","webrtcSessions"]
+  document.getElementById("summary").innerHTML = ["workers","activeSessions","tasks","assignments","receipts","validations","capabilityObservations","connectivityObservations","webrtcSessions","webrtcPairs"]
     .map((k) => '<div class="card"><div>'+k+'</div><div class="n">'+(data[k] ?? 0)+'</div></div>').join("");
   document.getElementById("useCases").innerHTML = table(["id","status","workload","inputBoundary","validation"], useCases);
+  document.getElementById("publicStats").innerHTML = table(["generatedAt","privacy","totalWorkers","activeWorkers","totalReceipts","acceptedReceiptPct","webgpuSupportedPct","webgpuCorrectnessPct","renderFixturePct","webrtcDirectSuccessPct","turnRequiredPct","medianKernelMs","p95KernelMs"], [data.publicStats || {}]);
+  document.getElementById("workerProfiles").innerHTML = table(["workerId","browserFamily","deviceClass","adapterClass","webgpuAvailable","webgpuCorrectnessScore","renderFixtureScore","webrtcDirectSuccessRate","turnRequiredRate","p95KernelMs","allowedWorkloadTier","acceptedReceipts","rejectedReceipts"], data.workerProfiles || []);
+  document.getElementById("deviceClasses").innerHTML = table(["classId","workers","activeWorkers","webgpuCorrectnessScore","renderFixtureScore","webrtcDirectSuccessRate","turnRequiredRate","p95KernelMs"], data.deviceClassProfiles || []);
+  document.getElementById("networkClasses").innerHTML = table(["classId","workers","activeWorkers","webrtcDirectSuccessRate","turnRequiredRate","p95KernelMs"], data.networkClassProfiles || []);
+  document.getElementById("replayBadges").innerHTML = table(["matchId","status","agreedReceipts","requiredReceipts","rulesHash","stageHash","verifiedAt"], data.replayBadges || []);
   document.getElementById("capabilityMap").innerHTML = table(["dimension","bucket","count"], flattenMap(data.capabilityMap || {}));
   document.getElementById("capabilityObservationMap").innerHTML = table(["dimension","bucket","count"], flattenMap(data.capabilityObservationMap || {}));
   document.getElementById("connectivityMap").innerHTML = table(["dimension","bucket","count"], flattenMap(data.connectivityMap || {}));

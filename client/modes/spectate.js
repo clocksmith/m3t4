@@ -15,12 +15,21 @@ import { STAGES } from "../lib/public-sim.js";
 import { setupCanvas, drawFrame, W, H } from "../lib/render.js";
 import { getComputeClient } from "../lib/compute.js";
 import { auth } from "../lib/auth.js";
+import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
 
 const SIM_HZ = 120;                // canonical sim rate
 const JITTER_BUFFER_FRAMES = 24;   // ~8 chunks at STRIDE=3 -> ~200ms
 const LIVE_BUFFER_FRAMES = 36;     // target after trimming -> ~300ms
 const MAX_BUFFER_FRAMES = 90;      // hard cap -> ~750ms
 const TELEPORT_PX = 200;           // position jump above this snaps instead of lerps
+const COUNTDOWN_PORTRAITS = [
+  { url: "assets/chars/sama/monastic_infra/portraits/large.png", accentVar: "--arena-p1", fallback: "#6ee7b7" },
+  { url: "assets/chars/darrius/legal_department_midnight/portraits/large.png", accentVar: "--arena-p2", fallback: "#fb923c" },
+];
+const SIDE_BINDINGS = [
+  bindingInfo("sama", "capacity_mystic", "worldcoin_orb_flail"),
+  bindingInfo("darrius", "policy_undertaker", "rolled_constitution_bat"),
+];
 
 let ws = null;
 let renderState = {
@@ -45,6 +54,12 @@ let rafId = 0;
 let statusCb = () => {};
 let computeClient = null;
 let reconnectTimer = null;
+const countdownPortraitState = COUNTDOWN_PORTRAITS.map((kit) => ({
+  kit,
+  image: null,
+  loaded: false,
+  failed: false,
+}));
 
 // Playback state — reset on every matchStart.
 let frameBuf = [];
@@ -87,16 +102,18 @@ export function mount(root, { setStatus }) {
         <h1>Live <small>— whatever match is happening right now</small></h1>
         <div id="match-hud" class="tight">—</div>
       </div>
-      <section class="panel live-quickstart">
-        <div class="live-scoring-strip">
-          <span>Kill</span>
-          <span>Proof Core</span>
-          <span>Demand Node</span>
-          <span>Delivery</span>
+      <section class="context-card live-briefing-card">
+        <div class="live-briefing-sides">
+          ${liveBriefingSideHtml(0)}
+          <div class="live-briefing-vs">VS</div>
+          ${liveBriefingSideHtml(1)}
         </div>
-        <a class="buttonish ${auth.user() ? "intro-cta-purple" : "primary"}" href="${auth.user() ? "#profile" : "#build"}">
-          ${auth.user() ? "edit roster" : "build a bot"}
-        </a>
+        <div class="live-briefing-footer">
+          <span>Kill mints proof. Carry it to the lit Demand Node. Delivery scores.</span>
+          <a class="buttonish ${auth.user() ? "intro-cta-purple" : "primary"}" href="${auth.user() ? "#profile" : "#build"}">
+            ${auth.user() ? "edit roster" : "tune bot"}
+          </a>
+        </div>
       </section>
       <div class="spectate-grid">
         <aside class="panel lb spectate-side">
@@ -116,6 +133,7 @@ export function mount(root, { setStatus }) {
             <div class="stat-row"><dt>next match</dt><dd id="stat-countdown">—</dd></div>
             <div class="stat-row"><dt>buffer</dt><dd id="stat-buf">—</dd></div>
             <div class="stat-row"><dt>last result</dt><dd id="stat-result">—</dd></div>
+            <div class="stat-row"><dt>receipt</dt><dd id="stat-verify">—</dd></div>
           </dl>
         </aside>
       </div>
@@ -210,6 +228,7 @@ function onEvent(m) {
       setStat("stat-stage", next.stageId ?? "datacenter");
       setStat("stat-result", "queued");
       renderState.stage = STAGES[next.stageId] ?? STAGES.datacenter;
+      updateLiveBriefing(next);
     }
     return;
   }
@@ -236,6 +255,8 @@ function onEvent(m) {
     setStat("stat-p2", `@${mt.b?.handle ?? "p2"} · ${mt.b?.elo ?? "?"}`);
     setStat("stat-stage", mt.stageId ?? "datacenter");
     setStat("stat-result", "in progress");
+    setStat("stat-verify", "pending");
+    updateLiveBriefing(mt);
     resetPlayback();
   } else if (m.type === "frames") {
     if (!Array.isArray(m.frames)) return;
@@ -263,6 +284,82 @@ function onEvent(m) {
       resEl.textContent = m.winner === -1 ? "draw" : m.winner === 0 ? `@${a} won` : `@${b} won`;
       resEl.className = m.winner === 0 ? "p1-accent" : m.winner === 1 ? "p2-accent" : "";
     }
+    if (m.matchId) void updateReplayBadge(m.matchId);
+  }
+}
+
+async function updateReplayBadge(matchId) {
+  const el = document.getElementById("stat-verify");
+  if (!el) return;
+  const origin = String(window.__M3T4_COMPUTE_LAB_ORIGIN__ || "").replace(/\/+$/, "");
+  if (!origin || window.__M3T4_FEATURES__?.computeLiveBadges !== true) {
+    el.textContent = "archived";
+    el.className = "";
+    return;
+  }
+  el.textContent = "checking";
+  el.className = "";
+  for (const waitMs of [0, 5000, 15000, 30000]) {
+    if (waitMs) await new Promise((resolve) => setTimeout(resolve, waitMs));
+    if (!running) return;
+    try {
+      const res = await fetch(`${origin}/compute/public/replay-badges/${encodeURIComponent(matchId)}`, { cache: "no-store" });
+      if (!res.ok) continue;
+      const badge = await res.json();
+      el.textContent = `verified ${badge.agreedReceipts}/${badge.requiredReceipts}`;
+      el.className = "ok";
+      el.title = [badge.rulesHash ? `rules ${badge.rulesHash}` : "", badge.stageHash ? `stage ${badge.stageHash}` : ""]
+        .filter(Boolean)
+        .join(" · ");
+      return;
+    } catch {
+      // Volunteer verification is advisory; Live should never wait on it.
+    }
+  }
+  el.textContent = "queued";
+  el.className = "";
+}
+
+function bindingInfo(characterKey, characterVariant, weaponKey) {
+  const character = gameCopy.characters?.[characterKey]?.[characterVariant] ?? {};
+  const weapon = gameCopy.weapons?.[characterKey]?.[weaponKey] ?? {};
+  return {
+    characterName: character.name ?? characterKey,
+    characterLabel: character.label ?? characterVariant,
+    weaponName: weapon.name ?? weaponKey,
+    weaponDescription: weapon.silhouette ?? "",
+  };
+}
+
+function liveBriefingSideHtml(side) {
+  const binding = SIDE_BINDINGS[side];
+  const label = side === 0 ? "P1" : "P2";
+  return `
+    <article class="live-briefing-side is-p${side + 1}">
+      <div class="live-briefing-head">
+        <span>${label}</span>
+        <strong id="brief-p${side + 1}-handle">@${side === 0 ? "p1" : "p2"}</strong>
+      </div>
+      <div class="live-briefing-seat tight" id="brief-p${side + 1}-seat">waiting for assignment</div>
+      <div class="live-briefing-binding">binding · ${escapeHtml(binding.characterName)} / ${escapeHtml(binding.characterLabel)}</div>
+      <div class="live-briefing-weapon">weapon · ${escapeHtml(binding.weaponName)}</div>
+      <p>${escapeHtml(binding.weaponDescription)}</p>
+    </article>`;
+}
+
+function updateLiveBriefing(match) {
+  updateBriefingSide(0, match?.a);
+  updateBriefingSide(1, match?.b);
+}
+
+function updateBriefingSide(side, data) {
+  const handleEl = document.getElementById(`brief-p${side + 1}-handle`);
+  const seatEl = document.getElementById(`brief-p${side + 1}-seat`);
+  if (handleEl) handleEl.textContent = `@${data?.handle ?? (side === 0 ? "p1" : "p2")}`;
+  if (seatEl) {
+    const name = data?.name ?? "slot";
+    const elo = data?.elo ?? "?";
+    seatEl.textContent = `${name} · ${elo} ELO`;
   }
 }
 
@@ -371,39 +468,156 @@ function loop() {
   } else if (matchActive) {
     drawSignalScreen("SIGNAL DEGRADED", "Holding the last verified frame.");
   } else {
-    // Between matches: idle bg + countdown.
-    ctx.fillStyle = cssColor("--arena-idle-bg", "black"); ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = cssColor("--arena-idle-text", "gray");
-    ctx.textAlign = "center";
-    const secs = waitSecondsLeft();
-    if (secs !== null) {
-      ctx.font = "600 22px -apple-system, system-ui";
-      ctx.fillText(waitState.reason === "no-pair" && !waitState.nextMatch ? "no eligible pair — retry in" : "next match in", W / 2, H / 2 - 68);
-      if (waitState.nextMatch) {
-        const next = waitState.nextMatch;
-        const a = next.a?.handle ?? "p1";
-        const b = next.b?.handle ?? "p2";
-        const delta = typeof next.eloDelta === "number" ? ` · Δ${Math.round(next.eloDelta)}` : "";
-        ctx.fillStyle = cssColor("--ui-text", "#f4f4ff");
-        ctx.font = "700 26px -apple-system, system-ui";
-        ctx.fillText(`@${a} vs @${b}${delta}`, W / 2, H / 2 - 36);
-        if (next.stageId) {
-          ctx.fillStyle = cssColor("--ui-purple", "#a855f7");
-          ctx.font = "600 16px ui-monospace, Menlo, monospace";
-          ctx.fillText(`STAGE · ${next.stageId.toUpperCase()}`, W / 2, H / 2 - 10);
-        }
-      }
-      ctx.fillStyle = cssColor("--ui-blue", "#3b82f6");
-      ctx.font = "700 56px ui-monospace, Menlo, monospace";
-      ctx.fillText(`${secs}s`, W / 2, H / 2 + 48);
-    } else {
-      ctx.font = "600 22px -apple-system, system-ui";
-      ctx.fillText("waiting for next match…", W / 2, H / 2);
-    }
+    drawWaitingScreen();
   }
   computeClient?.recordFrame(performance.now() - frameStart);
   updateWaitStat();
   rafId = requestAnimationFrame(loop);
+}
+
+function drawWaitingScreen() {
+  const secs = waitSecondsLeft();
+  ctx.fillStyle = cssColor("--arena-idle-bg", "#08080e");
+  ctx.fillRect(0, 0, W, H);
+  drawCountdownBackdrop();
+
+  if (secs === null) {
+    ctx.textAlign = "center";
+    ctx.fillStyle = cssColor("--arena-idle-text", "#667");
+    ctx.font = "600 22px -apple-system, system-ui";
+    ctx.fillText("waiting for next match…", W / 2, H / 2);
+    return;
+  }
+
+  const hasPair = !!waitState?.nextMatch;
+  if (hasPair) {
+    drawCountdownPortrait(0, 168, 170, 245, 368, waitState.nextMatch.a);
+    drawCountdownPortrait(1, W - 413, 170, 245, 368, waitState.nextMatch.b);
+  }
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = cssColor("--arena-idle-text", "#667");
+  ctx.font = "700 16px ui-monospace, Menlo, monospace";
+  ctx.fillText(hasPair ? "NEXT EXECUTION WINDOW" : "NO ELIGIBLE PAIR", W / 2, 204);
+
+  if (hasPair) {
+    const next = waitState.nextMatch;
+    const delta = typeof next.eloDelta === "number" ? `DELTA ${Math.round(next.eloDelta)}` : "DELTA ?";
+    ctx.fillStyle = cssColor("--ui-purple-bright", "#c084fc");
+    ctx.font = "900 54px -apple-system, system-ui";
+    ctx.fillText("VS", W / 2, 318);
+    ctx.fillStyle = cssColor("--ui-text", "#f4f4ff");
+    drawCenteredFit(`@${next.a?.handle ?? "p1"} / @${next.b?.handle ?? "p2"}`, W / 2, 370, 390, 700, 24);
+    ctx.fillStyle = cssColor("--arena-idle-text", "#99a");
+    ctx.font = "700 14px ui-monospace, Menlo, monospace";
+    ctx.fillText(`${next.stageId ?? "datacenter"} · ${delta}`, W / 2, 398);
+  } else {
+    ctx.fillStyle = cssColor("--ui-text", "#f4f4ff");
+    ctx.font = "800 29px -apple-system, system-ui";
+    ctx.fillText("candidate pool refused reconciliation", W / 2, 328);
+  }
+
+  const pulse = 1 + Math.sin(performance.now() / 180) * 0.035;
+  ctx.save();
+  ctx.translate(W / 2, 500);
+  ctx.scale(pulse, pulse);
+  ctx.fillStyle = cssColor("--ui-blue", "#3b82f6");
+  ctx.font = "900 72px ui-monospace, Menlo, monospace";
+  ctx.textAlign = "center";
+  ctx.fillText(`${secs}s`, 0, 0);
+  ctx.restore();
+
+  ctx.fillStyle = cssColor("--arena-idle-text", "#889");
+  ctx.font = "600 15px -apple-system, system-ui";
+  ctx.fillText(hasPair ? "server has selected the next bodies" : `${waitState?.reason ?? "waiting"} — retry pending`, W / 2, 536);
+}
+
+function drawCountdownBackdrop() {
+  const g = ctx.createRadialGradient(W / 2, H / 2, 70, W / 2, H / 2, 620);
+  g.addColorStop(0, "rgba(168,85,247,0.18)");
+  g.addColorStop(0.45, "rgba(59,130,246,0.08)");
+  g.addColorStop(1, "rgba(8,8,14,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = "rgba(192,132,252,0.18)";
+  ctx.lineWidth = 2;
+  for (let x = -W; x < W * 2; x += 96) {
+    ctx.beginPath();
+    ctx.moveTo(x, H);
+    ctx.lineTo(x + 420, 0);
+    ctx.stroke();
+  }
+}
+
+function drawCountdownPortrait(side, x, y, w, h, meta) {
+  const state = countdownPortraitState[side];
+  const accent = cssColor(state.kit.accentVar, state.kit.fallback);
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.52)";
+  ctx.fillRect(x - 14, y - 14, w + 28, h + 28);
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 3;
+  ctx.strokeRect(x - 14, y - 14, w + 28, h + 28);
+
+  const img = loadCountdownImage(state);
+  if (img) {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, x, y, w, h);
+  } else {
+    ctx.globalAlpha = 0.16;
+    ctx.fillStyle = accent;
+    ctx.fillRect(x, y, w, h);
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.fillStyle = "rgba(0,0,0,0.72)";
+  ctx.fillRect(x - 14, y + h - 54, w + 28, 68);
+  ctx.fillStyle = accent;
+  ctx.font = "800 15px ui-monospace, Menlo, monospace";
+  ctx.textAlign = "left";
+  ctx.fillText(side === 0 ? "P1" : "P2", x, y + h - 28);
+  ctx.fillStyle = cssColor("--ui-text", "#f4f4ff");
+  drawLeftFit(`@${meta?.handle ?? (side === 0 ? "p1" : "p2")}`, x + 36, y + h - 28, w - 42, 800, 17);
+  ctx.fillStyle = cssColor("--arena-idle-text", "#99a");
+  drawLeftFit(`${meta?.name ?? "slot"} · ${meta?.elo ?? "?"}`, x, y + h - 8, w, 700, 13);
+  ctx.restore();
+}
+
+function loadCountdownImage(state) {
+  if (state.failed) return null;
+  if (state.loaded) return state.image;
+  if (!state.image && typeof Image !== "undefined") {
+    const img = new Image();
+    img.onload = () => { state.loaded = true; };
+    img.onerror = () => { state.failed = true; };
+    img.src = state.kit.url;
+    state.image = img;
+  }
+  return state.loaded ? state.image : null;
+}
+
+function drawCenteredFit(text, x, y, maxWidth, weight, maxPx) {
+  const size = fitTextSize(text, maxWidth, weight, maxPx);
+  ctx.font = `${weight} ${size}px -apple-system, system-ui`;
+  ctx.textAlign = "center";
+  ctx.fillText(text, x, y);
+}
+
+function drawLeftFit(text, x, y, maxWidth, weight, maxPx) {
+  const size = fitTextSize(text, maxWidth, weight, maxPx);
+  ctx.font = `${weight} ${size}px -apple-system, system-ui`;
+  ctx.textAlign = "left";
+  ctx.fillText(text, x, y);
+}
+
+function fitTextSize(text, maxWidth, weight, maxPx) {
+  let size = maxPx;
+  while (size > 10) {
+    ctx.font = `${weight} ${size}px -apple-system, system-ui`;
+    if (ctx.measureText(text).width <= maxWidth) return size;
+    size -= 1;
+  }
+  return size;
 }
 
 // Procedural 2D noise scramble. Lo-res offscreen buffer painted with

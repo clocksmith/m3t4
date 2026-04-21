@@ -5,10 +5,10 @@
 export const STRATEGY_NAMES = [
     "standby",
     "blitz",
-    "incumbent",
+    "intern",
     "pivot",
     "unicorn",
-    "intern",
+    "incumbent",
     "operator",
     "oracle",
     "shipper",
@@ -40,8 +40,8 @@ export const STRATEGIES = {
         },
     },
     // evolved id=r2 spent=344 counters=2 internalWr=63.2% vsOldMeta=66.7%
-    incumbent: {
-        id: "incumbent",
+    intern: {
+        id: "intern",
         attributes: {
             burnRate: 0.42, moat: 123, shipRate: 0, foresight: 0.0125,
             pivotSpeed: 0.56, leverage: -1, networking: 1, hallucination: 0,
@@ -67,8 +67,8 @@ export const STRATEGIES = {
         },
     },
     // evolved id=r5 spent=360 counters=4 internalWr=52.0% vsOldMeta=65.8%
-    intern: {
-        id: "intern",
+    incumbent: {
+        id: "incumbent",
         attributes: {
             burnRate: 0.4402, moat: 0, shipRate: 0.8707, foresight: 0,
             pivotSpeed: 0.0293, leverage: -1, networking: 0.0293, hallucination: 0,

@@ -21,7 +21,18 @@ export function registerReplayVerifyRoutes(routes: RouteList, deps: ReplayRouteD
       return true;
     }
 
+    if (req.method === "GET" && url.pathname.startsWith("/api/replays/public-artifact/")) {
+      const matchId = url.pathname.slice("/api/replays/public-artifact/".length);
+      if (!matchId) {
+        json(res, 400, { error: "matchId required" });
+        return true;
+      }
+      const artifact = await deps.store.getPublicReplayArtifact(matchId);
+      if (!artifact) json(res, 404, { error: "public replay artifact not found" });
+      else json(res, 200, artifact);
+      return true;
+    }
+
     return false;
   });
 }
-

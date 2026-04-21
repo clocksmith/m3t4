@@ -48,10 +48,6 @@ export function mount(root, { setStatus }) {
         <a class="buttonish primary" href="#spectate">watch live</a>
       </div>
 
-      <section class="rules-summary">
-        ${escapeHtml(rules.summary ?? "")}
-      </section>
-
       ${aboutCardHtml(rules.about)}
 
       <div class="rules-section-label">Rules</div>

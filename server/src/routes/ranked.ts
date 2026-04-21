@@ -15,6 +15,8 @@ export interface RankedRouteDeps {
     authMode?: string;
     authProviders: readonly string[];
     cycleMs: number;
+    computeLabOrigin?: string;
+    computeStunUrls?: readonly string[];
     maxSlots: number;
     serverRole?: string;
     storeBackend?: string;
@@ -31,6 +33,8 @@ export function registerRankedRoutes(routes: RouteList, deps: RankedRouteDeps): 
       json(res, 200, {
         ok: true,
         cycleMs: config.cycleMs,
+        computeLabOrigin: config.computeLabOrigin,
+        computeStunUrls: config.computeStunUrls ?? [],
         maxSlots: config.maxSlots,
         authMode: config.authMode,
         authProviders: config.authProviders,
@@ -70,7 +74,12 @@ export function registerRankedRoutes(routes: RouteList, deps: RankedRouteDeps): 
         const auth = await verifyAuth(req.headers.authorization);
         const st = await store.getStable(auth.uid);
         if (!st) json(res, 404, { error: "not found" });
-        else json(res, 200, st);
+        else json(res, 200, {
+          ...stablePublic(st),
+          slots: st.slots,
+          createdAt: st.createdAt,
+          updatedAt: st.updatedAt,
+        });
       } catch (e) {
         json(res, 400, { error: (e as Error).message });
       }

@@ -40,7 +40,10 @@ class DevAuth {
   }
 
   setHandle(h) {
-    localStorage.setItem(KEY_HANDLE, h);
+    const next = h ? String(h) : "";
+    if ((localStorage.getItem(KEY_HANDLE) || "") === next) return;
+    if (next) localStorage.setItem(KEY_HANDLE, next);
+    else localStorage.removeItem(KEY_HANDLE);
     this._emit();
   }
 
@@ -130,7 +133,10 @@ class FirebaseAuth {
   }
 
   setHandle(h) {
-    localStorage.setItem(KEY_HANDLE, h);
+    const next = h ? String(h) : "";
+    if ((localStorage.getItem(KEY_HANDLE) || "") === next) return;
+    if (next) localStorage.setItem(KEY_HANDLE, next);
+    else localStorage.removeItem(KEY_HANDLE);
     this._emit();
   }
 

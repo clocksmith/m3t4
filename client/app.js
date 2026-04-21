@@ -18,13 +18,14 @@ const FEATURES = {
   proofLab: false,
   zk: false,
   distributedCompute: false,
+  computeSlackWorker: false,
 };
 window.__M3T4_FEATURES__ = FEATURES;
 
 // Practice was absorbed into build (live test stage + human P1/P2
 // toggles). Legacy #practice hash redirects to #build.
-const MODES = { intro, build, spectate, profile, rules };
-const LEGACY_HASH = { practice: "build", lore: "intro" };
+const MODES = { intro, build, spectate, profile, rules, about: rules };
+const LEGACY_HASH = { practice: "build", lore: "intro", rules: "about" };
 const OPTIONAL_MODE_LOADERS = {
   duel: () => import("./modes/duel.js"),
 };
@@ -91,6 +92,19 @@ async function loadFeatures() {
   try {
     const s = await getStatus();
     Object.assign(FEATURES, s.features ?? {});
+    if (s.computeLabOrigin && !window.__M3T4_COMPUTE_LAB_ORIGIN__) {
+      window.__M3T4_COMPUTE_LAB_ORIGIN__ = s.computeLabOrigin;
+    }
+    if (
+      Array.isArray(s.computeStunUrls) &&
+      s.computeStunUrls.length > 0 &&
+      (!Array.isArray(window.__M3T4_COMPUTE_STUN_URLS__) || window.__M3T4_COMPUTE_STUN_URLS__.length === 0)
+    ) {
+      window.__M3T4_COMPUTE_STUN_URLS__ = s.computeStunUrls;
+    }
+    if (FEATURES.computeSlackWorker === true) {
+      window.__M3T4_COMPUTE_SLACK_WORKER__ = true;
+    }
   } catch {
     // Static/local client without a reachable API keeps optional surfaces hidden.
   }

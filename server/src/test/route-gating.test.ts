@@ -19,15 +19,23 @@ import { registerRankedRoutes } from "../routes/ranked.js";
 import { registerReplayVerifyRoutes } from "../routes/replay.js";
 import type { RouteList } from "../routes/types.js";
 import { VerifyStore } from "../verify-store.js";
+import { publicReplayArtifactFromReplay, type PublicReplayArtifactV1 } from "../public-artifacts.js";
 
 class MemoryStableStore {
   private replays = new Map<string, ReplayArtifactV1>();
+  private publicArtifacts = new Map<string, PublicReplayArtifactV1>();
   private stables = new Map<string, any>();
   submitted: Array<{ userId: string; slotIdx: number; config: BrainConfig; name?: string }> = [];
   setStable(userId: string, stable: any): void { this.stables.set(userId, stable); }
-  async archiveReplay(a: ReplayArtifactV1): Promise<void> { this.replays.set(a.match.matchId, a); }
+  async archiveReplay(a: ReplayArtifactV1): Promise<void> {
+    this.replays.set(a.match.matchId, a);
+    this.publicArtifacts.set(a.match.matchId, publicReplayArtifactFromReplay(a));
+  }
   async getReplay(matchId: string): Promise<ReplayArtifactV1 | null> {
     return this.replays.get(matchId) ?? null;
+  }
+  async getPublicReplayArtifact(matchId: string): Promise<PublicReplayArtifactV1 | null> {
+    return this.publicArtifacts.get(matchId) ?? null;
   }
   async getStable(userId: string): Promise<any> { return this.stables.get(userId) ?? null; }
   async listActive(): Promise<any[]> { return []; }
@@ -257,6 +265,9 @@ test("public stable strips configs but owner stable returns private configs", as
     authorization: "Bearer alice",
   });
   assert.equal(own.status, 200);
+  assert.equal(own.body.eloAggregate, 1000);
+  assert.equal(own.body.wins, 0);
+  assert.equal(own.body.losses, 0);
   assert.deepEqual(own.body.slots[0].config, cfg);
 });
 

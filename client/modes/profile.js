@@ -41,13 +41,13 @@ function rosterIntroPanelHtml() {
   return `
     <section class="panel roster-intro-panel">
       <div class="funnel-strip roster-funnel" aria-label="ranked flow">
-        <span class="is-blue">Build</span>
-        <span class="is-purple">Install</span>
+        <span class="is-blue">Tune</span>
+        <span class="is-purple">Test</span>
         <span class="is-red">Live</span>
       </div>
       <div class="roster-intro-copy">
-        <strong>${pending ? "Build ready to install." : "Ranked starts here."}</strong>
-        <span>Install up to five seats. The server schedules matches. Live streams the current fight.</span>
+        <strong>${pending ? "Bot ready for the live roster." : "Your live roster holds five bots."}</strong>
+        <span>Tune one, test it, then send it into a seat. The server schedules matches. Live streams the current fight.</span>
       </div>
     </section>`;
 }
@@ -229,7 +229,7 @@ function wireSubmit(user) {
     msg.className = "tight";
     msg.textContent = "";
     try {
-      if (!user.handle) throw new Error("claim a handle first");
+      if (!(rosterCache?.handle ?? user.handle)) throw new Error("claim a handle first");
       const nameInput = root.querySelector("#slot-name").value.trim();
       const text = root.querySelector("#config-json").value;
       const cfg = normalizeProfileConfig(parseConfigJson(text));
@@ -301,7 +301,7 @@ function sanitizeConfigPaste(text) {
 function parseConfigJson(text) {
   const trimmed = sanitizeConfigPaste(text).trim();
   if (!trimmed) {
-    throw new Error("config JSON is empty — use Build -> save for ranked, or paste a complete JSON object");
+    throw new Error("config JSON is empty — use Tune -> send to live roster, or paste a complete JSON object");
   }
   if (trimmed.includes("...")) {
     throw new Error("config JSON still contains a placeholder (...); paste the complete object");
@@ -357,9 +357,14 @@ async function loadStable(user) {
       throw e;
     });
     rosterCache = s;
+    if (s?.handle && user.handle !== s.handle) {
+      auth.setHandle(s.handle);
+      return;
+    }
     if (subtitle) {
+      const summary = stableSummary(s);
       subtitle.textContent = s
-        ? `@${s.handle} · aggregate ELO ${s.eloAggregate} · ${s.wins}w ${s.losses}l`
+        ? `@${s.handle} · aggregate ELO ${summary.eloAggregate} · ${summary.wins}w ${summary.losses}l`
         : "vacant boardroom";
     }
     renderRosterGrid(grid, s);
@@ -401,6 +406,24 @@ function renderRosterGrid(grid, stable) {
       updateEditor();
     });
   });
+}
+
+function stableSummary(stable) {
+  if (!stable) return { eloAggregate: 1000, wins: 0, losses: 0 };
+  const slots = Array.from({ length: ROSTER_SIZE }, (_, i) => stable.slots?.[i] ?? null)
+    .filter((slot) => slot && slot.slotId);
+  const wins = Number.isFinite(stable.wins)
+    ? stable.wins
+    : slots.reduce((sum, slot) => sum + Number(slot.wins ?? 0), 0);
+  const losses = Number.isFinite(stable.losses)
+    ? stable.losses
+    : slots.reduce((sum, slot) => sum + Number(slot.losses ?? 0), 0);
+  const eloAggregate = Number.isFinite(stable.eloAggregate)
+    ? stable.eloAggregate
+    : slots.length
+      ? Math.round(slots.reduce((sum, slot) => sum + Number(slot.elo ?? 1000), 0) / slots.length)
+      : 1000;
+  return { eloAggregate, wins, losses };
 }
 
 function updateEditor() {

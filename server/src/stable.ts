@@ -9,6 +9,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { compileBrain, STRATEGIES, type BrainConfig, type ReplayArtifactV1 } from "@m3t4/sim";
 import { CONFIG } from "./config.js";
+import { publicReplayArtifactFromReplay, type PublicReplayArtifactV1 } from "./public-artifacts.js";
 
 // System user — owner of phantom seed bots (the 16 named strategies).
 // Ensures the firehose has opponents before real users sign up, and
@@ -92,6 +93,7 @@ export interface StableStore {
   updateAfterMatch(res: MatchUpdate): Promise<void>;
   archiveReplay(artifact: ReplayArtifactV1): Promise<void>;
   getReplay(matchId: string): Promise<ReplayArtifactV1 | null>;
+  getPublicReplayArtifact(matchId: string): Promise<PublicReplayArtifactV1 | null>;
   applyDecay(): Promise<number>; // returns number of slots decayed
   handleTaken(handle: string, excludeUid?: string): Promise<boolean>;
 }
@@ -115,6 +117,7 @@ interface StoreData {
   stables: Record<string, Stable>; // keyed by userId
   handles: Record<string, string>; // handle → userId
   replays: Record<string, ReplayArtifactV1>; // PRIVATE — includes configs
+  publicReplayArtifacts: Record<string, PublicReplayArtifactV1>; // PUBLIC — no configs
   version: number;
 }
 
@@ -136,11 +139,12 @@ export class FileStableStore implements StableStore {
     if (fs.existsSync(storePath)) {
       this.data = JSON.parse(fs.readFileSync(storePath, "utf8"));
       this.data.replays ??= {};
+      this.data.publicReplayArtifacts ??= {};
     } else if (this.readOnly) {
       throw new Error(`readOnly FileStableStore requires existing file: ${storePath}`);
     } else {
       fs.mkdirSync(path.dirname(storePath), { recursive: true });
-      this.data = { stables: {}, handles: {}, replays: {}, version: 1 };
+      this.data = { stables: {}, handles: {}, replays: {}, publicReplayArtifacts: {}, version: 1 };
     }
     if (!this.readOnly) {
       this.seedSystemPhantoms();
@@ -296,12 +300,22 @@ export class FileStableStore implements StableStore {
 
   async archiveReplay(artifact: ReplayArtifactV1): Promise<void> {
     this.data.replays[artifact.match.matchId] = artifact;
+    try {
+      this.data.publicReplayArtifacts[artifact.match.matchId] = publicReplayArtifactFromReplay(artifact);
+    } catch (e) {
+      console.error("[public-artifacts] export failed:", e instanceof Error ? e.message : String(e));
+    }
     this.trimReplayArchive();
     this.flush();
   }
 
   async getReplay(matchId: string): Promise<ReplayArtifactV1 | null> {
     return this.data.replays[matchId] ?? null;
+  }
+
+  async getPublicReplayArtifact(matchId: string): Promise<PublicReplayArtifactV1 | null> {
+    return this.data.publicReplayArtifacts[matchId]
+      ?? (this.data.replays[matchId] ? publicReplayArtifactFromReplay(this.data.replays[matchId]) : null);
   }
 
   async applyDecay(): Promise<number> {
@@ -324,6 +338,9 @@ export class FileStableStore implements StableStore {
     entries
       .sort(([, a], [, b]) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
       .slice(limit)
-      .forEach(([matchId]) => { delete this.data.replays[matchId]; });
+      .forEach(([matchId]) => {
+        delete this.data.replays[matchId];
+        delete this.data.publicReplayArtifacts[matchId];
+      });
   }
 }

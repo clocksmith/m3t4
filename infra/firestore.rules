@@ -21,6 +21,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Public replay artifact summaries. These contain hashes and public player
+    // refs only; full replay blobs and private configs remain closed below.
+    match /publicReplayArtifacts/{matchId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Full replay artifacts may include private configs. Spectators should
     // fetch sanitized tuples from /api/spectate/tuple/:matchId instead.
     match /replays/{matchId} {
@@ -41,6 +48,48 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /proof/{doc=**} {
+      allow read, write: if false;
+    }
+
+    // plasma-lab sidecar state. Server-only; clients use plasma-lab HTTP
+    // routes and never read/write coordinator state directly.
+    match /compute_workers/{doc=**} {
+      allow read, write: if false;
+    }
+    match /compute_capabilities/{doc=**} {
+      allow read, write: if false;
+    }
+    match /compute_tasks/{doc=**} {
+      allow read, write: if false;
+    }
+    match /compute_chunks/{doc=**} {
+      allow read, write: if false;
+    }
+    match /compute_assignments/{doc=**} {
+      allow read, write: if false;
+    }
+    match /compute_receipts/{doc=**} {
+      allow read, write: if false;
+    }
+    match /compute_validations/{doc=**} {
+      allow read, write: if false;
+    }
+    match /compute_reputation/{doc=**} {
+      allow read, write: if false;
+    }
+    match /compute_artifact_exports/{doc=**} {
+      allow read, write: if false;
+    }
+    match /compute_sessions/{doc=**} {
+      allow read, write: if false;
+    }
+    match /compute_webrtc_sessions/{doc=**} {
+      allow read, write: if false;
+    }
+    match /compute_capability_observations/{doc=**} {
+      allow read, write: if false;
+    }
+    match /compute_connectivity_observations/{doc=**} {
       allow read, write: if false;
     }
   }

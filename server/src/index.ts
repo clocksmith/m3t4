@@ -1,7 +1,7 @@
 // m3t4 Arena server — Phase 1.
 //
 // - Auth-gated submit API (dev mode accepts any bearer token as UID)
-// - 3-5 slot stables with 24h per-slot rate limits
+// - 3-5 slot stables with 15m per-slot rate limits
 // - Close-ELO firehose matchmaker, continuous
 // - Server-authoritative sim, WebSocket frame streaming
 // - File-backed StableStore for local dev (swap for Firestore in prod)
@@ -59,6 +59,8 @@ if (runsApi) {
         ok: true,
         role: CONFIG.serverRole,
         cycleMs: CONFIG.cycleMs,
+        computeLabOrigin: CONFIG.computeLabOrigin,
+        computeStunUrls: CONFIG.computeStunUrls,
         storeBackend: CONFIG.storeBackend,
         wsClientSoftLimit: CONFIG.wsClientSoftLimit,
         features: CONFIG.features,

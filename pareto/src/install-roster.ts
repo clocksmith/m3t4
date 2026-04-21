@@ -15,10 +15,10 @@ const STRATEGIES_PATH = path.resolve(process.cwd(), "sim/src/strategies.ts");
 // the roster JSON — useful when remapping which evolved config gets
 // which persona label.
 const DEFAULT_NAMES = [
-  "standby", "blitz", "incumbent", "pivot",
+  "standby", "blitz", "intern", "pivot",
   "unicorn", "disruptor", "operator", "oracle",
   "shipper", "moonshot", "regulatory", "founder",
-  "acolyte", "intern", "troll", "acquirer",
+  "acolyte", "incumbent", "troll", "acquirer",
 ];
 
 interface RosterJSON {

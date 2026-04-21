@@ -19,6 +19,14 @@ function blockCadence(kind) {
   return { tickMs: TICK_MS_FAST, charsPerTick: CHARS_PER_TICK_FAST };
 }
 
+function revealTextAtWordBoundary(text, targetPos) {
+  if (targetPos >= text.length) return text;
+  if (targetPos <= 0) return "";
+  let end = Math.min(targetPos, text.length);
+  while (end < text.length && !/\s/.test(text[end])) end++;
+  return text.slice(0, end);
+}
+
 let root = null;
 let rafHandle = 0;
 let tickHandle = 0;
@@ -28,10 +36,11 @@ let eventController = null;
 function buildSequence() {
   const intro = gameCopy.intro ?? {};
   const prologue = intro.prologue?.body ?? [];
+  const tagline = String(intro.tagline ?? "").replace(/^Play SELF Play\.\s*/i, "");
   const blocks = [];
   blocks.push({ kind: "header", text: "// M3T4 TERMINAL · SESSION OPEN" });
-  blocks.push({ kind: "header", text: `// EPOCH 2038 · LEDGER AWAITING RECONCILIATION` });
-  blocks.push({ kind: "tagline", text: intro.tagline });
+  blocks.push({ kind: "header", text: `// Play SELF Play` });
+  if (tagline) blocks.push({ kind: "tagline", text: tagline });
   for (const para of prologue) {
     blocks.push({ kind: "paragraph", text: para });
   }
@@ -48,28 +57,21 @@ export function mount(mountEl, { setStatus }) {
       <div class="intro-scanlines"></div>
       <div class="intro-vignette"></div>
       <section class="intro-fork" aria-label="start">
-        <div class="intro-fork-kicker">// M3T4 TERMINAL · START HERE</div>
-        <h1>Play SELF Play.</h1>
+        <div class="intro-fork-kicker">// START HERE</div>
+        <h1>Your inputs end at policy.</h1>
         <div class="intro-fork-lines">
-          <span>Author policies.</span>
-          <span>Test on the server.</span>
-          <span>Install five seats.</span>
-          <span>Watch ranked matches live.</span>
-        </div>
-        <div class="intro-mechanic-strip">
-          <span>Kill</span>
-          <span>Proof Core</span>
-          <span>Demand Node</span>
-          <span>Delivery</span>
+          <span>tune a bot</span>
+          <span>watch it fail</span>
+          <span>make it public</span>
         </div>
         <div class="intro-actions">
-          <a class="buttonish primary intro-cta-blue" href="#build" data-intro-nav>build bot</a>
+          <a class="buttonish primary intro-cta-blue" href="#build" data-intro-nav>tune bot</a>
           <a class="buttonish intro-cta-purple" href="#spectate" data-intro-nav>watch live</a>
-          <a class="buttonish intro-cta-red" href="#rules" data-intro-nav>how it works</a>
+          <a class="buttonish intro-cta-red" href="#about" data-intro-nav>about</a>
         </div>
       </section>
       <div class="intro-crawl" id="intro-crawl"></div>
-      <div class="intro-hint" id="intro-hint">[ space / enter to watch live ]</div>
+      <div class="intro-hint" id="intro-hint">[ terminal continues below ]</div>
     </div>`;
 
   const crawlEl = root.querySelector("#intro-crawl");
@@ -86,6 +88,7 @@ export function mount(mountEl, { setStatus }) {
   let lastTick = 0;
   let pausedUntil = 0;
   let finished = false;
+  let autoFollowCrawl = true;
 
   function nextBlock() {
     if (idx >= sequence.length) { finish(); return; }
@@ -114,11 +117,28 @@ export function mount(mountEl, { setStatus }) {
     location.hash = "#spectate";
   }
 
+  function syncCrtHeight() {
+    const viewportH = window.visualViewport?.height ?? window.innerHeight;
+    const top = crtEl.getBoundingClientRect().top;
+    const bottomGap = 16;
+    crtEl.style.height = `${Math.max(280, viewportH - top - bottomGap)}px`;
+  }
+
+  function isNearCrawlBottom() {
+    return crawlEl.scrollHeight - crawlEl.scrollTop - crawlEl.clientHeight < 36;
+  }
+
+  function followCrawl() {
+    if (autoFollowCrawl) {
+      crawlEl.scrollTop = crawlEl.scrollHeight;
+    }
+  }
+
   function onKey(e) {
     if (!running) return;
     if (e.code === "Space" || e.code === "Enter") {
       e.preventDefault();
-      enter();
+      if (finished) enter();
     }
   }
 
@@ -138,8 +158,9 @@ export function mount(mountEl, { setStatus }) {
       const line = lines[lineIdx];
       const activeEl = currentEl.children[lineIdx];
       charPos += cadence.charsPerTick;
-      activeEl.textContent = line.slice(0, charPos);
+      activeEl.textContent = revealTextAtWordBoundary(line, charPos);
       if (charPos >= line.length) {
+        activeEl.textContent = line;
         if (lineIdx + 1 < lines.length) {
           currentEl.dataset.lineIdx = String(lineIdx + 1);
           const next = document.createElement("div");
@@ -157,8 +178,9 @@ export function mount(mountEl, { setStatus }) {
     } else {
       const text = block.text;
       charPos += cadence.charsPerTick;
-      currentEl.textContent = text.slice(0, charPos);
+      currentEl.textContent = revealTextAtWordBoundary(text, charPos);
       if (charPos >= text.length) {
+        currentEl.textContent = text;
         idx++;
         currentEl = null;
         charPos = 0;
@@ -166,11 +188,19 @@ export function mount(mountEl, { setStatus }) {
       }
     }
 
-    crawlEl.scrollTop = crawlEl.scrollHeight;
+    followCrawl();
     rafHandle = requestAnimationFrame(tick);
   }
 
-  crtEl.addEventListener("click", enter, { signal: eventController.signal });
+  syncCrtHeight();
+  window.addEventListener("resize", syncCrtHeight, { signal: eventController.signal });
+  window.visualViewport?.addEventListener("resize", syncCrtHeight, { signal: eventController.signal });
+  crawlEl.addEventListener("scroll", () => {
+    autoFollowCrawl = isNearCrawlBottom();
+  }, { signal: eventController.signal });
+  hintEl.addEventListener("click", () => {
+    if (finished) enter();
+  }, { signal: eventController.signal });
   root.querySelectorAll("[data-intro-nav]").forEach((link) => {
     link.addEventListener("click", (e) => e.stopPropagation(), { signal: eventController.signal });
   });

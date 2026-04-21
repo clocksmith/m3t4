@@ -20,16 +20,12 @@ import {
   trackBuildStageChange, trackBuildAction,
 } from "../lib/analytics.js";
 import presetRanking from "../data/preset-ranking.v1.json" with { type: "json" };
-import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
-
-const INTRO = gameCopy?.intro ?? {};
-const RULES = gameCopy?.rules ?? {};
 
 const BUDGET = USER_BUDGET;
 const HARD_CAP = MAX_USER_SPEND ?? (BUDGET + MAX_DERIVED_HALLUCINATION / HALLUCINATION_PER_OVERAGE);
 const DEFAULT_PRESET_NAMES = [
-  "standby", "blitz", "incumbent", "pivot",
-  "unicorn", "intern", "operator", "oracle",
+  "standby", "blitz", "intern", "pivot",
+  "unicorn", "incumbent", "operator", "oracle",
   "shipper", "moonshot", "regulatory", "founder",
   "acolyte", "disruptor", "troll", "acquirer",
 ];
@@ -302,13 +298,13 @@ function remainingCeilingFor(slot, id) {
 // ==================== MOUNT ====================
 
 export function mount(root, { setStatus }) {
-  setStatus("build");
+  setStatus("tune");
   root.innerHTML = `
     <div class="page">
       <div class="page-header-row">
         <div class="page-title-stack">
-          <h1 class="page-title">${escapeHtml(INTRO.tagline ?? "Build")}</h1>
-          <div class="page-subtitle tight">${escapeHtml(RULES.summary ?? INTRO.coreRule ?? "")}</div>
+          <h1 class="page-title">Tune</h1>
+          <div class="page-subtitle tight">Set policy. Test once. Send it live.</div>
         </div>
         <label class="inline-control"><span class="tight">stage</span>
           <select id="test-stage">${STAGE_IDS.map((s) => `<option value="${s}" ${s === stageId ? "selected" : ""}>${s}</option>`).join("")}</select>
@@ -318,18 +314,12 @@ export function mount(root, { setStatus }) {
         <span class="tight" id="test-hud"></span>
       </div>
 
-      <div class="funnel-strip build-funnel" aria-label="build flow">
-        <span class="is-blue">Tune</span>
-        <span class="is-purple">Test Fight</span>
-        <span class="is-red">Install</span>
-      </div>
-
       <div class="grid-3">
         ${playerPanelHtml(0)}
         <section class="panel canvas-panel">
           <canvas id="test-canvas" class="u-canvas-fill" width="${W}" height="${H}" tabindex="0"></canvas>
           <div class="build-preview-stats" aria-live="polite">
-            <div class="build-preview-copy tight">Server preview: policy/config in, sanitized replay frames out.</div>
+            <div class="build-preview-copy tight">server test fight</div>
             <dl class="stat-list">
               <div class="stat-row"><dt>P1</dt><dd id="build-stat-p1">—</dd></div>
               <div class="stat-row"><dt>P2</dt><dd id="build-stat-p2">—</dd></div>
@@ -469,13 +459,13 @@ function playerPanelHtml(slot) {
               <div class="meter-bar slot-hall-bar" data-slot="${slot}" style="background:var(--ui-red);"></div>
             </div>
           </div>
-          <div class="build-install-note tight">Preview fights are not ranked until installed in your roster.</div>
           <div class="toolbar">
             <button class="slot-reset" data-slot="${slot}">reset</button>
             <button class="slot-randomize" data-slot="${slot}">randomize</button>
             <button class="slot-copy" data-slot="${slot}">copy JSON</button>
-            <button class="slot-submit primary" data-slot="${slot}">${auth.user() ? "install in roster" : "save for ranked"}</button>
+            <button class="slot-submit primary" data-slot="${slot}">send to live roster</button>
           </div>
+          <div class="build-install-note tight">Preview only until sent live.</div>
           <details class="json-fold">
             <summary>JSON config</summary>
             <pre class="code-export slot-export" data-slot="${slot}"></pre>

@@ -151,6 +151,75 @@ gcloud run deploy arena-server \
 File-backed closed alpha has explicit data-loss risk on deploy/revision
 replacement and must not be used for public ranked submissions.
 
+### Optional Cloud Run sidecar: plasma-lab
+
+`plasma-lab` is isolated from ranked authority. Deploy it only for staging or
+staff alpha until receipt agreement, frame impact, and IAM boundaries are
+proven.
+
+```bash
+cd /path/to/m3t4
+PROJECT_ID=m3ta-ai
+
+gcloud builds submit . --config plasma-lab/cloudbuild.yaml --project "$PROJECT_ID"
+
+gcloud run deploy plasma-lab \
+  --project "$PROJECT_ID" \
+  --image "gcr.io/$PROJECT_ID/plasma-lab" \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars "^|^NODE_ENV=production|FEATURE_COMPUTE_LAB_ROUTES=true|FEATURE_COMPUTE_TASK_ADMIN=true|COMPUTE_ACCEPT_ASSIGNMENTS=false|PLASMA_LAB_STORE_BACKEND=firestore|FEATURE_COMPUTE_WEBRTC_SIGNALING=false|FEATURE_COMPUTE_WEBRTC_DATA=false" \
+  --set-secrets "PLASMA_LAB_ADMIN_TOKEN=plasma-lab-admin-token:latest" \
+  --min-instances 0 \
+  --max-instances 2 \
+  --concurrency 80 \
+  --timeout 300
+```
+
+For strict storage isolation, prefer a separate compute project/database and
+set:
+
+```bash
+--set-env-vars "PLASMA_LAB_FIRESTORE_PROJECT_ID=<compute-project-id>"
+```
+
+Collection naming plus Firestore rules are useful defense in depth, but the
+Admin SDK can bypass rules if its service account has broad project access.
+Do not give `plasma-lab` credentials that can read private ranked config
+collections.
+
+Keep `COMPUTE_ACCEPT_ASSIGNMENTS=false` until you are intentionally running a
+staging smoke or staff alpha. After deploy, the admin dashboard is available at
+`/compute/admin/dashboard.html`; it can toggle assignment intake and seed
+public-artifact or public seed-sweep tasks without redeploying env vars. It
+also shows admin-only Device Witness maps for bucketed WebGPU correctness,
+WebRTC/ICE connectivity, and rendering fixture observations.
+
+To run the receipt-path smoke against the deploy:
+
+```bash
+# Enable assignment intake from /compute/admin/dashboard.html first.
+
+PLASMA_LAB_SMOKE_ORIGIN=https://<plasma-lab-cloud-run-url> \
+PLASMA_LAB_SMOKE_ADMIN_TOKEN=<admin-token> \
+npm -w plasma-lab run smoke
+
+# Disable assignment intake from /compute/admin/dashboard.html after the check.
+```
+
+The deployed game should only point at the lab after that sidecar is healthy:
+
+```bash
+gcloud run services update arena-server \
+  --project "$PROJECT_ID" \
+  --region us-central1 \
+  --update-env-vars "COMPUTE_LAB_ORIGIN=https://<plasma-lab-cloud-run-url>,FEATURE_COMPUTE_SLACK_WORKER=false,COMPUTE_STUN_URLS=stun:stun.l.google.com:19302"
+```
+
+`COMPUTE_STUN_URLS` is optional. Leaving it empty still measures HTTP RTT and
+local datachannel support; setting it lets the opt-in browser witness bucket
+STUN/srflx candidate success. Raw ICE candidates are never submitted.
+
 ## 6. Domain binding
 
 ```bash
@@ -219,6 +288,9 @@ echo -n "<secret>" | gcloud secrets versions add m3t4-match-token-secret --data-
 gcloud secrets create m3t4-internal-cron-token --replication-policy automatic
 echo -n "<internal-token>" | gcloud secrets versions add m3t4-internal-cron-token --data-file=-
 
+gcloud secrets create plasma-lab-admin-token --replication-policy automatic
+echo -n "<plasma-lab-admin-token>" | gcloud secrets versions add plasma-lab-admin-token --data-file=-
+
 # Closed alpha only
 gcloud secrets create m3t4-alpha-token --replication-policy automatic
 echo -n "<shared-alpha-token>" | gcloud secrets versions add m3t4-alpha-token --data-file=-
@@ -257,6 +329,21 @@ WebSocket check: from browser console, use the direct Cloud Run WS origin
 configured in `client/config.js`:
 `new WebSocket(window.__M3T4_WS_ORIGIN__ + "/ws").onopen = () => console.log("ok")`.
 
+Optional plasma-lab check:
+
+```bash
+npm -w plasma-lab run smoke
+
+PLASMA_LAB_SMOKE_ORIGIN=https://<plasma-lab-cloud-run-url> \
+PLASMA_LAB_SMOKE_ADMIN_TOKEN=<admin-token> \
+npm -w plasma-lab run smoke
+```
+
+The local smoke starts its own in-memory lab. The remote smoke requires
+`FEATURE_COMPUTE_LAB_ROUTES=true`, `FEATURE_COMPUTE_TASK_ADMIN=true`, and
+`COMPUTE_ACCEPT_ASSIGNMENTS=true`; flip assignment acceptance back off after
+the check unless you are in staff alpha.
+
 Watchlist check: Cloud Run logs should contain `[watchlist]` entries for
 matches involving `unicorn`, `disruptor`, `shipper`, long matches, or draws.
 
@@ -278,7 +365,7 @@ Firebase hosting rollback: Console → Hosting → Release history → Rollback.
 | Firebase Hosting | $0 | 10 GB transfer free |
 | Firebase Auth | $0 | < 50K MAU free |
 | Firestore | $0-5 | Free tier generous |
-| Cloud Run | $15-60 | Worker + API are kept warm for live streams |
+| Cloud Run | $15-60 | Worker + API are kept warm for live streams; plasma-lab can scale to zero until alpha |
 | Cloud Storage (replays) | $0-2 | 5 GB free |
 | Scheduler | $0 | 3 free jobs |
 | **Total** | **$15-65** | Scales with usage |

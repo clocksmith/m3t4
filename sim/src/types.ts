@@ -180,6 +180,7 @@ export interface World {
   roundPause: number;
   roundWinner: -1 | 0 | 1;
   matchWinner: -1 | 0 | 1;
+  openingSpawnFlip: boolean;
   killCounts: [number, number];
   roundKillCounts: [number, number];
   freeze: number;

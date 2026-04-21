@@ -43,7 +43,7 @@ let canvas = null;
 let ctx = null;
 let rafId = 0;
 let statusCb = () => {};
-let computeUnsub = null;
+let computeClient = null;
 let reconnectTimer = null;
 
 // Playback state — reset on every matchStart.
@@ -81,7 +81,6 @@ function trimPlaybackToLiveWindow() {
 
 export function mount(root, { setStatus }) {
   statusCb = setStatus;
-  const computeEnabled = !!(window.__M3T4_FEATURES__?.distributedCompute);
   root.innerHTML = `
     <div class="page">
       <div class="page-header">
@@ -120,23 +119,6 @@ export function mount(root, { setStatus }) {
           </dl>
         </aside>
       </div>
-      ${computeEnabled ? `
-      <div class="panel" id="compute-panel">
-        <h3>Donate idle cycles <small class="tight">(opt-in · runs off-thread · pauses when hidden or on battery)</small></h3>
-        <div class="row row-loose">
-          <label><input type="checkbox" id="compute-toggle"> contribute</label>
-          <label>intensity
-            <select id="compute-intensity">
-              <option value="low">low</option>
-              <option value="medium" selected>medium</option>
-              <option value="spicy">spicy</option>
-            </select>
-          </label>
-          <span class="tight" id="compute-state">off</span>
-          <span class="tight" id="compute-totals">accepted 0 · rejected 0 · pending 0</span>
-        </div>
-        <div class="tight mt-xs" id="compute-current"></div>
-      </div>` : ""}
       <div class="panel">
         <h3>Stream</h3>
         <div id="stream-log" class="tight stream-log"></div>
@@ -146,43 +128,15 @@ export function mount(root, { setStatus }) {
   leaderboardEl = root.querySelector("#leaderboard");
   const { ctx: c } = setupCanvas(canvas);
   ctx = c;
-
-  if (computeEnabled) wireComputePanel(root);
+  computeClient = getComputeClient();
+  computeClient.setMatchPhase(matchActive ? "active" : "intermission");
+  void computeClient.maybeAutoStart();
 
   running = true;
   connect();
   refreshLeaderboard();
   lbTimer = setInterval(refreshLeaderboard, 8000);
   loop();
-}
-
-function wireComputePanel(root) {
-  const client = getComputeClient();
-  const toggle = root.querySelector("#compute-toggle");
-  const intensity = root.querySelector("#compute-intensity");
-  const stateEl = root.querySelector("#compute-state");
-  const totalsEl = root.querySelector("#compute-totals");
-  const currentEl = root.querySelector("#compute-current");
-  if (!client.isAvailable()) {
-    stateEl.textContent = "unavailable (needs Worker + SubtleCrypto)";
-    toggle.disabled = true;
-    intensity.disabled = true;
-    return;
-  }
-  toggle.addEventListener("change", () => {
-    if (toggle.checked) client.start({ intensity: intensity.value });
-    else client.stop();
-  });
-  intensity.addEventListener("change", () => client.setIntensity(intensity.value));
-  computeUnsub = client.subscribe((s) => {
-    toggle.checked = s.enabled;
-    intensity.value = s.intensity;
-    stateEl.textContent = s.enabled ? s.state : "off";
-    totalsEl.textContent = `accepted ${s.totals.accepted} · rejected ${s.totals.rejected} · pending ${s.totals.pending}`;
-    currentEl.textContent = s.current
-      ? `chunk ${s.current.chunkId} (${s.current.kind})`
-      : s.workerId ? `worker ${s.workerId}` : "";
-  });
 }
 
 export function unmount() {
@@ -192,10 +146,7 @@ export function unmount() {
   if (lbTimer) { clearInterval(lbTimer); lbTimer = null; }
   if (rafId) cancelAnimationFrame(rafId);
   resetPlayback();
-  if (computeUnsub) { computeUnsub(); computeUnsub = null; }
-  // Compute client itself is a singleton — keep it running so leaving
-  // the tab open donates cycles across mode switches. User pauses via
-  // the toggle or by closing the tab.
+  computeClient = null;
 }
 
 function connect() {
@@ -247,6 +198,7 @@ function onEvent(m) {
     const skewMs = typeof m.serverNow === "number" ? (Date.now() - m.serverNow) : 0;
     waitState = { reason: m.reason, nextAttemptAt: m.nextAttemptAt, intervalMs: m.intervalMs, skewMs, nextMatch: m.nextMatch };
     matchActive = false;
+    computeClient?.setMatchPhase("intermission");
     resetPlayback();
     if (m.nextMatch) {
       const next = m.nextMatch;
@@ -264,6 +216,7 @@ function onEvent(m) {
   if (m.type === "matchStart" || m.type === "matchInProgress") {
     waitState = null;
     matchActive = true;
+    computeClient?.setMatchPhase("active");
     const mt = m.match || m;
     const handleA = mt.a?.handle ?? "?";
     const handleB = mt.b?.handle ?? "?";
@@ -293,6 +246,7 @@ function onEvent(m) {
     updateBufferStat(playbackStarted ? "live" : "priming");
   } else if (m.type === "matchEnd") {
     matchActive = false;
+    computeClient?.setMatchPhase("intermission");
     const { a, b } = renderState.handles;
     const eloDelta = m.eloAfter && m.eloBefore
       ? ` · Δ @${a} ${formatDelta(m.eloAfter[0] - m.eloBefore[0])} · @${b} ${formatDelta(m.eloAfter[1] - m.eloBefore[1])}`
@@ -408,6 +362,7 @@ function escapeHtml(s) {
 
 function loop() {
   if (!running) return;
+  const frameStart = performance.now();
   const f = signalState ? null : currentFrame();
   if (signalState) {
     drawSignalScreen(signalState.title, signalState.subtitle);
@@ -446,6 +401,7 @@ function loop() {
       ctx.fillText("waiting for next match…", W / 2, H / 2);
     }
   }
+  computeClient?.recordFrame(performance.now() - frameStart);
   updateWaitStat();
   rafId = requestAnimationFrame(loop);
 }

@@ -90,6 +90,23 @@ function makeFighter(id: 0 | 1, ch: Character, spawn: { x: number; y: number }, 
   };
 }
 
+function makeRoundFighters(
+  stage: Stage,
+  chars: [Character, Character],
+  flip: boolean,
+): [Fighter, Fighter] {
+  const p0Spawn = flip ? stage.spawnR : stage.spawnL;
+  const p1Spawn = flip ? stage.spawnL : stage.spawnR;
+  return [
+    makeFighter(0, chars[0], p0Spawn, flip ? -1 : 1),
+    makeFighter(1, chars[1], p1Spawn, flip ? 1 : -1),
+  ];
+}
+
+function spawnFlipForRound(openingSpawnFlip: boolean, roundIndex: number): boolean {
+  return openingSpawnFlip !== (roundIndex % 2 === 1);
+}
+
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
@@ -117,9 +134,9 @@ function noiseUnit(seed: number, tick: number, fighterId: 0 | 1, paramIndex: num
 }
 
 const NOISE_KEYS = PARAM_KEYS.filter((k): k is Exclude<ParamKey, "hallucination"> => k !== "hallucination");
-const MICRO_DRIFT_WINDOW_TICKS = 20;
-const MICRO_DRIFT_UI_STEP = 1;
-const MICRO_DRIFT_TOTAL_UI_CAP = 3;
+const MICRO_DRIFT_WINDOW_TICKS = 30;
+const MICRO_DRIFT_UI_STEP = 2;
+const MICRO_DRIFT_TOTAL_UI_CAP = 16;
 const MICRO_DRIFT_SLOTS = Math.floor(MICRO_DRIFT_TOTAL_UI_CAP / MICRO_DRIFT_UI_STEP);
 
 export function applyMicroAttributeDrift(
@@ -702,8 +719,7 @@ function resetDuel(w: World, chars: [Character, Character]): void {
   const s1 = w.fighters[1]?.score ?? 0;
   const r0 = w.fighters[0]?.rounds ?? 0;
   const r1 = w.fighters[1]?.rounds ?? 0;
-  const p0 = makeFighter(0, chars[0], w.stage.spawnL, 1);
-  const p1 = makeFighter(1, chars[1], w.stage.spawnR, -1);
+  const [p0, p1] = makeRoundFighters(w.stage, chars, spawnFlipForRound(w.openingSpawnFlip, r0 + r1));
   p0.score = s0;
   p0.rounds = r0;
   p1.score = s1;
@@ -841,6 +857,7 @@ export function simulate(opts: SimulateOptions): MatchResult {
   const maxTicks = opts.maxTicks ?? ROUND_TIMER_MAX_TICKS * ROUNDS_TO_WIN_MATCH * 2;
 
   const rng = makeRng(opts.seed);
+  const openingSpawnFlip = rng() < 0.5;
   const noiseSeed = noiseSeedFromMatchSeed(opts.seed);
   const telemetry: [FighterTelemetry, FighterTelemetry] | undefined = opts.telemetry
     ? [emptyFighterTelemetry(), emptyFighterTelemetry()]
@@ -848,10 +865,7 @@ export function simulate(opts: SimulateOptions): MatchResult {
   const w: World = {
     tick: 0,
     stage,
-    fighters: [
-      makeFighter(0, chars[0], stage.spawnL, 1),
-      makeFighter(1, chars[1], stage.spawnR, -1),
-    ],
+    fighters: makeRoundFighters(stage, chars, openingSpawnFlip),
     gold: null,
     goal: null,
     lastGoalIdx: -1,
@@ -859,6 +873,7 @@ export function simulate(opts: SimulateOptions): MatchResult {
     roundPause: 0,
     roundWinner: -1,
     matchWinner: -1,
+    openingSpawnFlip,
     killCounts: [0, 0],
     roundKillCounts: [0, 0],
     freeze: 0,
@@ -983,13 +998,11 @@ export function createStepperWorld(opts: {
 }): World {
   const chars = opts.chars ?? DEFAULT_CHARS;
   const rng = makeRng(opts.seed);
+  const openingSpawnFlip = rng() < 0.5;
   return {
     tick: 0,
     stage: opts.stage,
-    fighters: [
-      makeFighter(0, chars[0], opts.stage.spawnL, 1),
-      makeFighter(1, chars[1], opts.stage.spawnR, -1),
-    ],
+    fighters: makeRoundFighters(opts.stage, chars, openingSpawnFlip),
     gold: null,
     goal: null,
     lastGoalIdx: -1,
@@ -997,6 +1010,7 @@ export function createStepperWorld(opts: {
     roundPause: 0,
     roundWinner: -1,
     matchWinner: -1,
+    openingSpawnFlip,
     killCounts: [0, 0],
     roundKillCounts: [0, 0],
     freeze: 0,
@@ -1142,13 +1156,15 @@ export function simulateTrace(opts: SimulateOptions): TraceResult {
   const chars = opts.chars ?? DEFAULT_CHARS;
   const maxTicks = opts.maxTicks ?? ROUND_TIMER_MAX_TICKS * ROUNDS_TO_WIN_MATCH * 2;
   const rng = makeRng(opts.seed);
+  const openingSpawnFlip = rng() < 0.5;
   const noiseSeed = noiseSeedFromMatchSeed(opts.seed);
   const w: World = {
     tick: 0,
     stage,
-    fighters: [makeFighter(0, chars[0], stage.spawnL, 1), makeFighter(1, chars[1], stage.spawnR, -1)],
+    fighters: makeRoundFighters(stage, chars, openingSpawnFlip),
     gold: null, goal: null, lastGoalIdx: -1, roundStartTick: 0,
     roundPause: 0, roundWinner: -1, matchWinner: -1,
+    openingSpawnFlip,
     killCounts: [0, 0], roundKillCounts: [0, 0], freeze: 0, rng, noiseSeed,
     brainStates: [createBrainState(0), createBrainState(1)],
   };

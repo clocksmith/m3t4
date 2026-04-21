@@ -54,8 +54,8 @@ function defaultParams(overrides: Partial<Params> = {}): Params {
 
 // --- Tests ---
 
-test("BEHAVIOR_VERSION is 11", () => {
-  assert.equal(BEHAVIOR_VERSION, 11);
+test("BEHAVIOR_VERSION is 12", () => {
+  assert.equal(BEHAVIOR_VERSION, 12);
 });
 
 test("createBrainState initializes neutral with empty buffers", () => {

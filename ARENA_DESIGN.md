@@ -78,10 +78,10 @@ Each user owns a **stable** of 3-5 bot slots. Rationale:
 
 ### 3.1 Submission rules
 
-- 1 submission per slot per 24 hours
-- Total rerolls per user per week: 3-5 slots × 7 days = 21-35
+- 1 submission per slot per 15 minutes
+- Total rerolls per user per hour: 3-5 slots x 4 windows = 12-20
 - A rich-compute rival can test bots offline indefinitely but can only
-  DEPLOY 21-35 per week — climbing the ladder is bounded
+  DEPLOY 12-20 per hour — climbing the ladder is bounded
 
 ### 3.2 Slot metadata
 

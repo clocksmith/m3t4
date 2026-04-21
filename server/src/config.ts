@@ -28,6 +28,8 @@ export const CONFIG = {
   apiOrigin: process.env.ARENA_API_ORIGIN ?? "http://localhost:7777",
   wsOrigin: process.env.ARENA_WS_ORIGIN ?? "ws://localhost:7777",
   firehoseWsOrigin: process.env.FIREHOSE_WS_ORIGIN ?? process.env.ARENA_WS_ORIGIN ?? "ws://localhost:7777",
+  computeLabOrigin: process.env.COMPUTE_LAB_ORIGIN ?? "",
+  computeStunUrls: envList("COMPUTE_STUN_URLS", []),
   serverRole: SERVER_ROLE as "combined" | "api" | "worker",
   wsClientSoftLimit: parseInt(process.env.WS_CLIENT_SOFT_LIMIT ?? "0", 10),
   isProd: IS_PROD,
@@ -35,7 +37,7 @@ export const CONFIG = {
   // Stable rules
   maxSlots: parseInt(process.env.STABLE_MAX_SLOTS ?? "5", 10),
   minSlots: parseInt(process.env.STABLE_MIN_SLOTS ?? "3", 10),
-  submitRateMs: parseInt(process.env.SUBMIT_RATE_MS ?? "86400000", 10), // 24h per slot
+  submitRateMs: parseInt(process.env.SUBMIT_RATE_MS ?? "900000", 10), // 15m per slot
   submitIpRateLimitWindowMs: parseInt(process.env.SUBMIT_IP_RATE_LIMIT_WINDOW_MS ?? "600000", 10),
   submitIpRateLimitMax: parseInt(process.env.SUBMIT_IP_RATE_LIMIT_MAX ?? "20", 10),
 
@@ -82,6 +84,7 @@ export const CONFIG = {
     // factor for real workloads; the transport + receipt + quorum
     // pipeline exists whether or not any task is defined.
     distributedCompute: envFlag("FEATURE_DISTRIBUTED_COMPUTE", false),
+    computeSlackWorker: envFlag("FEATURE_COMPUTE_SLACK_WORKER", false),
     computeTaskAdmin: envFlag("FEATURE_COMPUTE_TASK_ADMIN", false),
   },
 } as const;

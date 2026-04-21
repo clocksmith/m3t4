@@ -17,6 +17,7 @@ import {
 import type { StableStore } from "./stable.js";
 import type { VerifyStore } from "./verify-store.js";
 import { corsHeaders } from "./http-utils.js";
+import { publicReplayTupleFromReplay } from "./public-artifacts.js";
 
 // ---------------------------- helpers ----------------------------
 
@@ -150,29 +151,7 @@ export async function handleSpectateTuple(
   const replay = await store.getReplay(matchId);
   if (!replay) return json(res, 404, { error: "replay not found" });
 
-  const publicPlayers = replay.players.map((p) => ({
-    side: p.side,
-    kind: p.kind,
-    label: p.label,
-    tier: p.tier,
-    slotName: p.slotName,
-    configHash: p.configHash,
-    // NOTE: p.config intentionally omitted. Public tuple spectating only
-    // works when the viewer has an independent source for the config
-    // (e.g. named preset). Private ranked configs stay on the server.
-  }));
-
-  return json(res, 200, {
-    matchId,
-    seed: replay.match.seed,
-    stageId: replay.match.stageId,
-    players: publicPlayers,
-    expectedLogHash: replay.result.logHash,
-    expectedResult: replay.result,
-    trust: replay.trust,
-    simConstantsHash: replay.sim.constantsHash ?? REPLAY_CONSTANTS_HASH,
-    behaviorVersion: BEHAVIOR_VERSION,
-  });
+  return json(res, 200, publicReplayTupleFromReplay(replay));
 }
 
 // ---------------------------- duel/* (scaffold) ----------------------------

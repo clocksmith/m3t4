@@ -12,6 +12,7 @@ import {
   type StablePublic,
   type StableStore,
 } from "./stable.js";
+import { publicReplayArtifactFromReplay, type PublicReplayArtifactV1 } from "./public-artifacts.js";
 
 interface HandleDoc {
   handle: string;
@@ -24,6 +25,7 @@ const FIRESTORE_COLLECTIONS = {
   handles: "handles",
   publicStables: "publicStables",
   replays: "replays",
+  publicReplayArtifacts: "publicReplayArtifacts",
 } as const;
 
 let configuredDb: Firestore | null = null;
@@ -177,14 +179,27 @@ export class FirestoreStableStore implements StableStore {
 
   async archiveReplay(artifact: ReplayArtifactV1): Promise<void> {
     await this.ready;
-    await this.db.collection(FIRESTORE_COLLECTIONS.replays).doc(artifact.match.matchId).set(stripUndefined(artifact));
+    await this.replayRef(artifact.match.matchId).set(stripUndefined(artifact));
+    try {
+      await this.publicReplayArtifactRef(artifact.match.matchId).set(stripUndefined(publicReplayArtifactFromReplay(artifact)));
+    } catch (e) {
+      console.error("[public-artifacts] export failed:", e instanceof Error ? e.message : String(e));
+    }
     await this.trimReplayArchive();
   }
 
   async getReplay(matchId: string): Promise<ReplayArtifactV1 | null> {
     await this.ready;
-    const snap = await this.db.collection(FIRESTORE_COLLECTIONS.replays).doc(matchId).get();
+    const snap = await this.replayRef(matchId).get();
     return snap.exists ? (snap.data() as ReplayArtifactV1) : null;
+  }
+
+  async getPublicReplayArtifact(matchId: string): Promise<PublicReplayArtifactV1 | null> {
+    await this.ready;
+    const snap = await this.publicReplayArtifactRef(matchId).get();
+    if (snap.exists) return snap.data() as PublicReplayArtifactV1;
+    const replay = await this.getReplay(matchId);
+    return replay ? publicReplayArtifactFromReplay(replay) : null;
   }
 
   async applyDecay(): Promise<number> {
@@ -269,7 +284,10 @@ export class FirestoreStableStore implements StableStore {
       .get();
     if (old.empty) return;
     const batch = this.db.batch();
-    for (const doc of old.docs) batch.delete(doc.ref);
+    for (const doc of old.docs) {
+      batch.delete(doc.ref);
+      batch.delete(this.publicReplayArtifactRef(doc.id));
+    }
     await batch.commit();
   }
 
@@ -283,6 +301,14 @@ export class FirestoreStableStore implements StableStore {
 
   private publicStableRef(userId: string) {
     return this.db.collection(FIRESTORE_COLLECTIONS.publicStables).doc(userId);
+  }
+
+  private replayRef(matchId: string) {
+    return this.db.collection(FIRESTORE_COLLECTIONS.replays).doc(matchId);
+  }
+
+  private publicReplayArtifactRef(matchId: string) {
+    return this.db.collection(FIRESTORE_COLLECTIONS.publicReplayArtifacts).doc(matchId);
   }
 
   private writeStable(writer: { set: (ref: DocumentReference, data: DocumentData) => unknown }, st: Stable): void {

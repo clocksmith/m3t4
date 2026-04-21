@@ -1,0 +1,20 @@
+{
+  "name": "@m3t4/plasma-lab",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "tsc && node --test dist/test/*.test.js",
+    "smoke": "tsc && node dist/smoke.js",
+    "start": "tsc && node dist/index.js"
+  },
+  "dependencies": {
+    "@m3t4/sim": "file:../sim",
+    "firebase-admin": "^13.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.4.0"
+  }
+}

@@ -30,14 +30,26 @@ import {
   handleProofCommit, handleProofReveal,
   handleProofZkSubmit, handleProofZkSystems,
 } from "../proof.js";
+import {
+  publicReplayArtifactFromReplay,
+  publicReplayArtifactPayloadJson,
+  type PublicReplayArtifactV1,
+} from "../public-artifacts.js";
 
 // --- Stub StableStore (only uses getReplay + archiveReplay) ---
 
 class MemoryStableStore {
   private replays = new Map<string, ReplayArtifactV1>();
-  async archiveReplay(a: ReplayArtifactV1): Promise<void> { this.replays.set(a.match.matchId, a); }
+  private publicArtifacts = new Map<string, PublicReplayArtifactV1>();
+  async archiveReplay(a: ReplayArtifactV1): Promise<void> {
+    this.replays.set(a.match.matchId, a);
+    this.publicArtifacts.set(a.match.matchId, publicReplayArtifactFromReplay(a));
+  }
   async getReplay(matchId: string): Promise<ReplayArtifactV1 | null> {
     return this.replays.get(matchId) ?? null;
+  }
+  async getPublicReplayArtifact(matchId: string): Promise<PublicReplayArtifactV1 | null> {
+    return this.publicArtifacts.get(matchId) ?? null;
   }
   // Other methods not needed for these tests — declared as any to satisfy the type.
   async getStable(): Promise<any> { return null; }
@@ -67,6 +79,17 @@ function bootTestServer(): Promise<{ port: number; close: () => Promise<void>; s
       if (m === "POST" && p === "/api/verify/replay") return handleVerifyReplay(req, res);
       if (m === "GET" && p.startsWith("/api/spectate/tuple/")) {
         return handleSpectateTuple(store as any, p.slice("/api/spectate/tuple/".length), req, res);
+      }
+      if (m === "GET" && p.startsWith("/api/replays/public-artifact/")) {
+        const artifact = await store.getPublicReplayArtifact(p.slice("/api/replays/public-artifact/".length));
+        if (!artifact) {
+          res.writeHead(404, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: "public replay artifact not found" }));
+        } else {
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify(artifact));
+        }
+        return;
       }
       if (m === "POST" && p === "/api/duel/challenge") return handleDuelChallenge(vstore, req, res);
       if (m === "POST" && p === "/api/duel/accept") return handleDuelAccept(vstore, req, res);
@@ -218,6 +241,40 @@ test("spectate/tuple: returns public ref + trust label", async (t) => {
   assert.equal(r.body.trust.tier, "ranked-server");
   // configs must NOT leak
   for (const p of r.body.players) assert.equal(p.config, undefined);
+});
+
+test("public replay artifact exports hashes without private configs", async (t) => {
+  const srv = await bootTestServer();
+  t.after(() => srv.close());
+  const result = simulate({
+    stage: STAGES.datacenter,
+    brainA: STRATEGIES.blitz, brainB: STRATEGIES.shipper,
+    seed: 202, maxTicks: 240,
+  });
+  const art = createReplayArtifactV1({
+    matchId: "pub1", mode: "ranked", stage: STAGES.datacenter, seed: 202, chars: DEFAULT_CHARS,
+    players: [
+      { kind: "brain", tier: "user", label: "blitz", config: STRATEGIES.blitz, handle: "alice", slotName: "a" },
+      { kind: "brain", tier: "user", label: "shipper", config: STRATEGIES.shipper, handle: "bob", slotName: "b" },
+    ],
+    actionLog: result.frameLog, result,
+    sim: { constantsHash: REPLAY_CONSTANTS_HASH },
+  });
+  await srv.store.archiveReplay(art);
+
+  const r = await req(srv.port, "GET", "/api/replays/public-artifact/pub1");
+  assert.equal(r.status, 200);
+  assert.equal(r.body.schema, "m3t4.public-replay-artifact");
+  assert.equal(r.body.matchId, "pub1");
+  assert.equal(r.body.payload.tuple.players[0].handle, "alice");
+  assert.equal(r.body.payload.tuple.players[0].config, undefined);
+  assert.equal(r.body.payload.tuple.players[1].config, undefined);
+  assert.equal(r.body.payload.actions.byteLength, result.frameLog.length);
+  assert.equal(r.body.payload.tuple.expectedLogHash, result.logHash);
+  assert.equal(
+    crypto.createHash("sha256").update(publicReplayArtifactPayloadJson(r.body.payload), "utf8").digest("hex"),
+    r.body.artifactSha256,
+  );
 });
 
 test("duel flow: challenge → accept → submit archives p2p-action-verified replay", async (t) => {

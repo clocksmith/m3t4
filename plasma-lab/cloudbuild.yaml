@@ -1,0 +1,11 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - plasma-lab/Dockerfile
+      - -t
+      - gcr.io/$PROJECT_ID/plasma-lab
+      - .
+images:
+  - gcr.io/$PROJECT_ID/plasma-lab

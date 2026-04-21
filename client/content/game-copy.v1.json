@@ -68,41 +68,31 @@
   },
   "rules": {
     "title": "About",
-    "subtitle": "The game, the machinery underneath it, and the rules the arena actually honors.",
+    "subtitle": "Kill to mint a Proof Core. Carry it to the lit Demand Node. Two deliveries win a round; two rounds win the match.",
     "about": {
       "title": "What m3t4.ai is",
       "body": [
-        "m3t4.ai is a server-authoritative autonomous strategy game wrapped around a distributed-compute substrate: players submit constrained policy vectors, the hidden server brain evaluates them, and spectators receive only sanitized replay/event frames.",
-        "The game's search space is intentionally rugged: budgeted attributes, hallucination from over-allocation, stage geometry, spawn variance, proof-routing, combat timing, and denial behavior create a large combinatorial optimization problem where strong configs are discovered through experimentation rather than direct control.",
-        "That same structure makes m3t4 a natural first workload for Plasma-style P2P compute: match batches, seed sweeps, exploit searches, meta-health checks, and replay verification can be split into independent chunks and executed by spectator browsers.",
-        "Each browser worker can run WebGPU/WebRTC tasks, emit content-hashed receipts, and have its output checked by redundant peers or validators before credit is accepted.",
-        "The long-term idea is that the spectator layer becomes a proof-carrying volunteer compute network: first powering the game's own meta-analysis, then graduating to other highly parallel workloads like geospatial tile scoring, microscopy/pathology tiles, docking pose scoring, and eventually larger bio or cancer-research pipelines."
+        "m3t4.ai is a live autonomous bot arena. You tune a bot, run a server-side test fight, then send it into a five-seat roster. The server runs the matches; Live shows the current fight.",
+        "You do not pilot frame by frame. You shape tendencies: movement, aggression, proof routing, denial, risk, and recovery. Strong bots come from finding useful behavior inside those constraints.",
+        "The ranked arena is server-authoritative. The public client receives replay frames and match events, not hidden decision code or private opponent configs.",
+        "Under the hood, the game is being shaped into a testbed for verified distributed compute. Match batches, seed sweeps, replay checks, and exploit searches are the first safe workloads before broader volunteer-compute ambitions."
       ]
     },
-    "summary": "Kill to mint a Proof Core. Carry it to the lit Demand Node. Two deliveries win a round; two rounds win the match.",
     "sections": [
       {
-        "title": "Objective",
+        "title": "How To Score",
         "body": [
-          "Two fighters enter each round. A kill creates or transfers the Proof Core.",
-          "The carrier must bring the Proof Core to the active Demand Node and hold inside the ring long enough to deliver.",
-          "A kill by itself does not score. The arena only rewards proof that arrives."
-        ]
-      },
-      {
-        "title": "Scoring",
-        "body": [
-          "Each delivery is one point.",
-          "First fighter to two points wins the round.",
-          "First fighter to two rounds wins the match."
+          "A kill creates or transfers the Proof Core.",
+          "The carrier must bring it to the lit Demand Node and hold long enough to deliver.",
+          "Each delivery is one point. Two points win a round; two rounds win the match."
         ]
       },
       {
         "title": "Demand Nodes",
         "body": [
           "Only one Demand Node is live at a time.",
-          "Nodes can expire. If the timer runs out, the current Proof Core and node are cleared.",
-          "After a new kill, the arena lights a fresh node chosen from the stage targets."
+          "Nodes can expire. If the timer runs out, the Proof Core and node reset.",
+          "A fresh kill lights a new node."
         ]
       },
       {
@@ -114,51 +104,43 @@
         ]
       },
       {
-        "title": "Manual Control",
+        "title": "Tuning, Not Piloting",
         "body": [
-          "There is no manual pilot in ranked.",
-          "The browser authors policies, submits configs, and watches the bodies execute.",
-          "Build mode previews those policies through server-rendered replay frames."
+          "Ranked has no manual pilot.",
+          "The Tune page edits policy tendencies, then previews them through server-run replay frames.",
+          "Preset internals stay server-side; the client gets labels and frames, not decision code."
         ]
       },
       {
-        "title": "Builds and Presets",
+        "title": "Budget And Hallucination",
         "body": [
-          "A build is a slider-authored combat policy. You are setting tendencies, not driving every frame.",
-          "A preset is a curated reference fighter used for testing and matchmaking.",
-          "Preset internals stay server-side. The public client gets labels and frames, not the decision code."
+          "Ranked bots get 360 clean points across visible tuning knobs.",
+          "You can over-allocate up to 390, but every point over budget becomes hallucination.",
+          "Hallucination adds deterministic seeded jitter, making over-tuned bots less reliable."
         ]
       },
       {
-        "title": "Build Budget",
+        "title": "Match Seeds",
         "body": [
-          "Ranked builds spend 360 legal points across the visible tuning knobs.",
-          "You can push past that budget up to 390 total spend, but the overage is converted into hallucination.",
-          "Every point over 360 adds 10 hallucination. The arena rejects configs whose hallucination does not match the computed penalty."
+          "Each match seed rotates the legal spawn points for the arena.",
+          "The same build can open from different ground, wall, or platform positions.",
+          "Seeded variation is intentional: a bot has to survive the ruleset, not memorize one opening."
         ]
       },
       {
-        "title": "Hallucination",
+        "title": "Seeded Drift",
         "body": [
-          "Hallucination is not a free stat. It is the cost of over-tuned policy.",
-          "During a match, hallucination adds seeded jitter to non-hallucination attributes, so high-overage builds become less reliable under pressure.",
-          "The jitter is deterministic for the match seed, so replays can still be verified."
+          "Even clean bots get small seeded match drift.",
+          "About every 30 simulation ticks, eight non-hallucination attributes shift by plus or minus two UI points.",
+          "These perturbations are clamped, replayable, and part of the ruleset."
         ]
       },
       {
-        "title": "Internal Glitches",
+        "title": "Ranked Roster",
         "body": [
-          "Even clean builds have small seeded glitches inside a match.",
-          "About every 20 simulation ticks, each fighter gets three non-hallucination attributes nudged by plus or minus one UI point.",
-          "These micro-perturbations are clamped to legal ranges and are part of the replayed ruleset, not browser-side luck."
-        ]
-      },
-      {
-        "title": "Ranked",
-        "body": [
-          "Profile installs seats into your Boardroom Roster.",
-          "The server validates submitted configs, schedules ranked matches, and streams one live match for spectators.",
-          "The ladder records wins, losses, draws, and ELO. Invalid configs do not enter ranked."
+          "Your roster holds up to five live seats.",
+          "The server validates configs, schedules ranked matches, and streams one canonical live match.",
+          "The ladder records wins, losses, draws, and ELO."
         ]
       }
     ]

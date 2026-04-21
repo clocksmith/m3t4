@@ -14,6 +14,7 @@ import { WS_ORIGIN, leaderboard } from "../lib/api.js";
 import { STAGES } from "../lib/public-sim.js";
 import { setupCanvas, drawFrame, W, H } from "../lib/render.js";
 import { getComputeClient } from "../lib/compute.js";
+import { auth } from "../lib/auth.js";
 
 const SIM_HZ = 120;                // canonical sim rate
 const JITTER_BUFFER_FRAMES = 24;   // ~8 chunks at STRIDE=3 -> ~200ms
@@ -87,6 +88,17 @@ export function mount(root, { setStatus }) {
         <h1>Live <small>— whatever match is happening right now</small></h1>
         <div id="match-hud" class="tight">—</div>
       </div>
+      <section class="panel live-quickstart">
+        <div class="live-scoring-strip">
+          <span>Kill</span>
+          <span>Proof Core</span>
+          <span>Demand Node</span>
+          <span>Delivery</span>
+        </div>
+        <a class="buttonish ${auth.user() ? "intro-cta-purple" : "primary"}" href="${auth.user() ? "#profile" : "#build"}">
+          ${auth.user() ? "edit roster" : "build a bot"}
+        </a>
+      </section>
       <div class="spectate-grid">
         <aside class="panel lb spectate-side">
           <h3>Leaderboard</h3>

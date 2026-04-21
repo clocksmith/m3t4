@@ -37,6 +37,7 @@ export interface Assignment {
 export interface ExecutionReceipt {
   receiptId: string;
   chunkId: string;
+  assignmentId: string;
   workerId: string;
   outputHash: string;
   computeMs: number;
@@ -190,6 +191,7 @@ export class ComputeStore {
   submitReceipt(input: {
     workerId: string;
     chunkId: string;
+    assignmentId: string;
     outputHash: string;
     computeMs: number;
   }): { status: "accepted" | "rejected" | "pending"; reason?: string } {
@@ -208,8 +210,9 @@ export class ComputeStore {
       return { status: matches ? "accepted" : "rejected", reason: "chunk already decided" };
     }
     const assignments = task.assignmentsByChunk.get(input.chunkId) ?? [];
-    if (!assignments.some((a) => a.workerId === input.workerId)) {
-      return { status: "rejected", reason: "no matching assignment" };
+    const assignment = assignments.find((a) => a.assignmentId === input.assignmentId);
+    if (!assignment || assignment.workerId !== input.workerId || assignment.chunkId !== input.chunkId) {
+      return { status: "rejected", reason: "assignment mismatch" };
     }
     const receipts = task.receipts.get(input.chunkId) ?? [];
     if (receipts.some((r) => r.workerId === input.workerId)) {
@@ -218,6 +221,7 @@ export class ComputeStore {
     const receipt: ExecutionReceipt = {
       receiptId: `rc-${randomUUID().slice(0, 12)}`,
       chunkId: input.chunkId,
+      assignmentId: input.assignmentId,
       workerId: input.workerId,
       outputHash: input.outputHash,
       computeMs: input.computeMs,

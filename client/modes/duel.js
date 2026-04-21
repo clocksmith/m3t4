@@ -52,7 +52,7 @@ export function renderDuel(root, { setStatus } = {}) {
       { class: "duel-actions" },
       el("button", { type: "button", onclick: () => go("build") }, "author policy"),
       el("button", { type: "button", onclick: () => go("spectate") }, "watch receipts"),
-      el("button", { type: "button", onclick: () => go("rules") }, "read rules")
+      el("button", { type: "button", onclick: () => go("rules") }, "read about")
     )
   );
 

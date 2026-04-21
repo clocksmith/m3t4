@@ -42,13 +42,34 @@ function buildSequence() {
 
 export function mount(mountEl, { setStatus }) {
   root = mountEl;
-  setStatus("intro · signal received");
+  setStatus("start · signal received");
   root.innerHTML = `
     <div class="intro-crt" id="intro-crt">
       <div class="intro-scanlines"></div>
       <div class="intro-vignette"></div>
+      <section class="intro-fork" aria-label="start">
+        <div class="intro-fork-kicker">// M3T4 TERMINAL · START HERE</div>
+        <h1>Play SELF Play.</h1>
+        <div class="intro-fork-lines">
+          <span>Author policies.</span>
+          <span>Test on the server.</span>
+          <span>Install five seats.</span>
+          <span>Watch ranked matches live.</span>
+        </div>
+        <div class="intro-mechanic-strip">
+          <span>Kill</span>
+          <span>Proof Core</span>
+          <span>Demand Node</span>
+          <span>Delivery</span>
+        </div>
+        <div class="intro-actions">
+          <a class="buttonish primary intro-cta-blue" href="#build" data-intro-nav>build bot</a>
+          <a class="buttonish intro-cta-purple" href="#spectate" data-intro-nav>watch live</a>
+          <a class="buttonish intro-cta-red" href="#rules" data-intro-nav>how it works</a>
+        </div>
+      </section>
       <div class="intro-crawl" id="intro-crawl"></div>
-      <div class="intro-hint" id="intro-hint">[ click / space / enter to spectate ]</div>
+      <div class="intro-hint" id="intro-hint">[ space / enter to watch live ]</div>
     </div>`;
 
   const crawlEl = root.querySelector("#intro-crawl");
@@ -85,7 +106,7 @@ export function mount(mountEl, { setStatus }) {
   function finish() {
     if (finished) return;
     finished = true;
-    hintEl.textContent = "[ click / space / enter to spectate ]";
+    hintEl.textContent = "[ click / space / enter to watch live ]";
     hintEl.classList.add("is-final");
   }
 
@@ -150,6 +171,9 @@ export function mount(mountEl, { setStatus }) {
   }
 
   crtEl.addEventListener("click", enter, { signal: eventController.signal });
+  root.querySelectorAll("[data-intro-nav]").forEach((link) => {
+    link.addEventListener("click", (e) => e.stopPropagation(), { signal: eventController.signal });
+  });
   document.addEventListener("keydown", onKey, { signal: eventController.signal });
 
   rafHandle = requestAnimationFrame(tick);

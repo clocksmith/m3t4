@@ -36,6 +36,22 @@ const SAMPLE_CONFIG = {
 };
 const SAMPLE_CONFIG_JSON = JSON.stringify(SAMPLE_CONFIG, null, 2);
 
+function rosterIntroPanelHtml() {
+  const pending = sessionStorage.getItem("m3t4:pendingSubmit");
+  return `
+    <section class="panel roster-intro-panel">
+      <div class="funnel-strip roster-funnel" aria-label="ranked flow">
+        <span class="is-blue">Build</span>
+        <span class="is-purple">Install</span>
+        <span class="is-red">Live</span>
+      </div>
+      <div class="roster-intro-copy">
+        <strong>${pending ? "Build ready to install." : "Ranked starts here."}</strong>
+        <span>Install up to five seats. The server schedules matches. Live streams the current fight.</span>
+      </div>
+    </section>`;
+}
+
 export function mount(mountEl, ctx) {
   root = mountEl;
   setStatus = ctx.setStatus;
@@ -57,7 +73,7 @@ function render() {
 }
 
 function renderSignIn() {
-  setStatus("profile · not signed in");
+  setStatus("roster · not signed in");
   const authError = auth.error?.();
   if (auth.mode === "firebase") return renderFirebaseSignIn(authError);
   const isAlpha = auth.mode === "alpha-token";
@@ -65,8 +81,9 @@ function renderSignIn() {
   root.innerHTML = `
     <div class="page">
       <div class="page-header">
-        <h1>Profile <small>— sign in to see your boardroom roster</small></h1>
+        <h1>Roster <small>— sign in to install ranked seats</small></h1>
       </div>
+      ${rosterIntroPanelHtml()}
       <div class="panel">
         <h3>${isAlpha ? "Closed alpha" : "Dev mode"}</h3>
         <p class="tight mb-lg">
@@ -102,8 +119,9 @@ function renderFirebaseSignIn(authError) {
   root.innerHTML = `
     <div class="page">
       <div class="page-header">
-        <h1>Profile <small>— sign in to see your boardroom roster</small></h1>
+        <h1>Roster <small>— sign in to install ranked seats</small></h1>
       </div>
+      ${rosterIntroPanelHtml()}
       <div class="panel">
         <h3>Sign in</h3>
         <p class="tight mb-lg">
@@ -135,13 +153,14 @@ function renderFirebaseSignIn(authError) {
 }
 
 async function renderDashboard(user) {
-  setStatus(`profile · ${user.uid}`);
+  setStatus(`roster · ${user.uid}`);
   root.innerHTML = `
     <div class="page">
       <div class="page-header">
-        <h1>Profile <small>— @${user.handle ?? "unclaimed"} (${user.uid}) — only you can see this</small></h1>
+        <h1>Roster <small>— @${user.handle ?? "unclaimed"} (${user.uid}) — only you can see this</small></h1>
         <button id="signout">sign out</button>
       </div>
+      ${rosterIntroPanelHtml()}
       ${!user.handle ? handleClaimHtml() : ""}
       <div class="panel profile-roster-panel">
         <div class="profile-roster-head">
@@ -157,7 +176,7 @@ async function renderDashboard(user) {
           <div class="profile-submit-row">
             <label>name <input type="text" id="slot-name" placeholder="e.g. bruiser-v2"></label>
             <div class="profile-submit-actions">
-              <button id="paste-pending" class="tight">paste from Build</button>
+              <button id="paste-pending" class="tight">load build</button>
               <button id="submit-btn" class="primary">install</button>
             </div>
           </div>
@@ -282,7 +301,7 @@ function sanitizeConfigPaste(text) {
 function parseConfigJson(text) {
   const trimmed = sanitizeConfigPaste(text).trim();
   if (!trimmed) {
-    throw new Error("config JSON is empty — use Build → send to profile, or paste a complete JSON object");
+    throw new Error("config JSON is empty — use Build -> save for ranked, or paste a complete JSON object");
   }
   if (trimmed.includes("...")) {
     throw new Error("config JSON still contains a placeholder (...); paste the complete object");

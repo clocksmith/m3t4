@@ -78,6 +78,7 @@ costly, and understandable.
 │   │  p2pDuel         → server/src/p2p/          /api/duel/*         │    │
 │   │  communityVerify → server/src/community/    /api/community/*    │    │
 │   │  proofLab        → server/src/labs/proof/   /api/proof/*        │    │
+│   │  compute         → server/src/compute/      /api/compute/*      │    │
 │   └─────────────────────────────────────────────────────────────────┘    │
 │                                                                          │
 │   ┌──────────────┐  ┌──────────────────────┐  ┌──────────────────┐       │
@@ -118,7 +119,7 @@ Key invariants:
 - **pareto/ is offline**: evolves and tests locally; only the output
   (`install-roster` writing `sim/src/strategies.ts`) touches prod.
 - **Feature flags are the beta knob**: `CONFIG.features = { p2pDuel,
-  communityVerify, proofLab, zk }`. All off by default. Client hides
+  communityVerify, proofLab, zk, distributedCompute }`. All off by default. Client hides
   the nav item; server skips registering the route set entirely.
 
 ## Packages
@@ -133,6 +134,7 @@ server/       — Cloud Run service (REST + WebSocket + matchmaker)
   routes/     —   core: ranked, replay-verify
   p2p/        —   optional: exhibition duel (WebRTC signaling)
   community/  —   optional: federated replay-verification workers
+  compute/    —   optional: Plasma-lite spectator compute coordinator
   labs/proof/ —   optional: L1 commit-reveal, L2 attestation,
                   L3 zk envelope
 client/       — spectator SPA hosted at m3t4.ai

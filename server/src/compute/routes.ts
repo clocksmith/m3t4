@@ -22,6 +22,7 @@ interface WorkerRegistrationBody {
 interface ReceiptBody {
   workerId: string;
   chunkId: string;
+  assignmentId: string;
   outputHash: string;
   computeMs: number;
 }
@@ -90,13 +91,14 @@ export function registerComputeRoutes(routes: RouteList, deps: ComputeRouteDeps)
     // dedicated validator-node instead.
     if (req.method === "POST" && url.pathname === "/api/compute/receipts") {
       const body = await readJson<ReceiptBody>(req);
-      if (!body || !body.workerId || !body.chunkId || !body.outputHash) {
-        json(res, 400, { error: "workerId, chunkId, outputHash required" });
+      if (!body || !body.workerId || !body.chunkId || !body.assignmentId || !body.outputHash) {
+        json(res, 400, { error: "workerId, chunkId, assignmentId, outputHash required" });
         return true;
       }
       const result = store.submitReceipt({
         workerId: body.workerId,
         chunkId: body.chunkId,
+        assignmentId: body.assignmentId,
         outputHash: body.outputHash,
         computeMs: Number(body.computeMs) || 0,
       });

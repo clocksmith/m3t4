@@ -201,6 +201,7 @@ class ComputeClient {
         body: JSON.stringify({
           workerId: this.workerId,
           chunkId,
+          assignmentId: msg.assignmentId,
           outputHash: msg.outputHash,
           computeMs: msg.computeMs,
         }),

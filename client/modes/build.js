@@ -14,6 +14,7 @@ import {
 } from "../lib/public-sim.js";
 import { setupCanvas, drawFrame, W, H } from "../lib/render.js";
 import { simulateBuildPreview } from "../lib/api.js";
+import { auth } from "../lib/auth.js";
 import {
   trackBuildSlotModeChange, trackBuildPresetChange,
   trackBuildStageChange, trackBuildAction,
@@ -161,6 +162,7 @@ let previewLoading = false;
 let previewDirty = false;
 let previewError = "";
 let previewRequestId = 0;
+let previewEditVersion = 0;
 
 // Preset dropdown: flat list of all 16 presets, sorted by round-robin
 // win rate (strongest top). The easy/medium/hard tier labels were
@@ -312,8 +314,14 @@ export function mount(root, { setStatus }) {
           <select id="test-stage">${STAGE_IDS.map((s) => `<option value="${s}" ${s === stageId ? "selected" : ""}>${s}</option>`).join("")}</select>
         </label>
         <button id="test-reset">reset match</button>
-        <button id="test-resim" class="primary">re-sim</button>
+        <button id="test-resim" class="primary">test fight</button>
         <span class="tight" id="test-hud"></span>
+      </div>
+
+      <div class="funnel-strip build-funnel" aria-label="build flow">
+        <span class="is-blue">Tune</span>
+        <span class="is-purple">Test Fight</span>
+        <span class="is-red">Install</span>
       </div>
 
       <div class="grid-3">
@@ -461,11 +469,12 @@ function playerPanelHtml(slot) {
               <div class="meter-bar slot-hall-bar" data-slot="${slot}" style="background:var(--ui-red);"></div>
             </div>
           </div>
+          <div class="build-install-note tight">Preview fights are not ranked until installed in your roster.</div>
           <div class="toolbar">
             <button class="slot-reset" data-slot="${slot}">reset</button>
             <button class="slot-randomize" data-slot="${slot}">randomize</button>
             <button class="slot-copy" data-slot="${slot}">copy JSON</button>
-            <button class="slot-submit primary" data-slot="${slot}">send to profile</button>
+            <button class="slot-submit primary" data-slot="${slot}">${auth.user() ? "install in roster" : "save for ranked"}</button>
           </div>
           <details class="json-fold">
             <summary>JSON config</summary>
@@ -779,11 +788,14 @@ function sidePayload(slot) {
 }
 
 function markPreviewDirty() {
+  previewEditVersion++;
   previewDirty = true;
+  updatePreviewHud();
 }
 
 async function requestPreview({ newSeed = false } = {}) {
   const requestId = ++previewRequestId;
+  const requestEditVersion = previewEditVersion;
   previewLoading = true;
   previewDirty = false;
   previewError = "";
@@ -805,6 +817,7 @@ async function requestPreview({ newSeed = false } = {}) {
     previewStride = response.frameStride || 2;
     previewStartedAt = performance.now();
     previewLoading = false;
+    previewDirty = previewEditVersion !== requestEditVersion;
     previewError = "";
     updatePreviewHud();
   } catch (e) {
@@ -857,6 +870,7 @@ function emptyFrame() {
 }
 
 function updatePreviewHud(frame = currentPreviewFrame()) {
+  updatePreviewControls();
   const hud = document.getElementById("test-hud");
   if (!hud) {
     updatePreviewStats(frame);
@@ -874,7 +888,7 @@ function updatePreviewHud(frame = currentPreviewFrame()) {
     return;
   }
   if (!frame) {
-    hud.textContent = `${matchup} — press re-sim`;
+    hud.textContent = `${matchup} — press test fight`;
     updatePreviewStats(frame);
     return;
   }
@@ -883,7 +897,7 @@ function updatePreviewHud(frame = currentPreviewFrame()) {
   const outcome = !ended ? "replay"
     : winner === -1 ? "draw"
     : `${winner === 0 ? previewLabels.p1 : previewLabels.p2} wins`;
-  hud.textContent = `${matchup} — tick ${frame.tick}${previewDirty ? " — changed; press re-sim" : ""} — ${outcome}`;
+  hud.textContent = `${matchup} — tick ${frame.tick}${previewDirty ? " — changed; test again" : ""} — ${outcome}`;
   updatePreviewStats(frame);
 }
 
@@ -909,7 +923,7 @@ function updatePreviewStats(frame = currentPreviewFrame()) {
   if (!frame) {
     setBuildStat("build-stat-server", "ready");
     setBuildStat("build-stat-tick", "—");
-    setBuildStat("build-stat-result", "press re-sim");
+    setBuildStat("build-stat-result", "press test fight");
     return;
   }
 
@@ -920,7 +934,7 @@ function updatePreviewStats(frame = currentPreviewFrame()) {
   setBuildStat("build-stat-tick", `${frame.tick} / ${finalTick}`);
 
   if (previewDirty) {
-    setBuildStat("build-stat-result", "changed - press re-sim");
+    setBuildStat("build-stat-result", "changed - test again");
     return;
   }
   const winner = previewResult?.winner;
@@ -934,4 +948,20 @@ function updatePreviewStats(frame = currentPreviewFrame()) {
 function setBuildStat(id, value) {
   const el = document.getElementById(id);
   if (el) el.textContent = String(value);
+}
+
+function updatePreviewControls() {
+  const resim = document.getElementById("test-resim");
+  const reset = document.getElementById("test-reset");
+  const stage = document.getElementById("test-stage");
+
+  if (resim) {
+    resim.disabled = previewLoading;
+    resim.textContent = previewLoading ? "simulating..." : previewDirty ? "test fight*" : "test fight";
+    resim.classList.toggle("is-simulating", previewLoading);
+    resim.classList.toggle("needs-resim", previewDirty && !previewLoading);
+    resim.setAttribute("aria-busy", previewLoading ? "true" : "false");
+  }
+  if (reset) reset.disabled = previewLoading;
+  if (stage) stage.disabled = previewLoading;
 }

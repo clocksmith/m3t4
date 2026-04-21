@@ -67,8 +67,18 @@
     ]
   },
   "rules": {
-    "title": "Rules",
-    "subtitle": "How the arena actually works. Fiction is elsewhere. The machine is still not on your side.",
+    "title": "About",
+    "subtitle": "The game, the machinery underneath it, and the rules the arena actually honors.",
+    "about": {
+      "title": "What m3t4.ai is",
+      "body": [
+        "m3t4.ai is a server-authoritative autonomous strategy game wrapped around a distributed-compute substrate: players submit constrained policy vectors, the hidden server brain evaluates them, and spectators receive only sanitized replay/event frames.",
+        "The game's search space is intentionally rugged: budgeted attributes, hallucination from over-allocation, stage geometry, spawn variance, proof-routing, combat timing, and denial behavior create a large combinatorial optimization problem where strong configs are discovered through experimentation rather than direct control.",
+        "That same structure makes m3t4 a natural first workload for Plasma-style P2P compute: match batches, seed sweeps, exploit searches, meta-health checks, and replay verification can be split into independent chunks and executed by spectator browsers.",
+        "Each browser worker can run WebGPU/WebRTC tasks, emit content-hashed receipts, and have its output checked by redundant peers or validators before credit is accepted.",
+        "The long-term idea is that the spectator layer becomes a proof-carrying volunteer compute network: first powering the game's own meta-analysis, then graduating to other highly parallel workloads like geospatial tile scoring, microscopy/pathology tiles, docking pose scoring, and eventually larger bio or cancer-research pipelines."
+      ]
+    },
     "summary": "Kill to mint a Proof Core. Carry it to the lit Demand Node. Two deliveries win a round; two rounds win the match.",
     "sections": [
       {

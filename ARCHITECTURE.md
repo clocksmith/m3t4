@@ -295,6 +295,30 @@ Community verification should never override server truth for ranked.
 It can add confidence to exhibitions and provide redundancy for public
 events.
 
+## Spectator Distributed Compute
+
+The Plasma-lite compute surface is an opt-in way for spectators to donate
+idle cycles. It is not ranked authority and must not receive private brain
+logic.
+
+Allowed early workloads:
+
+- public demo kernels such as `prime-search.v0`
+- public replay or action-log verification that does not require the brain
+- render or asset hash probes
+
+The shape mirrors Plasma:
+
+1. A peer advertises capability.
+2. The coordinator assigns a content-addressed chunk.
+3. The browser worker runs the chunk off-thread.
+4. The worker submits a receipt bound to the assignment ID.
+5. The coordinator validates hashes/quorum and updates local reputation.
+
+HTTP polling is the first transport. WebRTC data channels can replace the
+transport later, but the authority remains the assignment, output hash,
+validation policy, and receipt.
+
 ## Replay Registry
 
 The server owns the replay registry. A replay entry should include:

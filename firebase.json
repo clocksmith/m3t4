@@ -31,6 +31,20 @@
     ],
     "rewrites": [
       {
+        "source": "/api/**",
+        "run": {
+          "serviceId": "arena-server",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/ws",
+        "run": {
+          "serviceId": "arena-server",
+          "region": "us-central1"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

@@ -26,10 +26,25 @@ export interface ServerEvent {
   [k: string]: unknown;
 }
 
+type MatchPair = {
+  a: Stable; aSlot: Slot; b: Stable; bSlot: Slot; stageId: string;
+};
+
+type PublicMatchPreview = {
+  a: { userId: string; handle: string; slotId: string; name: string; elo: number };
+  b: { userId: string; handle: string; slotId: string; name: string; elo: number };
+  stageId: string;
+  eloDelta: number;
+};
+
+const HUMAN_PAIR_ELO_BONUS = 75;
+
 export class Firehose {
   private clients = new Set<Client>();
   private nextClientId = 1;
-  private stages = Object.values(STAGES);
+  // Only datacenter is enabled for ranked play. Other stages exist in
+  // STAGES for build-mode experimentation but aren't in the meta pool.
+  private stages = [STAGES.datacenter];
   private running = false;
   private currentMatch: {
     matchId: string;
@@ -37,6 +52,12 @@ export class Firehose {
     b: { userId: string; handle: string; slotId: string; name: string; elo: number };
     stageId: string;
     watchlist?: { a: WatchlistTag[]; b: WatchlistTag[] };
+  } | null = null;
+  private currentWait: {
+    reason: "cooldown" | "no-pair";
+    nextAttemptAt: number;
+    intervalMs: number;
+    nextMatch?: PublicMatchPreview;
   } | null = null;
 
   constructor(private store: StableStore) {}
@@ -46,6 +67,8 @@ export class Firehose {
     this.clients.add(c);
     if (this.currentMatch) {
       this.sendTo(c, { type: "matchInProgress", match: this.currentMatch });
+    } else if (this.currentWait) {
+      this.sendTo(c, { type: "waiting", ...this.currentWait, serverNow: Date.now() });
     }
     return c;
   }
@@ -62,26 +85,39 @@ export class Firehose {
   async start(): Promise<void> {
     if (this.running) return;
     this.running = true;
+    let pendingPair: MatchPair | null = null;
     while (this.running) {
       try {
-        const pair = await this.findPair();
-        if (!pair) { await sleep(CONFIG.cycleMs); continue; }
+        const pair = pendingPair ?? await this.findPair();
+        pendingPair = null;
+        if (!pair) {
+          this.enterWait("no-pair");
+          await sleep(CONFIG.cycleMs);
+          continue;
+        }
         await this.runMatch(pair);
+        pendingPair = await this.findPair();
       } catch (e) {
         console.error("[firehose] error:", e);
         await sleep(2000);
       }
+      this.enterWait(pendingPair ? "cooldown" : "no-pair", pendingPair);
       await sleep(CONFIG.cycleMs);
     }
+  }
+
+  private enterWait(reason: "cooldown" | "no-pair", nextPair: MatchPair | null = null): void {
+    const nextAttemptAt = Date.now() + CONFIG.cycleMs;
+    const nextMatch = nextPair ? this.previewPair(nextPair) : undefined;
+    this.currentWait = { reason, nextAttemptAt, intervalMs: CONFIG.cycleMs, nextMatch };
+    this.broadcast({ type: "waiting", reason, nextAttemptAt, intervalMs: CONFIG.cycleMs, nextMatch, serverNow: Date.now() });
   }
 
   stop(): void { this.running = false; }
 
   // Close-ELO pairing. Walks active pool sorted by ELO, pairs each with
   // nearest unpaired neighbor within tolerance. Returns one pair at a time.
-  private async findPair(): Promise<{
-    a: Stable; aSlot: Slot; b: Stable; bSlot: Slot; stageId: string;
-  } | null> {
+  private async findPair(): Promise<MatchPair | null> {
     const active = await this.store.listActive(CONFIG.activePoolMs);
     // Each stable contributes one randomly-chosen slot for matchmaking
     const entries: Array<{ st: Stable; slot: Slot }> = active.flatMap((st) => {
@@ -97,14 +133,25 @@ export class Firehose {
     const pivotIdx = Math.floor(Math.random() * entries.length);
     const pivot = entries[pivotIdx];
     let best: typeof entries[0] | null = null;
-    let bestDelta = Infinity;
+    let bestRawDelta = Infinity;
+    let bestEffectiveDelta = Infinity;
+    const pivotHuman = isHumanStable(pivot.st);
     for (let i = 0; i < entries.length; i++) {
       if (i === pivotIdx) continue;
-      const delta = Math.abs(entries[i].slot.elo - pivot.slot.elo);
-      if (delta > CONFIG.eloToleranceMax) continue;
-      if (delta < bestDelta) { bestDelta = delta; best = entries[i]; }
+      const rawDelta = Math.abs(entries[i].slot.elo - pivot.slot.elo);
+      if (rawDelta > CONFIG.eloToleranceMax) continue;
+      const bothHuman = pivotHuman && isHumanStable(entries[i].st);
+      const effectiveDelta = rawDelta - (bothHuman ? HUMAN_PAIR_ELO_BONUS : 0);
+      if (
+        effectiveDelta < bestEffectiveDelta ||
+        (effectiveDelta === bestEffectiveDelta && rawDelta < bestRawDelta)
+      ) {
+        bestEffectiveDelta = effectiveDelta;
+        bestRawDelta = rawDelta;
+        best = entries[i];
+      }
     }
-    if (!best || bestDelta > CONFIG.eloTolerance && entries.length > 8) {
+    if (!best || bestEffectiveDelta > CONFIG.eloTolerance && entries.length > 8) {
       // Loose tolerance only for small pools
       return null;
     }
@@ -130,6 +177,7 @@ export class Firehose {
       stageId: p.stageId,
       watchlist: watchlistTags,
     };
+    this.currentWait = null;
 
     this.broadcast({
       type: "matchStart",
@@ -219,8 +267,21 @@ export class Firehose {
     });
     this.currentMatch = null;
   }
+
+  private previewPair(p: MatchPair): PublicMatchPreview {
+    return {
+      a: { userId: p.a.userId, handle: p.a.handle, slotId: p.aSlot.slotId, name: p.aSlot.name, elo: p.aSlot.elo },
+      b: { userId: p.b.userId, handle: p.b.handle, slotId: p.bSlot.slotId, name: p.bSlot.name, elo: p.bSlot.elo },
+      stageId: p.stageId,
+      eloDelta: Math.abs(p.aSlot.elo - p.bSlot.elo),
+    };
+  }
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function isHumanStable(st: Stable): boolean {
+  return !st.userId.startsWith("system:");
 }

@@ -5,9 +5,37 @@
 import { auth } from "../lib/auth.js";
 import * as api from "../lib/api.js";
 import { validateUserSubmission } from "../sim/index.js";
+import { trackProfileSignIn, trackProfileHandleClaim, trackProfileSubmitConfig } from "../lib/analytics.js";
 
 let root = null;
 let setStatus = () => {};
+
+const ROSTER_SIZE = 5;
+let selectedSlot = 0;
+let rosterCache = null; // last loaded stable response, or null
+
+const SAMPLE_CONFIG = {
+  id: "my-bot",
+  attributes: {
+    burnRate: 0.4,
+    moat: 60,
+    shipRate: 0.5,
+    foresight: 0.025,
+    pivotSpeed: 0.35,
+    leverage: -0.4,
+    networking: 0.2,
+    spite: -0.4,
+    greed: 0.25,
+    pacing: 0.15,
+    cunning: 0.15,
+    lift: 0.2,
+    parry: 0.1,
+    chase: 0.15,
+    discipline: 0.15,
+    hallucination: 0,
+  },
+};
+const SAMPLE_CONFIG_JSON = JSON.stringify(SAMPLE_CONFIG, null, 2);
 
 export function mount(mountEl, ctx) {
   root = mountEl;
@@ -60,7 +88,11 @@ function renderSignIn() {
     err.textContent = "";
     try {
       await auth.signIn(input.value.trim());
-    } catch (e) { err.textContent = e.message; }
+      trackProfileSignIn(auth.mode === "alpha-token" ? "alpha" : "dev", true);
+    } catch (e) {
+      err.textContent = e.message;
+      trackProfileSignIn(auth.mode === "alpha-token" ? "alpha" : "dev", false);
+    }
   });
   root.querySelector("#uid-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter") root.querySelector("#signin-btn").click();
@@ -92,8 +124,10 @@ function renderFirebaseSignIn(authError) {
     err.textContent = "";
     try {
       await auth.signIn(provider);
+      trackProfileSignIn(provider, true);
     } catch (e) {
       err.textContent = e.message;
+      trackProfileSignIn(provider, false);
     }
   }
 
@@ -111,26 +145,26 @@ async function renderDashboard(user) {
       </div>
       ${!user.handle ? handleClaimHtml() : ""}
       <div class="panel">
-        <h3>Your stable</h3>
-        <div id="stable-view" class="tight">loading…</div>
+        <h3>Boardroom Roster <small class="tight" id="roster-subtitle">loading…</small></h3>
+        <div class="tight mb-sm roster-help">
+          Five seats in the boardroom. Click a seat to install or revise its
+          configuration below. Each seat keeps its identity, ELO, and record
+          across revisions. Rate-limited to 1 submission per seat per 24 h.
+        </div>
+        <div id="roster-grid" class="roster-grid"></div>
       </div>
-      <div class="panel">
-        <h3>Submit a config</h3>
-        <div class="tight mb-sm">
-          Paste JSON from Build mode (or your offline toolkit). Rate-limited to
-          1 submission per slot per 24 h. Server validates attributes and privacy.
+      <div class="panel" id="seat-editor">
+        <h3 id="editor-title">Install seat 0</h3>
+        <div class="tight mb-sm" id="editor-note">
+          Paste JSON from Build mode (or your offline toolkit). Server
+          validates attributes and privacy.
         </div>
         <div class="row mb-xs">
-          <label>slot:
-            <select id="slot-idx">
-              <option>0</option><option>1</option><option>2</option><option>3</option><option>4</option>
-            </select>
-          </label>
-          <label>name: <input type="text" id="slot-name" placeholder="e.g. bruiser-v2"></label>
+          <label>name <input type="text" id="slot-name" placeholder="e.g. bruiser-v2"></label>
           <button id="paste-pending" class="tight">paste from Build</button>
-          <button id="submit-btn" class="primary">submit</button>
+          <button id="submit-btn" class="primary">install</button>
         </div>
-        <textarea id="config-json" rows="14" spellcheck="false" placeholder='{"id":"my-bot","attributes":{"burnRate":0.5,"moat":60,...}}'></textarea>
+        <textarea id="config-json" class="config-json-textarea" rows="22" spellcheck="false" placeholder="${escapeHtml(SAMPLE_CONFIG_JSON)}"></textarea>
         <div id="submit-msg"></div>
       </div>
     </div>`;
@@ -139,16 +173,7 @@ async function renderDashboard(user) {
   if (!user.handle) wireClaimHandle();
   wireSubmit(user);
   loadStable(user);
-  // If there's a pending config from Build mode, offer to paste it
-  const pending = sessionStorage.getItem("m3t4:pendingSubmit");
-  if (pending) {
-    root.querySelector("#paste-pending").addEventListener("click", () => {
-      root.querySelector("#config-json").value = pending;
-    });
-    root.querySelector("#paste-pending").classList.add("is-ready");
-  } else {
-    root.querySelector("#paste-pending").disabled = true;
-  }
+  wirePendingBuildConfig();
 }
 
 function handleClaimHtml() {
@@ -172,7 +197,8 @@ function wireClaimHandle() {
     try {
       const r = await api.claimHandle(await auth.token(), input.value.trim());
       auth.setHandle(r.handle);
-    } catch (e) { err.textContent = e.message; }
+      trackProfileHandleClaim(true);
+    } catch (e) { err.textContent = e.message; trackProfileHandleClaim(false); }
   });
 }
 
@@ -183,48 +209,170 @@ function wireSubmit(user) {
     msg.textContent = "";
     try {
       if (!user.handle) throw new Error("claim a handle first");
-      const slotIdx = parseInt(root.querySelector("#slot-idx").value, 10);
       const nameInput = root.querySelector("#slot-name").value.trim();
       const text = root.querySelector("#config-json").value;
-      const cfg = JSON.parse(text);
+      const cfg = parseConfigJson(text);
       const validation = validateUserSubmission(cfg);
       if (!validation.ok || !validation.config) {
         throw new Error(`invalid config: ${validation.errors.join("; ")}`);
       }
-      const r = await api.submitSlot(await auth.token(), slotIdx, validation.config, nameInput || undefined);
+      const r = await api.submitSlot(await auth.token(), selectedSlot, validation.config, nameInput || undefined);
       msg.className = "ok";
-      msg.textContent = `submitted · slotId=${r.slotId}`;
+      msg.textContent = `seat ${selectedSlot} ${isFilled(selectedSlot) ? "revised" : "installed"} · slotId=${r.slotId}`;
       sessionStorage.removeItem("m3t4:pendingSubmit");
       loadStable(user);
+      trackProfileSubmitConfig(true);
     } catch (e) {
       msg.className = "error";
       msg.textContent = e.message;
+      trackProfileSubmitConfig(false);
     }
   });
 }
 
-async function loadStable(user) {
-  const el = root.querySelector("#stable-view");
-  if (!el) return;
-  try {
-    const s = await api.getStable(user.uid);
-    el.innerHTML = `
-      <div>@${s.handle} · aggregate ELO ${s.eloAggregate} · ${s.wins}w ${s.losses}l</div>
-      <table class="data-table">
-        <thead><tr><td>slot</td><td>name</td><td>ELO</td><td>W-L-D</td><td>last played</td></tr></thead>
-        ${s.slots.map((slot, i) => `
-          <tr>
-            <td class="rank">${i}</td>
-            <td>${slot.name}</td>
-            <td class="elo">${slot.elo}</td>
-            <td class="wl">${slot.wins}-${slot.losses}-${slot.draws}</td>
-            <td class="tight">${slot.lastPlayedAt ? new Date(slot.lastPlayedAt).toLocaleString() : "—"}</td>
-          </tr>`).join("")}
-      </table>`;
-  } catch (e) {
-    if (e.status === 404) el.textContent = "no slots yet — submit your first config below";
-    else el.textContent = `error: ${e.message}`;
+function isFilled(slotIdx) {
+  const slot = rosterCache?.slots?.[slotIdx];
+  return !!(slot && slot.slotId);
+}
+
+function wirePendingBuildConfig() {
+  const btn = root.querySelector("#paste-pending");
+  const textarea = root.querySelector("#config-json");
+  const pending = sessionStorage.getItem("m3t4:pendingSubmit");
+  if (!pending) {
+    btn.disabled = true;
+    return;
   }
+
+  function applyPending() {
+    textarea.value = formatJsonForTextarea(pending);
+  }
+
+  applyPending();
+  btn.textContent = "loaded from Build";
+  btn.classList.add("is-ready");
+  btn.addEventListener("click", applyPending);
+}
+
+function sanitizeConfigPaste(text) {
+  return text
+    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, "\"")
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'")
+    .replace(/\u00A0/g, " ")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/\r/g, "")
+    // Terminal / markdown paste wraps can break tokens across lines as
+    // `"paci\n    ng"`. Collapse newline+indent to nothing so wrapped
+    // keys/values rejoin. Valid pretty-printed JSON survives because
+    // JSON.parse accepts any amount of whitespace (including none)
+    // between tokens.
+    .replace(/\n[ \t]*/g, "")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+}
+
+function parseConfigJson(text) {
+  const trimmed = sanitizeConfigPaste(text).trim();
+  if (!trimmed) {
+    throw new Error("config JSON is empty — use Build → send to profile, or paste a complete JSON object");
+  }
+  if (trimmed.includes("...")) {
+    throw new Error("config JSON still contains a placeholder (...); paste the complete object");
+  }
+  try {
+    return JSON.parse(trimmed);
+  } catch (e) {
+    throw new Error(`config JSON is invalid: ${(e instanceof Error ? e.message : String(e))}`);
+  }
+}
+
+function formatJsonForTextarea(raw) {
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2);
+  } catch {
+    return raw;
+  }
+}
+
+async function loadStable(user) {
+  const subtitle = root.querySelector("#roster-subtitle");
+  const grid = root.querySelector("#roster-grid");
+  if (!grid) return;
+  try {
+    const s = await api.getStable(user.uid).catch((e) => {
+      if (e.status === 404) return null;
+      throw e;
+    });
+    rosterCache = s;
+    if (subtitle) {
+      subtitle.textContent = s
+        ? `@${s.handle} · aggregate ELO ${s.eloAggregate} · ${s.wins}w ${s.losses}l`
+        : "empty — install your first seat below";
+    }
+    renderRosterGrid(grid, s);
+    updateEditor();
+  } catch (e) {
+    grid.innerHTML = `<div class="error">roster error: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderRosterGrid(grid, stable) {
+  const slots = Array.from({ length: ROSTER_SIZE }, (_, i) => stable?.slots?.[i] ?? null);
+  grid.innerHTML = slots.map((slot, i) => {
+    const filled = !!(slot && slot.slotId);
+    const active = i === selectedSlot ? "is-active" : "";
+    const state = filled ? "is-filled" : "is-empty";
+    const name = filled ? escapeHtml(slot.name ?? "unnamed") : "vacant seat";
+    const elo = filled ? `<div class="seat-elo">${slot.elo}</div>` : "";
+    const wl = filled ? `<div class="seat-wl">${slot.wins}-${slot.losses}-${slot.draws}</div>` : "";
+    const last = filled && slot.lastPlayedAt
+      ? `<div class="seat-last">last played ${relativeTime(slot.lastPlayedAt)}</div>`
+      : filled
+      ? `<div class="seat-last">no matches yet</div>`
+      : `<div class="seat-last">click to install</div>`;
+    return `
+      <button type="button" class="seat-card ${state} ${active}" data-slot="${i}">
+        <div class="seat-head">
+          <span class="seat-label">SEAT ${i}</span>
+          <span class="seat-state-dot"></span>
+        </div>
+        <div class="seat-name">${name}</div>
+        ${elo}${wl}
+        ${last}
+      </button>`;
+  }).join("");
+  grid.querySelectorAll(".seat-card").forEach((card) => {
+    card.addEventListener("click", () => {
+      selectedSlot = parseInt(card.dataset.slot, 10);
+      grid.querySelectorAll(".seat-card").forEach((c) => c.classList.toggle("is-active", c === card));
+      updateEditor();
+    });
+  });
+}
+
+function updateEditor() {
+  const title = root.querySelector("#editor-title");
+  const btn = root.querySelector("#submit-btn");
+  const nameInput = root.querySelector("#slot-name");
+  if (!title || !btn) return;
+  const slot = rosterCache?.slots?.[selectedSlot];
+  const filled = !!(slot && slot.slotId);
+  title.textContent = filled ? `Revise seat ${selectedSlot}` : `Install seat ${selectedSlot}`;
+  btn.textContent = filled ? "revise" : "install";
+  if (filled && nameInput && !nameInput.value.trim()) {
+    nameInput.placeholder = slot.name ? `current: ${slot.name}` : "e.g. bruiser-v2";
+  } else if (nameInput) {
+    nameInput.placeholder = "e.g. bruiser-v2";
+  }
+}
+
+function relativeTime(iso) {
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "—";
+  const secs = Math.max(0, (Date.now() - t) / 1000);
+  if (secs < 60) return `${Math.round(secs)}s ago`;
+  if (secs < 3600) return `${Math.round(secs / 60)}m ago`;
+  if (secs < 86400) return `${Math.round(secs / 3600)}h ago`;
+  return `${Math.round(secs / 86400)}d ago`;
 }
 
 function escapeHtml(s) {

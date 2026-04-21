@@ -58,7 +58,7 @@ const CHARACTER_SPRITES = [
 ];
 
 const WEAPON_SHEETS = [
-  { url: "assets/weapons/sama/launch.png", frameW: 48, frameH: 48, cell: 0 },
+  { url: "assets/weapons/sama/launch.png", frameW: 48, frameH: 48, cell: 0, visualYOffset: 16 },
   { url: "assets/weapons/darrius/launch.png", frameW: 48, frameH: 48, cell: 0 },
 ];
 
@@ -157,9 +157,9 @@ export function setupCanvas(canvas) {
     // (spectate/practice) but caused the canvas to overflow narrow
     // columns in the build page grid.
     const parent = canvas.parentElement;
-    const parentW = parent ? parent.clientWidth : Infinity;
+    const parentW = parent ? parentContentWidth(parent) : Infinity;
     const viewportW = document.documentElement.clientWidth - 40;
-    const cssW = Math.max(160, Math.min(W, parentW || viewportW, viewportW));
+    const cssW = Math.max(160, Math.min(parentW || viewportW, viewportW));
     const cssH = cssW * (H / W);
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
@@ -179,6 +179,19 @@ export function setupCanvas(canvas) {
   }
   resize();
   return { ctx, resize, teardown: () => { window.removeEventListener("resize", resize); ro?.disconnect(); } };
+}
+
+function parentContentWidth(el) {
+  const rect = el.getBoundingClientRect();
+  const style = getComputedStyle(el);
+  const px = (value) => Number.parseFloat(value) || 0;
+  return Math.max(0,
+    rect.width
+    - px(style.paddingLeft)
+    - px(style.paddingRight)
+    - px(style.borderLeftWidth)
+    - px(style.borderRightWidth),
+  );
 }
 
 export function drawFrame(ctx, stage, frame, labels) {
@@ -324,7 +337,7 @@ function drawGoal(ctx, goal) {
   const frac = Math.min(1, timer / GOAL_TIMER_START);
   const [r, g, b] = goalRingColor(frac);
   const urgent = frac < GOAL_URGENT_FRAC;
-  const pulse = 1 + Math.sin(Date.now() * (urgent ? 0.02 : 0.008)) * (urgent ? 0.18 : 0.06);
+  const pulse = 1 + Math.sin(Date.now() * (urgent ? 0.032 : 0.008)) * (urgent ? 0.34 : 0.06);
 
   ctx.save();
   ctx.translate(goal.x, goal.y);
@@ -339,14 +352,14 @@ function drawGoal(ctx, goal) {
   }
 
   // Outer glow halo — faint, tinted by current urgency color.
-  ctx.fillStyle = `rgba(${r},${g},${b},0.08)`;
+  ctx.fillStyle = `rgba(${r},${g},${b},${urgent ? 0.16 : 0.08})`;
   ctx.beginPath();
-  ctx.arc(0, 0, 60 * pulse, 0, Math.PI * 2);
+  ctx.arc(0, 0, (urgent ? 66 : 60) * pulse, 0, Math.PI * 2);
   ctx.fill();
 
   // Dim background track so the radial sweep reads even at low time.
   ctx.strokeStyle = `rgba(${r},${g},${b},0.15)`;
-  ctx.lineWidth = 4;
+  ctx.lineWidth = urgent ? 5 : 4;
   ctx.beginPath();
   ctx.arc(0, 0, 28, 0, Math.PI * 2);
   ctx.stroke();
@@ -356,7 +369,7 @@ function drawGoal(ctx, goal) {
   const start = -Math.PI / 2;
   const end = start + Math.PI * 2 * frac;
   ctx.strokeStyle = `rgba(${r},${g},${b},0.95)`;
-  ctx.lineWidth = 4;
+  ctx.lineWidth = urgent ? 6 : 4;
   ctx.lineCap = "round";
   ctx.beginPath();
   ctx.arc(0, 0, 28, start, end);
@@ -364,7 +377,7 @@ function drawGoal(ctx, goal) {
 
   // Intake ring (the smaller "still accepts tender" core).
   ctx.strokeStyle = `rgba(${r},${g},${b},0.7)`;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = urgent ? 5 : 3;
   ctx.beginPath();
   ctx.arc(0, 0, 16 * pulse, 0, Math.PI * 2);
   ctx.stroke();
@@ -583,7 +596,12 @@ function drawWeaponSprite(ctx, side, bx, by, tx, ty, active) {
   if (!img) return false;
 
   const kit = state.kit;
-  const angle = Math.atan2(ty - by, tx - bx);
+  const visualYOffset = kit.visualYOffset ?? 0;
+  const vbx = bx;
+  const vby = by + visualYOffset;
+  const vtx = tx;
+  const vty = ty + visualYOffset;
+  const angle = Math.atan2(vty - vby, vtx - vbx);
   const scale = active ? 1.12 : 0.96;
   const dw = kit.frameW * scale;
   const dh = kit.frameH * scale;
@@ -592,13 +610,13 @@ function drawWeaponSprite(ctx, side, bx, by, tx, ty, active) {
     ctx.save();
     ctx.strokeStyle = cssColor("--arena-weapon-glow", "white");
     ctx.lineWidth = 12;
-    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(tx, ty); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(vbx, vby); ctx.lineTo(vtx, vty); ctx.stroke();
     ctx.restore();
   }
 
   ctx.save();
   ctx.imageSmoothingEnabled = false;
-  ctx.translate(bx, by);
+  ctx.translate(vbx, vby);
   ctx.rotate(angle);
   ctx.globalAlpha = active ? 1 : 0.78;
   ctx.drawImage(

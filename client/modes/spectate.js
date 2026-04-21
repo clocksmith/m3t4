@@ -6,7 +6,7 @@
 // the canonical sim rate (120Hz), interpolating fighter/token positions
 // between adjacent frames on every RAF. This smooths:
 //   - the 3:2 pulldown jank of 40Hz source on a 60Hz display
-//   - network jitter (via ~50ms jitter buffer before playback starts;
+//   - network jitter (via a larger live buffer before playback starts;
 //     bursts past MAX_BUFFER_FRAMES are trimmed back to the live window
 //     so latency can't grow unbounded after a stall or tab background)
 
@@ -16,8 +16,9 @@ import { setupCanvas, drawFrame, W, H } from "../lib/render.js";
 import { getComputeClient } from "../lib/compute.js";
 
 const SIM_HZ = 120;                // canonical sim rate
-const JITTER_BUFFER_FRAMES = 6;    // ~2 chunks at STRIDE=3 → ~50ms
-const MAX_BUFFER_FRAMES = JITTER_BUFFER_FRAMES * 2;
+const JITTER_BUFFER_FRAMES = 24;   // ~8 chunks at STRIDE=3 -> ~200ms
+const LIVE_BUFFER_FRAMES = 36;     // target after trimming -> ~300ms
+const MAX_BUFFER_FRAMES = 90;      // hard cap -> ~750ms
 const TELEPORT_PX = 200;           // position jump above this snaps instead of lerps
 
 let ws = null;
@@ -25,7 +26,14 @@ let renderState = {
   matchLabel: "waiting…",
   stage: STAGES.datacenter,
   labels: { p1: "", p2: "" },
+  handles: { a: "", b: "" },
+  elos: { a: 0, b: 0 },
 };
+let waitState = null; // { reason, nextAttemptAt, intervalMs, skewMs }
+let matchActive = false;
+let noiseCanvas = null;
+let noiseCtx = null;
+let noiseFrameCounter = 0;
 let running = false;
 let lbTimer = null;
 let leaderboardEl = null;
@@ -46,6 +54,7 @@ function resetPlayback() {
   baselineWallMs = 0;
   baselineTick = 0;
   playbackStarted = false;
+  updateBufferStat("idle");
 }
 
 function primePlayback() {
@@ -61,7 +70,9 @@ function pausePlayback() {
 }
 
 function trimPlaybackToLiveWindow() {
-  frameBuf = frameBuf.slice(-JITTER_BUFFER_FRAMES);
+  // Large overflows usually mean a backgrounded tab or network burst.
+  // Jump back near live once, then rebuild a normal playback baseline.
+  frameBuf = frameBuf.slice(-LIVE_BUFFER_FRAMES);
   if (playbackStarted && frameBuf.length > 0) primePlayback();
 }
 
@@ -74,11 +85,25 @@ export function mount(root, { setStatus }) {
         <h1>Live <small>— whatever match is happening right now</small></h1>
         <div id="match-hud" class="tight">—</div>
       </div>
-      <div class="grid-2">
-        <canvas id="stage-canvas" width="${W}" height="${H}" tabindex="0"></canvas>
-        <aside class="panel lb">
+      <div class="spectate-grid">
+        <aside class="panel lb spectate-side">
           <h3>Leaderboard</h3>
           <div id="leaderboard">loading…</div>
+        </aside>
+        <div class="spectate-center">
+          <canvas id="stage-canvas" width="${W}" height="${H}" tabindex="0"></canvas>
+        </div>
+        <aside class="panel spectate-stats spectate-side">
+          <h3>Live</h3>
+          <dl class="stat-list">
+            <div class="stat-row"><dt>P1</dt><dd class="p1-accent" id="stat-p1">—</dd></div>
+            <div class="stat-row"><dt>P2</dt><dd class="p2-accent" id="stat-p2">—</dd></div>
+            <div class="stat-row"><dt>stage</dt><dd id="stat-stage">—</dd></div>
+            <div class="stat-row"><dt>ws</dt><dd id="stat-ws">connecting…</dd></div>
+            <div class="stat-row"><dt>next match</dt><dd id="stat-countdown">—</dd></div>
+            <div class="stat-row"><dt>buffer</dt><dd id="stat-buf">—</dd></div>
+            <div class="stat-row"><dt>last result</dt><dd id="stat-result">—</dd></div>
+          </dl>
         </aside>
       </div>
       ${computeEnabled ? `
@@ -166,9 +191,10 @@ function connect() {
     setTimeout(connect, 3000);
     return;
   }
-  ws.onopen = () => statusCb("ws live");
+  ws.onopen = () => { statusCb("ws live"); setStat("stat-ws", "live"); };
   ws.onclose = () => {
     statusCb("ws disconnected — retry in 3s");
+    setStat("stat-ws", "disconnected");
     if (running) setTimeout(connect, 3000);
   };
   ws.onerror = () => { /* handled by onclose */ };
@@ -179,32 +205,82 @@ function connect() {
 }
 
 function onEvent(m) {
-  const logEl = document.getElementById("stream-log");
-  if (logEl) {
-    const t = new Date().toLocaleTimeString();
-    logEl.innerHTML = `<div>[${t}] ${m.type} ${m.matchId ? m.matchId.slice(0, 8) : ""}</div>` + logEl.innerHTML;
+  if (m.type !== "frames") logStreamEvent(m);
+  if (m.type === "waiting") {
+    const skewMs = typeof m.serverNow === "number" ? (Date.now() - m.serverNow) : 0;
+    waitState = { reason: m.reason, nextAttemptAt: m.nextAttemptAt, intervalMs: m.intervalMs, skewMs, nextMatch: m.nextMatch };
+    matchActive = false;
+    resetPlayback();
+    if (m.nextMatch) {
+      const next = m.nextMatch;
+      const label = nextMatchLabel(next);
+      const hudEl = document.getElementById("match-hud");
+      if (hudEl) hudEl.textContent = `Next: ${label}`;
+      setStat("stat-p1", `@${next.a?.handle ?? "p1"} · ${next.a?.elo ?? "?"}`);
+      setStat("stat-p2", `@${next.b?.handle ?? "p2"} · ${next.b?.elo ?? "?"}`);
+      setStat("stat-stage", next.stageId ?? "datacenter");
+      setStat("stat-result", "queued");
+      renderState.stage = STAGES[next.stageId] ?? STAGES.datacenter;
+    }
+    return;
   }
   if (m.type === "matchStart" || m.type === "matchInProgress") {
+    waitState = null;
+    matchActive = true;
     const mt = m.match || m;
-    renderState.matchLabel = `${mt.a?.handle ?? "?"} (${mt.a?.elo ?? "?"}) vs ${mt.b?.handle ?? "?"} (${mt.b?.elo ?? "?"})`;
+    const handleA = mt.a?.handle ?? "?";
+    const handleB = mt.b?.handle ?? "?";
+    const eloA = mt.a?.elo ?? "?";
+    const eloB = mt.b?.elo ?? "?";
+    renderState.handles = { a: handleA, b: handleB };
+    renderState.elos = { a: eloA, b: eloB };
+    renderState.matchLabel = `@${handleA} (${eloA}) vs @${handleB} (${eloB})`;
     renderState.labels = {
-      p1: `@${mt.a?.handle ?? "p1"} [${mt.a?.name ?? "slot"}]`,
-      p2: `@${mt.b?.handle ?? "p2"} [${mt.b?.name ?? "slot"}]`,
+      p1: `@${handleA} [${mt.a?.name ?? "slot"}]`,
+      p2: `@${handleB} [${mt.b?.name ?? "slot"}]`,
     };
     renderState.stage = STAGES[mt.stageId] ?? STAGES.datacenter;
     const hudEl = document.getElementById("match-hud");
     if (hudEl) hudEl.textContent = renderState.matchLabel;
+    setStat("stat-p1", `@${mt.a?.handle ?? "p1"} · ${mt.a?.elo ?? "?"}`);
+    setStat("stat-p2", `@${mt.b?.handle ?? "p2"} · ${mt.b?.elo ?? "?"}`);
+    setStat("stat-stage", mt.stageId ?? "datacenter");
+    setStat("stat-result", "in progress");
     resetPlayback();
   } else if (m.type === "frames") {
     if (!Array.isArray(m.frames)) return;
-    for (const f of m.frames) frameBuf.push(f);
+    appendFrames(m.frames);
     if (frameBuf.length > MAX_BUFFER_FRAMES) trimPlaybackToLiveWindow();
     // Start playback once the jitter buffer is primed.
     if (!playbackStarted && frameBuf.length >= JITTER_BUFFER_FRAMES) primePlayback();
+    updateBufferStat(playbackStarted ? "live" : "priming");
   } else if (m.type === "matchEnd") {
-    renderState.matchLabel = `${renderState.matchLabel}  →  winner ${m.winner === -1 ? "draw" : m.winner === 0 ? "P1" : "P2"}`;
+    matchActive = false;
+    const { a, b } = renderState.handles;
+    const eloDelta = m.eloAfter && m.eloBefore
+      ? ` · Δ @${a} ${formatDelta(m.eloAfter[0] - m.eloBefore[0])} · @${b} ${formatDelta(m.eloAfter[1] - m.eloBefore[1])}`
+      : "";
+    let outcome;
+    if (m.winner === -1) outcome = "draw";
+    else if (m.winner === 0) outcome = `@${a} beat @${b}`;
+    else outcome = `@${b} beat @${a}`;
+    renderState.matchLabel = `${outcome}${eloDelta}`;
     const hudEl = document.getElementById("match-hud");
     if (hudEl) hudEl.textContent = renderState.matchLabel;
+    const resEl = document.getElementById("stat-result");
+    if (resEl) {
+      resEl.textContent = m.winner === -1 ? "draw" : m.winner === 0 ? `@${a} won` : `@${b} won`;
+      resEl.className = m.winner === 0 ? "p1-accent" : m.winner === 1 ? "p2-accent" : "";
+    }
+  }
+}
+
+function appendFrames(frames) {
+  const lastTick = frameBuf.length ? frameBuf[frameBuf.length - 1].tick : -Infinity;
+  for (const f of frames) {
+    if (typeof f?.tick !== "number") continue;
+    if (f.tick <= lastTick) continue;
+    frameBuf.push(f);
   }
 }
 
@@ -215,24 +291,29 @@ function currentFrame() {
   if (!playbackStarted) return null;
   if (frameBuf.length === 0) {
     pausePlayback();
+    updateBufferStat("empty");
     return null;
   }
   const elapsedMs = performance.now() - baselineWallMs;
   const targetTick = baselineTick + (elapsedMs * SIM_HZ) / 1000;
 
-  // Advance head of buffer, keeping at least 2 frames for interpolation.
-  while (frameBuf.length > 2 && frameBuf[1].tick <= targetTick) frameBuf.shift();
+  // Advance head past consumed frames, keeping at least 1 frame for
+  // the "stall — hold last" fallback.
+  while (frameBuf.length > 1 && frameBuf[1].tick <= targetTick) frameBuf.shift();
 
   const a = frameBuf[0];
   const b = frameBuf[1];
-  const last = frameBuf[frameBuf.length - 1] ?? a;
-  if (!b || targetTick >= last.tick) {
-    // The wall clock has outrun the received stream. Drop stale frames so
-    // the next incoming chunk rebuilds a real jitter buffer before playback.
-    frameBuf = [];
-    pausePlayback();
-    return last;
+  if (!b) {
+    // Only one frame buffered — stream stalled briefly. Hold last frame
+    // and keep targetTick pinned near it. If wall time keeps advancing
+    // while the buffer is empty, the next packet would otherwise be
+    // consumed immediately, producing the visible "skip" stutter.
+    baselineWallMs = performance.now();
+    baselineTick = a.tick;
+    updateBufferStat("refilling");
+    return a;
   }
+  if (targetTick >= b.tick) return b;
 
   const span = (b.tick - a.tick) || 1;
   const raw = (targetTick - a.tick) / span;
@@ -263,15 +344,15 @@ function interpolateFrame(a, b, t) {
 
 async function refreshLeaderboard() {
   try {
-    const rows = await leaderboard(12);
+    const rows = await leaderboard(10);
     leaderboardEl.innerHTML = `
       <table>
         ${rows.map((r, i) => `
           <tr>
             <td class="rank">${i + 1}</td>
-            <td>@${r.handle}</td>
+            <td class="handle" title="@${escapeHtml(r.handle)}">@${escapeHtml(r.handle)}</td>
             <td class="elo">${r.eloAggregate}</td>
-            <td class="wl">${r.wins}w ${r.losses}l</td>
+            <td class="wl">${r.wins}-${r.losses}</td>
           </tr>`).join("")}
       </table>`;
   } catch (e) {
@@ -279,20 +360,162 @@ async function refreshLeaderboard() {
   }
 }
 
+function formatDelta(n) {
+  const r = Math.round(n);
+  return r > 0 ? `+${r}` : `${r}`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+
 function loop() {
   if (!running) return;
   const f = currentFrame();
   if (f) {
     drawFrame(ctx, renderState.stage, f, renderState.labels);
+  } else if (matchActive) {
+    // Mid-match stall: noise scramble behind a "buffering" message.
+    drawNoiseScramble(ctx);
+    ctx.fillStyle = "rgba(4,4,4,0.55)";
+    ctx.fillRect(0, H / 2 - 44, W, 72);
+    ctx.fillStyle = cssColor("--ui-blue", "#3b82f6");
+    ctx.textAlign = "center";
+    ctx.font = "700 22px -apple-system, system-ui";
+    ctx.fillText("buffering signal…", W / 2, H / 2);
   } else {
+    // Between matches: idle bg + countdown.
     ctx.fillStyle = cssColor("--arena-idle-bg", "black"); ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = cssColor("--arena-idle-text", "gray"); ctx.font = "600 22px -apple-system, system-ui"; ctx.textAlign = "center";
-    ctx.fillText("waiting for next match…", W / 2, H / 2);
+    ctx.fillStyle = cssColor("--arena-idle-text", "gray");
+    ctx.textAlign = "center";
+    const secs = waitSecondsLeft();
+    if (secs !== null) {
+      ctx.font = "600 22px -apple-system, system-ui";
+      ctx.fillText(waitState.reason === "no-pair" && !waitState.nextMatch ? "no eligible pair — retry in" : "next match in", W / 2, H / 2 - 42);
+      if (waitState.nextMatch) {
+        ctx.fillStyle = cssColor("--arena-idle-text", "gray");
+        ctx.font = "600 18px -apple-system, system-ui";
+        ctx.fillText(nextMatchLabel(waitState.nextMatch), W / 2, H / 2 - 12);
+      }
+      ctx.fillStyle = cssColor("--ui-blue", "#3b82f6");
+      ctx.font = "700 56px ui-monospace, Menlo, monospace";
+      ctx.fillText(`${secs}s`, W / 2, H / 2 + 48);
+    } else {
+      ctx.font = "600 22px -apple-system, system-ui";
+      ctx.fillText("waiting for next match…", W / 2, H / 2);
+    }
   }
+  updateWaitStat();
   rafId = requestAnimationFrame(loop);
+}
+
+// Procedural 2D noise scramble. Lo-res offscreen buffer painted with
+// blue/purple/red/white static that we upscale (no smoothing) into the
+// main canvas. Regenerated every 3 frames so it shimmers without
+// burning CPU during a real stall.
+const NOISE_W = 160;
+const NOISE_H = 90;
+function drawNoiseScramble(destCtx) {
+  if (!noiseCanvas) {
+    noiseCanvas = document.createElement("canvas");
+    noiseCanvas.width = NOISE_W;
+    noiseCanvas.height = NOISE_H;
+    noiseCtx = noiseCanvas.getContext("2d", { alpha: false });
+  }
+  if ((noiseFrameCounter++ % 3) === 0) {
+    const img = noiseCtx.createImageData(NOISE_W, NOISE_H);
+    const d = img.data;
+    const palette = [
+      [10, 10, 18],      // near-black
+      [10, 10, 18],
+      [10, 10, 18],
+      [29, 78, 216],     // blue-ink
+      [59, 130, 246],    // blue
+      [124, 58, 237],    // purple-ink
+      [168, 85, 247],    // purple
+      [185, 28, 28],     // red-ink (sparingly)
+      [244, 244, 255],   // white (rare)
+    ];
+    for (let i = 0; i < d.length; i += 4) {
+      const c = palette[(Math.random() * palette.length) | 0];
+      d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; d[i + 3] = 255;
+    }
+    noiseCtx.putImageData(img, 0, 0);
+  }
+  const prevSmoothing = destCtx.imageSmoothingEnabled;
+  destCtx.imageSmoothingEnabled = false;
+  destCtx.drawImage(noiseCanvas, 0, 0, NOISE_W, NOISE_H, 0, 0, W, H);
+  destCtx.imageSmoothingEnabled = prevSmoothing;
+}
+
+function waitSecondsLeft() {
+  if (!waitState) return null;
+  const remaining = waitState.nextAttemptAt - (Date.now() - waitState.skewMs);
+  return Math.max(0, Math.ceil(remaining / 1000));
+}
+
+function updateWaitStat() {
+  const el = document.getElementById("stat-countdown");
+  if (!el) return;
+  const secs = waitSecondsLeft();
+  if (secs === null) {
+    el.textContent = "live";
+  } else if (waitState.nextMatch) {
+    el.textContent = `${secs}s · ${nextMatchLabel(waitState.nextMatch)}`;
+  } else {
+    el.textContent = `${secs}s (${waitState.reason})`;
+  }
+}
+
+function nextMatchLabel(next) {
+  const a = next?.a?.handle ?? "p1";
+  const b = next?.b?.handle ?? "p2";
+  const delta = typeof next?.eloDelta === "number" ? ` · Δ${Math.round(next.eloDelta)}` : "";
+  return `@${a} vs @${b}${delta}`;
 }
 
 function cssColor(name, fallback) {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return value || fallback;
+}
+
+function setStat(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function updateBufferStat(state = "live") {
+  const n = frameBuf.length;
+  const frames = `${n} ${n === 1 ? "frame" : "frames"}`;
+  if (state === "idle") return setStat("stat-buf", "idle");
+  if (state === "empty") return setStat("stat-buf", "0 frames");
+  if (state === "priming") return setStat("stat-buf", `${frames} priming`);
+  if (state === "refilling") return setStat("stat-buf", `${frames} refilling`);
+  return setStat("stat-buf", frames);
+}
+
+const STREAM_LOG_MAX = 8;
+function logStreamEvent(m) {
+  const logEl = document.getElementById("stream-log");
+  if (!logEl) return;
+  const t = new Date().toLocaleTimeString();
+  let extra = "";
+  if (m.type === "matchStart" || m.type === "matchInProgress") {
+    const mt = m.match || m;
+    extra = `  @${mt.a?.handle ?? "?"} vs @${mt.b?.handle ?? "?"} · ${mt.stageId ?? "stage"}`;
+  } else if (m.type === "matchEnd") {
+    const { a, b } = renderState.handles;
+    const w = m.winner === -1 ? "draw" : m.winner === 0 ? `@${a} beat @${b}` : `@${b} beat @${a}`;
+    const e = m.eloAfter && m.eloBefore
+      ? `  Δ[${formatDelta(m.eloAfter[0] - m.eloBefore[0])},${formatDelta(m.eloAfter[1] - m.eloBefore[1])}]`
+      : "";
+    extra = `  ${w}${e}`;
+  } else if (m.type === "waiting") {
+    const next = m.nextMatch ? ` · ${nextMatchLabel(m.nextMatch)}` : "";
+    extra = `  ${m.reason} · next ~${Math.max(0, Math.round((m.nextAttemptAt - (m.serverNow ?? Date.now())) / 1000))}s${next}`;
+  }
+  const row = document.createElement("div");
+  row.textContent = `[${t}] ${m.type}${extra}`;
+  logEl.prepend(row);
+  while (logEl.childElementCount > STREAM_LOG_MAX) logEl.lastElementChild.remove();
 }

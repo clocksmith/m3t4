@@ -25,6 +25,7 @@ import { registerProofRoutes } from "./labs/proof/routes.js";
 import { initZkVerifiers } from "./labs/proof/zk.js";
 import { registerComputeRoutes } from "./compute/routes.js";
 import { ComputeStore } from "./compute/store.js";
+import { FanoutRelay } from "./fanout.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,35 +35,58 @@ const STORE_PATH = CONFIG.storePath ?? path.join(__dirname, "..", "data", "m3t4.
 const store = CONFIG.storeBackend === "firestore"
   ? new FirestoreStableStore()
   : new FileStableStore(STORE_PATH);
-const firehose = new Firehose(store);
+const runsApi = CONFIG.serverRole === "combined" || CONFIG.serverRole === "api";
+const runsFirehose = CONFIG.serverRole === "combined" || CONFIG.serverRole === "worker";
+const runsFanout = CONFIG.serverRole === "api";
+const firehose = runsFirehose ? new Firehose(store) : null;
+const fanout = runsFanout ? new FanoutRelay(CONFIG.firehoseWsOrigin) : null;
 
-if (CONFIG.features.proofLab && CONFIG.features.zk) {
+if (runsApi && CONFIG.features.proofLab && CONFIG.features.zk) {
   // No-op if no vkey.json is present; the proof route reports that clearly.
   initZkVerifiers();
 }
 
 const routes: RouteList = [];
-registerRankedRoutes(routes, { store, features: CONFIG.features, config: CONFIG });
-registerReplayVerifyRoutes(routes, { store });
+if (runsApi) {
+  registerRankedRoutes(routes, { store, features: CONFIG.features, config: CONFIG });
+  registerReplayVerifyRoutes(routes, { store });
+} else {
+  routes.push(async (req, res, url) => {
+    if (req.method === "GET" && url.pathname === "/api/status") {
+      json(res, 200, {
+        ok: true,
+        role: CONFIG.serverRole,
+        cycleMs: CONFIG.cycleMs,
+        storeBackend: CONFIG.storeBackend,
+        features: CONFIG.features,
+      });
+      return true;
+    }
+    return false;
+  });
+}
 
-if (CONFIG.features.p2pDuel) {
+if (runsApi && CONFIG.features.p2pDuel) {
   const duelStore = new VerifyStore(defaultVerifyStorePath("duel"));
   registerDuelRoutes(routes, { store, vstore: duelStore });
 }
 
-if (CONFIG.features.communityVerify) {
+if (runsApi && CONFIG.features.communityVerify) {
   const communityStore = new VerifyStore(defaultVerifyStorePath("community"));
   registerCommunityVerifyRoutes(routes, { store, vstore: communityStore });
 }
 
-if (CONFIG.features.proofLab) {
+if (runsApi && CONFIG.features.proofLab) {
   const proofStore = new VerifyStore(defaultVerifyStorePath("proof"));
   registerProofRoutes(routes, { store, vstore: proofStore, zkEnabled: CONFIG.features.zk });
 }
 
-if (CONFIG.features.distributedCompute) {
+if (runsApi && CONFIG.features.distributedCompute) {
   const computeStore = new ComputeStore();
-  registerComputeRoutes(routes, { store: computeStore });
+  registerComputeRoutes(routes, {
+    store: computeStore,
+    taskAdminEnabled: CONFIG.features.computeTaskAdmin,
+  });
   // Seed a small prime-search task so freshly-connected workers have
   // something to chew on without needing an admin API call. Real
   // workloads are posted via /api/compute/tasks (gated separately).
@@ -96,15 +120,31 @@ const server = http.createServer(async (req, res) => {
 
 const wss = new WebSocketServer({ server, path: "/ws" });
 wss.on("connection", (ws) => {
-  const client = firehose.addClient(ws);
-  ws.on("close", () => firehose.removeClient(client));
-  ws.on("error", () => firehose.removeClient(client));
+  if (firehose) {
+    const client = firehose.addClient(ws);
+    ws.on("close", () => firehose.removeClient(client));
+    ws.on("error", () => firehose.removeClient(client));
+    return;
+  }
+  if (fanout) {
+    const client = fanout.addClient(ws);
+    ws.on("close", () => fanout.removeClient(client));
+    ws.on("error", () => fanout.removeClient(client));
+    return;
+  }
+  ws.close(1011, "websocket disabled for this role");
 });
 
 server.listen(CONFIG.port, () => {
   const storeLabel = CONFIG.storeBackend === "firestore" ? "firestore" : STORE_PATH;
-  console.log(`m3t4 server on :${CONFIG.port}  (store=${storeLabel})`);
-  console.log(`  firehose: close-ELO ±${CONFIG.eloTolerance}, active pool ${CONFIG.activePoolMs / 86400000}d`);
+  console.log(`m3t4 server on :${CONFIG.port}  (role=${CONFIG.serverRole}, store=${storeLabel})`);
+  if (fanout) {
+    console.log(`  fanout: upstream ${CONFIG.firehoseWsOrigin}`);
+    fanout.start();
+  }
+  if (firehose) {
+    console.log(`  firehose: close-ELO ±${CONFIG.eloTolerance}, active pool ${CONFIG.activePoolMs / 86400000}d`);
+    firehose.start().catch((e) => console.error("firehose crashed:", e));
+  }
   console.log(`  features: ${JSON.stringify(CONFIG.features)}`);
-  firehose.start().catch((e) => console.error("firehose crashed:", e));
 });

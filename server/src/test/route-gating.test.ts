@@ -164,6 +164,39 @@ test("ranked submit rejects configs past the hallucination cap before store writ
   assert.equal(store.submitted.length, 0);
 });
 
+test("production internal routes require the internal token", async (t) => {
+  const oldNodeEnv = process.env.NODE_ENV;
+  const oldToken = process.env.M3T4_INTERNAL_TOKEN;
+  process.env.NODE_ENV = "production";
+  process.env.M3T4_INTERNAL_TOKEN = "cron-secret";
+  t.after(() => {
+    if (oldNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = oldNodeEnv;
+    if (oldToken === undefined) delete process.env.M3T4_INTERNAL_TOKEN;
+    else process.env.M3T4_INTERNAL_TOKEN = oldToken;
+  });
+
+  const routes: RouteList = [];
+  const store = new MemoryStableStore();
+  registerCore(routes, store);
+  const srv = await boot(routes);
+  t.after(() => srv.close());
+
+  const missing = await req(srv.port, "POST", "/internal/elo-decay");
+  assert.equal(missing.status, 403);
+
+  const wrong = await req(srv.port, "POST", "/internal/elo-decay", undefined, {
+    "x-m3t4-internal-token": "wrong",
+  });
+  assert.equal(wrong.status, 403);
+
+  const ok = await req(srv.port, "POST", "/internal/elo-decay", undefined, {
+    "x-m3t4-internal-token": "cron-secret",
+  });
+  assert.equal(ok.status, 200);
+  assert.deepEqual(ok.body, { ok: true, decayed: 0 });
+});
+
 test("P2P routes are available only when the duel registrar is mounted", async (t) => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "m3t4-route-gating-"));
   const routes: RouteList = [];

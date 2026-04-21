@@ -11,7 +11,7 @@ export const STRATEGY_NAMES = [
   "incumbent",
   "pivot",
   "unicorn",
-  "disruptor",
+  "intern",
   "operator",
   "oracle",
   "shipper",
@@ -19,7 +19,7 @@ export const STRATEGY_NAMES = [
   "regulatory",
   "founder",
   "acolyte",
-  "intern",
+  "disruptor",
   "troll",
   "acquirer",
 ] as const;
@@ -72,8 +72,8 @@ export const STRATEGIES: Record<StrategyName, BrainConfig> = {
     },
   },
   // evolved id=r5 spent=360 counters=4 internalWr=52.0% vsOldMeta=65.8%
-  disruptor: {
-    id: "disruptor",
+  intern: {
+    id: "intern",
     attributes: {
       burnRate: 0.4402, moat: 0, shipRate: 0.8707, foresight: 0,
       pivotSpeed: 0.0293, leverage: -1, networking: 0.0293, hallucination: 0,
@@ -144,8 +144,8 @@ export const STRATEGIES: Record<StrategyName, BrainConfig> = {
     },
   },
   // evolved id=r13 spent=353 counters=7 internalWr=44.6% vsOldMeta=62.8%
-  intern: {
-    id: "intern",
+  disruptor: {
+    id: "disruptor",
     attributes: {
       burnRate: 0.1, moat: 96, shipRate: 0.36, foresight: 0.085,
       pivotSpeed: 0.27, leverage: -0.28, networking: 0.54, hallucination: 0,

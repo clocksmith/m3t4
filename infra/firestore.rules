@@ -2,10 +2,6 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
-    }
-
     // Private canonical state. Contains submitted bot configs and Elo stats.
     // Only the Cloud Run service account should access this through the Admin
     // SDK. Browser clients use API endpoints instead.

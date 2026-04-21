@@ -35,10 +35,11 @@ interface TaskCreateBody {
 
 export interface ComputeRouteDeps {
   store: ComputeStore;
+  taskAdminEnabled: boolean;
 }
 
 export function registerComputeRoutes(routes: RouteList, deps: ComputeRouteDeps): void {
-  const { store } = deps;
+  const { store, taskAdminEnabled } = deps;
 
   routes.push(async (req, res, url) => {
     // Capabilities / known kernels
@@ -124,7 +125,7 @@ export function registerComputeRoutes(routes: RouteList, deps: ComputeRouteDeps)
     // rather than the main feature flag so the route can exist but
     // require explicit opt-in to create real work.
     if (req.method === "POST" && url.pathname === "/api/compute/tasks") {
-      if (process.env.FEATURE_COMPUTE_TASK_ADMIN !== "true") {
+      if (!taskAdminEnabled) {
         json(res, 403, { error: "task creation disabled" });
         return true;
       }

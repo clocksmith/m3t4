@@ -41,6 +41,8 @@
   --ui-blue-ink: var(--color-blue-ink);
   --ui-purple: var(--color-purple);
   --ui-purple-ink: var(--color-purple-ink);
+  --ui-pink: #ec4899;
+  --ui-pink-ink: #be185d;
 
   /* Canvas fallback renderer. Full asset palettes belong in theming/. */
   --arena-bg: #14141e;
@@ -50,12 +52,14 @@
   --arena-platform-solid: #141c28;
   --arena-platform-soft: #151e2a;
   --arena-platform-highlight: rgba(255,255,255,0.07);
-  --arena-p1: #6ee7b7;
-  --arena-p1-trim: #d1fae5;
-  --arena-p1-shadow: #047857;
-  --arena-p2: #fb923c;
-  --arena-p2-trim: #fed7aa;
-  --arena-p2-shadow: #9a3412;
+  --arena-p1: var(--ui-blue);
+  --arena-p1-trim: #93c5fd;
+  --arena-p1-shadow: var(--ui-blue-ink);
+  /* P2 is purple, not red — red is reserved for hallucination /
+   * over-budget / danger signals across the whole UI. */
+  --arena-p2: var(--ui-purple);
+  --arena-p2-trim: #d8b4fe;
+  --arena-p2-shadow: var(--ui-purple-ink);
   --arena-goal-normal: #d946ef;
   --arena-goal-urgent: #ef4444;
   --arena-token: #ffd700;
@@ -77,11 +81,58 @@ body {
   color: var(--ui-text);
   font-family: -apple-system, system-ui, sans-serif;
   min-height: 100vh;
+  /* Firefox + modern spec: thin scrollbars, theme-matched colors. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-border) var(--ui-bg-soft);
 }
 
 body {
   display: flex;
   flex-direction: column;
+}
+
+/* Chrome / Safari / Edge scrollbar styling. Scoped via the universal
+ * selector so every scrollable container in the app — page body,
+ * .grid-3 side panels, .code-export, .stream-log — gets the same
+ * dark-track + accent-thumb treatment instead of the browser default. */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: var(--ui-bg-soft);
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--ui-border);
+  border-radius: 4px;
+  border: 1px solid var(--ui-bg-soft);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-border-soft);
+}
+*::-webkit-scrollbar-corner {
+  background: var(--ui-bg-soft);
+}
+
+/* Side-tinted scrollbars inside each player panel so the P1/P2 accent
+ * carries through the scroll chrome too. */
+.player-panel.is-p1 *::-webkit-scrollbar-thumb {
+  background: var(--ui-blue-ink);
+}
+.player-panel.is-p1 *::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-blue);
+}
+.player-panel.is-p2 *::-webkit-scrollbar-thumb {
+  background: var(--ui-purple-ink);
+}
+.player-panel.is-p2 *::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-purple);
+}
+.player-panel.is-p1 {
+  scrollbar-color: var(--ui-blue-ink) var(--ui-bg-soft);
+}
+.player-panel.is-p2 {
+  scrollbar-color: var(--ui-purple-ink) var(--ui-bg-soft);
 }
 
 a {
@@ -289,6 +340,13 @@ textarea {
   line-height: 1.4;
 }
 
+.config-json-textarea {
+  width: 100%;
+  min-height: 360px;
+  white-space: pre;
+  overflow: auto;
+}
+
 /* --- canvas --- */
 canvas {
   display: block;
@@ -301,11 +359,12 @@ canvas {
 
 /* --- leaderboard table --- */
 .lb {
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 .lb table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-family: ui-monospace, Menlo, monospace;
   font-size: 11px;
@@ -325,15 +384,110 @@ canvas {
   text-align: right;
 }
 
+.lb .handle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .lb .elo {
   text-align: right;
   color: var(--ui-blue);
   font-weight: 700;
+  width: 3.5em;
 }
 
 .lb .wl {
   text-align: right;
   color: var(--ui-text-subtle);
+  width: 3.5em;
+}
+
+/* --- spectate 3-column layout: leaderboard | centered arena | live stats --- */
+.spectate-grid {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) 240px;
+  gap: 14px;
+  align-items: start;
+}
+
+.spectate-center {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.spectate-center canvas {
+  max-width: 100%;
+  display: block;
+}
+
+.spectate-side {
+  position: sticky;
+  top: 14px;
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+}
+
+.spectate-stats .stat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.spectate-stats .stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 2px;
+  border-bottom: 1px dotted var(--ui-border);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+}
+
+.spectate-stats .stat-row:last-child {
+  border-bottom: none;
+}
+
+.spectate-stats dt {
+  color: var(--ui-text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.spectate-stats dd {
+  color: var(--ui-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  min-width: 0;
+}
+
+.spectate-stats .p1-accent { color: var(--ui-blue); font-weight: 700; }
+.spectate-stats .p2-accent { color: var(--ui-purple); font-weight: 700; }
+
+@media (max-width: 1100px) {
+  .spectate-grid {
+    grid-template-columns: minmax(0, 1fr) 220px;
+  }
+  .spectate-center { grid-column: 1 / 2; }
+  .spectate-stats { grid-column: 2 / 3; grid-row: 1 / 2; }
+  .spectate-grid .lb { grid-column: 1 / -1; grid-row: 2 / 3; position: static; max-height: none; }
+}
+
+@media (max-width: 800px) {
+  .spectate-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .spectate-center, .spectate-stats, .spectate-grid .lb {
+    grid-column: 1 / -1;
+  }
+  .spectate-side { position: static; max-height: none; }
 }
 
 /* --- footer --- */
@@ -387,28 +541,22 @@ canvas {
  * max-height and scroll their contents internally so they don't grow
  * to match a tall canvas. On narrow screens the layout collapses.
  */
+/* Symmetric P1 | canvas | P2. Side panels are static-width at every
+ * viewport ≥ 1200px so P1 (blue) and P2 (purple) always read as a mirror
+ * pair. The canvas (middle column) absorbs the rest of the width.
+ */
 .grid-3 {
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) minmax(480px, 2fr) 340px;
+  grid-template-columns: 340px minmax(480px, 1fr) 340px;
   gap: 14px;
   align-items: stretch;
 }
-
 .grid-3 > .panel {
   min-height: 0;
   height: 100%;
 }
-/* On very wide viewports give the arena even more runway. */
-@media (min-width: 1600px) {
-  .grid-3 {
-    grid-template-columns: minmax(300px, 1fr) minmax(640px, 3fr) 360px;
-  }
-}
-/* Keep the three build columns visually equal-height on desktop. CSS grid
- * sizes the row to the tallest panel, then stretches the siblings; the max
- * height prevents the builder from exceeding the viewport and scrolling the
- * whole page.
- */
+/* Keep the three columns bounded by viewport height on desktop; each
+ * panel scrolls its own overflow so the whole page doesn't scroll. */
 @media (min-width: 1024px) {
   .grid-3 > .panel {
     max-height: calc(100vh - 180px);
@@ -416,9 +564,11 @@ canvas {
   }
 }
 
+/* Narrow desktop / tablet: canvas goes full-width on top, player panels
+ * side-by-side and still symmetric below. */
 @media (max-width: 1200px) {
   .grid-3 {
-    grid-template-columns: 1fr 340px;
+    grid-template-columns: 1fr 1fr;
   }
   .grid-3 > :nth-child(2) {
     grid-column: 1 / -1;
@@ -433,6 +583,363 @@ canvas {
   .grid-3 > :nth-child(2) {
     order: 0;
   }
+}
+
+/* --- collapsible JSON export inside each player panel --- */
+.json-fold {
+  margin-top: 6px;
+}
+.json-fold > summary {
+  cursor: pointer;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ui-text-soft);
+  padding: 4px 0;
+  user-select: none;
+  list-style: none;
+}
+.json-fold > summary::-webkit-details-marker { display: none; }
+.json-fold > summary::before {
+  content: "▸ ";
+  display: inline-block;
+  transition: transform 120ms ease;
+}
+.json-fold[open] > summary::before {
+  transform: rotate(90deg);
+  margin-right: 2px;
+}
+.json-fold > summary:hover { color: var(--ui-text); }
+.json-fold > .code-export { margin-top: 6px; }
+
+/* --- match bar on build (stage + reset + re-sim row) --- */
+.match-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Build page header row — title + stage selector + match controls all
+ * on one horizontal line on desktop. Wraps to multiple lines on mobile.
+ * Replaces the old separate .page-header + .match-bar stack. */
+.page-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 0 4px;
+}
+.page-header-row .page-title-stack {
+  margin-right: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.page-header-row .page-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ui-red);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.page-header-row .page-subtitle {
+  color: var(--ui-text-subtle);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+  max-width: 64ch;
+  white-space: pre-line;
+}
+.page-header-row .inline-control {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.page-header-row #test-hud {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  color: var(--ui-text-subtle);
+}
+
+/* Panel-level fold: whole player config collapses to a single compact
+ * row on mobile. Tap the summary to expand. On desktop the summary is
+ * hidden and the panel stays expanded. */
+.player-fold-summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 2px 10px;
+  user-select: none;
+}
+.player-fold-summary::-webkit-details-marker { display: none; }
+.player-fold-summary .player-title {
+  color: var(--slot-accent);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  margin: 0;
+}
+.player-fold-summary .player-fold-badge {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  color: var(--ui-text-soft);
+  padding: 3px 8px;
+  background: var(--ui-surface-code);
+  border: 1px solid var(--ui-border);
+  border-radius: 3px;
+}
+.player-fold-summary .player-fold-chevron {
+  margin-left: auto;
+  color: var(--slot-accent);
+  font-size: 14px;
+  transition: transform 120ms ease;
+}
+details.player-fold[open] > .player-fold-summary .player-fold-chevron {
+  transform: rotate(90deg);
+}
+/* Desktop ≥900px: panel-fold summary hidden, content always shows. */
+@media (min-width: 900px) {
+  .player-fold-summary { display: none; }
+}
+
+/* Build body is now a <details> so mobile can collapse it. Show a
+ * clean, accent-colored chevron summary; hide the native marker. */
+.build-fold-summary {
+  cursor: pointer;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--slot-accent, var(--ui-text-soft));
+  padding: 6px 0;
+  user-select: none;
+  list-style: none;
+  margin-bottom: 6px;
+}
+.build-fold-summary::-webkit-details-marker { display: none; }
+.build-fold-summary::before {
+  content: "▸ ";
+  display: inline-block;
+  transition: transform 120ms ease;
+}
+details.player-build-body[open] > .build-fold-summary::before {
+  transform: rotate(90deg);
+  margin-right: 2px;
+}
+
+/* Desktop: summary hidden; body always shows. Mobile: summary visible
+ * so users can toggle. */
+@media (min-width: 900px) {
+  .build-fold-summary { display: none; }
+}
+
+/* --- symmetric P1/P2 player panels on build --- */
+.player-panel {
+  border-top-width: 3px;
+}
+.player-panel.is-p1 {
+  --slot-accent: var(--ui-blue);
+  --slot-accent-ink: var(--ui-blue-ink);
+  border-top-color: var(--ui-blue);
+}
+.player-panel.is-p2 {
+  --slot-accent: var(--ui-purple);
+  --slot-accent-ink: var(--ui-purple-ink);
+  border-top-color: var(--ui-purple);
+}
+.player-panel .player-title {
+  color: var(--slot-accent);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+}
+.canvas-panel {
+  /* The middle column is also .panel. Keep it neutral and pin the arena
+   * to the top-center while setupCanvas sizes it to the content width. */
+  border-top-color: var(--ui-border);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.canvas-panel .u-canvas-fill {
+  flex: 0 1 auto;
+  margin-inline: auto;
+}
+
+.player-mode-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.mode-pill {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 6px 8px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface-2);
+  color: var(--ui-text-soft);
+  cursor: pointer;
+  user-select: none;
+}
+.mode-pill input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.mode-pill:hover { background: var(--ui-hover); }
+.mode-pill.is-active {
+  background: var(--slot-accent-ink, var(--ui-blue-ink));
+  color: var(--ui-text);
+  border-color: var(--slot-accent, var(--ui-blue));
+}
+
+.player-mode-detail {
+  height: 132px;
+  margin-bottom: 10px;
+}
+
+.player-mode-detail > [hidden] {
+  display: none !important;
+}
+
+.player-mode-copy,
+.player-human-hint {
+  height: 132px;
+  padding: 14px;
+  background: var(--ui-surface-code);
+  border: 1px dashed var(--slot-accent, var(--ui-border));
+}
+
+.mode-copy-title {
+  color: var(--slot-accent, var(--ui-text));
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+  margin-bottom: 8px;
+}
+
+.mode-copy-body {
+  color: var(--ui-text-soft);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.player-preset-row {
+  height: 132px;
+  padding: 14px;
+  background: var(--ui-surface-code);
+  border: 1px dashed var(--slot-accent, var(--ui-border));
+}
+.player-preset-row select {
+  width: 100%;
+  margin: 4px 0 8px;
+}
+
+.player-preset-row .player-mode-copy {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.player-human-hint {
+  position: relative;
+  overflow: hidden;
+}
+.player-human-quip {
+  color: var(--slot-accent, var(--ui-text));
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  line-height: 1.55;
+  margin-bottom: 10px;
+  white-space: pre-line;
+}
+.player-human-keys {
+  font-family: ui-monospace, Menlo, monospace;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.glitch-line {
+  color: var(--ui-text-soft);
+  white-space: pre-line;
+}
+
+.glitch-line b {
+  color: var(--slot-accent);
+  font-weight: 800;
+}
+
+/* PRESET mode: same layout as BUILD mode, sliders locked. Dims the
+ * whole body and de-saturates the slider track fill so the lock state
+ * reads clearly without changing the shape of the panel. */
+.player-build-body.is-readonly {
+  opacity: 0.85;
+}
+.player-build-body.is-readonly input[type="range"] {
+  cursor: not-allowed;
+  filter: saturate(0.7);
+}
+.player-build-body.is-human-noise {
+  opacity: 0.92;
+}
+.player-build-body.is-human-noise input[type="range"] {
+  filter: saturate(1.25) contrast(1.15);
+}
+.player-build-body.is-human-noise .knob-val {
+  color: var(--ui-red);
+  text-shadow: 1px 0 var(--slot-accent);
+}
+.player-build-body.is-human-noise .knob-val.is-pinned {
+  color: var(--slot-accent);
+  text-shadow: none;
+}
+.player-build-body.is-human-noise .knob-desc::after {
+  content: " / signal disputed";
+  color: var(--ui-red);
+}
+.player-build-body.is-readonly .toolbar button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.player-panel .meter-bar:not(.over) {
+  background: var(--slot-accent, var(--ui-blue));
+}
+
+/* Per-panel knob fill color: overrides the global --ui-blue used by
+ * input[type=range] so each panel's sliders match its side color. */
+.player-panel input[type="range"] {
+  background:
+    linear-gradient(
+      to right,
+      var(--slot-accent) 0%,
+      var(--slot-accent) var(--fill),
+      var(--ui-surface-code) var(--fill),
+      var(--ui-surface-code) 100%
+    );
+}
+.player-panel input[type="range"]::-webkit-slider-thumb {
+  background: var(--slot-accent);
+  border-color: var(--slot-accent-ink);
+}
+.player-panel input[type="range"]::-moz-range-thumb {
+  background: var(--slot-accent);
+  border-color: var(--slot-accent-ink);
+}
+.player-panel input[type="range"]::-moz-range-progress {
+  background: var(--slot-accent);
 }
 
 .row {
@@ -750,4 +1257,173 @@ input[type="range"]::-moz-range-thumb {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+/* --- lore crawl · late-80s/early-90s CRT terminal --- */
+.lore-crt {
+  position: relative;
+  width: 100%;
+  min-height: calc(100vh - 120px);
+  background: #030504;
+  color: #9cff7a;
+  font-family: "VT323", "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  overflow: hidden;
+  isolation: isolate;
+  cursor: pointer;
+  user-select: none;
+}
+
+.lore-crt::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(70, 255, 140, 0.08) 0%, rgba(10, 16, 10, 0.0) 60%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.lore-scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.0) 0px,
+    rgba(0, 0, 0, 0.0) 2px,
+    rgba(0, 0, 0, 0.35) 3px,
+    rgba(0, 0, 0, 0.35) 4px
+  );
+  mix-blend-mode: multiply;
+  animation: lore-flicker 4.2s steps(12) infinite;
+}
+
+.lore-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.85) 100%);
+}
+
+.lore-crawl {
+  position: relative;
+  z-index: 2;
+  padding: 56px 8vw 120px;
+  max-width: 920px;
+  margin: 0 auto;
+  font-size: 22px;
+  line-height: 1.55;
+  letter-spacing: 0.02em;
+  max-height: calc(100vh - 120px);
+  overflow: hidden;
+  text-shadow:
+    0 0 4px rgba(156, 255, 122, 0.55),
+    0 0 18px rgba(80, 255, 120, 0.22);
+}
+
+.lore-block {
+  margin-bottom: 28px;
+  white-space: pre-wrap;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.lore-header {
+  color: #57ffa0;
+  font-size: 16px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  margin-bottom: 10px;
+}
+
+.lore-tagline {
+  color: #c8ffd2;
+  font-size: 26px;
+  margin-bottom: 44px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.lore-paragraph {
+  color: #a9ff90;
+}
+
+.lore-stinger {
+  margin-top: 54px;
+  color: #e0ffe4;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+}
+
+.lore-stinger-line {
+  margin-bottom: 10px;
+}
+
+.lore-stinger-line:nth-child(1) { color: #e0ffe4; }
+.lore-stinger-line:nth-child(2) { color: #ff6b6b; }
+.lore-stinger-line:nth-child(3) { color: #c58bff; }
+
+.lore-tail {
+  margin-top: 40px;
+  color: #57ffa0;
+  font-size: 14px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.lore-block:not(.lore-stinger):last-child::after,
+.lore-stinger:last-child .lore-stinger-line:last-child::after {
+  content: "▊";
+  display: inline-block;
+  margin-left: 4px;
+  animation: lore-cursor 1s steps(2) infinite;
+  color: inherit;
+}
+
+.lore-hint {
+  position: absolute;
+  bottom: 18px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  z-index: 4;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(156, 255, 122, 0.45);
+  pointer-events: none;
+}
+
+.lore-hint.is-final {
+  color: #e0ffe4;
+  animation: lore-cursor 0.8s steps(2) infinite;
+}
+
+@keyframes lore-cursor {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@keyframes lore-flicker {
+  0%, 100% { opacity: 0.9; }
+  3% { opacity: 0.7; }
+  6% { opacity: 0.95; }
+  48% { opacity: 0.88; }
+  52% { opacity: 0.72; }
+  88% { opacity: 0.92; }
+}
+
+@media (max-width: 700px) {
+  .lore-crawl {
+    padding: 32px 6vw 100px;
+    font-size: 17px;
+    line-height: 1.55;
+  }
+  .lore-tagline { font-size: 20px; }
+  .lore-stinger { font-size: 22px; }
 }

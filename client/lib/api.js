@@ -4,7 +4,9 @@
 export const API_ORIGIN =
   (typeof window !== "undefined" && window.__M3T4_API_ORIGIN__) ||
   "http://localhost:7777";
-export const WS_ORIGIN = API_ORIGIN.replace(/^http/, "ws");
+export const WS_ORIGIN =
+  (typeof window !== "undefined" && window.__M3T4_WS_ORIGIN__) ||
+  API_ORIGIN.replace(/^http/, "ws");
 
 async function handle(res) {
   const ct = res.headers.get("content-type") || "";

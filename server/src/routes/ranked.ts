@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { StableStore } from "../stable.js";
 import { stablePublic } from "../stable.js";
 import { handleClaimHandle, handleSubmit } from "../submit.js";
@@ -13,6 +14,7 @@ export interface RankedRouteDeps {
     authProviders: readonly string[];
     cycleMs: number;
     maxSlots: number;
+    serverRole?: string;
     storeBackend?: string;
   };
 }
@@ -28,6 +30,7 @@ export function registerRankedRoutes(routes: RouteList, deps: RankedRouteDeps): 
         maxSlots: config.maxSlots,
         authMode: config.authMode,
         authProviders: config.authProviders,
+        role: config.serverRole,
         storeBackend: config.storeBackend,
         features,
       });
@@ -67,6 +70,11 @@ export function registerRankedRoutes(routes: RouteList, deps: RankedRouteDeps): 
     }
 
     if (req.method === "POST" && url.pathname === "/internal/elo-decay") {
+      const internal = verifyInternalRequest(req.headers.authorization, req.headers["x-m3t4-internal-token"]);
+      if (!internal.ok) {
+        json(res, internal.code, { error: internal.error });
+        return true;
+      }
       const count = await store.applyDecay();
       json(res, 200, { ok: true, decayed: count });
       return true;
@@ -74,4 +82,23 @@ export function registerRankedRoutes(routes: RouteList, deps: RankedRouteDeps): 
 
     return false;
   });
+}
+
+function verifyInternalRequest(
+  authHeader: string | undefined,
+  tokenHeader: string | string[] | undefined,
+): { ok: true } | { ok: false; code: number; error: string } {
+  if (process.env.NODE_ENV !== "production") return { ok: true };
+  const expected = process.env.M3T4_INTERNAL_TOKEN;
+  if (!expected) return { ok: false, code: 503, error: "internal token not configured" };
+
+  const token = Array.isArray(tokenHeader)
+    ? tokenHeader[0]
+    : tokenHeader ?? (authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : "");
+  const got = Buffer.from(token ?? "");
+  const want = Buffer.from(expected);
+  if (got.length !== want.length || !crypto.timingSafeEqual(got, want)) {
+    return { ok: false, code: 403, error: "forbidden" };
+  }
+  return { ok: true };
 }

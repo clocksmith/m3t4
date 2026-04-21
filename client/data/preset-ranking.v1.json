@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "computedAt": "2026-04-20T17:13:41.558Z",
+  "computedAt": "2026-04-20T22:03:28.259Z",
   "seedsPerPairing": 3,
   "totalMatches": 720,
   "rows": [
     {
-      "name": "disruptor",
+      "name": "intern",
       "wins": 57,
       "losses": 33,
       "draws": 0,
@@ -40,7 +40,7 @@
       "wr": 0.5222222222222223
     },
     {
-      "name": "intern",
+      "name": "disruptor",
       "wins": 47,
       "losses": 43,
       "draws": 0,

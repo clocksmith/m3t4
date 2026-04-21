@@ -4,8 +4,12 @@
 import * as spectate from "./modes/spectate.js";
 import * as build from "./modes/build.js";
 import * as profile from "./modes/profile.js";
+import * as lore from "./modes/lore.js";
 import { status as getStatus } from "./lib/api.js";
 import { auth } from "./lib/auth.js";
+import { initAnalytics, trackPageView } from "./lib/analytics.js";
+
+initAnalytics();
 
 const FEATURES = {
   p2pDuel: false,
@@ -18,7 +22,7 @@ window.__M3T4_FEATURES__ = FEATURES;
 
 // Practice was absorbed into build (live test stage + human P1/P2
 // toggles). Legacy #practice hash redirects to #build.
-const MODES = { spectate, build, profile };
+const MODES = { spectate, build, profile, lore };
 const LEGACY_HASH = { practice: "build" };
 const OPTIONAL_MODE_LOADERS = {
   duel: () => import("./modes/duel.js"),
@@ -65,6 +69,7 @@ function render() {
   appEl.innerHTML = "";
   current = mode;
   mode.mount(appEl, { setStatus: (s) => (statusEl.textContent = s) });
+  trackPageView(activeName);
 }
 
 function renderWhoami() {

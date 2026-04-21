@@ -153,6 +153,7 @@ function sanitizeFighter(f: TraceFrame["p0"]): TraceFrame["p0"] {
     stun: round3(f.stun),
     swipeT: round3(f.swipeT),
     diveT: round3(f.diveT),
+    lastClashTick: typeof f.lastClashTick === "number" ? Math.trunc(f.lastClashTick) : -9999,
     dead: !!f.dead,
   };
 }

@@ -44,6 +44,8 @@
   --ui-purple-bright: #c084fc;
   --ui-pink: #ec4899;
   --ui-pink-ink: #be185d;
+  --context-card-height: 112px;
+  --context-card-height-mobile: 136px;
 
   /* Canvas fallback renderer. Full asset palettes belong in theming/. */
   --arena-bg: #14141e;
@@ -338,6 +340,7 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-height: calc(100svh - 112px);
 }
 
 .page-header {
@@ -380,10 +383,17 @@ a:hover {
 
 .context-card {
   display: grid;
-  gap: 10px;
+  align-content: center;
+  gap: 8px;
+  height: var(--context-card-height);
+  overflow: hidden;
   background: var(--ui-surface);
   border: 1px solid var(--ui-border);
   padding: 14px 16px;
+}
+
+.context-card > * {
+  min-width: 0;
 }
 
 .context-card-kicker {
@@ -399,12 +409,19 @@ a:hover {
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .context-card p {
   color: var(--ui-text-soft);
   font-size: 14px;
   line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 /* --- buttons / inputs --- */
@@ -537,6 +554,13 @@ textarea {
 .profile-roster-panel {
   display: grid;
   gap: 12px;
+}
+
+.roster-intro-claim {
+  display: grid;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px dotted var(--ui-border);
 }
 
 .roster-intro-panel {
@@ -831,21 +855,22 @@ canvas {
 }
 
 .live-briefing-card {
+  align-content: center;
   border-color: var(--ui-blue-ink);
 }
 
 .live-briefing-sides {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: stretch;
+  align-items: center;
   gap: 12px;
 }
 
 .live-briefing-side {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
-  padding: 10px 12px;
+  padding: 9px 12px;
   background: var(--ui-surface-code);
   border: 1px solid var(--ui-border);
   border-left-width: 3px;
@@ -876,6 +901,8 @@ canvas {
 
 .live-briefing-head strong {
   color: var(--ui-text);
+  min-width: 0;
+  text-align: right;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -889,7 +916,6 @@ canvas {
   color: var(--ui-purple);
 }
 
-.live-briefing-seat,
 .live-briefing-binding,
 .live-briefing-weapon {
   overflow: hidden;
@@ -904,12 +930,6 @@ canvas {
   font-size: 11px;
 }
 
-.live-briefing-side p {
-  color: var(--ui-text-subtle);
-  font-size: 12px;
-  line-height: 1.35;
-}
-
 .live-briefing-vs {
   align-self: center;
   color: var(--ui-red);
@@ -917,22 +937,6 @@ canvas {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.14em;
-}
-
-.live-briefing-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding-top: 10px;
-  border-top: 1px dotted var(--ui-border);
-  color: var(--ui-text-soft);
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.live-briefing-footer .buttonish {
-  flex: 0 0 auto;
 }
 
 .spectate-stats .stat-list {
@@ -977,17 +981,24 @@ canvas {
 .spectate-stats .p2-accent { color: var(--ui-purple); font-weight: 700; }
 
 @media (max-width: 640px) {
+  .context-card {
+    height: var(--context-card-height-mobile);
+    padding: 12px 14px;
+  }
+
   .live-briefing-sides {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .live-briefing-side {
+    gap: 3px;
+    padding: 7px 8px;
   }
 
   .live-briefing-vs {
-    justify-self: center;
-  }
-
-  .live-briefing-footer {
-    align-items: stretch;
-    flex-direction: column;
+    justify-self: stretch;
+    text-align: center;
   }
 }
 
@@ -1074,6 +1085,12 @@ canvas {
   gap: 14px;
   align-items: stretch;
 }
+
+.build-page .grid-3 {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .grid-3 > .panel {
   min-height: 0;
   height: 100%;
@@ -1081,8 +1098,9 @@ canvas {
 /* Keep the three columns bounded by viewport height on desktop; each
  * panel scrolls its own overflow so the whole page doesn't scroll. */
 @media (min-width: 1024px) {
-  .grid-3 > .panel {
-    max-height: calc(100vh - 180px);
+  .build-page .grid-3 > .panel {
+    height: calc(100svh - 202px);
+    max-height: none;
     overflow-y: auto;
   }
 }
@@ -1900,8 +1918,7 @@ input[type="range"]::-moz-range-thumb {
 
 /* --- rules --- */
 .rules-page {
-  max-width: 1120px;
-  margin: 0 auto;
+  width: 100%;
 }
 
 .rules-hero {
@@ -1921,11 +1938,46 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .rules-card-feature {
-  margin: 14px 0;
+  margin: 0;
   border-color: var(--ui-purple);
   background:
     linear-gradient(135deg, rgba(168, 85, 247, 0.14), rgba(59, 130, 246, 0.06)),
     var(--ui-surface);
+}
+
+.rules-about-copy {
+  display: grid;
+  align-content: start;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.rules-about-copy p {
+  border-left: 1px solid var(--ui-border);
+  color: var(--ui-text-soft);
+  font-size: 13px;
+  line-height: 1.5;
+  padding-left: 12px;
+}
+
+.rules-main-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.72fr) minmax(420px, 1.28fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.rules-rules-column {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .rules-main-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 .rules-card h2 {
@@ -1948,7 +2000,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .rules-section-label {
-  margin: 16px 0 8px;
+  margin: 0;
   color: var(--ui-red);
   font-size: 12px;
   font-weight: 800;

@@ -2,13 +2,13 @@
 // Expand theming/visual-theme.v1.json into one prompt-per-asset,
 // ready to paste into an image generator (Gemini / GPT image / Midjourney).
 //
-// Launch batch (default): 41 prompts. Emits three-row character sprite
+// Launch batch (default): 25 prompts. Emits three-row character sprite
 // strips plus the other launch assets. Skips anything marked
 // "status": "deferred" in the SSOT — boardroom/demoday stage layers +
 // textures, and the epic/legendary weapon sheets.
 //
 // Usage:
-//   node tools/build-prompts.mjs                       # launch batch, Gemini copy/paste .txt
+//   node tools/build-prompts.mjs                       # launch batch, one Gemini .txt per asset
 //   node tools/build-prompts.mjs --only stages         # single bucket
 //   node tools/build-prompts.mjs --only characters     # (stages | characters |
 //   node tools/build-prompts.mjs --only portraits      #  portraits | weapons |
@@ -16,17 +16,20 @@
 //   node tools/build-prompts.mjs --only objectives
 //   node tools/build-prompts.mjs --only ui             # locked-slot placeholder
 //   node tools/build-prompts.mjs --include-deferred    # launch + deferred
-//   node tools/build-prompts.mjs --format gemini       # Gemini copy/paste .txt (default)
-//   node tools/build-prompts.mjs --format gpt          # GPT image copy/paste .txt
-//   node tools/build-prompts.mjs --format chat         # alias for Gemini copy/paste .txt
-//   node tools/build-prompts.mjs --format mj           # Midjourney /imagine .txt
+//   node tools/build-prompts.mjs --format gemini       # one Gemini copy/paste .txt per asset
+//   node tools/build-prompts.mjs --format gpt          # one GPT image copy/paste .txt per asset
+//   node tools/build-prompts.mjs --format chat         # alias for Gemini copy/paste files
+//   node tools/build-prompts.mjs --format mj           # one Midjourney /imagine .txt per asset
 //   node tools/build-prompts.mjs --format text         # human-readable .txt
 //   node tools/build-prompts.mjs --format gemini-jsonl # Gemini-ready JSONL to stdout
 //   node tools/build-prompts.mjs --format gpt-jsonl    # GPT image-ready JSONL to stdout
 //   node tools/build-prompts.mjs --format jsonl        # raw records JSONL to stdout
+//   node tools/build-prompts.mjs --combined-file       # old combined copy/paste .txt batch
+//   node tools/build-prompts.mjs --split-files         # force one paste-ready .txt per asset
+//   node tools/build-prompts.mjs --missing-only        # only assets missing from client/
 //   node tools/build-prompts.mjs --stdout              # print copy/paste formats instead
 //
-// Launch → 41 prompts. With --include-deferred → 61 (adds 16 boardroom/demoday
+// Launch → 25 prompts. With --include-deferred → 61 (adds 16 boardroom/demoday
 // stage assets + 4 epic/legendary weapon sheets).
 //
 // Each emitted record has:
@@ -56,6 +59,9 @@ const format = normalizeFormat(requestedFormat);
 const stdout = args.includes("--stdout");
 const explicitOut = arg("--out");
 const outputDir = arg("--output-dir") ?? path.resolve(__dirname, "../theming/generated-prompts");
+const forceSplitFiles = args.includes("--split-files") || args.includes("--one-file-per-prompt");
+const combinedFile = args.includes("--combined-file");
+const missingOnly = args.includes("--missing-only");
 // Deferred assets (non-playable stages, epic+legendary weapons) are
 // hidden from the launch batch. Pass --include-deferred to emit them
 // (e.g. when unlocking Boardroom/Demoday or higher weapon rarities).
@@ -70,11 +76,18 @@ if (!only || only === "objectives") records.push(...collectObjectives());
 if (!only || only === "ui")         records.push(...collectUi());
 
 // Filter deferred unless explicitly opted in.
-const filtered = includeDeferred ? records : records.filter((r) => !r.deferred);
+const scoped = includeDeferred ? records : records.filter((r) => !r.deferred);
+const filtered = missingOnly ? scoped.filter((r) => !assetExists(r.out)) : scoped;
 const rendered = renderRecords(format, filtered);
+const splitFiles = forceSplitFiles || (!combinedFile && !stdout && !explicitOut && isSplitPromptFormat(format));
 const shouldWriteFile = explicitOut || (rendered.autoFile && !stdout);
 
-if (shouldWriteFile) {
+if (splitFiles) {
+  const result = writeSplitPromptFiles(format, filtered);
+  process.stdout.write(`wrote ${result.count} prompt files to ${path.relative(process.cwd(), result.dir)}\n`);
+  process.stdout.write(`index: ${path.relative(process.cwd(), result.indexPath)}\n`);
+  process.stdout.write("format: one copy/paste prompt per .txt file\n");
+} else if (shouldWriteFile) {
   const outPath = explicitOut ? path.resolve(explicitOut) : defaultOutputPath(format, rendered.ext);
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, rendered.text);
@@ -83,6 +96,14 @@ if (shouldWriteFile) {
   process.stdout.write(`format: ${rendered.label}; use --stdout to print instead\n`);
 } else {
   process.stdout.write(rendered.text);
+}
+
+function assetExists(assetPath) {
+  return fs.existsSync(path.resolve(__dirname, "../client", assetPath));
+}
+
+function isSplitPromptFormat(value) {
+  return value === "gemini-copy" || value === "gpt-copy" || value === "mj";
 }
 
 function collectStages() {
@@ -210,7 +231,7 @@ function collectPortraits() {
         out: v.out,
         outW: shared.outW, outH: shared.outH, genW: shared.genW, genH: shared.genH,
         seed: v.seed,
-        basePrompt: `${v.base}. ${shared.layoutDirective}`,
+        basePrompt: `${stripTrailingPeriod(v.base)}. ${shared.layoutDirective}`,
         deferred: v.status === "deferred",
       }));
     }
@@ -301,6 +322,10 @@ function stripFullSheetInstruction(base) {
   return base.replace(/\s*Include all 12 animation rows in the shared sprite-sheet layout\.$/, "");
 }
 
+function stripTrailingPeriod(value) {
+  return String(value).replace(/\.+\s*$/u, "");
+}
+
 function promptRecord({ out, finalOut, outW, outH, genW, genH, seed, basePrompt, grid, assembly, deferred }) {
   return {
     out, finalOut, outW, outH, genW, genH, seed,
@@ -352,6 +377,77 @@ function renderRecords(format, sourceRecords) {
     return { text, ext: "txt", label: "human-readable prompt text", autoFile: true };
   }
   throw new Error(`unhandled format ${format}`);
+}
+
+function writeSplitPromptFiles(format, sourceRecords) {
+  if (stdout) {
+    process.stderr.write("--split-files writes files; remove --stdout.\n");
+    process.exit(1);
+  }
+  const provider = splitProvider(format);
+  const dir = explicitOut ? path.resolve(explicitOut) : defaultOutputDir(format);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const indexRows = [];
+  for (const [i, r] of sourceRecords.entries()) {
+    const n = String(i + 1).padStart(3, "0");
+    const file = `${n}-${assetFileSlug(r.out)}.txt`;
+    const filePath = path.join(dir, file);
+    fs.writeFileSync(filePath, splitPromptText(provider, r).trimEnd() + "\n");
+    indexRows.push({ n, file, record: r });
+  }
+
+  const indexPath = path.join(dir, "INDEX.md");
+  fs.writeFileSync(indexPath, splitIndex(format, indexRows));
+  return { dir, indexPath, count: sourceRecords.length };
+}
+
+function splitProvider(format) {
+  if (format === "gemini-copy") return "gemini";
+  if (format === "gpt-copy") return "gpt";
+  if (format === "mj") return "mj";
+  process.stderr.write(
+    "--split-files supports --format gemini, chat, gpt, or mj. " +
+    "JSONL formats are batch data, not one pasteable prompt per text file.\n"
+  );
+  process.exit(1);
+}
+
+function splitPromptText(provider, r) {
+  if (provider === "mj") {
+    const ar = reduceAr(r.genW, r.genH);
+    return `/imagine prompt: ${r.prompt} --ar ${ar} --style raw --seed ${r.seed} --stylize 100`;
+  }
+  return promptBody(provider, r);
+}
+
+function splitIndex(format, rows) {
+  const bucket = only ?? "launch";
+  const lines = [
+    "# Generated Prompts",
+    "",
+    `- Format: ${formatFileSlug(format)}`,
+    `- Bucket: ${bucket}`,
+    `- Include deferred: ${includeDeferred ? "yes" : "no"}`,
+    `- Missing only: ${missingOnly ? "yes" : "no"}`,
+    `- Count: ${rows.length}`,
+    "",
+    "Every `.txt` file in this directory is directly copy/pasteable into the image generator. The filenames and table below are tracking metadata only.",
+    "",
+    "| # | file | asset | canvas | final | seed |",
+    "|---:|---|---|---:|---:|---:|",
+  ];
+  for (const row of rows) {
+    const r = row.record;
+    const final = r.finalOut ? `${r.outW}x${r.outH} -> ${r.finalOut}` : `${r.outW}x${r.outH}`;
+    const asset = `${r.out}${r.deferred ? " (deferred)" : ""}`;
+    lines.push(`| ${row.n} | [${row.file}](./${row.file}) | \`${asset}\` | ${r.genW}x${r.genH} | ${final} | ${r.seed} |`);
+  }
+  return lines.join("\n") + "\n";
+}
+
+function assetFileSlug(assetPath) {
+  return slug(String(assetPath).replace(/\.[a-z0-9]+$/i, ""));
 }
 
 function providerRecord(provider, r) {
@@ -549,10 +645,18 @@ function formatFileSlug(format) {
 function defaultOutputPath(format, ext) {
   const bucket = only ?? "launch";
   const deferred = includeDeferred ? "-with-deferred" : "";
+  const missing = missingOnly ? "-missing" : "";
   const stamp = timestamp();
-  return path.join(outputDir, `${stamp}-${slug(bucket)}-${formatFileSlug(format)}${deferred}.${ext}`);
+  return path.join(outputDir, `${stamp}-${slug(bucket)}-${formatFileSlug(format)}${deferred}${missing}.${ext}`);
 }
 
+function defaultOutputDir(format) {
+  const bucket = only ?? "launch";
+  const deferred = includeDeferred ? "-with-deferred" : "";
+  const missing = missingOnly ? "-missing" : "";
+  const stamp = timestamp();
+  return path.join(outputDir, `${stamp}-${slug(bucket)}-${formatFileSlug(format)}${deferred}${missing}-files`);
+}
 
 function timestamp() {
   const d = new Date();

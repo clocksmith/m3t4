@@ -50,19 +50,21 @@ batch until `--include-deferred` is passed.
 
 | batch | command | count |
 |---|---|---:|
-| Launch, copy/paste (Chars A+B, Datacenter only) | `node tools/build-prompts.mjs` | **25** |
-| Characters A+B, 4-row strip copy/paste | `node tools/build-prompts.mjs --only characters` | 8 |
-| Launch, GPT-sized copy/paste | `node tools/build-prompts.mjs --format gpt` | **25** |
-| Launch, Midjourney copy/paste | `node tools/build-prompts.mjs --format mj` | **25** |
+| Launch, copy/paste (Chars A+B, Datacenter only) | `node tools/build-prompts.mjs` | **25 files** |
+| Characters A+B, 4-row strip copy/paste | `node tools/build-prompts.mjs --only characters` | 8 files |
+| Launch, GPT-sized copy/paste | `node tools/build-prompts.mjs --format gpt` | **25 files** |
+| Launch, Midjourney copy/paste | `node tools/build-prompts.mjs --format mj` | **25 files** |
 | With deferred (unlocks Chars C+D, boardroom/demoday, epic/legendary) | `node tools/build-prompts.mjs --include-deferred` | 61 |
+| Missing assets, one paste-ready `.txt` per asset | `node tools/build-prompts.mjs --include-deferred --missing-only` | varies |
 | Launch, Gemini JSONL | `node tools/build-prompts.mjs --format gemini-jsonl` | **25** |
 | Launch, GPT image JSONL | `node tools/build-prompts.mjs --format gpt-jsonl` | **25** |
 
 ### Common commands
 
 ```bash
-# Copy/paste launch batch (default). Writes a timestamped file in
-# theming/generated-prompts/, e.g. 20260420-073012-launch-gemini.txt.
+# Copy/paste launch batch (default). Writes a timestamped directory in
+# theming/generated-prompts/. Every .txt inside is one paste-ready prompt.
+# INDEX.md maps prompt filenames back to asset paths.
 node tools/build-prompts.mjs
 
 # Single bucket: stages | characters | portraits | weapons | objectives | ui
@@ -70,11 +72,15 @@ node tools/build-prompts.mjs --only weapons
 node tools/build-prompts.mjs --only characters --format gemini
 node tools/build-prompts.mjs --only characters --format chat
 
+# Easiest manual generation mode: writes one .txt per asset, and every
+# .txt file contains only the prompt body you paste into the generator.
+# INDEX.md in the generated directory maps filenames back to asset paths.
+node tools/build-prompts.mjs --include-deferred --missing-only
+
 # Character sheets are generated as 4 strips per character:
 # generate proportional 2:1 raw strips, then post-process to 384x192
 # final strips, then compose 4 strips into 384x768.
-# Only paste the BEGIN PROMPT / END PROMPT block into the image tool.
-# The prompt block is self-contained; header metadata is for our files.
+# Paste the whole .txt file into the image tool.
 
 # Midjourney /imagine lines; also writes a timestamped .txt by default.
 node tools/build-prompts.mjs --only portraits --format mj
@@ -88,6 +94,9 @@ node tools/build-prompts.mjs --format gpt-jsonl > prompts.gpt.jsonl
 
 # Print copy/paste blocks to stdout instead of writing a timestamped file.
 node tools/build-prompts.mjs --format gemini --stdout
+
+# Legacy combined copy/paste file, mostly useful for bulk review.
+node tools/build-prompts.mjs --combined-file
 
 # Unlock deferred (later)
 node tools/build-prompts.mjs --include-deferred --format gemini

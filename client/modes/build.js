@@ -300,7 +300,7 @@ function remainingCeilingFor(slot, id) {
 export function mount(root, { setStatus }) {
   setStatus("tune");
   root.innerHTML = `
-    <div class="page">
+    <div class="page build-page">
       <div class="page-header-row">
         <div class="page-title-stack">
           <h1 class="page-title">Tune</h1>
@@ -854,8 +854,8 @@ function currentPreviewFrame() {
 function emptyFrame() {
   return {
     tick: 0,
-    p0: { x: 300, y: 590, vx: 0, vy: 0, facing: 1, onGround: true, wall: 0, stun: 0, swipeT: 0, diveT: 0, dead: false },
-    p1: { x: 980, y: 590, vx: 0, vy: 0, facing: -1, onGround: true, wall: 0, stun: 0, swipeT: 0, diveT: 0, dead: false },
+    p0: { x: 300, y: 590, vx: 0, vy: 0, facing: 1, onGround: true, wall: 0, stun: 0, swipeT: 0, diveT: 0, lastClashTick: -9999, dead: false },
+    p1: { x: 980, y: 590, vx: 0, vy: 0, facing: -1, onGround: true, wall: 0, stun: 0, swipeT: 0, diveT: 0, lastClashTick: -9999, dead: false },
     token: { exists: false, x: 0, y: 0, carrier: -1, dwellT: 0 },
     goal: { exists: false, x: 0, y: 0, label: "", timer: 0 },
     scoreboard: [0, 0],

@@ -1,78 +1,99 @@
 {
   "version": 1,
-  "computedAt": "2026-04-21T19:38:38.711Z",
+  "computedAt": "2026-04-21T20:37:09.017Z",
   "seedsPerPairing": 3,
   "totalMatches": 720,
   "rows": [
     {
+      "name": "pivot",
+      "wins": 53,
+      "losses": 37,
+      "draws": 0,
+      "wr": 0.5888888888888889
+    },
+    {
       "name": "acolyte",
-      "wins": 69,
-      "losses": 21,
-      "draws": 0,
-      "wr": 0.7666666666666667
-    },
-    {
-      "name": "incumbent",
-      "wins": 65,
-      "losses": 25,
-      "draws": 0,
-      "wr": 0.7222222222222222
-    },
-    {
-      "name": "intern",
-      "wins": 62,
-      "losses": 28,
-      "draws": 0,
-      "wr": 0.6888888888888889
+      "wins": 51,
+      "losses": 38,
+      "draws": 1,
+      "wr": 0.5722222222222222
     },
     {
       "name": "unicorn",
-      "wins": 55,
-      "losses": 35,
-      "draws": 0,
-      "wr": 0.6111111111111112
-    },
-    {
-      "name": "moonshot",
-      "wins": 55,
-      "losses": 35,
-      "draws": 0,
-      "wr": 0.6111111111111112
-    },
-    {
-      "name": "shipper",
-      "wins": 52,
-      "losses": 38,
-      "draws": 0,
-      "wr": 0.5777777777777777
-    },
-    {
-      "name": "disruptor",
-      "wins": 51,
-      "losses": 39,
-      "draws": 0,
-      "wr": 0.5666666666666667
-    },
-    {
-      "name": "pivot",
       "wins": 50,
       "losses": 40,
       "draws": 0,
       "wr": 0.5555555555555556
     },
     {
-      "name": "acquirer",
+      "name": "troll",
+      "wins": 50,
+      "losses": 40,
+      "draws": 0,
+      "wr": 0.5555555555555556
+    },
+    {
+      "name": "disruptor",
+      "wins": 49,
+      "losses": 41,
+      "draws": 0,
+      "wr": 0.5444444444444444
+    },
+    {
+      "name": "operator",
+      "wins": 47,
+      "losses": 43,
+      "draws": 0,
+      "wr": 0.5222222222222223
+    },
+    {
+      "name": "founder",
+      "wins": 44,
+      "losses": 45,
+      "draws": 1,
+      "wr": 0.49444444444444446
+    },
+    {
+      "name": "incumbent",
       "wins": 44,
       "losses": 46,
       "draws": 0,
       "wr": 0.4888888888888889
     },
     {
-      "name": "founder",
+      "name": "shipper",
+      "wins": 44,
+      "losses": 46,
+      "draws": 0,
+      "wr": 0.4888888888888889
+    },
+    {
+      "name": "intern",
       "wins": 42,
       "losses": 48,
       "draws": 0,
       "wr": 0.4666666666666667
+    },
+    {
+      "name": "regulatory",
+      "wins": 42,
+      "losses": 48,
+      "draws": 0,
+      "wr": 0.4666666666666667
+    },
+    {
+      "name": "acquirer",
+      "wins": 42,
+      "losses": 48,
+      "draws": 0,
+      "wr": 0.4666666666666667
+    },
+    {
+      "name": "blitz",
+      "wins": 41,
+      "losses": 49,
+      "draws": 0,
+      "wr": 0.45555555555555555
     },
     {
       "name": "standby",
@@ -82,44 +103,23 @@
       "wr": 0.4444444444444444
     },
     {
-      "name": "operator",
-      "wins": 39,
-      "losses": 51,
-      "draws": 0,
-      "wr": 0.43333333333333335
-    },
-    {
-      "name": "troll",
-      "wins": 37,
-      "losses": 53,
-      "draws": 0,
-      "wr": 0.4111111111111111
-    },
-    {
-      "name": "regulatory",
-      "wins": 30,
-      "losses": 60,
-      "draws": 0,
-      "wr": 0.3333333333333333
-    },
-    {
       "name": "oracle",
-      "wins": 19,
-      "losses": 71,
+      "wins": 40,
+      "losses": 50,
       "draws": 0,
-      "wr": 0.2111111111111111
+      "wr": 0.4444444444444444
     },
     {
-      "name": "blitz",
-      "wins": 10,
-      "losses": 80,
+      "name": "moonshot",
+      "wins": 40,
+      "losses": 50,
       "draws": 0,
-      "wr": 0.1111111111111111
+      "wr": 0.4444444444444444
     }
   ],
   "tiers": {
-    "hard": "unicorn",
-    "medium": "acquirer",
-    "easy": "blitz"
+    "hard": "troll",
+    "medium": "shipper",
+    "easy": "moonshot"
   }
 }

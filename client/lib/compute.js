@@ -1014,13 +1014,20 @@ async function httpRttProbe() {
   const controller = typeof AbortController === "undefined" ? null : new AbortController();
   const timeout = controller ? setTimeout(() => controller.abort(), 1500) : null;
   const t0 = performance.now();
+  const paths = [
+    `/healthz?witness=${Date.now()}`,
+    `/compute/healthz?witness=${Date.now()}`,
+    `/compute/status?witness=${Date.now()}`,
+  ];
   try {
-    const res = await fetch(computeLabOrigin() + `/healthz?witness=${Date.now()}`, {
-      cache: "no-store",
-      signal: controller?.signal,
-    });
-    const ms = performance.now() - t0;
-    return { status: res.ok ? "ok" : "failed", httpRttBucket: bucketMs(ms) };
+    for (const path of paths) {
+      const res = await fetch(computeLabOrigin() + path, {
+        cache: "no-store",
+        signal: controller?.signal,
+      });
+      if (res.ok) return { status: "ok", httpRttBucket: bucketMs(performance.now() - t0) };
+    }
+    return { status: "failed", httpRttBucket: bucketMs(performance.now() - t0) };
   } catch (e) {
     return { status: e?.name === "AbortError" ? "timeout" : "failed", httpRttBucket: "timeout" };
   } finally {

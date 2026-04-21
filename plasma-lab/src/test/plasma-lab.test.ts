@@ -689,6 +689,10 @@ test("HTTP compute routes are disabled behind the lab route flag", async (t) => 
   const health = await req(srv.port, "GET", "/healthz");
   assert.equal(health.status, 200);
 
+  const computeHealth = await req(srv.port, "GET", "/compute/healthz?witness=test");
+  assert.equal(computeHealth.status, 200);
+  assert.equal(computeHealth.body.service, "plasma-lab");
+
   const resp = await req(srv.port, "GET", "/compute/status");
   assert.equal(resp.status, 404);
 });

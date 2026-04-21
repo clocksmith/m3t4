@@ -36,8 +36,17 @@ const SAMPLE_CONFIG = {
 };
 const SAMPLE_CONFIG_JSON = JSON.stringify(SAMPLE_CONFIG, null, 2);
 
-function rosterIntroPanelHtml() {
+function rosterIntroPanelHtml({ needsHandle = false } = {}) {
   const pending = sessionStorage.getItem("m3t4:pendingSubmit");
+  const claimForm = needsHandle ? `
+      <div class="roster-intro-claim">
+        <div class="tight mb-xs">Claim a public handle first. 3-20 chars, lowercase + digits + underscore.</div>
+        <div class="row">
+          <input type="text" id="handle-input" placeholder="your_handle">
+          <button id="handle-claim" class="primary">claim</button>
+        </div>
+        <div class="error" id="handle-err"></div>
+      </div>` : "";
   return `
     <section class="context-card roster-intro-panel">
       <div class="context-card-kicker">ranked roster</div>
@@ -45,6 +54,7 @@ function rosterIntroPanelHtml() {
         <strong>${pending ? "Bot ready for the live roster." : "Your live roster holds five bots."}</strong>
         <span>Tune one, test it, then send it into a seat. The server schedules matches. Live streams the current fight.</span>
       </div>
+      ${claimForm}
     </section>`;
 }
 
@@ -68,6 +78,17 @@ function render() {
   renderDashboard(user);
 }
 
+function rosterPageHeaderHtml({ subtitle = "", action = "" } = {}) {
+  return `
+    <div class="page-header-row">
+      <div class="page-title-stack">
+        <h1 class="page-title">Roster</h1>
+        ${subtitle ? `<div class="page-subtitle tight">${subtitle}</div>` : ""}
+      </div>
+      ${action}
+    </div>`;
+}
+
 function renderSignIn() {
   setStatus("roster · not signed in");
   const authError = auth.error?.();
@@ -76,9 +97,7 @@ function renderSignIn() {
 
   root.innerHTML = `
     <div class="page">
-      <div class="page-header">
-        <h1>Roster <small>— sign in to install ranked seats</small></h1>
-      </div>
+      ${rosterPageHeaderHtml({ subtitle: "sign in to install ranked seats" })}
       ${rosterIntroPanelHtml()}
       <div class="panel">
         <h3>${isAlpha ? "Closed alpha" : "Dev mode"}</h3>
@@ -114,9 +133,7 @@ function renderSignIn() {
 function renderFirebaseSignIn(authError) {
   root.innerHTML = `
     <div class="page">
-      <div class="page-header">
-        <h1>Roster <small>— sign in to install ranked seats</small></h1>
-      </div>
+      ${rosterPageHeaderHtml({ subtitle: "sign in to install ranked seats" })}
       ${rosterIntroPanelHtml()}
       <div class="panel">
         <h3>Sign in</h3>
@@ -152,12 +169,11 @@ async function renderDashboard(user) {
   setStatus(`roster · ${user.uid}`);
   root.innerHTML = `
     <div class="page">
-      <div class="page-header">
-        <h1>Roster <small>— @${user.handle ?? "unclaimed"} (${user.uid}) — only you can see this</small></h1>
-        <button id="signout">sign out</button>
-      </div>
-      ${rosterIntroPanelHtml()}
-      ${!user.handle ? handleClaimHtml() : ""}
+      ${rosterPageHeaderHtml({
+        subtitle: `@${user.handle ?? "unclaimed"} · ${user.uid} · only you can see this`,
+        action: `<button id="signout">sign out</button>`,
+      })}
+      ${rosterIntroPanelHtml({ needsHandle: !user.handle })}
       <div class="panel profile-roster-panel">
         <div class="profile-roster-head">
           <h3>Boardroom Roster</h3>
@@ -193,18 +209,6 @@ async function renderDashboard(user) {
   wirePendingBuildConfig();
 }
 
-function handleClaimHtml() {
-  return `
-    <div class="panel">
-      <h3>Claim a handle</h3>
-      <div class="tight mb-sm">3-20 chars, lowercase + digits + underscore. Public.</div>
-      <div class="row">
-        <input type="text" id="handle-input" placeholder="your_handle">
-        <button id="handle-claim" class="primary">claim</button>
-      </div>
-      <div class="error" id="handle-err"></div>
-    </div>`;
-}
 
 function wireClaimHandle() {
   root.querySelector("#handle-claim").addEventListener("click", async () => {

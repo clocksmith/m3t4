@@ -94,10 +94,6 @@ const OBJECTIVE_IMAGES = {
   target: imageState("assets/objectives/demand_node/target.png"),
 };
 
-// Base asset pack: the Cold-Aisle Chapel art. boardroom and demoday
-// reuse the same image states (same files → shared cache) with the
-// parallax layer order shuffled and a hue-rotate filter applied at
-// draw time. Cheap way to add visual diversity without new assets.
 const DATACENTER_PACK = {
   sky: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/sky.png"),
   farParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/far_parallax.png"),
@@ -109,11 +105,20 @@ const DATACENTER_PACK = {
   floorDetail: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/floor_detail.png"),
 };
 
+const BOARDROOM_PACK = {
+  sky: imageState("assets/stages/boardroom/fiduciary_basement/layers/sky.png"),
+  farParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/far_parallax.png"),
+  midParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/mid_parallax.png"),
+  nearParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/near_parallax.png"),
+  platform: imageState("assets/stages/boardroom/fiduciary_basement/textures/platform.png"),
+  platformEdge: imageState("assets/stages/boardroom/fiduciary_basement/textures/platform_edge.png"),
+  wall: imageState("assets/stages/boardroom/fiduciary_basement/textures/wall.png"),
+  floorDetail: imageState("assets/stages/boardroom/fiduciary_basement/textures/floor_detail.png"),
+};
+
 const STAGE_ASSETS = {
   datacenter: { ...DATACENTER_PACK, tint: null },
-  // Boardroom: slight pull toward monochrome. Subtle — retains color
-  // character but reads cooler/flatter than datacenter. ~15% intensity.
-  boardroom: { ...DATACENTER_PACK, tint: "grayscale(0.18) contrast(0.96)" },
+  boardroom: { ...BOARDROOM_PACK, tint: null },
   // Demo Day: subtle drift toward pink/purple. Shifts cyans into
   // magenta range and nudges saturation. ~15% intensity.
   demoday: { ...DATACENTER_PACK, tint: "hue-rotate(-14deg) saturate(1.12)" },
@@ -216,6 +221,7 @@ export function drawFrame(ctx, stage, frame, labels) {
   drawToken(ctx, frame.token);
   drawFighter(ctx, frame.p0, p1.body, p1.trim, p1.shadow, 0, frame);
   drawFighter(ctx, frame.p1, p2.body, p2.trim, p2.shadow, 1, frame);
+  drawClashFx(ctx, frame);
   drawHUD(ctx, frame, labels, p1.body, p2.body);
 }
 
@@ -456,7 +462,7 @@ function drawFighter(ctx, f, col, trim, shadow, side, frame) {
   }
   const drewSprite = drawSpriteFighter(ctx, f, side, frame);
   if (!drewSprite) drawPrimitiveBody(ctx, f, col, trim, shadow);
-  drawSword(ctx, f, shadow, side);
+  drawSword(ctx, f, shadow, side, frame);
   updateSpriteMotion(side, f, frame);
 }
 
@@ -464,6 +470,7 @@ function drawFighter(ctx, f, col, trim, shadow, side, frame) {
 // at bodyW=26, bodyH=52; the rendered sprite is just art. 1.25x reads
 // at ~11% of stage height vs. 8.9% at 1:1, closer to genre norm.
 const SPRITE_RENDER_SCALE = 1.25;
+const CLASH_VISUAL_TICKS = 10;
 
 function drawSpriteFighter(ctx, f, side, frame) {
   const state = spriteState[side];
@@ -566,15 +573,18 @@ function drawPrimitiveBody(ctx, f, col, trim, shadow) {
   ctx.fillRect(f.x - bw * 0.48, f.y - bh * 0.54, bw * 0.96, bh * 0.74);
 }
 
-function drawSword(ctx, f, shadow, side) {
+function drawSword(ctx, f, shadow, side, frame) {
   const bw = STATS.bodyW;
   const bh = STATS.bodyH;
   // Sword
-  const active = f.swipeT > 0 || f.diveT > 0;
+  const clashAge = clashVisualAge(f, frame);
+  const clashing = Number.isFinite(clashAge);
+  const active = f.swipeT > 0 || f.diveT > 0 || clashing;
   const bx = f.x + f.facing * bw * 0.35;
   const by = f.y - bh * 0.3;
   let angle = 0;
   if (f.diveT > 0) angle = Math.PI * 0.46;
+  else if (clashing) angle = 0;
   else if (f.swipeT > 0) {
     const t = 1 - f.swipeT / STATS.swipeTime;
     // Upward anti-air slash: horizontal-forward → ~57° up (must match sim/swordSeg).
@@ -603,6 +613,52 @@ function drawSword(ctx, f, shadow, side) {
   ctx.beginPath(); ctx.arc(tx, ty, active ? 4 : 3, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = shadow;
   ctx.beginPath(); ctx.arc(bx, by, 4, 0, Math.PI * 2); ctx.fill();
+}
+
+function clashVisualAge(f, frame) {
+  const tick = frame?.tick;
+  const clashTick = f?.lastClashTick;
+  if (typeof tick !== "number" || typeof clashTick !== "number" || clashTick < 0) return Infinity;
+  const age = tick - clashTick;
+  return age >= 0 && age <= CLASH_VISUAL_TICKS ? age : Infinity;
+}
+
+function drawClashFx(ctx, frame) {
+  const p0 = frame?.p0;
+  const p1 = frame?.p1;
+  const a0 = clashVisualAge(p0, frame);
+  const a1 = clashVisualAge(p1, frame);
+  if (!Number.isFinite(a0) || !Number.isFinite(a1)) return;
+  if (Math.abs((p0.lastClashTick ?? -9999) - (p1.lastClashTick ?? -9999)) > 1) return;
+
+  const age = Math.max(a0, a1);
+  const fade = Math.max(0, 1 - age / CLASH_VISUAL_TICKS);
+  const x = (p0.x + p1.x) * 0.5;
+  const y = (p0.y + p1.y) * 0.5 - STATS.bodyH * 0.3;
+  const r = 18 + (1 - fade) * 8;
+
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, 0.95 * fade + 0.15);
+  ctx.translate(x, y);
+  ctx.strokeStyle = cssColor("--arena-weapon-active", "#fffaf0");
+  ctx.fillStyle = cssColor("--arena-weapon-active", "#fffaf0");
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-r, 0);
+  ctx.lineTo(r, 0);
+  ctx.moveTo(0, -r);
+  ctx.lineTo(0, r);
+  ctx.moveTo(-r * 0.65, -r * 0.65);
+  ctx.lineTo(r * 0.65, r * 0.65);
+  ctx.moveTo(-r * 0.65, r * 0.65);
+  ctx.lineTo(r * 0.65, -r * 0.65);
+  ctx.stroke();
+  ctx.globalAlpha = Math.min(1, 0.75 * fade + 0.1);
+  ctx.beginPath();
+  ctx.arc(0, 0, 5 + (1 - fade) * 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawWeaponSprite(ctx, side, bx, by, tx, ty, active) {

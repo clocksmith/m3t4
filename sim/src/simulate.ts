@@ -1113,6 +1113,7 @@ function fighterToFrame(f: Fighter): TraceFighterFrame {
     stun: f.stun,
     swipeT: f.swipeT,
     diveT: f.diveT,
+    lastClashTick: f.lastClashTick,
     dead: f.dead,
   };
 }
@@ -1132,6 +1133,7 @@ export interface TraceFighterFrame {
   stun: number;
   swipeT: number;
   diveT: number;
+  lastClashTick: number;
   dead: boolean;
 }
 

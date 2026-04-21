@@ -14,7 +14,6 @@ import { WS_ORIGIN, leaderboard } from "../lib/api.js";
 import { STAGES } from "../lib/public-sim.js";
 import { setupCanvas, drawFrame, W, H } from "../lib/render.js";
 import { getComputeClient } from "../lib/compute.js";
-import { auth } from "../lib/auth.js";
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
 
 const SIM_HZ = 120;                // canonical sim rate
@@ -98,21 +97,18 @@ export function mount(root, { setStatus }) {
   statusCb = setStatus;
   root.innerHTML = `
     <div class="page">
-      <div class="page-header">
-        <h1>Live <small>— whatever match is happening right now</small></h1>
-        <div id="match-hud" class="tight">—</div>
+      <div class="page-header-row">
+        <div class="page-title-stack">
+          <h1 class="page-title">Live</h1>
+          <div class="page-subtitle tight">whatever match is happening right now</div>
+        </div>
       </div>
       <section class="context-card live-briefing-card">
+        <div class="context-card-kicker" id="match-hud">now playing</div>
         <div class="live-briefing-sides">
           ${liveBriefingSideHtml(0)}
           <div class="live-briefing-vs">VS</div>
           ${liveBriefingSideHtml(1)}
-        </div>
-        <div class="live-briefing-footer">
-          <span>Kill mints proof. Carry it to the lit Demand Node. Delivery scores.</span>
-          <a class="buttonish ${auth.user() ? "intro-cta-purple" : "primary"}" href="${auth.user() ? "#profile" : "#build"}">
-            ${auth.user() ? "edit roster" : "tune bot"}
-          </a>
         </div>
       </section>
       <div class="spectate-grid">
@@ -327,7 +323,6 @@ function bindingInfo(characterKey, characterVariant, weaponKey) {
     characterName: character.name ?? characterKey,
     characterLabel: character.label ?? characterVariant,
     weaponName: weapon.name ?? weaponKey,
-    weaponDescription: weapon.silhouette ?? "",
   };
 }
 
@@ -338,12 +333,10 @@ function liveBriefingSideHtml(side) {
     <article class="live-briefing-side is-p${side + 1}">
       <div class="live-briefing-head">
         <span>${label}</span>
-        <strong id="brief-p${side + 1}-handle">@${side === 0 ? "p1" : "p2"}</strong>
+        <strong id="brief-p${side + 1}-identity">@${side === 0 ? "p1" : "p2"} · slot · ?</strong>
       </div>
-      <div class="live-briefing-seat tight" id="brief-p${side + 1}-seat">waiting for assignment</div>
-      <div class="live-briefing-binding">binding · ${escapeHtml(binding.characterName)} / ${escapeHtml(binding.characterLabel)}</div>
-      <div class="live-briefing-weapon">weapon · ${escapeHtml(binding.weaponName)}</div>
-      <p>${escapeHtml(binding.weaponDescription)}</p>
+      <div class="live-briefing-binding">${escapeHtml(binding.characterName)} · ${escapeHtml(binding.characterLabel)}</div>
+      <div class="live-briefing-weapon">${escapeHtml(binding.weaponName)}</div>
     </article>`;
 }
 
@@ -353,14 +346,12 @@ function updateLiveBriefing(match) {
 }
 
 function updateBriefingSide(side, data) {
-  const handleEl = document.getElementById(`brief-p${side + 1}-handle`);
-  const seatEl = document.getElementById(`brief-p${side + 1}-seat`);
-  if (handleEl) handleEl.textContent = `@${data?.handle ?? (side === 0 ? "p1" : "p2")}`;
-  if (seatEl) {
-    const name = data?.name ?? "slot";
-    const elo = data?.elo ?? "?";
-    seatEl.textContent = `${name} · ${elo} ELO`;
-  }
+  const identityEl = document.getElementById(`brief-p${side + 1}-identity`);
+  if (!identityEl) return;
+  const handle = data?.handle ?? (side === 0 ? "p1" : "p2");
+  const name = data?.name ?? "slot";
+  const elo = data?.elo ?? "?";
+  identityEl.textContent = `@${handle} · ${name} · ${elo}`;
 }
 
 function appendFrames(frames) {

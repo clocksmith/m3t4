@@ -28,9 +28,18 @@ function aboutCardHtml(about) {
   if (!body.length) return "";
   return `
     <article class="context-card rules-card-feature">
-      <h2>${escapeHtml(about.title ?? "About")}</h2>
-      ${body.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}
+      <div class="context-card-kicker">${escapeHtml(about.title ?? "About")}</div>
+      <p>${escapeHtml(body[0])}</p>
     </article>`;
+}
+
+function aboutDetailHtml(about) {
+  const body = Array.isArray(about?.body) ? about.body.slice(1) : [];
+  if (!body.length) return "";
+  return `
+    <section class="rules-about-copy" aria-label="About details">
+      ${body.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}
+    </section>`;
 }
 
 export function mount(root, { setStatus }) {
@@ -50,10 +59,15 @@ export function mount(root, { setStatus }) {
 
       ${aboutCardHtml(rules.about)}
 
-      <div class="rules-section-label">Rules</div>
-      <section class="rules-grid">
-        ${sections.map(sectionHtml).join("")}
-      </section>
+      <div class="rules-main-layout">
+        ${aboutDetailHtml(rules.about)}
+        <div class="rules-rules-column">
+          <div class="rules-section-label">Rules</div>
+          <section class="rules-grid">
+            ${sections.map(sectionHtml).join("")}
+          </section>
+        </div>
+      </div>
     </div>`;
 }
 

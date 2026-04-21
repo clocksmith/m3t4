@@ -28,7 +28,7 @@ export async function handleComputeLabRequest(
     return true;
   }
 
-  if (req.method === "GET" && url.pathname === "/healthz") {
+  if (req.method === "GET" && (url.pathname === "/healthz" || url.pathname === "/compute/healthz")) {
     json(res, 200, { ok: true, service: "plasma-lab" });
     return true;
   }

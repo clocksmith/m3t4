@@ -58,6 +58,7 @@ if (runsApi) {
         role: CONFIG.serverRole,
         cycleMs: CONFIG.cycleMs,
         storeBackend: CONFIG.storeBackend,
+        wsClientSoftLimit: CONFIG.wsClientSoftLimit,
         features: CONFIG.features,
       });
       return true;
@@ -121,12 +122,20 @@ const server = http.createServer(async (req, res) => {
 const wss = new WebSocketServer({ server, path: "/ws" });
 wss.on("connection", (ws) => {
   if (firehose) {
+    if (isWsAtCapacity(firehose.clientCount())) {
+      ws.close(1013, "capacity");
+      return;
+    }
     const client = firehose.addClient(ws);
     ws.on("close", () => firehose.removeClient(client));
     ws.on("error", () => firehose.removeClient(client));
     return;
   }
   if (fanout) {
+    if (isWsAtCapacity(fanout.clientCount())) {
+      ws.close(1013, "capacity");
+      return;
+    }
     const client = fanout.addClient(ws);
     ws.on("close", () => fanout.removeClient(client));
     ws.on("error", () => fanout.removeClient(client));
@@ -134,6 +143,10 @@ wss.on("connection", (ws) => {
   }
   ws.close(1011, "websocket disabled for this role");
 });
+
+function isWsAtCapacity(currentClients: number): boolean {
+  return CONFIG.wsClientSoftLimit > 0 && currentClients >= CONFIG.wsClientSoftLimit;
+}
 
 server.listen(CONFIG.port, () => {
   const storeLabel = CONFIG.storeBackend === "firestore" ? "firestore" : STORE_PATH;

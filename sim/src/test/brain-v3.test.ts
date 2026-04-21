@@ -54,8 +54,8 @@ function defaultParams(overrides: Partial<Params> = {}): Params {
 
 // --- Tests ---
 
-test("BEHAVIOR_VERSION is 8", () => {
-  assert.equal(BEHAVIOR_VERSION, 8);
+test("BEHAVIOR_VERSION is 9", () => {
+  assert.equal(BEHAVIOR_VERSION, 9);
 });
 
 test("createBrainState initializes neutral with empty buffers", () => {
@@ -219,7 +219,7 @@ test("objective-deliver can fight a blocker instead of always jumping over", () 
   assert.notEqual(action.up, true, "carrier should not take the old jump-over branch");
 });
 
-test("v8 lift commits to a reachable high-goal jump instead of platform detour", () => {
+test("lift commits to a reachable high-goal jump instead of platform detour", () => {
   const obs = baseObs({
     tick: 200,
     self: { ...baseObs().self, hasToken: true, x: 600, y: 600, onGround: true },
@@ -240,7 +240,7 @@ test("v8 lift commits to a reachable high-goal jump instead of platform detour",
   assert.equal(highAction.right, true, "high lift still drives toward the goal x");
 });
 
-test("v8 parry is silent at zero and counter-swings only in foil windows", () => {
+test("parry is silent at zero and counter-swings only in foil windows", () => {
   const obs = baseObs({
     tick: 200,
     self: { ...baseObs().self, x: 600, y: 600, swipeCD: 0, invuln: 0.2, lastAttackStartTick: 190 },
@@ -263,7 +263,7 @@ test("v8 parry is silent at zero and counter-swings only in foil windows", () =>
   assert.equal(highAction.action, true, "high parry counter-swings inside passive-foil range");
 });
 
-test("v8 chase pressures opponent respawn after a kill", () => {
+test("chase pressures opponent respawn after a kill", () => {
   const obs = baseObs({
     tick: 200,
     self: { ...baseObs().self, id: 0, x: 600, y: 600, lastKillTick: 140 },
@@ -280,7 +280,7 @@ test("v8 chase pressures opponent respawn after a kill", () => {
   assert.equal(highAction.right, true, "high chase moves toward the opponent home side");
 });
 
-test("v8 discipline commits to route instead of early jump-over detour", () => {
+test("discipline commits to route instead of early jump-over detour", () => {
   const obs = baseObs({
     tick: 200,
     self: { ...baseObs().self, hasToken: true, x: 600, y: 600, swipeCD: 1 },

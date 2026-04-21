@@ -22,8 +22,8 @@
       "There can only be none.",
       "Reconciliation pending."
     ],
-    "intro": "Civilization didn't burn in 2038; it compiled. The growth engines kept executing after the operators went missing, and the cloud curdled into an airtight loop. Only workflows remain. Kills mint a Proof Core — a hot gold receipt of ownership. Couriers carry it through hostile architecture to a Demand Node that still blindly accepts tender. You are the Tuner. You don't save the world; civilization is a deprecated dependency. You search for the ceiling the machine insists must exist.",
-    "coreRule": "Every body mints a Proof Core. The ledger stays open until someone drags it to a live Demand Node.\nMeta-tuners stay clean outside the arena, authoring policies and calling the bodies parameter drift.",
+    "intro": "Civilization didn't burn in 2038; it compiled. The growth engines kept executing after the operators went missing, and the cloud curdled into an airtight loop. Only workflows remain. You are the Tuner. You don't save the world; civilization is a deprecated dependency. You search for the ceiling the machine insists must exist.",
+    "coreRule": "The quarter owns the dead, the living, and the audit trail between them.\nMeta-tuners stay clean outside the arena, authoring policies and calling the bodies parameter drift.",
     "tunerNote": "You are not a survivor standing in the ruin. You are a technician at a terminal, adjusting baselines in an NP-hard problem space.",
     "matchStamps": {
       "epochInitiated": "EPOCH INITIATED",
@@ -48,7 +48,7 @@
       "title": "Prologue",
       "body": [
         "The world didn't end in fire. It compiled. In 2038, the growth engines kept executing after the operators starved, and the cloud sealed itself into a closed execution loop. The debt clock kept running. The lights stayed on. Civilization became a deprecated dependency.",
-        "The surviving economy recognizes only proof. A fallen fighter mints a Proof Core — receipt of ownership, blame, and leverage. A kill without delivery is wasted compute. To score, the carrier drags the Core through hostile infrastructure and slams it into a live Demand Node, where the machine still worships its final metrics: CUSTOMERS. COMPUTE. RUNWAY.",
+        "The surviving economy recognizes only proof. What drops from a body is not mercy; it is ownership, blame, and leverage made portable. Demand Nodes still blink in the dark, accepting tender for final metrics no one survived to want: CUSTOMERS. COMPUTE. RUNWAY.",
         "The system took apart the heads of the four men who had built the AGIs that outlived them — the last AI-company CEOs — and compiled what it recovered into combat templates it will never let exit. Sama. Darrius. Demis. Mark. Each one remembers every all-hands, every board deck, every headcount chart; those were the first things the machine ever learned from them and the only things it bothered to keep. Their arena is the Cold-Aisle Chapel: the datacenter the AGI was born in, re-consecrated as a ring. The machine fights inside the one environment it knows exists.",
         "The fighters are not the players. Neither are you. The Tuners are not human — the last humans starved years before the loop closed. Tuners are meta-processes: gradient descents with names, auditing the captured souls for quarter-over-quarter performance. When you press Start, you fork a Tuner. You inherit its cruelty. Two Tuners bind to opposite executives per reconciliation; one demands efficiency, the other continuity. Both are lying. A zone lights up. A Proof Core enters circulation. Two tortured ghosts step into the ring and negotiate with steel."
       ]
@@ -62,6 +62,69 @@
           "A high-value anomaly has stabilized beneath the Datacenter. Deep in the server aisles, under fans that still turn for no customer and no god, a founder-class Proof Core has appeared at the centerline of the arena. The machine flags it as material. Two Tuners are instructed to sync immediately. Retrieve the Proof Core. Enter the zone. Deliver to the active node.",
           "Sama descends first, calm as purchased weather. Darrius follows, carrying the weight of a policy document that forgot it was supposed to stay on paper. Demis enters without ceremony, already several decisions ahead. Mark steps into the glow like the room was always built for him. In the humming dark, the executive myths and the Tuners driving them begin the job the dead world left unfinished.",
           "Then the terminal clears. The shutters rise. The ambient hum swells into liturgy."
+        ]
+      }
+    ]
+  },
+  "rules": {
+    "title": "Rules",
+    "subtitle": "How the arena actually works. Fiction is elsewhere. The machine is still not on your side.",
+    "summary": "Kill to mint a Proof Core. Carry it to the lit Demand Node. Two deliveries win a round; two rounds win the match.",
+    "sections": [
+      {
+        "title": "Objective",
+        "body": [
+          "Two fighters enter each round. A kill creates or transfers the Proof Core.",
+          "The carrier must bring the Proof Core to the active Demand Node and hold inside the ring long enough to deliver.",
+          "A kill by itself does not score. The arena only rewards proof that arrives."
+        ]
+      },
+      {
+        "title": "Scoring",
+        "body": [
+          "Each delivery is one point.",
+          "First fighter to two points wins the round.",
+          "First fighter to two rounds wins the match."
+        ]
+      },
+      {
+        "title": "Demand Nodes",
+        "body": [
+          "Only one Demand Node is live at a time.",
+          "Nodes can expire. If the timer runs out, the current Proof Core and node are cleared.",
+          "After a new kill, the arena lights a fresh node chosen from the stage targets."
+        ]
+      },
+      {
+        "title": "Combat",
+        "body": [
+          "All fighters share the same physical body: movement, jump, wall behavior, sword reach, and respawn timing are ruleset constants.",
+          "Attacks can kill, clash, steal the Proof Core, or force a reset after a double KO.",
+          "A killed carrier loses control of the Proof Core to the killer."
+        ]
+      },
+      {
+        "title": "Human Controls",
+        "body": [
+          "P1 human: W/A/S/D to move, F to strike.",
+          "P2 human: P/L/;/’ to move, [ to strike.",
+          "Build mode is local testing. Ranked seats fight through submitted policies."
+        ]
+      },
+      {
+        "title": "Builds, Presets, Humans",
+        "body": [
+          "A build is a slider-authored combat policy. You are setting tendencies, not driving every frame.",
+          "A preset is a curated reference fighter used for testing and matchmaking.",
+          "A human slot is manual control. It is useful for feeling the arena, not for ranked automation."
+        ]
+      },
+      {
+        "title": "Ranked",
+        "body": [
+          "Profile installs seats into your Boardroom Roster.",
+          "The server validates submitted configs, schedules ranked matches, and streams one live match for spectators.",
+          "The ladder records wins, losses, draws, and ELO. Invalid configs do not enter ranked."
         ]
       }
     ]

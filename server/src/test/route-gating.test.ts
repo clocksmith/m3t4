@@ -128,6 +128,9 @@ test("centralized route graph hides P2P routes by default", async (t) => {
   const status = await req(srv.port, "GET", "/api/status");
   assert.equal(status.status, 200);
   assert.equal(status.body.features.p2pDuel, false);
+  assert.equal(status.body.matchmaker.rankedMode, "normal");
+  assert.equal(status.body.matchmaker.activeStableCount, 0);
+  assert.equal(status.body.matchmaker.effectiveCycleMs, 1500);
 
   const duel = await req(srv.port, "POST", "/api/duel/challenge", {
     toUid: "bob",
@@ -162,6 +165,27 @@ test("ranked submit rejects configs past the hallucination cap before store writ
     `expected hallucination-cap error, got ${JSON.stringify(resp.body.details)}`,
   );
   assert.equal(store.submitted.length, 0);
+});
+
+test("ranked submit accepts profile configs without a JSON id", async (t) => {
+  const routes: RouteList = [];
+  const store = new MemoryStableStore();
+  registerCore(routes, store);
+  const srv = await boot(routes);
+  t.after(() => srv.close());
+
+  const { id: _id, ...configWithoutId } = configFromUi({}, 0);
+  const resp = await req(srv.port, "POST", "/api/ranked/submit", {
+    slotIdx: 2,
+    config: configWithoutId,
+    name: "field-name-wins",
+  }, { authorization: "Bearer alice" });
+
+  assert.equal(resp.status, 200);
+  assert.equal(resp.body.ok, true);
+  assert.equal(store.submitted.length, 1);
+  assert.equal(store.submitted[0].name, "field-name-wins");
+  assert.match(store.submitted[0].config.id, /^alice-2-/);
 });
 
 test("production internal routes require the internal token", async (t) => {

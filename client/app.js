@@ -4,7 +4,8 @@
 import * as spectate from "./modes/spectate.js";
 import * as build from "./modes/build.js";
 import * as profile from "./modes/profile.js";
-import * as lore from "./modes/lore.js";
+import * as intro from "./modes/intro.js";
+import * as rules from "./modes/rules.js";
 import { status as getStatus } from "./lib/api.js";
 import { auth } from "./lib/auth.js";
 import { initAnalytics, trackPageView } from "./lib/analytics.js";
@@ -22,12 +23,12 @@ window.__M3T4_FEATURES__ = FEATURES;
 
 // Practice was absorbed into build (live test stage + human P1/P2
 // toggles). Legacy #practice hash redirects to #build.
-const MODES = { spectate, build, profile, lore };
-const LEGACY_HASH = { practice: "build" };
+const MODES = { intro, build, spectate, profile, rules };
+const LEGACY_HASH = { practice: "build", lore: "intro" };
 const OPTIONAL_MODE_LOADERS = {
   duel: () => import("./modes/duel.js"),
 };
-const DEFAULT_MODE = "build";
+const DEFAULT_MODE = "intro";
 
 const appEl = document.getElementById("app");
 const navLinks = Array.from(document.querySelectorAll("#topnav nav a"));

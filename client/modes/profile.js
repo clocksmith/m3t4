@@ -15,7 +15,6 @@ let selectedSlot = 0;
 let rosterCache = null; // last loaded stable response, or null
 
 const SAMPLE_CONFIG = {
-  id: "my-bot",
   attributes: {
     burnRate: 0.4,
     moat: 60,
@@ -66,7 +65,7 @@ function renderSignIn() {
   root.innerHTML = `
     <div class="page">
       <div class="page-header">
-        <h1>Profile <small>— sign in to see your stable</small></h1>
+        <h1>Profile <small>— sign in to see your boardroom roster</small></h1>
       </div>
       <div class="panel">
         <h3>${isAlpha ? "Closed alpha" : "Dev mode"}</h3>
@@ -103,7 +102,7 @@ function renderFirebaseSignIn(authError) {
   root.innerHTML = `
     <div class="page">
       <div class="page-header">
-        <h1>Profile <small>— sign in to see your stable</small></h1>
+        <h1>Profile <small>— sign in to see your boardroom roster</small></h1>
       </div>
       <div class="panel">
         <h3>Sign in</h3>
@@ -144,28 +143,27 @@ async function renderDashboard(user) {
         <button id="signout">sign out</button>
       </div>
       ${!user.handle ? handleClaimHtml() : ""}
-      <div class="panel">
-        <h3>Boardroom Roster <small class="tight" id="roster-subtitle">loading…</small></h3>
-        <div class="tight mb-sm roster-help">
-          Five seats in the boardroom. Click a seat to install or revise its
-          configuration below. Each seat keeps its identity, ELO, and record
-          across revisions. Rate-limited to 1 submission per seat per 24 h.
+      <div class="panel profile-roster-panel">
+        <div class="profile-roster-head">
+          <h3>Boardroom Roster</h3>
+          <small class="tight" id="roster-subtitle">loading…</small>
         </div>
         <div id="roster-grid" class="roster-grid"></div>
-      </div>
-      <div class="panel" id="seat-editor">
-        <h3 id="editor-title">Install seat 0</h3>
-        <div class="tight mb-sm" id="editor-note">
-          Paste JSON from Build mode (or your offline toolkit). Server
-          validates attributes and privacy.
+        <div class="seat-editor" id="seat-editor">
+          <div class="seat-editor-head">
+            <h3 id="editor-title">Install seat 0</h3>
+            <div class="tight" id="editor-note">vacant</div>
+          </div>
+          <div class="profile-submit-row">
+            <label>name <input type="text" id="slot-name" placeholder="e.g. bruiser-v2"></label>
+            <div class="profile-submit-actions">
+              <button id="paste-pending" class="tight">paste from Build</button>
+              <button id="submit-btn" class="primary">install</button>
+            </div>
+          </div>
+          <textarea id="config-json" class="config-json-textarea" rows="18" spellcheck="false" placeholder="${escapeHtml(SAMPLE_CONFIG_JSON)}"></textarea>
+          <div id="submit-msg"></div>
         </div>
-        <div class="row mb-xs">
-          <label>name <input type="text" id="slot-name" placeholder="e.g. bruiser-v2"></label>
-          <button id="paste-pending" class="tight">paste from Build</button>
-          <button id="submit-btn" class="primary">install</button>
-        </div>
-        <textarea id="config-json" class="config-json-textarea" rows="22" spellcheck="false" placeholder="${escapeHtml(SAMPLE_CONFIG_JSON)}"></textarea>
-        <div id="submit-msg"></div>
       </div>
     </div>`;
 
@@ -211,7 +209,7 @@ function wireSubmit(user) {
       if (!user.handle) throw new Error("claim a handle first");
       const nameInput = root.querySelector("#slot-name").value.trim();
       const text = root.querySelector("#config-json").value;
-      const cfg = parseConfigJson(text);
+      const cfg = normalizeProfileConfig(parseConfigJson(text));
       const validation = validateUserSubmission(cfg);
       if (!validation.ok || !validation.config) {
         throw new Error(`invalid config: ${validation.errors.join("; ")}`);
@@ -285,6 +283,32 @@ function parseConfigJson(text) {
   }
 }
 
+function normalizeProfileConfig(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("config JSON must be an object with an attributes object");
+  }
+  const cfg = { ...raw };
+  if (!cfg.attributes && looksLikeAttributeMap(cfg)) {
+    return { attributes: cfg };
+  }
+  if (!cfg.attributes || typeof cfg.attributes !== "object" || Array.isArray(cfg.attributes)) {
+    throw new Error("config JSON must include an attributes object");
+  }
+  if (typeof cfg.id !== "string" || !cfg.id.trim()) {
+    delete cfg.id;
+  }
+  return cfg;
+}
+
+function looksLikeAttributeMap(obj) {
+  return obj && typeof obj === "object" && (
+    "burnRate" in obj ||
+    "moat" in obj ||
+    "shipRate" in obj ||
+    "hallucination" in obj
+  );
+}
+
 function formatJsonForTextarea(raw) {
   try {
     return JSON.stringify(JSON.parse(raw), null, 2);
@@ -306,7 +330,7 @@ async function loadStable(user) {
     if (subtitle) {
       subtitle.textContent = s
         ? `@${s.handle} · aggregate ELO ${s.eloAggregate} · ${s.wins}w ${s.losses}l`
-        : "empty — install your first seat below";
+        : "vacant boardroom";
     }
     renderRosterGrid(grid, s);
     updateEditor();
@@ -325,10 +349,10 @@ function renderRosterGrid(grid, stable) {
     const elo = filled ? `<div class="seat-elo">${slot.elo}</div>` : "";
     const wl = filled ? `<div class="seat-wl">${slot.wins}-${slot.losses}-${slot.draws}</div>` : "";
     const last = filled && slot.lastPlayedAt
-      ? `<div class="seat-last">last played ${relativeTime(slot.lastPlayedAt)}</div>`
+      ? `<div class="seat-last">${relativeTime(slot.lastPlayedAt)}</div>`
       : filled
-      ? `<div class="seat-last">no matches yet</div>`
-      : `<div class="seat-last">click to install</div>`;
+      ? `<div class="seat-last">unplayed</div>`
+      : `<div class="seat-last">vacant</div>`;
     return `
       <button type="button" class="seat-card ${state} ${active}" data-slot="${i}">
         <div class="seat-head">
@@ -351,12 +375,18 @@ function renderRosterGrid(grid, stable) {
 
 function updateEditor() {
   const title = root.querySelector("#editor-title");
+  const note = root.querySelector("#editor-note");
   const btn = root.querySelector("#submit-btn");
   const nameInput = root.querySelector("#slot-name");
   if (!title || !btn) return;
   const slot = rosterCache?.slots?.[selectedSlot];
   const filled = !!(slot && slot.slotId);
   title.textContent = filled ? `Revise seat ${selectedSlot}` : `Install seat ${selectedSlot}`;
+  if (note) {
+    note.textContent = filled
+      ? `${slot.elo} ELO · ${slot.wins}-${slot.losses}-${slot.draws} · ${slot.lastPlayedAt ? relativeTime(slot.lastPlayedAt) : "unplayed"}`
+      : "vacant";
+  }
   btn.textContent = filled ? "revise" : "install";
   if (filled && nameInput && !nameInput.value.trim()) {
     nameInput.placeholder = slot.name ? `current: ${slot.name}` : "e.g. bruiser-v2";

@@ -237,7 +237,7 @@ export function renderDuel(root) {
         ...STRATEGY_NAMES.map((n) => h("option", { value: n, selected: n === state.myPreset ? "selected" : null }, n)))),
     h("label", {}, "stage: ",
       h("select", { onchange: (e) => state.stageId = e.target.value },
-        ...["datacenter"].map((k) => h("option", { value: k, selected: k === state.stageId ? "selected" : null }, k)))),
+        ...Object.keys(STAGES).map((k) => h("option", { value: k, selected: k === state.stageId ? "selected" : null }, k)))),
   );
 
   async function runInitiator() {

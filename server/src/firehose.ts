@@ -15,6 +15,7 @@ import { CONFIG } from "./config.js";
 import type { StableStore, Stable, Slot } from "./stable.js";
 import { updatePair } from "./elo.js";
 import { shouldLogWatchlist, summarizeWatchlistMatch, watchlistTagsForSlot, type WatchlistTag } from "./watchlist.js";
+import { isHumanStable, matchmakerPressure, type MatchmakerPressure } from "./matchmaker-pressure.js";
 
 export interface Client {
   ws: WebSocket;
@@ -37,14 +38,27 @@ type PublicMatchPreview = {
   eloDelta: number;
 };
 
-const HUMAN_PAIR_ELO_BONUS = 75;
+const HUMAN_PIVOT_TARGETS = [
+  { maxHumans: 3, target: 0.55 },
+  { maxHumans: 7, target: 0.60 },
+  { maxHumans: 15, target: 0.65 },
+];
+const MAX_HUMAN_PIVOT_TARGET = 0.85;
+const HUMAN_SYS_ELO_BONUS_MAX = 150;
+const HUMAN_SYS_ELO_BONUS_DECAY_PER_HUMAN = 5;
+const HUMAN_PAIR_ELO_BONUS_BASE = 40;
+const HUMAN_PAIR_ELO_BONUS_PER_HUMAN = 5;
+const HUMAN_PAIR_ELO_BONUS_MAX = 200;
+const LEAST_RECENTLY_PLAYED_BONUS = 25;
+const RECENTLY_PLAYED_WINDOW_MS = 10 * 60 * 1000;
 
 export class Firehose {
   private clients = new Set<Client>();
   private nextClientId = 1;
-  // Only datacenter is enabled for ranked play. Other stages exist in
-  // STAGES for build-mode experimentation but aren't in the meta pool.
-  private stages = [STAGES.datacenter];
+  // All three arenas are in the meta pool. Visually they share the
+  // datacenter asset pack with subtle filters to differentiate
+  // (client/lib/render.js STAGE_ASSETS). Platform layouts differ.
+  private stages = Object.values(STAGES);
   private running = false;
   private currentMatch: {
     matchId: string;
@@ -57,8 +71,11 @@ export class Firehose {
     reason: "cooldown" | "no-pair";
     nextAttemptAt: number;
     intervalMs: number;
+    rankedMode: MatchmakerPressure["rankedMode"];
     nextMatch?: PublicMatchPreview;
   } | null = null;
+  private effectiveCycleMs = CONFIG.cycleMs;
+  private rankedMode: MatchmakerPressure["rankedMode"] = "normal";
 
   constructor(private store: StableStore) {}
 
@@ -72,6 +89,7 @@ export class Firehose {
     }
     return c;
   }
+  clientCount(): number { return this.clients.size; }
   removeClient(c: Client): void { this.clients.delete(c); }
 
   private sendTo(c: Client, ev: ServerEvent): void {
@@ -92,7 +110,7 @@ export class Firehose {
         pendingPair = null;
         if (!pair) {
           this.enterWait("no-pair");
-          await sleep(CONFIG.cycleMs);
+          await sleep(this.effectiveCycleMs);
           continue;
         }
         await this.runMatch(pair);
@@ -102,15 +120,24 @@ export class Firehose {
         await sleep(2000);
       }
       this.enterWait(pendingPair ? "cooldown" : "no-pair", pendingPair);
-      await sleep(CONFIG.cycleMs);
+      await sleep(this.effectiveCycleMs);
     }
   }
 
   private enterWait(reason: "cooldown" | "no-pair", nextPair: MatchPair | null = null): void {
-    const nextAttemptAt = Date.now() + CONFIG.cycleMs;
+    const intervalMs = this.effectiveCycleMs;
+    const nextAttemptAt = Date.now() + intervalMs;
     const nextMatch = nextPair ? this.previewPair(nextPair) : undefined;
-    this.currentWait = { reason, nextAttemptAt, intervalMs: CONFIG.cycleMs, nextMatch };
-    this.broadcast({ type: "waiting", reason, nextAttemptAt, intervalMs: CONFIG.cycleMs, nextMatch, serverNow: Date.now() });
+    this.currentWait = { reason, nextAttemptAt, intervalMs, rankedMode: this.rankedMode, nextMatch };
+    this.broadcast({
+      type: "waiting",
+      reason,
+      nextAttemptAt,
+      intervalMs,
+      rankedMode: this.rankedMode,
+      nextMatch,
+      serverNow: Date.now(),
+    });
   }
 
   stop(): void { this.running = false; }
@@ -119,6 +146,9 @@ export class Firehose {
   // nearest unpaired neighbor within tolerance. Returns one pair at a time.
   private async findPair(): Promise<MatchPair | null> {
     const active = await this.store.listActive(CONFIG.activePoolMs);
+    const pressure = matchmakerPressure(active, CONFIG.cycleMs);
+    this.effectiveCycleMs = pressure.effectiveCycleMs;
+    this.rankedMode = pressure.rankedMode;
     // Each stable contributes one randomly-chosen slot for matchmaking
     const entries: Array<{ st: Stable; slot: Slot }> = active.flatMap((st) => {
       if (st.slots.length === 0) return [];
@@ -127,10 +157,15 @@ export class Firehose {
     });
     if (entries.length < 2) return null;
 
+    const humanCount = entries.filter((e) => isHumanStable(e.st)).length;
+    const sysCount = entries.length - humanCount;
+
     // Sort by ELO
     entries.sort((x, y) => x.slot.elo - y.slot.elo);
-    // Pick a random pivot, find its ELO-closest partner within tolerance
-    const pivotIdx = Math.floor(Math.random() * entries.length);
+    // Pick a pivot, then find its ELO-closest partner within tolerance.
+    // Scarce humans are upweighted as pivots so early public streams show
+    // human-vs-sys ladder action instead of mostly sys-vs-sys filler.
+    const pivotIdx = choosePivotIndex(entries, humanCount, sysCount);
     const pivot = entries[pivotIdx];
     let best: typeof entries[0] | null = null;
     let bestRawDelta = Infinity;
@@ -140,8 +175,8 @@ export class Firehose {
       if (i === pivotIdx) continue;
       const rawDelta = Math.abs(entries[i].slot.elo - pivot.slot.elo);
       if (rawDelta > CONFIG.eloToleranceMax) continue;
-      const bothHuman = pivotHuman && isHumanStable(entries[i].st);
-      const effectiveDelta = rawDelta - (bothHuman ? HUMAN_PAIR_ELO_BONUS : 0);
+      const candidateHuman = isHumanStable(entries[i].st);
+      const effectiveDelta = rawDelta - pairEloBonusForMatchup(pivotHuman, candidateHuman, humanCount);
       if (
         effectiveDelta < bestEffectiveDelta ||
         (effectiveDelta === bestEffectiveDelta && rawDelta < bestRawDelta)
@@ -282,6 +317,53 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function isHumanStable(st: Stable): boolean {
-  return !st.userId.startsWith("system:");
+function choosePivotIndex(entries: Array<{ st: Stable; slot: Slot }>, humanCount: number, sysCount: number): number {
+  const now = Date.now();
+  const humanWeight = humanPivotWeight(humanCount, sysCount);
+  let total = 0;
+  const weights = entries.map((e) => {
+    let w = isHumanStable(e.st) ? humanWeight : 1;
+    if (isHumanStable(e.st)) {
+      const ageMs = e.slot.lastPlayedAt > 0 ? now - e.slot.lastPlayedAt : CONFIG.activePoolMs;
+      const ageRatio = Math.max(0, Math.min(1, ageMs / CONFIG.activePoolMs));
+      const recentPenalty = ageMs < RECENTLY_PLAYED_WINDOW_MS ? 0.25 : 1;
+      w *= (1 + ageRatio * LEAST_RECENTLY_PLAYED_BONUS) * recentPenalty;
+    }
+    total += w;
+    return w;
+  });
+  let r = Math.random() * total;
+  for (let i = 0; i < weights.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return i;
+  }
+  return entries.length - 1;
+}
+
+export function humanPivotTarget(humanCount: number, sysCount: number): number {
+  if (humanCount <= 0) return 0;
+  if (sysCount <= 0) return 1;
+  const humanShare = humanCount / (humanCount + sysCount);
+  const early = HUMAN_PIVOT_TARGETS.find((x) => humanCount <= x.maxHumans)?.target;
+  const grown = Math.min(MAX_HUMAN_PIVOT_TARGET, 0.70 + Math.max(0, humanCount - 16) * 0.005);
+  return Math.max(humanShare, early ?? grown);
+}
+
+export function humanPivotWeight(humanCount: number, sysCount: number): number {
+  if (humanCount <= 0 || sysCount <= 0) return 1;
+  const target = humanPivotTarget(humanCount, sysCount);
+  if (target >= 1) return Number.POSITIVE_INFINITY;
+  const targetOdds = target / (1 - target);
+  return Math.max(1, targetOdds * (sysCount / humanCount));
+}
+
+export function pairEloBonusForMatchup(aHuman: boolean, bHuman: boolean, humanCount: number): number {
+  if (!aHuman && !bHuman) return 0;
+  if (aHuman && bHuman) {
+    return Math.min(
+      HUMAN_PAIR_ELO_BONUS_MAX,
+      HUMAN_PAIR_ELO_BONUS_BASE + humanCount * HUMAN_PAIR_ELO_BONUS_PER_HUMAN,
+    );
+  }
+  return Math.max(0, HUMAN_SYS_ELO_BONUS_MAX - humanCount * HUMAN_SYS_ELO_BONUS_DECAY_PER_HUMAN);
 }

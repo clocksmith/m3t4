@@ -42,6 +42,10 @@ export class FanoutRelay {
     return c;
   }
 
+  clientCount(): number {
+    return this.clients.size;
+  }
+
   removeClient(c: Client): void {
     this.clients.delete(c);
   }

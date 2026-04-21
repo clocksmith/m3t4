@@ -1,6 +1,7 @@
 import { type CompiledBrain } from "./dsl.js";
 import type { Action, BrainConfig, Character, MatchResult, Observation, Params, Stage, World } from "./types.js";
 export declare const DEFAULT_CHARS: [Character, Character];
+export declare function applyMicroAttributeDrift(params: Params, tick: number, fighterId: 0 | 1, noiseSeed: number): Params;
 export declare function applyHallucinationNoise(params: Params, tick: number, fighterId: 0 | 1, noiseSeed: number): Params;
 export declare function settleWorldWinner(w: World): void;
 declare function packAction(a: Action): number;

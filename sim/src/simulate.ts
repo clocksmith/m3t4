@@ -117,6 +117,38 @@ function noiseUnit(seed: number, tick: number, fighterId: 0 | 1, paramIndex: num
 }
 
 const NOISE_KEYS = PARAM_KEYS.filter((k): k is Exclude<ParamKey, "hallucination"> => k !== "hallucination");
+const MICRO_DRIFT_WINDOW_TICKS = 20;
+const MICRO_DRIFT_UI_STEP = 1;
+const MICRO_DRIFT_TOTAL_UI_CAP = 3;
+const MICRO_DRIFT_SLOTS = Math.floor(MICRO_DRIFT_TOTAL_UI_CAP / MICRO_DRIFT_UI_STEP);
+
+export function applyMicroAttributeDrift(
+  params: Params,
+  tick: number,
+  fighterId: 0 | 1,
+  noiseSeed: number,
+): Params {
+  const driftTick = Math.floor(Math.max(0, tick) / MICRO_DRIFT_WINDOW_TICKS);
+  const out: Params = { ...params };
+  const used = new Set<number>();
+  const slots = Math.min(MICRO_DRIFT_SLOTS, NOISE_KEYS.length);
+
+  for (let slot = 0; slot < slots; slot++) {
+    let index = Math.floor(noiseUnit(noiseSeed, driftTick, fighterId, 64 + slot) * NOISE_KEYS.length) % NOISE_KEYS.length;
+    while (used.has(index)) index = (index + 1) % NOISE_KEYS.length;
+    used.add(index);
+
+    const k = NOISE_KEYS[index];
+    const [lo, hi] = RANGES[k];
+    const sign = noiseUnit(noiseSeed, driftTick, fighterId, 96 + slot) < 0.5 ? -1 : 1;
+    const rawBase = Number.isFinite(out[k]) ? out[k] : params[k];
+    const base = Number.isFinite(rawBase) ? rawBase : lo;
+    const nativeStep = ((hi - lo) * MICRO_DRIFT_UI_STEP) / 100;
+    out[k] = clamp(base + sign * nativeStep, lo, hi);
+  }
+
+  return out;
+}
 
 export function applyHallucinationNoise(
   params: Params,
@@ -124,16 +156,16 @@ export function applyHallucinationNoise(
   fighterId: 0 | 1,
   noiseSeed: number,
 ): Params {
+  const out = applyMicroAttributeDrift(params, tick, fighterId, noiseSeed);
   const hallucination = Math.max(0, Number.isFinite(params.hallucination) ? params.hallucination : 0);
-  if (hallucination <= 0) return params;
+  if (hallucination <= 0) return out;
 
   const jitterScale = (hallucination / 100) * 0.5;
-  const out: Params = { ...params };
   for (let i = 0; i < NOISE_KEYS.length; i++) {
     const k = NOISE_KEYS[i];
     const [lo, hi] = RANGES[k];
     const delta = (noiseUnit(noiseSeed, tick, fighterId, i) * 2 - 1) * jitterScale * (hi - lo);
-    out[k] = clamp(params[k] + delta, lo, hi);
+    out[k] = clamp(out[k] + delta, lo, hi);
   }
   return out;
 }
@@ -502,12 +534,20 @@ function resolveCombat(w: World): void {
   }
 }
 
+const RESPAWN_MIN_OPP_DIST = 200;
+
 function respawn(f: Fighter, w: World): void {
-  // Always home-side. Spawning on the goal when gold is in play drops the
-  // victim on top of the carrier's delivery zone, creating an endless
-  // contest loop and robbing the defender of the chance to intercept
-  // mid-field. Home-side respawns let the carrier earn delivery.
-  const sp = f.id === 0 ? w.stage.spawnL : w.stage.spawnR;
+  // Per-respawn randomized mirror. Coin-flip picks left or right spawn
+  // regardless of player id. Over a match each fighter visits both sides.
+  // If the coin-flipped side is too close to the live opponent, we fall
+  // through to the other side so respawning fighters can't be ambushed
+  // during their invuln window.
+  const opp = w.fighters[f.id === 0 ? 1 : 0];
+  const flipLeft = w.rng() < 0.5;
+  const primary = flipLeft ? w.stage.spawnL : w.stage.spawnR;
+  const alt     = flipLeft ? w.stage.spawnR : w.stage.spawnL;
+  const dxPrimary = opp.dead ? Infinity : Math.hypot(opp.x - primary.x, opp.y - primary.y);
+  const sp = dxPrimary < RESPAWN_MIN_OPP_DIST ? alt : primary;
   f.x = sp.x;
   f.y = sp.y;
   f.vx = 0;

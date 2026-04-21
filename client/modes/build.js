@@ -109,9 +109,7 @@ const compiledSlots = [null, null];
 // --- live test stage ---
 const STEP = 1 / 120;
 const MAX_DT = 0.05;
-// Ranked and build-mode live test both run on datacenter only. Other
-// stages remain in STAGES for future content but are out of rotation.
-const STAGE_IDS = ["datacenter"];
+const STAGE_IDS = Object.keys(STAGES);
 const KEY_MAP = [
   { left: "KeyA", right: "KeyD", up: "KeyW", down: "KeyS", act: "KeyF", moveHint: "W/A/S/D", strikeHint: "F" },
   { left: "KeyL", right: "Quote", up: "KeyP", down: "Semicolon", act: "BracketLeft", moveHint: "P/L/;/'", strikeHint: "[" },
@@ -253,12 +251,14 @@ function slotSpent(slot) {
   const s = slotStates[slot];
   return KNOBS.reduce((sum, k) => sum + s[k.id], 0);
 }
-function slotConfig(slot) {
+function slotConfig(slot, opts = {}) {
   const s = slotStates[slot];
   const attrs = {};
   for (const k of KNOBS) attrs[k.id] = +denormalize(k, s[k.id]).toFixed(4);
   attrs.hallucination = computedHallucinationForSpend(slotSpent(slot));
-  return { id: `user-bot-slot${slot}-${Date.now().toString(36)}`, attributes: attrs };
+  const cfg = { attributes: attrs };
+  if (opts.runtimeId) cfg.id = `build-slot-${slot}`;
+  return cfg;
 }
 function remainingCeilingFor(slot, id) {
   const s = slotStates[slot];
@@ -741,7 +741,7 @@ function rebuildSlotBrain(slot) {
   const mode = modes[slot];
   if (mode === "human") { compiledSlots[slot] = null; return; }
   try {
-    const cfg = mode === "preset" ? STRATEGIES[slotPresetNames[slot]] : slotConfig(slot);
+    const cfg = mode === "preset" ? STRATEGIES[slotPresetNames[slot]] : slotConfig(slot, { runtimeId: true });
     compiledSlots[slot] = compileBrain(cfg);
   } catch (e) {
     compiledSlots[slot] = null;

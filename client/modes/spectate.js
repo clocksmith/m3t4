@@ -30,6 +30,7 @@ let renderState = {
   elos: { a: 0, b: 0 },
 };
 let waitState = null; // { reason, nextAttemptAt, intervalMs, skewMs }
+let signalState = null; // { title, subtitle, stat, retryMs }
 let matchActive = false;
 let noiseCanvas = null;
 let noiseCtx = null;
@@ -42,6 +43,7 @@ let ctx = null;
 let rafId = 0;
 let statusCb = () => {};
 let computeUnsub = null;
+let reconnectTimer = null;
 
 // Playback state — reset on every matchStart.
 let frameBuf = [];
@@ -173,6 +175,7 @@ function wireComputePanel(root) {
 
 export function unmount() {
   running = false;
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
   if (ws) { try { ws.close(); } catch {} ws = null; }
   if (lbTimer) { clearInterval(lbTimer); lbTimer = null; }
   if (rafId) cancelAnimationFrame(rafId);
@@ -184,27 +187,49 @@ export function unmount() {
 }
 
 function connect() {
+  if (!running) return;
   try {
     ws = new WebSocket(WS_ORIGIN + "/ws");
   } catch (e) {
-    statusCb(`ws: ${e.message}`);
-    setTimeout(connect, 3000);
+    setSignalFailure(
+      "BROADCAST UNAVAILABLE",
+      "The relay socket refused construction. Reopening the wound shortly.",
+      "unavailable",
+      3000,
+    );
     return;
   }
-  ws.onopen = () => { statusCb("ws live"); setStat("stat-ws", "live"); };
-  ws.onclose = () => {
-    statusCb("ws disconnected — retry in 3s");
-    setStat("stat-ws", "disconnected");
-    if (running) setTimeout(connect, 3000);
+  ws.onopen = () => {
+    signalState = null;
+    statusCb("ws live");
+    setStat("stat-ws", "live");
+  };
+  ws.onclose = (ev) => {
+    if (!running) return;
+    const failure = signalFailureForClose(ev);
+    setSignalFailure(failure.title, failure.subtitle, failure.stat, failure.retryMs);
   };
   ws.onerror = () => { /* handled by onclose */ };
   ws.onmessage = (ev) => {
-    let msg; try { msg = JSON.parse(ev.data); } catch { return; }
+    let msg;
+    try {
+      msg = JSON.parse(ev.data);
+    } catch {
+      setSignalFailure(
+        "BROADCAST REJECTED",
+        "The signal arrived malformed. The client declined to hallucinate.",
+        "malformed",
+        15000,
+      );
+      try { ws.close(1003, "protocol"); } catch {}
+      return;
+    }
     onEvent(msg);
   };
 }
 
 function onEvent(m) {
+  signalState = null;
   if (m.type !== "frames") logStreamEvent(m);
   if (m.type === "waiting") {
     const skewMs = typeof m.serverNow === "number" ? (Date.now() - m.serverNow) : 0;
@@ -371,18 +396,13 @@ function escapeHtml(s) {
 
 function loop() {
   if (!running) return;
-  const f = currentFrame();
-  if (f) {
+  const f = signalState ? null : currentFrame();
+  if (signalState) {
+    drawSignalScreen(signalState.title, signalState.subtitle);
+  } else if (f) {
     drawFrame(ctx, renderState.stage, f, renderState.labels);
   } else if (matchActive) {
-    // Mid-match stall: noise scramble behind a "buffering" message.
-    drawNoiseScramble(ctx);
-    ctx.fillStyle = "rgba(4,4,4,0.55)";
-    ctx.fillRect(0, H / 2 - 44, W, 72);
-    ctx.fillStyle = cssColor("--ui-blue", "#3b82f6");
-    ctx.textAlign = "center";
-    ctx.font = "700 22px -apple-system, system-ui";
-    ctx.fillText("buffering signal…", W / 2, H / 2);
+    drawSignalScreen("SIGNAL DEGRADED", "Holding the last verified frame.");
   } else {
     // Between matches: idle bg + countdown.
     ctx.fillStyle = cssColor("--arena-idle-bg", "black"); ctx.fillRect(0, 0, W, H);
@@ -391,11 +411,20 @@ function loop() {
     const secs = waitSecondsLeft();
     if (secs !== null) {
       ctx.font = "600 22px -apple-system, system-ui";
-      ctx.fillText(waitState.reason === "no-pair" && !waitState.nextMatch ? "no eligible pair — retry in" : "next match in", W / 2, H / 2 - 42);
+      ctx.fillText(waitState.reason === "no-pair" && !waitState.nextMatch ? "no eligible pair — retry in" : "next match in", W / 2, H / 2 - 68);
       if (waitState.nextMatch) {
-        ctx.fillStyle = cssColor("--arena-idle-text", "gray");
-        ctx.font = "600 18px -apple-system, system-ui";
-        ctx.fillText(nextMatchLabel(waitState.nextMatch), W / 2, H / 2 - 12);
+        const next = waitState.nextMatch;
+        const a = next.a?.handle ?? "p1";
+        const b = next.b?.handle ?? "p2";
+        const delta = typeof next.eloDelta === "number" ? ` · Δ${Math.round(next.eloDelta)}` : "";
+        ctx.fillStyle = cssColor("--ui-text", "#f4f4ff");
+        ctx.font = "700 26px -apple-system, system-ui";
+        ctx.fillText(`@${a} vs @${b}${delta}`, W / 2, H / 2 - 36);
+        if (next.stageId) {
+          ctx.fillStyle = cssColor("--ui-purple", "#a855f7");
+          ctx.font = "600 16px ui-monospace, Menlo, monospace";
+          ctx.fillText(`STAGE · ${next.stageId.toUpperCase()}`, W / 2, H / 2 - 10);
+        }
       }
       ctx.fillStyle = cssColor("--ui-blue", "#3b82f6");
       ctx.font = "700 56px ui-monospace, Menlo, monospace";
@@ -415,6 +444,21 @@ function loop() {
 // burning CPU during a real stall.
 const NOISE_W = 160;
 const NOISE_H = 90;
+function drawSignalScreen(title, subtitle = "") {
+  drawNoiseScramble(ctx);
+  ctx.fillStyle = "rgba(4,4,4,0.64)";
+  ctx.fillRect(0, H / 2 - 70, W, 118);
+  ctx.textAlign = "center";
+  ctx.fillStyle = cssColor("--ui-purple-bright", "#c084fc");
+  ctx.font = "800 25px -apple-system, system-ui";
+  ctx.fillText(title, W / 2, H / 2 - 16);
+  if (subtitle) {
+    ctx.fillStyle = cssColor("--arena-idle-text", "#cbd5e1");
+    ctx.font = "600 15px -apple-system, system-ui";
+    ctx.fillText(subtitle, W / 2, H / 2 + 18);
+  }
+}
+
 function drawNoiseScramble(destCtx) {
   if (!noiseCanvas) {
     noiseCanvas = document.createElement("canvas");
@@ -471,7 +515,8 @@ function nextMatchLabel(next) {
   const a = next?.a?.handle ?? "p1";
   const b = next?.b?.handle ?? "p2";
   const delta = typeof next?.eloDelta === "number" ? ` · Δ${Math.round(next.eloDelta)}` : "";
-  return `@${a} vs @${b}${delta}`;
+  const stage = next?.stageId ? ` · ${next.stageId}` : "";
+  return `@${a} vs @${b}${delta}${stage}`;
 }
 
 function cssColor(name, fallback) {
@@ -482,6 +527,50 @@ function cssColor(name, fallback) {
 function setStat(id, value) {
   const el = document.getElementById(id);
   if (el) el.textContent = value;
+}
+
+function signalFailureForClose(ev) {
+  const reason = String(ev.reason || "").toLowerCase();
+  if (ev.code === 1013 || reason.includes("capacity")) {
+    return {
+      title: "SPECTATOR CAPACITY EXHAUSTED",
+      subtitle: "The relay chose execution over applause. Try again shortly.",
+      stat: "capacity",
+      retryMs: 30000,
+    };
+  }
+  if (ev.code === 1003 || reason.includes("protocol")) {
+    return {
+      title: "BROADCAST REJECTED",
+      subtitle: "The signal arrived malformed. The client declined to hallucinate.",
+      stat: "malformed",
+      retryMs: 15000,
+    };
+  }
+  return {
+    title: "BROADCAST LOST",
+    subtitle: "Reconnecting to the arena relay.",
+    stat: "reconnecting",
+    retryMs: 3000,
+  };
+}
+
+function setSignalFailure(title, subtitle, stat, retryMs) {
+  signalState = { title, subtitle, stat, retryMs };
+  resetPlayback();
+  setStat("stat-ws", stat);
+  statusCb(`${stat} — retry in ${Math.ceil(retryMs / 1000)}s`);
+  appendStreamLine(`${title} — ${subtitle}`);
+  scheduleReconnect(retryMs);
+}
+
+function scheduleReconnect(delayMs) {
+  if (!running) return;
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connect();
+  }, delayMs);
 }
 
 function updateBufferStat(state = "live") {
@@ -496,8 +585,6 @@ function updateBufferStat(state = "live") {
 
 const STREAM_LOG_MAX = 8;
 function logStreamEvent(m) {
-  const logEl = document.getElementById("stream-log");
-  if (!logEl) return;
   const t = new Date().toLocaleTimeString();
   let extra = "";
   if (m.type === "matchStart" || m.type === "matchInProgress") {
@@ -514,8 +601,14 @@ function logStreamEvent(m) {
     const next = m.nextMatch ? ` · ${nextMatchLabel(m.nextMatch)}` : "";
     extra = `  ${m.reason} · next ~${Math.max(0, Math.round((m.nextAttemptAt - (m.serverNow ?? Date.now())) / 1000))}s${next}`;
   }
+  appendStreamLine(`[${t}] ${m.type}${extra}`);
+}
+
+function appendStreamLine(text) {
+  const logEl = document.getElementById("stream-log");
+  if (!logEl) return;
   const row = document.createElement("div");
-  row.textContent = `[${t}] ${m.type}${extra}`;
+  row.textContent = text;
   logEl.prepend(row);
   while (logEl.childElementCount > STREAM_LOG_MAX) logEl.lastElementChild.remove();
 }

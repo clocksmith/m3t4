@@ -1,6 +1,6 @@
-// Lore mode — auto-scrolling CRT crawl. Late-80s/early-90s terminal
+// Intro mode — auto-scrolling CRT crawl. Late-80s/early-90s terminal
 // aesthetic: amber-green phosphor, mono, scanlines, type-on reveal,
-// skip-on-click. Renders content/game-copy.v1.json in a fixed
+// enter-on-click. Renders content/game-copy.v1.json in a fixed
 // sequence (approved in PR: tagline → prologue[0..4] → stinger).
 
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
@@ -40,18 +40,18 @@ function buildSequence() {
 
 export function mount(mountEl, { setStatus }) {
   root = mountEl;
-  setStatus("lore · signal received");
+  setStatus("intro · signal received");
   root.innerHTML = `
-    <div class="lore-crt" id="lore-crt">
-      <div class="lore-scanlines"></div>
-      <div class="lore-vignette"></div>
-      <div class="lore-crawl" id="lore-crawl"></div>
-      <div class="lore-hint" id="lore-hint">[ click / tap / any key to skip ]</div>
+    <div class="intro-crt" id="intro-crt">
+      <div class="intro-scanlines"></div>
+      <div class="intro-vignette"></div>
+      <div class="intro-crawl" id="intro-crawl"></div>
+      <div class="intro-hint" id="intro-hint">[ click / space / enter to spectate ]</div>
     </div>`;
 
-  const crawlEl = root.querySelector("#lore-crawl");
-  const hintEl = root.querySelector("#lore-hint");
-  const crtEl = root.querySelector("#lore-crt");
+  const crawlEl = root.querySelector("#intro-crawl");
+  const hintEl = root.querySelector("#intro-hint");
+  const crtEl = root.querySelector("#intro-crt");
 
   running = true;
   const sequence = buildSequence();
@@ -66,12 +66,12 @@ export function mount(mountEl, { setStatus }) {
     if (idx >= sequence.length) { finish(); return; }
     const block = sequence[idx];
     currentEl = document.createElement("div");
-    currentEl.className = `lore-block lore-${block.kind}`;
+    currentEl.className = `intro-block intro-${block.kind}`;
     if (block.kind === "stinger") {
       currentEl.dataset.lines = JSON.stringify(block.lines);
       currentEl.dataset.lineIdx = "0";
       const first = document.createElement("div");
-      first.className = "lore-stinger-line";
+      first.className = "intro-stinger-line";
       currentEl.appendChild(first);
     }
     crawlEl.appendChild(currentEl);
@@ -81,10 +81,8 @@ export function mount(mountEl, { setStatus }) {
   function finish() {
     if (finished) return;
     finished = true;
-    hintEl.textContent = "[ click to enter ]";
+    hintEl.textContent = "[ click / space / enter to spectate ]";
     hintEl.classList.add("is-final");
-    crtEl.addEventListener("click", enter, { once: true });
-    document.addEventListener("keydown", onKey, { once: true });
   }
 
   function enter() {
@@ -93,32 +91,10 @@ export function mount(mountEl, { setStatus }) {
 
   function onKey(e) {
     if (!running) return;
-    if (finished) { enter(); return; }
-    skipAll();
-  }
-
-  function skipAll() {
-    while (idx < sequence.length) renderBlockInstant(sequence[idx++]);
-    currentEl = null;
-    charPos = 0;
-    finish();
-  }
-
-  function renderBlockInstant(block) {
-    const el = document.createElement("div");
-    el.className = `lore-block lore-${block.kind}`;
-    if (block.kind === "stinger") {
-      for (const line of block.lines) {
-        const ln = document.createElement("div");
-        ln.className = "lore-stinger-line";
-        ln.textContent = line;
-        el.appendChild(ln);
-      }
-    } else {
-      el.textContent = block.text;
+    if (e.code === "Space" || e.code === "Enter") {
+      e.preventDefault();
+      enter();
     }
-    crawlEl.appendChild(el);
-    crawlEl.scrollTop = crawlEl.scrollHeight;
   }
 
   function tick(now) {
@@ -142,7 +118,7 @@ export function mount(mountEl, { setStatus }) {
         if (lineIdx + 1 < lines.length) {
           currentEl.dataset.lineIdx = String(lineIdx + 1);
           const next = document.createElement("div");
-          next.className = "lore-stinger-line";
+          next.className = "intro-stinger-line";
           currentEl.appendChild(next);
           charPos = 0;
           pausedUntil = now + 420;
@@ -169,13 +145,13 @@ export function mount(mountEl, { setStatus }) {
     rafHandle = requestAnimationFrame(tick);
   }
 
-  crtEl.addEventListener("click", () => { if (!finished) skipAll(); });
+  crtEl.addEventListener("click", enter);
   document.addEventListener("keydown", onKey);
 
   rafHandle = requestAnimationFrame(tick);
 
   // Remember viewer saw it — app.js can respect this for first-visit redirects.
-  try { localStorage.setItem("m3t4:loreSeen", "1"); } catch {}
+  try { localStorage.setItem("m3t4:introSeen", "1"); } catch {}
 }
 
 export function unmount() {

@@ -70,17 +70,41 @@ function noiseUnit(seed, tick, fighterId, paramIndex) {
     return mix32(x) / 0x100000000;
 }
 const NOISE_KEYS = PARAM_KEYS.filter((k) => k !== "hallucination");
+const MICRO_DRIFT_WINDOW_TICKS = 20;
+const MICRO_DRIFT_UI_STEP = 1;
+const MICRO_DRIFT_TOTAL_UI_CAP = 3;
+const MICRO_DRIFT_SLOTS = Math.floor(MICRO_DRIFT_TOTAL_UI_CAP / MICRO_DRIFT_UI_STEP);
+export function applyMicroAttributeDrift(params, tick, fighterId, noiseSeed) {
+    const driftTick = Math.floor(Math.max(0, tick) / MICRO_DRIFT_WINDOW_TICKS);
+    const out = { ...params };
+    const used = new Set();
+    const slots = Math.min(MICRO_DRIFT_SLOTS, NOISE_KEYS.length);
+    for (let slot = 0; slot < slots; slot++) {
+        let index = Math.floor(noiseUnit(noiseSeed, driftTick, fighterId, 64 + slot) * NOISE_KEYS.length) % NOISE_KEYS.length;
+        while (used.has(index))
+            index = (index + 1) % NOISE_KEYS.length;
+        used.add(index);
+        const k = NOISE_KEYS[index];
+        const [lo, hi] = RANGES[k];
+        const sign = noiseUnit(noiseSeed, driftTick, fighterId, 96 + slot) < 0.5 ? -1 : 1;
+        const rawBase = Number.isFinite(out[k]) ? out[k] : params[k];
+        const base = Number.isFinite(rawBase) ? rawBase : lo;
+        const nativeStep = ((hi - lo) * MICRO_DRIFT_UI_STEP) / 100;
+        out[k] = clamp(base + sign * nativeStep, lo, hi);
+    }
+    return out;
+}
 export function applyHallucinationNoise(params, tick, fighterId, noiseSeed) {
+    const out = applyMicroAttributeDrift(params, tick, fighterId, noiseSeed);
     const hallucination = Math.max(0, Number.isFinite(params.hallucination) ? params.hallucination : 0);
     if (hallucination <= 0)
-        return params;
+        return out;
     const jitterScale = (hallucination / 100) * 0.5;
-    const out = { ...params };
     for (let i = 0; i < NOISE_KEYS.length; i++) {
         const k = NOISE_KEYS[i];
         const [lo, hi] = RANGES[k];
         const delta = (noiseUnit(noiseSeed, tick, fighterId, i) * 2 - 1) * jitterScale * (hi - lo);
-        out[k] = clamp(params[k] + delta, lo, hi);
+        out[k] = clamp(out[k] + delta, lo, hi);
     }
     return out;
 }

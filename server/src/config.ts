@@ -29,6 +29,7 @@ export const CONFIG = {
   wsOrigin: process.env.ARENA_WS_ORIGIN ?? "ws://localhost:7777",
   firehoseWsOrigin: process.env.FIREHOSE_WS_ORIGIN ?? process.env.ARENA_WS_ORIGIN ?? "ws://localhost:7777",
   serverRole: SERVER_ROLE as "combined" | "api" | "worker",
+  wsClientSoftLimit: parseInt(process.env.WS_CLIENT_SOFT_LIMIT ?? "0", 10),
   isProd: IS_PROD,
 
   // Stable rules

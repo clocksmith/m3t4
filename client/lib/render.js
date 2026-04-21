@@ -94,17 +94,29 @@ const OBJECTIVE_IMAGES = {
   target: imageState("assets/objectives/demand_node/target.png"),
 };
 
+// Base asset pack: the Cold-Aisle Chapel art. boardroom and demoday
+// reuse the same image states (same files → shared cache) with the
+// parallax layer order shuffled and a hue-rotate filter applied at
+// draw time. Cheap way to add visual diversity without new assets.
+const DATACENTER_PACK = {
+  sky: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/sky.png"),
+  farParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/far_parallax.png"),
+  midParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/mid_parallax.png"),
+  nearParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/near_parallax.png"),
+  platform: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/platform.png"),
+  platformEdge: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/platform_edge.png"),
+  wall: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/wall.png"),
+  floorDetail: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/floor_detail.png"),
+};
+
 const STAGE_ASSETS = {
-  datacenter: {
-    sky: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/sky.png"),
-    farParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/far_parallax.png"),
-    midParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/mid_parallax.png"),
-    nearParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/near_parallax.png"),
-    platform: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/platform.png"),
-    platformEdge: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/platform_edge.png"),
-    wall: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/wall.png"),
-    floorDetail: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/floor_detail.png"),
-  },
+  datacenter: { ...DATACENTER_PACK, tint: null },
+  // Boardroom: slight pull toward monochrome. Subtle — retains color
+  // character but reads cooler/flatter than datacenter. ~15% intensity.
+  boardroom: { ...DATACENTER_PACK, tint: "grayscale(0.18) contrast(0.96)" },
+  // Demo Day: subtle drift toward pink/purple. Shifts cyans into
+  // magenta range and nudges saturation. ~15% intensity.
+  demoday: { ...DATACENTER_PACK, tint: "hue-rotate(-14deg) saturate(1.12)" },
 };
 
 function imageState(url) {
@@ -210,8 +222,14 @@ export function drawFrame(ctx, stage, frame, labels) {
 function drawStage(ctx, stage, frame) {
   const pack = STAGE_ASSETS[stage.id];
   drawStageGradient(ctx);
+  // Apply the per-stage tint across the whole stage (backdrop + platforms
+  // + walls + floor detail) so the subtle hue shift reads consistently.
+  // Sprites, token, and HUD render after this returns, unfiltered, so
+  // P1/P2 identity colors stay true.
+  if (pack?.tint) ctx.filter = pack.tint;
   drawStageBackdrop(ctx, pack, frame);
   for (const p of stage.platforms) drawPlatform(ctx, p, pack);
+  if (pack?.tint) ctx.filter = "none";
 }
 
 function drawStageGradient(ctx) {
@@ -225,11 +243,9 @@ function drawStageGradient(ctx) {
 
 function drawStageBackdrop(ctx, pack, frame) {
   if (!pack) return;
+  ctx.imageSmoothingEnabled = false;
   const sky = loadImage(pack.sky);
-  if (sky) {
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(sky, 0, 0, W, H);
-  }
+  if (sky) ctx.drawImage(sky, 0, 0, W, H);
 
   const tick = frame?.tick ?? 0;
   const far = loadImage(pack.farParallax);

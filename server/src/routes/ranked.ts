@@ -4,6 +4,7 @@ import { stablePublic } from "../stable.js";
 import { handleClaimHandle, handleSubmit } from "../submit.js";
 import { json } from "../http-utils.js";
 import type { RouteList } from "./types.js";
+import { matchmakerPressure } from "../matchmaker-pressure.js";
 
 export interface RankedRouteDeps {
   store: StableStore;
@@ -16,6 +17,7 @@ export interface RankedRouteDeps {
     maxSlots: number;
     serverRole?: string;
     storeBackend?: string;
+    wsClientSoftLimit?: number;
   };
 }
 
@@ -24,6 +26,7 @@ export function registerRankedRoutes(routes: RouteList, deps: RankedRouteDeps): 
 
   routes.push(async (req, res, url) => {
     if (req.method === "GET" && url.pathname === "/api/status") {
+      const active = await store.listActive(config.activePoolMs);
       json(res, 200, {
         ok: true,
         cycleMs: config.cycleMs,
@@ -32,6 +35,8 @@ export function registerRankedRoutes(routes: RouteList, deps: RankedRouteDeps): 
         authProviders: config.authProviders,
         role: config.serverRole,
         storeBackend: config.storeBackend,
+        wsClientSoftLimit: config.wsClientSoftLimit,
+        matchmaker: matchmakerPressure(active, config.cycleMs),
         features,
       });
       return true;

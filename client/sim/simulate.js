@@ -443,12 +443,19 @@ function resolveCombat(w) {
         killPlayer(w, 0, 1);
     }
 }
+const RESPAWN_MIN_OPP_DIST = 200;
 function respawn(f, w) {
-    // Always home-side. Spawning on the goal when gold is in play drops the
-    // victim on top of the carrier's delivery zone, creating an endless
-    // contest loop and robbing the defender of the chance to intercept
-    // mid-field. Home-side respawns let the carrier earn delivery.
-    const sp = f.id === 0 ? w.stage.spawnL : w.stage.spawnR;
+    // Per-respawn randomized mirror. Coin-flip picks left or right spawn
+    // regardless of player id. Over a match each fighter visits both sides.
+    // If the coin-flipped side is too close to the live opponent, we fall
+    // through to the other side so respawning fighters can't be ambushed
+    // during their invuln window.
+    const opp = w.fighters[f.id === 0 ? 1 : 0];
+    const flipLeft = w.rng() < 0.5;
+    const primary = flipLeft ? w.stage.spawnL : w.stage.spawnR;
+    const alt = flipLeft ? w.stage.spawnR : w.stage.spawnL;
+    const dxPrimary = opp.dead ? Infinity : Math.hypot(opp.x - primary.x, opp.y - primary.y);
+    const sp = dxPrimary < RESPAWN_MIN_OPP_DIST ? alt : primary;
     f.x = sp.x;
     f.y = sp.y;
     f.vx = 0;
@@ -462,11 +469,50 @@ function respawn(f, w) {
     f.stun = 0;
     f.hp = 100;
 }
+const GOAL_NEAR_HOLDER_DIST = 280;
 function pickGoal(w) {
     const goals = w.stage.goals;
-    let i = Math.floor(w.rng() * goals.length);
-    if (i === w.lastGoalIdx)
-        i = (i + 1) % goals.length;
+    // If there's a live proof holder (or dropped gold), exclude goals too
+    // close to their position so the carrier can't instantly deliver two
+    // steps from where they minted the proof. Fall back to "all goals" if
+    // filtering would leave nothing.
+    let holderX = null;
+    let holderY = null;
+    if (w.gold) {
+        if (w.gold.carrier >= 0) {
+            const c = w.fighters[w.gold.carrier];
+            holderX = c.x;
+            holderY = c.y;
+        }
+        else {
+            holderX = w.gold.x;
+            holderY = w.gold.y;
+        }
+    }
+    const eligible = [];
+    for (let j = 0; j < goals.length; j++) {
+        if (j === w.lastGoalIdx)
+            continue;
+        if (holderX !== null && holderY !== null) {
+            const d = Math.hypot(goals[j].x - holderX, goals[j].y - holderY);
+            if (d < GOAL_NEAR_HOLDER_DIST)
+                continue;
+        }
+        eligible.push(j);
+    }
+    // Fallbacks if the filter eliminated everything: relax the near-holder
+    // constraint first, then the no-repeat constraint.
+    let pool = eligible;
+    if (pool.length === 0) {
+        pool = [];
+        for (let j = 0; j < goals.length; j++)
+            if (j !== w.lastGoalIdx)
+                pool.push(j);
+    }
+    if (pool.length === 0) {
+        pool = goals.map((_, j) => j);
+    }
+    const i = pool[Math.floor(w.rng() * pool.length)];
     w.lastGoalIdx = i;
     const g = goals[i];
     w.goal = { x: g.x, y: g.y, sx: g.sx, sy: g.sy, label: g.label, timer: GOAL_TIMER_START };

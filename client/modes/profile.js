@@ -4,7 +4,7 @@
 
 import { auth } from "../lib/auth.js";
 import * as api from "../lib/api.js";
-import { validateUserSubmission } from "../sim/index.js";
+import { validateUserSubmission } from "../lib/public-sim.js";
 import { trackProfileSignIn, trackProfileHandleClaim, trackProfileSubmitConfig } from "../lib/analytics.js";
 
 let root = null;
@@ -169,6 +169,10 @@ async function renderDashboard(user) {
 
   root.querySelector("#signout").addEventListener("click", () => auth.signOut());
   if (!user.handle) wireClaimHandle();
+  root.querySelector("#config-json").addEventListener("input", (e) => {
+    e.currentTarget.dataset.dirty = "1";
+    e.currentTarget.dataset.source = "user";
+  });
   wireSubmit(user);
   loadStable(user);
   wirePendingBuildConfig();
@@ -218,6 +222,11 @@ function wireSubmit(user) {
       msg.className = "ok";
       msg.textContent = `seat ${selectedSlot} ${isFilled(selectedSlot) ? "revised" : "installed"} · slotId=${r.slotId}`;
       sessionStorage.removeItem("m3t4:pendingSubmit");
+      const textarea = root.querySelector("#config-json");
+      if (textarea) {
+        textarea.dataset.dirty = "0";
+        textarea.dataset.source = "server";
+      }
       loadStable(user);
       trackProfileSubmitConfig(true);
     } catch (e) {
@@ -244,6 +253,8 @@ function wirePendingBuildConfig() {
 
   function applyPending() {
     textarea.value = formatJsonForTextarea(pending);
+    textarea.dataset.dirty = "1";
+    textarea.dataset.source = "build";
   }
 
   applyPending();
@@ -322,7 +333,7 @@ async function loadStable(user) {
   const grid = root.querySelector("#roster-grid");
   if (!grid) return;
   try {
-    const s = await api.getStable(user.uid).catch((e) => {
+    const s = await api.getMyStable(await auth.token()).catch((e) => {
       if (e.status === 404) return null;
       throw e;
     });
@@ -378,6 +389,7 @@ function updateEditor() {
   const note = root.querySelector("#editor-note");
   const btn = root.querySelector("#submit-btn");
   const nameInput = root.querySelector("#slot-name");
+  const textarea = root.querySelector("#config-json");
   if (!title || !btn) return;
   const slot = rosterCache?.slots?.[selectedSlot];
   const filled = !!(slot && slot.slotId);
@@ -393,6 +405,14 @@ function updateEditor() {
   } else if (nameInput) {
     nameInput.placeholder = "e.g. bruiser-v2";
   }
+  syncEditorConfig(slot, textarea);
+}
+
+function syncEditorConfig(slot, textarea) {
+  if (!textarea) return;
+  if (textarea.dataset.dirty === "1") return;
+  textarea.dataset.source = slot?.config ? "server" : "";
+  textarea.value = slot?.config ? JSON.stringify(slot.config, null, 2) : "";
 }
 
 function relativeTime(iso) {

@@ -304,6 +304,32 @@ textarea {
   font-size: 13px;
 }
 
+a.buttonish {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ui-surface-2);
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+a.buttonish:hover {
+  background: var(--ui-hover);
+  color: var(--ui-text);
+}
+
+a.buttonish.primary {
+  background: var(--ui-blue-ink);
+  border-color: var(--ui-blue);
+}
+
+a.buttonish.primary:hover {
+  background: var(--ui-blue);
+}
+
 button {
   cursor: pointer;
 }
@@ -955,6 +981,8 @@ details.player-build-body[open] > .build-fold-summary::before {
    * to the top-center while setupCanvas sizes it to the content width. */
   border-top-color: var(--ui-border);
   display: flex;
+  flex-direction: column;
+  gap: 10px;
   align-items: flex-start;
   justify-content: center;
 }
@@ -962,6 +990,60 @@ details.player-build-body[open] > .build-fold-summary::before {
 .canvas-panel .u-canvas-fill {
   flex: 0 1 auto;
   margin-inline: auto;
+}
+
+.build-preview-stats {
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+  border-top: 1px solid var(--ui-border);
+  padding-top: 9px;
+}
+
+.build-preview-copy {
+  margin-bottom: 7px;
+  color: var(--ui-text-subtle);
+  font-family: ui-monospace, Menlo, monospace;
+}
+
+.build-preview-stats .stat-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 14px;
+}
+
+.build-preview-stats .stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 2px;
+  border-bottom: 1px dotted var(--ui-border);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+}
+
+.build-preview-stats dt {
+  color: var(--ui-text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.build-preview-stats dd {
+  color: var(--ui-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .build-preview-stats .stat-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .player-mode-row {
@@ -1453,6 +1535,66 @@ input[type="range"]::-moz-range-thumb {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+/* --- rules --- */
+.rules-page {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.rules-hero {
+  align-items: flex-start;
+}
+
+.rules-summary {
+  border: 1px solid var(--ui-purple);
+  background:
+    linear-gradient(90deg, rgba(168, 85, 247, 0.16), rgba(59, 130, 246, 0.08)),
+    var(--ui-surface);
+  color: var(--ui-text);
+  padding: 18px 20px;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.rules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.rules-card {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  padding: 16px;
+}
+
+.rules-card h2 {
+  color: var(--ui-purple);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+
+.rules-card ul {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  list-style: none;
+}
+
+.rules-card li {
+  color: var(--ui-text-soft);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.rules-card li::before {
+  content: ">";
+  color: var(--ui-red);
+  margin-right: 8px;
 }
 
 /* --- intro crawl · late-80s/early-90s CRT terminal --- */

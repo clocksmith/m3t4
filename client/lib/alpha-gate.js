@@ -38,13 +38,15 @@ export async function installAlphaGate() {
       document.body.innerHTML = `
         <header id="topnav">
           <div class="brand">
-            <a href="#build" class="logo">m3t4<span class="logo-caret">.ai</span></a>
+            <a href="#intro" class="logo">m3t4<span class="logo-caret">.ai</span></a>
           </div>
           <nav>
+            <a href="#intro" data-route="intro">intro</a>
             <a href="#build" data-route="build">build</a>
             <a href="#spectate" data-route="spectate">live</a>
             <a href="#profile" data-route="profile">profile</a>
             <a href="#duel" data-route="duel" data-feature="p2pDuel" hidden>duel</a>
+            <a href="#rules" data-route="rules">rules</a>
           </nav>
           <div id="whoami" class="whoami"></div>
         </header>

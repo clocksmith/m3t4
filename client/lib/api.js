@@ -32,6 +32,12 @@ export async function getStable(uid) {
   return handle(await fetch(API_ORIGIN + "/api/stables/" + encodeURIComponent(uid)));
 }
 
+export async function getMyStable(token) {
+  return handle(await fetch(API_ORIGIN + "/api/me/stable", {
+    headers: { authorization: "Bearer " + token },
+  }));
+}
+
 export async function claimHandle(token, handleStr) {
   return handle(await fetch(API_ORIGIN + "/api/handle", {
     method: "POST",
@@ -45,5 +51,13 @@ export async function submitSlot(token, slotIdx, config, name) {
     method: "POST",
     headers: { "content-type": "application/json", authorization: "Bearer " + token },
     body: JSON.stringify({ slotIdx, config, name }),
+  }));
+}
+
+export async function simulateBuildPreview(payload) {
+  return handle(await fetch(API_ORIGIN + "/api/build/simulate", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
   }));
 }

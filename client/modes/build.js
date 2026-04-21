@@ -1,10 +1,8 @@
-// Build mode — symmetric P1 vs P2 editor + live deterministic test.
+// Build mode — symmetric P1 vs P2 editor + server-rendered deterministic preview.
 // Each side (P1 blue, P2 purple) can independently be:
 //   BUILD   — local editable knobs + budget + hallucination
 //   PRESET  — pick any of the 16 curated preset bots
-//   HUMAN   — keyboard (P1 = WASD+F, P2 = PL;'+[)
-// The sim runs a 1v1 match between the two configured slots every frame
-// so tuning shows up immediately.
+// The canonical sim runs server-side; the browser receives sanitized frames.
 
 import {
   USER_BUDGET,
@@ -12,17 +10,10 @@ import {
   MAX_DERIVED_HALLUCINATION,
   MAX_USER_SPEND,
   computedHallucinationForSpend,
-  nativeToUI,
   STAGES,
-  STRATEGIES,
-  STRATEGY_NAMES,
-  compileBrain,
-  createStepperWorld,
-  runBrainForWorld,
-  stepWorld,
-  worldToFrame,
-} from "../sim/index.js";
+} from "../lib/public-sim.js";
 import { setupCanvas, drawFrame, W, H } from "../lib/render.js";
+import { simulateBuildPreview } from "../lib/api.js";
 import {
   trackBuildSlotModeChange, trackBuildPresetChange,
   trackBuildStageChange, trackBuildAction,
@@ -30,10 +21,17 @@ import {
 import presetRanking from "../data/preset-ranking.v1.json" with { type: "json" };
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
 
-const LORE = gameCopy?.lore ?? {};
+const INTRO = gameCopy?.intro ?? {};
+const RULES = gameCopy?.rules ?? {};
 
 const BUDGET = USER_BUDGET;
 const HARD_CAP = MAX_USER_SPEND ?? (BUDGET + MAX_DERIVED_HALLUCINATION / HALLUCINATION_PER_OVERAGE);
+const DEFAULT_PRESET_NAMES = [
+  "standby", "blitz", "incumbent", "pivot",
+  "unicorn", "intern", "operator", "oracle",
+  "shipper", "moonshot", "regulatory", "founder",
+  "acolyte", "disruptor", "troll", "acquirer",
+];
 
 const KNOBS = [
   { id: "burnRate",   label: "burn rate",   desc: "swing eagerness + range",          range: [0, 1],    init: 25 },
@@ -63,9 +61,52 @@ function neutralSlotState() {
 }
 
 function randomPresetName() {
-  const names = (presetRanking.rows ?? STRATEGY_NAMES.map((n) => ({ name: n })))
+  const names = (presetRanking.rows ?? DEFAULT_PRESET_NAMES.map((n) => ({ name: n })))
     .map((r) => r.name ?? r);
   return names[Math.floor(Math.random() * names.length)];
+}
+
+function hashString(s) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0;
+}
+
+function seededUnit(seed, i) {
+  let x = (seed + Math.imul(i + 1, 0x9e3779b9)) >>> 0;
+  x ^= x >>> 16;
+  x = Math.imul(x, 0x7feb352d) >>> 0;
+  x ^= x >>> 15;
+  x = Math.imul(x, 0x846ca68b) >>> 0;
+  x ^= x >>> 16;
+  return (x >>> 0) / 0x100000000;
+}
+
+function scaledStateFromValues(values, cap = BUDGET) {
+  const s = {};
+  let total = 0;
+  for (const k of KNOBS) {
+    s[k.id] = Math.max(0, Math.min(100, Math.round(values[k.id] ?? k.init)));
+    total += s[k.id];
+  }
+  if (total > cap) {
+    const scale = cap / total;
+    for (const k of KNOBS) s[k.id] = Math.round(s[k.id] * scale);
+  }
+  return s;
+}
+
+function presetDisplayState(name) {
+  const seed = hashString(String(name));
+  const values = {};
+  for (let i = 0; i < KNOBS.length; i++) {
+    const k = KNOBS[i];
+    values[k.id] = Math.round(10 + seededUnit(seed, i) * 80);
+  }
+  return scaledStateFromValues(values, BUDGET);
 }
 
 // Fresh BUILD starter: take a random preset as the baseline, convert
@@ -74,23 +115,9 @@ function randomPresetName() {
 // always reads as "a real working build, slightly disturbed" instead
 // of the stale hand-authored defaults.
 function perturbedPresetState() {
-  const s = neutralSlotState();
-  const preset = STRATEGIES[randomPresetName()];
-  if (!preset?.attributes) return s;
-  for (const k of KNOBS) {
-    const raw = preset.attributes[k.id];
-    if (typeof raw !== "number" || !Number.isFinite(raw)) continue;
-    const ui = nativeToUI(k.id, raw);
-    const jitter = (Math.random() - 0.5) * 40; // ±20
-    s[k.id] = Math.round(Math.max(0, Math.min(100, ui + jitter)));
-  }
-  // Scale down proportionally if we blew past HARD_CAP.
-  const total = KNOBS.reduce((sum, k) => sum + s[k.id], 0);
-  if (total > HARD_CAP) {
-    const scale = HARD_CAP / total;
-    for (const k of KNOBS) s[k.id] = Math.round(s[k.id] * scale);
-  }
-  return s;
+  const values = {};
+  for (const k of KNOBS) values[k.id] = k.init + (Math.random() - 0.5) * 40;
+  return scaledStateFromValues(values, HARD_CAP);
 }
 
 // Keep `initialSlotState` as the public factory so existing callers
@@ -103,13 +130,11 @@ const slotStates = [initialSlotState(), initialSlotState()];
 // switches P1 to PRESET; P2 starts in PRESET mode and uses its pointer
 // immediately for the opening matchup.
 const slotPresetNames = [randomPresetName(), randomPresetName()];
-const modes = ["user", "preset"]; // "user" | "preset" | "human"
-const compiledSlots = [null, null];
+const modes = ["user", "preset"]; // "user" | "preset"; no browser-executed brain.
 
-// --- live test stage ---
-const STEP = 1 / 120;
-const MAX_DT = 0.05;
-const STAGE_IDS = Object.keys(STAGES);
+// --- remote preview playback ---
+const SIM_HZ = 120;
+const STAGE_IDS = ["datacenter", "boardroom"];
 const KEY_MAP = [
   { left: "KeyA", right: "KeyD", up: "KeyW", down: "KeyS", act: "KeyF", moveHint: "W/A/S/D", strikeHint: "F" },
   { left: "KeyL", right: "Quote", up: "KeyP", down: "Semicolon", act: "BracketLeft", moveHint: "P/L/;/'", strikeHint: "[" },
@@ -121,21 +146,27 @@ const GAME_KEYS = new Set([
 const keyset = new Set();
 
 let stageId = STAGE_IDS[0];
-let world = null;
 let testCtx = null;
 let testCanvas = null;
 let testRafId = 0;
-let testLastTime = 0;
-let testAcc = 0;
 let testRunning = false;
-let testOutcome = "";
 let mountMediaHandler = null;
+let previewFrames = [];
+let previewStage = STAGES.datacenter;
+let previewLabels = { p1: "BUILD P1", p2: "PRESET" };
+let previewResult = null;
+let previewStride = 2;
+let previewStartedAt = 0;
+let previewLoading = false;
+let previewDirty = false;
+let previewError = "";
+let previewRequestId = 0;
 
 // Preset dropdown: flat list of all 16 presets, sorted by round-robin
 // win rate (strongest top). The easy/medium/hard tier labels were
 // tripping users up — the win-rate % is a cleaner read.
 function presetSelectOptions(selected) {
-  const rows = presetRanking.rows ?? STRATEGY_NAMES.map((name) => ({ name, wr: 0 }));
+  const rows = presetRanking.rows ?? DEFAULT_PRESET_NAMES.map((name) => ({ name, wr: 0 }));
   return rows.map((r) => {
     const pct = (r.wr * 100).toFixed(0);
     return `<option value="${r.name}" ${r.name === selected ? "selected" : ""}>${r.name} · ${pct}%</option>`;
@@ -274,8 +305,8 @@ export function mount(root, { setStatus }) {
     <div class="page">
       <div class="page-header-row">
         <div class="page-title-stack">
-          <h1 class="page-title">${escapeHtml(LORE.tagline ?? "Build")}</h1>
-          <div class="page-subtitle tight">${escapeHtml(LORE.coreRule ?? "")}</div>
+          <h1 class="page-title">${escapeHtml(INTRO.tagline ?? "Build")}</h1>
+          <div class="page-subtitle tight">${escapeHtml(RULES.summary ?? INTRO.coreRule ?? "")}</div>
         </div>
         <label class="inline-control"><span class="tight">stage</span>
           <select id="test-stage">${STAGE_IDS.map((s) => `<option value="${s}" ${s === stageId ? "selected" : ""}>${s}</option>`).join("")}</select>
@@ -289,6 +320,19 @@ export function mount(root, { setStatus }) {
         ${playerPanelHtml(0)}
         <section class="panel canvas-panel">
           <canvas id="test-canvas" class="u-canvas-fill" width="${W}" height="${H}" tabindex="0"></canvas>
+          <div class="build-preview-stats" aria-live="polite">
+            <div class="build-preview-copy tight">Server preview: policy/config in, sanitized replay frames out.</div>
+            <dl class="stat-list">
+              <div class="stat-row"><dt>P1</dt><dd id="build-stat-p1">—</dd></div>
+              <div class="stat-row"><dt>P2</dt><dd id="build-stat-p2">—</dd></div>
+              <div class="stat-row"><dt>stage</dt><dd id="build-stat-stage">—</dd></div>
+              <div class="stat-row"><dt>server</dt><dd id="build-stat-server">—</dd></div>
+              <div class="stat-row"><dt>seed</dt><dd id="build-stat-seed">—</dd></div>
+              <div class="stat-row"><dt>tick</dt><dd id="build-stat-tick">—</dd></div>
+              <div class="stat-row"><dt>frames</dt><dd id="build-stat-frames">—</dd></div>
+              <div class="stat-row"><dt>result</dt><dd id="build-stat-result">—</dd></div>
+            </dl>
+          </div>
         </section>
         ${playerPanelHtml(1)}
       </div>
@@ -303,10 +347,6 @@ export function mount(root, { setStatus }) {
   wireSlot(root, 0);
   wireSlot(root, 1);
   wireMatchBar(root);
-
-  addEventListener("keydown", onKeyDown);
-  addEventListener("keyup", onKeyUp);
-  addEventListener("blur", onBlur);
 
   // Collapse each side's build fold on narrow viewports so the canvas
   // and mode selector stay primary; leave open on desktop (where the
@@ -336,15 +376,13 @@ export function mount(root, { setStatus }) {
   applyModeVisibility(1);
   updateSlot(0);
   updateSlot(1);
-  rebuildSlotBrain(0);
-  rebuildSlotBrain(1);
   startLoop();
+  requestPreview({ newSeed: true });
 }
 
 export function unmount() {
   testRunning = false;
   if (testRafId) cancelAnimationFrame(testRafId);
-  world = null;
   removeEventListener("keydown", onKeyDown);
   removeEventListener("keyup", onKeyUp);
   removeEventListener("blur", onBlur);
@@ -357,7 +395,6 @@ export function unmount() {
 function playerPanelHtml(slot) {
   const sideClass = slot === 0 ? "is-p1" : "is-p2";
   const label = slot === 0 ? "P1" : "P2";
-  const keyHint = KEY_MAP[slot].hint;
   const mode = modes[slot];
   return `
     <section class="panel player-panel ${sideClass}" data-slot="${slot}">
@@ -369,10 +406,10 @@ function playerPanelHtml(slot) {
         </summary>
 
       <div class="player-mode-row" role="radiogroup" aria-label="${label} mode">
-        ${["user","preset","human"].map((v) => `
+        ${["user","preset"].map((v) => `
           <label class="mode-pill ${v === mode ? "is-active" : ""}" data-mode="${v}">
             <input type="radio" name="slot${slot}-mode" value="${v}" ${v === mode ? "checked" : ""}>
-            <span>${v === "user" ? "BUILD" : v === "preset" ? "PRESET" : "HUMAN"}</span>
+            <span>${v === "user" ? "BUILD" : "PRESET"}</span>
           </label>`).join("")}
       </div>
 
@@ -393,8 +430,8 @@ function playerPanelHtml(slot) {
         </div>
 
         <div class="player-human-hint" data-mode-detail="human" hidden>
-          <div class="player-human-quip"></div>
-          <div class="player-human-keys tight"></div>
+          <div class="player-human-quip">MANUAL CONTROL REVOKED.</div>
+          <div class="player-human-keys tight">The browser may watch. It may not think.</div>
         </div>
       </div>
 
@@ -459,15 +496,15 @@ function wireMatchBar(root) {
   const refocus = () => { keyset.clear(); testCanvas.focus(); };
   root.querySelector("#test-stage").addEventListener("change", (e) => {
     stageId = e.target.value;
-    resetMatch();
+    requestPreview({ newSeed: true });
     refocus();
     trackBuildStageChange(stageId);
   });
   root.querySelector("#test-reset").addEventListener("click", () => {
-    resetMatch(); refocus(); trackBuildAction("reset_match");
+    requestPreview({ newSeed: true }); refocus(); trackBuildAction("reset_match");
   });
   root.querySelector("#test-resim").addEventListener("click", () => {
-    rebuildSlotBrain(0); rebuildSlotBrain(1); resetMatch(); refocus();
+    requestPreview({ newSeed: true }); refocus();
     trackBuildAction("resim");
   });
 }
@@ -485,7 +522,7 @@ function wireSlot(root, slot) {
       });
       applyModeVisibility(slot);
       refreshFoldBadge(slot);
-      rebuildSlotBrain(slot);
+      requestPreview({ newSeed: true });
       refocusCanvas();
       trackBuildSlotModeChange(slot, modes[slot]);
     });
@@ -501,7 +538,7 @@ function wireSlot(root, slot) {
     updateSlot(slot);
     refreshPresetCopy(slot);
     refreshFoldBadge(slot);
-    rebuildSlotBrain(slot);
+    requestPreview({ newSeed: true });
     refocusCanvas();
     trackBuildPresetChange(slot, slotPresetNames[slot]);
   });
@@ -511,7 +548,7 @@ function wireSlot(root, slot) {
     slotStates[slot] = initialSlotState();
     renderKnobsForSlot(slot);
     updateSlot(slot);
-    rebuildSlotBrain(slot);
+    markPreviewDirty();
     trackBuildAction("reset");
   });
   panel.querySelector(".slot-randomize").addEventListener("click", () => {
@@ -527,7 +564,7 @@ function wireSlot(root, slot) {
     }
     renderKnobsForSlot(slot);
     updateSlot(slot);
-    rebuildSlotBrain(slot);
+    markPreviewDirty();
     trackBuildAction("randomize");
   });
   panel.querySelector(".slot-copy").addEventListener("click", async () => {
@@ -578,16 +615,15 @@ function applyModeVisibility(slot) {
   const sliders = buildBody.querySelectorAll('input[type="range"]');
   sliders.forEach((inp) => { inp.disabled = mode === "preset" || mode === "human"; });
 
-  // Buttons: disable config mutation in PRESET/HUMAN mode. Copy JSON
-  // stays live for PRESET so players can study it, but HUMAN has no
-  // config worth copying.
+  // Buttons: disable config mutation in PRESET/HUMAN mode. Preset
+  // internals are server-side; the browser only gets a label.
   const buttonsToGate = ["slot-reset", "slot-randomize", "slot-submit"];
   for (const cls of buttonsToGate) {
     const btn = buildBody.querySelector(`.${cls}`);
     if (btn) btn.disabled = mode === "preset" || mode === "human";
   }
   const copyBtn = buildBody.querySelector(".slot-copy");
-  if (copyBtn) copyBtn.disabled = mode === "human";
+  if (copyBtn) copyBtn.disabled = mode === "preset" || mode === "human";
 
   // In PRESET mode always display the current preset's knob values.
   if (mode === "preset") {
@@ -648,8 +684,9 @@ function renderKnobsForSlot(slot) {
       const display = container.querySelector(`[data-val="${id}"]`);
       if (display) display.textContent = next;
       updateSlot(slot);
+      markPreviewDirty();
     });
-    inp.addEventListener("change", () => rebuildSlotBrain(slot));
+    inp.addEventListener("change", () => markPreviewDirty());
   });
   // Initial --fill paint
   container.querySelectorAll("input[type=range]").forEach((inp) => {
@@ -687,7 +724,11 @@ function updateSlot(slot) {
     hallBar.style.width = ((hallucination / MAX_DERIVED_HALLUCINATION) * 100) + "%";
     hallVal.textContent = `${hallucination} / ${MAX_DERIVED_HALLUCINATION}`;
   }
-  if (exportEl) exportEl.textContent = JSON.stringify(slotConfig(slot), null, 2);
+  if (exportEl) {
+    exportEl.textContent = modes[slot] === "preset"
+      ? JSON.stringify({ preset: slotPresetNames[slot], attributes: "server-side" }, null, 2)
+      : JSON.stringify(slotConfig(slot), null, 2);
+  }
 
   // Repaint --fill on each slider so drag-beyond-ceiling clamps don't
   // leave the gradient in the wrong state.
@@ -719,91 +760,178 @@ function paintHumanSliderNoise(slot) {
 
 // --- preset → knob sync ---
 function loadPresetIntoSliders(slot, name) {
-  const preset = STRATEGIES[name];
-  if (!preset) return;
-  for (const k of KNOBS) {
-    const raw = preset.attributes?.[k.id];
-    if (typeof raw === "number" && Number.isFinite(raw)) {
-      slotStates[slot][k.id] = Math.round(nativeToUI(k.id, raw));
-    } else {
-      // Preset doesn't set this knob (v7-era presets lack the v8 knobs
-      // lift/parry/chase/discipline). Reset to the knob's init default
-      // rather than leaving the prior-state value behind — otherwise a
-      // PRESET load can land at spend > HARD_CAP.
-      slotStates[slot][k.id] = k.init;
-    }
-  }
+  slotStates[slot] = presetDisplayState(name);
 }
 
-// ==================== SIM LOOP ====================
-
-function rebuildSlotBrain(slot) {
-  const mode = modes[slot];
-  if (mode === "human") { compiledSlots[slot] = null; return; }
-  try {
-    const cfg = mode === "preset" ? STRATEGIES[slotPresetNames[slot]] : slotConfig(slot, { runtimeId: true });
-    compiledSlots[slot] = compileBrain(cfg);
-  } catch (e) {
-    compiledSlots[slot] = null;
-    console.warn(`slot ${slot} brain compile failed`, e);
-  }
-  resetMatch();
-}
-
-function readSlot(idx) {
-  if (modes[idx] === "human") return readKeyboard(idx);
-  const brain = compiledSlots[idx];
-  if (!brain) return {};
-  const a = runBrainForWorld(world, brain, idx) || {};
-  return { left: !!a.left, right: !!a.right, up: !!a.up, down: !!a.down, action: !!a.action };
-}
+// ==================== REMOTE PREVIEW LOOP ====================
 
 function labelForSlot(idx) {
   const mode = modes[idx];
-  if (mode === "human") return `HUMAN P${idx + 1}`;
   if (mode === "preset") return `${slotPresetNames[idx]}`;
   return `BUILD ${idx === 0 ? "P1" : "P2"}`;
 }
 
-function resetMatch() {
-  world = createStepperWorld({
-    stage: STAGES[stageId] ?? STAGES.datacenter,
-    seed: Math.floor(Math.random() * 1e9),
-  });
-  testOutcome = "";
+function sidePayload(slot) {
+  if (modes[slot] === "preset") {
+    return { kind: "preset", preset: slotPresetNames[slot] };
+  }
+  return { kind: "user", config: slotConfig(slot) };
+}
+
+function markPreviewDirty() {
+  previewDirty = true;
+}
+
+async function requestPreview({ newSeed = false } = {}) {
+  const requestId = ++previewRequestId;
+  previewLoading = true;
+  previewDirty = false;
+  previewError = "";
+  updatePreviewHud();
+
+  try {
+    const response = await simulateBuildPreview({
+      stageId,
+      seed: newSeed ? undefined : previewResult?.seed,
+      frameStride: 2,
+      a: sidePayload(0),
+      b: sidePayload(1),
+    });
+    if (requestId !== previewRequestId) return;
+    previewFrames = Array.isArray(response.frames) ? response.frames : [];
+    previewStage = response.stage ?? STAGES[stageId] ?? STAGES.datacenter;
+    previewLabels = response.labels ?? { p1: labelForSlot(0), p2: labelForSlot(1) };
+    previewResult = response.result ? { ...response.result, seed: response.seed } : { seed: response.seed };
+    previewStride = response.frameStride || 2;
+    previewStartedAt = performance.now();
+    previewLoading = false;
+    previewError = "";
+    updatePreviewHud();
+  } catch (e) {
+    if (requestId !== previewRequestId) return;
+    previewLoading = false;
+    previewError = e?.message ?? String(e);
+    updatePreviewHud();
+  }
 }
 
 function startLoop() {
   testRunning = true;
-  testLastTime = performance.now();
-  testAcc = 0;
+  previewStartedAt = performance.now();
   loopTest();
 }
 
 function loopTest() {
   if (!testRunning) return;
-  const now = performance.now();
-  const dt = Math.min(MAX_DT, (now - testLastTime) / 1000);
-  testLastTime = now;
-  testAcc += dt;
-  while (testAcc >= STEP) {
-    if (world && world.matchWinner === -1) {
-      const a = readSlot(0);
-      const b = readSlot(1);
-      stepWorld(world, a, b);
-      if (world.matchWinner !== -1) {
-        testOutcome = world.matchWinner === -1 ? "draw"
-          : `${world.matchWinner === 0 ? labelForSlot(0) : labelForSlot(1)} wins`;
-      }
-    }
-    testAcc -= STEP;
-  }
-  if (world && testCtx) {
+  if (testCtx) {
     paintHumanSliderNoise(0);
     paintHumanSliderNoise(1);
-    drawFrame(testCtx, world.stage, worldToFrame(world), { p1: labelForSlot(0), p2: labelForSlot(1) });
-    const hud = document.getElementById("test-hud");
-    if (hud) hud.textContent = `${labelForSlot(0)} vs ${labelForSlot(1)} — ${stageId} — tick ${world.tick} — ${world.matchWinner === -1 ? "live" : testOutcome}`;
+    const frame = currentPreviewFrame();
+    if (frame) {
+      drawFrame(testCtx, previewStage, frame, previewLabels);
+    } else {
+      drawFrame(testCtx, previewStage, emptyFrame(), previewLabels);
+    }
+    updatePreviewHud(frame);
   }
   testRafId = requestAnimationFrame(loopTest);
+}
+
+function currentPreviewFrame() {
+  if (!previewFrames.length) return null;
+  const elapsedTicks = Math.floor(((performance.now() - previewStartedAt) / 1000) * SIM_HZ);
+  const idx = Math.min(previewFrames.length - 1, Math.floor(elapsedTicks / Math.max(1, previewStride)));
+  return previewFrames[idx];
+}
+
+function emptyFrame() {
+  return {
+    tick: 0,
+    p0: { x: 300, y: 590, vx: 0, vy: 0, facing: 1, onGround: true, wall: 0, stun: 0, swipeT: 0, diveT: 0, dead: false },
+    p1: { x: 980, y: 590, vx: 0, vy: 0, facing: -1, onGround: true, wall: 0, stun: 0, swipeT: 0, diveT: 0, dead: false },
+    token: { exists: false, x: 0, y: 0, carrier: -1, dwellT: 0 },
+    goal: { exists: false, x: 0, y: 0, label: "", timer: 0 },
+    scoreboard: [0, 0],
+    rounds: [0, 0],
+  };
+}
+
+function updatePreviewHud(frame = currentPreviewFrame()) {
+  const hud = document.getElementById("test-hud");
+  if (!hud) {
+    updatePreviewStats(frame);
+    return;
+  }
+  const matchup = `${labelForSlot(0)} vs ${labelForSlot(1)} — ${stageId}`;
+  if (previewLoading) {
+    hud.textContent = `${matchup} — simulating on server`;
+    updatePreviewStats(frame);
+    return;
+  }
+  if (previewError) {
+    hud.textContent = `${matchup} — preview failed: ${previewError}`;
+    updatePreviewStats(frame);
+    return;
+  }
+  if (!frame) {
+    hud.textContent = `${matchup} — press re-sim`;
+    updatePreviewStats(frame);
+    return;
+  }
+  const ended = previewResult && frame === previewFrames[previewFrames.length - 1];
+  const winner = previewResult?.winner;
+  const outcome = !ended ? "replay"
+    : winner === -1 ? "draw"
+    : `${winner === 0 ? previewLabels.p1 : previewLabels.p2} wins`;
+  hud.textContent = `${matchup} — tick ${frame.tick}${previewDirty ? " — changed; press re-sim" : ""} — ${outcome}`;
+  updatePreviewStats(frame);
+}
+
+function updatePreviewStats(frame = currentPreviewFrame()) {
+  setBuildStat("build-stat-p1", labelForSlot(0));
+  setBuildStat("build-stat-p2", labelForSlot(1));
+  setBuildStat("build-stat-stage", stageId);
+  setBuildStat("build-stat-seed", previewResult?.seed ?? "—");
+  setBuildStat("build-stat-frames", previewFrames.length ? `${previewFrames.length} @ ${previewStride}f` : "—");
+
+  if (previewLoading) {
+    setBuildStat("build-stat-server", "simulating");
+    setBuildStat("build-stat-tick", "—");
+    setBuildStat("build-stat-result", "pending");
+    return;
+  }
+  if (previewError) {
+    setBuildStat("build-stat-server", "failed");
+    setBuildStat("build-stat-tick", "—");
+    setBuildStat("build-stat-result", previewError);
+    return;
+  }
+  if (!frame) {
+    setBuildStat("build-stat-server", "ready");
+    setBuildStat("build-stat-tick", "—");
+    setBuildStat("build-stat-result", "press re-sim");
+    return;
+  }
+
+  const finalTick = previewResult?.ticks ?? previewFrames[previewFrames.length - 1]?.tick ?? "—";
+  const ended = previewResult && frame === previewFrames[previewFrames.length - 1];
+  const serverState = previewDirty ? "changed" : ended ? "complete" : "replay";
+  setBuildStat("build-stat-server", serverState);
+  setBuildStat("build-stat-tick", `${frame.tick} / ${finalTick}`);
+
+  if (previewDirty) {
+    setBuildStat("build-stat-result", "changed - press re-sim");
+    return;
+  }
+  const winner = previewResult?.winner;
+  const score = Array.isArray(previewResult?.finalScore) ? ` ${previewResult.finalScore[0]}-${previewResult.finalScore[1]}` : "";
+  const result = !ended ? "in playback"
+    : winner === -1 ? `draw${score}`
+    : `${winner === 0 ? previewLabels.p1 : previewLabels.p2} wins${score}`;
+  setBuildStat("build-stat-result", result);
+}
+
+function setBuildStat(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = String(value);
 }

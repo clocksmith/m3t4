@@ -14,6 +14,7 @@ import {
 } from "@m3t4/sim";
 import { json } from "../http-utils.js";
 import { registerDuelRoutes } from "../p2p/routes.js";
+import { registerBuildRoutes } from "../routes/build.js";
 import { registerRankedRoutes } from "../routes/ranked.js";
 import { registerReplayVerifyRoutes } from "../routes/replay.js";
 import type { RouteList } from "../routes/types.js";
@@ -21,12 +22,14 @@ import { VerifyStore } from "../verify-store.js";
 
 class MemoryStableStore {
   private replays = new Map<string, ReplayArtifactV1>();
+  private stables = new Map<string, any>();
   submitted: Array<{ userId: string; slotIdx: number; config: BrainConfig; name?: string }> = [];
+  setStable(userId: string, stable: any): void { this.stables.set(userId, stable); }
   async archiveReplay(a: ReplayArtifactV1): Promise<void> { this.replays.set(a.match.matchId, a); }
   async getReplay(matchId: string): Promise<ReplayArtifactV1 | null> {
     return this.replays.get(matchId) ?? null;
   }
-  async getStable(): Promise<any> { return null; }
+  async getStable(userId: string): Promise<any> { return this.stables.get(userId) ?? null; }
   async listActive(): Promise<any[]> { return []; }
   async applyDecay(): Promise<number> { return 0; }
   async createStable(): Promise<any> { return null; }
@@ -100,6 +103,7 @@ function configFromUi(values: Partial<Record<ParamKey, number>>, spent: number):
 }
 
 function registerCore(routes: RouteList, store: MemoryStableStore): void {
+  registerBuildRoutes(routes);
   registerRankedRoutes(routes, {
     store: store as any,
     features: {
@@ -117,6 +121,33 @@ function registerCore(routes: RouteList, store: MemoryStableStore): void {
   });
   registerReplayVerifyRoutes(routes, { store: store as any });
 }
+
+test("build preview returns sanitized frames without preset configs", async (t) => {
+  const routes: RouteList = [];
+  const store = new MemoryStableStore();
+  registerCore(routes, store);
+  const srv = await boot(routes);
+  t.after(() => srv.close());
+
+  const res = await req(srv.port, "POST", "/api/build/simulate", {
+    stageId: "datacenter",
+    frameStride: 8,
+    maxTicks: 240,
+    a: { kind: "preset", preset: "operator" },
+    b: { kind: "preset", preset: "unicorn" },
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.ok, true);
+  assert.equal(res.body.labels.p1, "operator");
+  assert.equal(res.body.labels.p2, "unicorn");
+  assert.ok(Array.isArray(res.body.frames));
+  assert.ok(res.body.frames.length > 0);
+  assert.equal(typeof res.body.frames[0].p0.x, "number");
+  const raw = JSON.stringify(res.body);
+  assert.equal(raw.includes("\"attributes\""), false);
+  assert.equal(raw.includes("burnRate"), false);
+});
 
 test("centralized route graph hides P2P routes by default", async (t) => {
   const routes: RouteList = [];
@@ -186,6 +217,47 @@ test("ranked submit accepts profile configs without a JSON id", async (t) => {
   assert.equal(store.submitted.length, 1);
   assert.equal(store.submitted[0].name, "field-name-wins");
   assert.match(store.submitted[0].config.id, /^alice-2-/);
+});
+
+test("public stable strips configs but owner stable returns private configs", async (t) => {
+  const routes: RouteList = [];
+  const store = new MemoryStableStore();
+  const cfg = configFromUi({}, 0);
+  store.setStable("alice", {
+    userId: "alice",
+    handle: "alice",
+    slots: [{
+      slotId: "slot-a",
+      config: cfg,
+      name: "private-build",
+      submittedAt: 1,
+      rateLockedUntil: 0,
+      elo: 1000,
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      lastPlayedAt: 0,
+    }],
+    createdAt: 1,
+    updatedAt: 1,
+  });
+  registerCore(routes, store);
+  const srv = await boot(routes);
+  t.after(() => srv.close());
+
+  const pub = await req(srv.port, "GET", "/api/stables/alice");
+  assert.equal(pub.status, 200);
+  assert.equal(pub.body.slots[0].name, "private-build");
+  assert.equal(pub.body.slots[0].config, undefined);
+
+  const missingAuth = await req(srv.port, "GET", "/api/me/stable");
+  assert.equal(missingAuth.status, 400);
+
+  const own = await req(srv.port, "GET", "/api/me/stable", undefined, {
+    authorization: "Bearer alice",
+  });
+  assert.equal(own.status, 200);
+  assert.deepEqual(own.body.slots[0].config, cfg);
 });
 
 test("production internal routes require the internal token", async (t) => {

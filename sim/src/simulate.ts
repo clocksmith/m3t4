@@ -562,10 +562,44 @@ function respawn(f: Fighter, w: World): void {
   f.hp = 100;
 }
 
+const GOAL_NEAR_HOLDER_DIST = 280;
+
 function pickGoal(w: World): void {
   const goals = w.stage.goals;
-  let i = Math.floor(w.rng() * goals.length);
-  if (i === w.lastGoalIdx) i = (i + 1) % goals.length;
+  // If there's a live proof holder (or dropped gold), exclude goals too
+  // close to their position so the carrier can't instantly deliver two
+  // steps from where they minted the proof. Fall back to "all goals" if
+  // filtering would leave nothing.
+  let holderX: number | null = null;
+  let holderY: number | null = null;
+  if (w.gold) {
+    if (w.gold.carrier >= 0) {
+      const c = w.fighters[w.gold.carrier];
+      holderX = c.x; holderY = c.y;
+    } else {
+      holderX = w.gold.x; holderY = w.gold.y;
+    }
+  }
+  const eligible: number[] = [];
+  for (let j = 0; j < goals.length; j++) {
+    if (j === w.lastGoalIdx) continue;
+    if (holderX !== null && holderY !== null) {
+      const d = Math.hypot(goals[j].x - holderX, goals[j].y - holderY);
+      if (d < GOAL_NEAR_HOLDER_DIST) continue;
+    }
+    eligible.push(j);
+  }
+  // Fallbacks if the filter eliminated everything: relax the near-holder
+  // constraint first, then the no-repeat constraint.
+  let pool = eligible;
+  if (pool.length === 0) {
+    pool = [];
+    for (let j = 0; j < goals.length; j++) if (j !== w.lastGoalIdx) pool.push(j);
+  }
+  if (pool.length === 0) {
+    pool = goals.map((_, j) => j);
+  }
+  const i = pool[Math.floor(w.rng() * pool.length)];
   w.lastGoalIdx = i;
   const g = goals[i];
   w.goal = { x: g.x, y: g.y, sx: g.sx, sy: g.sy, label: g.label, timer: GOAL_TIMER_START };

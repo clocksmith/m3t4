@@ -1,7 +1,7 @@
 // Shared canvas renderer. Takes a TraceFrame (from sim) + stage and draws
 // the scene. Used by both Spectate (server frames) and Practice (local).
 
-import { STAGES, STATS, GOAL_TIMER_START } from "../sim/index.js";
+import { STAGES, STATS, GOAL_TIMER_START } from "./public-sim.js";
 
 export const W = 1280;
 export const H = 720;

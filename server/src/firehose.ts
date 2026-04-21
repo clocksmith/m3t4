@@ -58,7 +58,9 @@ export class Firehose {
   // All three arenas are in the meta pool. Visually they share the
   // datacenter asset pack with subtle filters to differentiate
   // (client/lib/render.js STAGE_ASSETS). Platform layouts differ.
-  private stages = Object.values(STAGES);
+  // demoday is removed from ranked rotation for now — datacenter +
+  // boardroom only. Stage still exists in STAGES for build-mode use.
+  private stages = [STAGES.datacenter, STAGES.boardroom];
   private running = false;
   private currentMatch: {
     matchId: string;
@@ -110,7 +112,7 @@ export class Firehose {
         pendingPair = null;
         if (!pair) {
           this.enterWait("no-pair");
-          await sleep(this.effectiveCycleMs);
+          await this.sleepWithHeartbeat(this.effectiveCycleMs);
           continue;
         }
         await this.runMatch(pair);
@@ -120,7 +122,32 @@ export class Firehose {
         await sleep(2000);
       }
       this.enterWait(pendingPair ? "cooldown" : "no-pair", pendingPair);
-      await sleep(this.effectiveCycleMs);
+      await this.sleepWithHeartbeat(this.effectiveCycleMs);
+    }
+  }
+
+  // Sleep in short slices and rebroadcast the current waiting state
+  // every HEARTBEAT_MS so clients joining mid-cooldown — or that missed
+  // the original `waiting` packet — always have an up-to-date
+  // nextAttemptAt / serverNow pair to drive their local countdown.
+  private async sleepWithHeartbeat(totalMs: number): Promise<void> {
+    const HEARTBEAT_MS = 5000;
+    const end = Date.now() + totalMs;
+    while (Date.now() < end) {
+      const remaining = end - Date.now();
+      await sleep(Math.min(HEARTBEAT_MS, remaining));
+      if (!this.running) return;
+      if (this.currentWait && Date.now() < end) {
+        this.broadcast({
+          type: "waiting",
+          reason: this.currentWait.reason,
+          nextAttemptAt: this.currentWait.nextAttemptAt,
+          intervalMs: this.currentWait.intervalMs,
+          rankedMode: this.currentWait.rankedMode,
+          nextMatch: this.currentWait.nextMatch,
+          serverNow: Date.now(),
+        });
+      }
     }
   }
 

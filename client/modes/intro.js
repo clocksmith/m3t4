@@ -23,17 +23,19 @@ let root = null;
 let rafHandle = 0;
 let tickHandle = 0;
 let running = false;
+let eventController = null;
 
 function buildSequence() {
-  const { lore } = gameCopy;
+  const intro = gameCopy.intro ?? {};
+  const prologue = intro.prologue?.body ?? [];
   const blocks = [];
   blocks.push({ kind: "header", text: "// M3T4 TERMINAL · SESSION OPEN" });
   blocks.push({ kind: "header", text: `// EPOCH 2038 · LEDGER AWAITING RECONCILIATION` });
-  blocks.push({ kind: "tagline", text: lore.tagline });
-  for (const para of lore.prologue.body) {
+  blocks.push({ kind: "tagline", text: intro.tagline });
+  for (const para of prologue) {
     blocks.push({ kind: "paragraph", text: para });
   }
-  blocks.push({ kind: "stinger", lines: lore.stinger });
+  blocks.push({ kind: "stinger", lines: intro.stinger ?? [] });
   blocks.push({ kind: "tail", text: "// END OF TRANSMISSION" });
   return blocks;
 }
@@ -54,6 +56,8 @@ export function mount(mountEl, { setStatus }) {
   const crtEl = root.querySelector("#intro-crt");
 
   running = true;
+  eventController?.abort();
+  eventController = new AbortController();
   const sequence = buildSequence();
   let idx = 0;
   let charPos = 0;
@@ -145,8 +149,8 @@ export function mount(mountEl, { setStatus }) {
     rafHandle = requestAnimationFrame(tick);
   }
 
-  crtEl.addEventListener("click", enter);
-  document.addEventListener("keydown", onKey);
+  crtEl.addEventListener("click", enter, { signal: eventController.signal });
+  document.addEventListener("keydown", onKey, { signal: eventController.signal });
 
   rafHandle = requestAnimationFrame(tick);
 
@@ -158,5 +162,7 @@ export function unmount() {
   running = false;
   if (rafHandle) cancelAnimationFrame(rafHandle);
   if (tickHandle) clearTimeout(tickHandle);
+  eventController?.abort();
+  eventController = null;
   root = null;
 }

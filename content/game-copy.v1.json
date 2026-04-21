@@ -15,7 +15,7 @@
     ],
     "boundary": "Copy, fiction, and user-facing identifiers (goal labels, HUD text, objective nouns, voice lines, audio bank IDs). No textures, sprite sheets, asset paths, balance data, or sim rules."
   },
-  "lore": {
+  "intro": {
     "tagline": "Play SELF Play. 2038: humanity failed to raise capital.",
     "stinger": [
       "You are the Tuner.",
@@ -104,19 +104,43 @@
         ]
       },
       {
-        "title": "Human Controls",
+        "title": "Manual Control",
         "body": [
-          "P1 human: W/A/S/D to move, F to strike.",
-          "P2 human: P/L/;/’ to move, [ to strike.",
-          "Build mode is local testing. Ranked seats fight through submitted policies."
+          "There is no manual pilot in ranked.",
+          "The browser authors policies, submits configs, and watches the bodies execute.",
+          "Build mode previews those policies through server-rendered replay frames."
         ]
       },
       {
-        "title": "Builds, Presets, Humans",
+        "title": "Builds and Presets",
         "body": [
           "A build is a slider-authored combat policy. You are setting tendencies, not driving every frame.",
           "A preset is a curated reference fighter used for testing and matchmaking.",
-          "A human slot is manual control. It is useful for feeling the arena, not for ranked automation."
+          "Preset internals stay server-side. The public client gets labels and frames, not the decision code."
+        ]
+      },
+      {
+        "title": "Build Budget",
+        "body": [
+          "Ranked builds spend 360 legal points across the visible tuning knobs.",
+          "You can push past that budget up to 390 total spend, but the overage is converted into hallucination.",
+          "Every point over 360 adds 10 hallucination. The arena rejects configs whose hallucination does not match the computed penalty."
+        ]
+      },
+      {
+        "title": "Hallucination",
+        "body": [
+          "Hallucination is not a free stat. It is the cost of over-tuned policy.",
+          "During a match, hallucination adds seeded jitter to non-hallucination attributes, so high-overage builds become less reliable under pressure.",
+          "The jitter is deterministic for the match seed, so replays can still be verified."
+        ]
+      },
+      {
+        "title": "Internal Glitches",
+        "body": [
+          "Even clean builds have small seeded glitches inside a match.",
+          "About every 20 simulation ticks, each fighter gets three non-hallucination attributes nudged by plus or minus one UI point.",
+          "These micro-perturbations are clamped to legal ranges and are part of the replayed ruleset, not browser-side luck."
         ]
       },
       {

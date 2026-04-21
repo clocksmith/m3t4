@@ -11,7 +11,7 @@
 //     so latency can't grow unbounded after a stall or tab background)
 
 import { WS_ORIGIN, leaderboard } from "../lib/api.js";
-import { STAGES } from "../sim/index.js";
+import { STAGES } from "../lib/public-sim.js";
 import { setupCanvas, drawFrame, W, H } from "../lib/render.js";
 import { getComputeClient } from "../lib/compute.js";
 
@@ -575,12 +575,9 @@ function scheduleReconnect(delayMs) {
 
 function updateBufferStat(state = "live") {
   const n = frameBuf.length;
-  const frames = `${n} ${n === 1 ? "frame" : "frames"}`;
   if (state === "idle") return setStat("stat-buf", "idle");
-  if (state === "empty") return setStat("stat-buf", "0 frames");
-  if (state === "priming") return setStat("stat-buf", `${frames} priming`);
-  if (state === "refilling") return setStat("stat-buf", `${frames} refilling`);
-  return setStat("stat-buf", frames);
+  if (state === "empty") return setStat("stat-buf", "0f");
+  return setStat("stat-buf", `${n}f`);
 }
 
 const STREAM_LOG_MAX = 8;

@@ -12,7 +12,7 @@ import {
 // commitment window. Replaces v2's per-tick reactive ladder. Params
 // bias mode transitions and tactical details within each mode; they no
 // longer drive behavior directly via a flat if/else.
-export const BEHAVIOR_VERSION = 9;
+export const BEHAVIOR_VERSION = 11;
 
 // ---------- Opp-model buffer sizing ----------
 //

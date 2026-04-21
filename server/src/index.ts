@@ -17,6 +17,7 @@ import { Firehose } from "./firehose.js";
 import { defaultVerifyStorePath, VerifyStore } from "./verify-store.js";
 import { corsHeaders, json } from "./http-utils.js";
 import type { RouteList } from "./routes/types.js";
+import { registerBuildRoutes } from "./routes/build.js";
 import { registerRankedRoutes } from "./routes/ranked.js";
 import { registerReplayVerifyRoutes } from "./routes/replay.js";
 import { registerDuelRoutes } from "./p2p/routes.js";
@@ -48,6 +49,7 @@ if (runsApi && CONFIG.features.proofLab && CONFIG.features.zk) {
 
 const routes: RouteList = [];
 if (runsApi) {
+  registerBuildRoutes(routes);
   registerRankedRoutes(routes, { store, features: CONFIG.features, config: CONFIG });
   registerReplayVerifyRoutes(routes, { store });
 } else {

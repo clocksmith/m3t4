@@ -19,9 +19,9 @@
       "required": ["version", "theme", "boundary"],
       "additionalProperties": true
     },
-    "lore": {
+    "intro": {
       "type": "object",
-      "description": "Narrative hook in four zoom levels. tagline=splash/poster, stinger=intro lines, intro=rules/about paragraph, matchStamps=in-game HUD stings.",
+      "description": "Narrative hook in four zoom levels. tagline=splash/poster, stinger=intro lines, intro=about paragraph, matchStamps=in-game HUD stings.",
       "properties": {
         "tagline": { "type": "string" },
         "stinger": { "type": "array", "items": { "type": "string" } },
@@ -69,6 +69,28 @@
               "title": { "type": "string" },
               "body": { "type": "array", "items": { "type": "string" } }
             }
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "rules": {
+      "type": "object",
+      "description": "Client-facing gameplay rules and mechanics. This is player-readable behavior, not implementation internals.",
+      "properties": {
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "summary": { "type": "string" },
+        "sections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["title", "body"],
+            "properties": {
+              "title": { "type": "string" },
+              "body": { "type": "array", "items": { "type": "string" } }
+            },
+            "additionalProperties": true
           }
         }
       },

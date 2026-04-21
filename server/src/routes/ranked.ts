@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { StableStore } from "../stable.js";
 import { stablePublic } from "../stable.js";
 import { handleClaimHandle, handleSubmit } from "../submit.js";
+import { verifyAuth } from "../auth.js";
 import { json } from "../http-utils.js";
 import type { RouteList } from "./types.js";
 import { matchmakerPressure } from "../matchmaker-pressure.js";
@@ -61,6 +62,18 @@ export function registerRankedRoutes(routes: RouteList, deps: RankedRouteDeps): 
       const st = await store.getStable(uid);
       if (!st) json(res, 404, { error: "not found" });
       else json(res, 200, stablePublic(st));
+      return true;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/me/stable") {
+      try {
+        const auth = await verifyAuth(req.headers.authorization);
+        const st = await store.getStable(auth.uid);
+        if (!st) json(res, 404, { error: "not found" });
+        else json(res, 200, st);
+      } catch (e) {
+        json(res, 400, { error: (e as Error).message });
+      }
       return true;
     }
 

@@ -120,6 +120,7 @@ function downsampleFrames(frames: TraceFrame[], stride: number): TraceFrame[] {
 function sanitizeFrame(f: TraceFrame): TraceFrame {
   return {
     tick: f.tick,
+    roundStartTick: f.roundStartTick,
     p0: sanitizeFighter(f.p0),
     p1: sanitizeFighter(f.p1),
     token: {

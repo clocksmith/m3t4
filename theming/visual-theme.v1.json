@@ -573,7 +573,7 @@
         "genW": 1024,
         "genH": 576,
         "kind": "still",
-        "base": "Fiduciary Basement preview thumbnail: sterile corporate undercroft wide shot, cold glass reflections, shattered dry-erase boards, muted legal office fluorescent lighting, moody composition, palette skyTop #171116 skyMid #1d1516 skyBottom #080506",
+        "base": "Fiduciary Basement preview thumbnail: modern corporate sub-basement under a boardroom, glass-walled records vaults, low acoustic ceiling panels, fluorescent strips, concrete slab, mahogany veneer accents, scattered papers and small broken office furniture at human scale, moody composition, palette skyTop #171116 skyMid #1d1516 skyBottom #080506. Not medieval: no castle, no cathedral, no arches, no torches, no stone blocks, no dungeon masonry",
         "status": "deferred"
       },
       "boardroom/fiduciary_basement/layers/sky.png": {
@@ -584,7 +584,7 @@
         "genW": 1280,
         "genH": 720,
         "kind": "still",
-        "base": "Fiduciary Basement SKY layer: sterile corporate undercroft, cold glass reflections, shattered dry-erase boards, muted legal fluorescent lighting, muted amber accents, no foreground",
+        "base": "Fiduciary Basement SKY layer: modern corporate sub-basement backdrop only, low suspended ceiling grid, distant fluorescent strips, frosted glass boardroom reflections, concrete and veneer planes, muted amber warning accents, no foreground objects, no furniture. Not medieval: no castle, no cathedral, no arches, no torches, no stone blocks, no dungeon masonry",
         "status": "deferred"
       },
       "boardroom/fiduciary_basement/layers/far_parallax.png": {
@@ -596,7 +596,7 @@
         "genH": 720,
         "kind": "parallax-strip",
         "tileX": true,
-        "base": "Fiduciary Basement FAR parallax: distant filing aisles, endless identical doors, boardroom shadow grids, tileable horizontally, transparent #FF00FF background",
+        "base": "Fiduciary Basement FAR parallax: distant corporate filing aisles, endless small identical office doors, frosted glass conference-room walls, low ceiling shadow grid, tiny scale cues only, horizontally tileable, transparent #FF00FF background. Not medieval: no castle, no cathedral, no arches, no torches, no stone blocks, no dungeon masonry",
         "status": "deferred"
       },
       "boardroom/fiduciary_basement/layers/mid_parallax.png": {
@@ -608,7 +608,7 @@
         "genH": 720,
         "kind": "parallax-strip",
         "tileX": true,
-        "base": "Fiduciary Basement MID parallax: elongated mahogany table forms, cracked telepresence screens in depth, tileable horizontally, transparent #FF00FF background",
+        "base": "Fiduciary Basement MID parallax: long low mahogany boardroom table silhouettes in the distance, cracked wall-mounted telepresence screens, filing cabinets, cables, glass partitions, all furniture clearly human scale and below mid-height, horizontally tileable, transparent #FF00FF background. No single chair, screen, cabinet, or table section taller than 120px on the 1920x720 canvas. Not medieval: no castle, no cathedral, no arches, no torches, no stone blocks, no dungeon masonry",
         "status": "deferred"
       },
       "boardroom/fiduciary_basement/layers/near_parallax.png": {
@@ -620,7 +620,7 @@
         "genH": 720,
         "kind": "parallax-strip",
         "tileX": true,
-        "base": "Fiduciary Basement NEAR parallax: close-up wood and stone hybrid architecture, overturned ergonomic chairs, thick legal dust, framing silhouettes, tileable horizontally, transparent #FF00FF background",
+        "base": "Fiduciary Basement NEAR parallax: foreground dressing strip for a modern corporate basement, not close-up props. Use low baseboards, cable trays, desk-leg silhouettes, chair-leg fragments, thin paper piles, dust bands, and cropped office debris along the bottom edge. Keep the upper 70% of the canvas mostly transparent #FF00FF. All furniture and debris must stay human scale: no chair, table fragment, monitor, box, or object taller than 80px on the 1920x720 canvas, and no object wider than 160px. Horizontally tileable, transparent #FF00FF background. Not medieval: no castle, no cathedral, no arches, no torches, no stone blocks, no dungeon masonry, no giant foreground furniture",
         "status": "deferred"
       },
       "boardroom/fiduciary_basement/textures/platform.png": {
@@ -632,7 +632,7 @@
         "genH": 256,
         "kind": "tile",
         "tileX": true,
-        "base": "Seamless polished but scratched mahogany conference-table veneer platform tile, matte corporate, 4:1 aspect, horizontally tileable",
+        "base": "Seamless platform-surface tile that reads as polished but scratched mahogany conference-table veneer material, not a whole table object. Matte corporate finish, subtle worn grain, low-contrast seams, 4:1 aspect, horizontally tileable",
         "status": "deferred"
       },
       "boardroom/fiduciary_basement/textures/platform_edge.png": {
@@ -644,7 +644,7 @@
         "genH": 64,
         "kind": "tile",
         "tileX": true,
-        "base": "Seamless platform edge trim with tarnished brass filing accents, 16:1 aspect, horizontally tileable",
+        "base": "Seamless thin platform edge trim with tarnished brass filing-cabinet accents and worn veneer lip, 16:1 aspect, horizontally tileable. Material strip only, no large objects",
         "status": "deferred"
       },
       "boardroom/fiduciary_basement/textures/wall.png": {
@@ -657,7 +657,7 @@
         "kind": "tile",
         "tileX": true,
         "tileY": true,
-        "base": "Seamless acoustic wood-panel wall tile, micro-engraved contract clauses as faint relief, heavy scuffing, 1:2 aspect, tileable both axes",
+        "base": "Seamless acoustic wood-panel wall tile for a modern office basement, faint legal-glyph relief with no readable text, heavy scuffing, screw holes, veneer seams, 1:2 aspect, tileable both axes. Not medieval: no castle, no cathedral, no arches, no torches, no stone blocks, no dungeon masonry",
         "status": "deferred"
       },
       "boardroom/fiduciary_basement/textures/floor_detail.png": {
@@ -668,7 +668,7 @@
         "genW": 1024,
         "genH": 256,
         "kind": "decal",
-        "base": "Floor detail decal strip: ruined rubber mats, paper edge wear, tiny scattered security badges, transparent #FF00FF background",
+        "base": "Floor detail decal strip: ruined rubber mat scraps, paper edge wear, tiny scattered security badges, dust, staples, and small office grit, all objects under 24px tall on the final 256x64 asset, transparent #FF00FF background",
         "status": "deferred"
       },
       "demoday/demo_day_afterparty/ui/preview_thumb.png": {
@@ -818,21 +818,21 @@
             "anim": "fall",
             "frames": 2,
             "fps": 10,
-            "pose": "peak hang, then descent with trailing cloth/hair"
+            "pose": "peak hang, then descent with trailing cloth/hair; full body stays inside each cell, no ground, no ledge, no platform"
           },
           {
             "row": 4,
             "anim": "wallSlide",
             "frames": 2,
             "fps": 8,
-            "pose": "side-on wall-slide body pose against an implied invisible wall, hand-brake sliding, alternating arm, no drawn wall or platform"
+            "pose": "side-on wall-slide body pose against an implied invisible wall; one hand and one foot braced in the air, but draw no wall, no platform, no floor, no contact surface"
           },
           {
             "row": 5,
             "anim": "dive",
             "frames": 2,
             "fps": 12,
-            "pose": "committed aerial dive downward with empty hands, no weapon, no slash effect, no ground"
+            "pose": "committed aerial dive downward with empty hands; compact body silhouette fully contained inside each cell, no weapon, no slash effect, no ground"
           },
           {
             "row": 6,
@@ -860,7 +860,7 @@
             "anim": "carry",
             "frames": 2,
             "fps": 4,
-            "pose": "walk cycle holding glowing token high in off-hand"
+            "pose": "walk cycle with one empty hand raised as if balancing an invisible payload; do not draw the payload, token, coin, orb, document, bag, or any carried object"
           },
           {
             "row": 10,
@@ -877,10 +877,10 @@
             "pose": "idle-victory loop matching character archetype"
           }
         ],
-        "layoutDirective": "Strict sprite sheet grid: EXACTLY 6 columns x 12 rows, each frame centered in its 128x128 generation cell (target 64x64 after 2x nearest-neighbor downscale), no gutters. Character facing camera-right in every frame. Character silhouette is a TALL HUMAN FIGURE with aspect approximately 1:2 — roughly 28 pixels wide by 52 pixels tall in the 64x64 final cell. Do NOT draw a square silhouette. Center the body horizontally with about 18 pixels of pure magenta #FF00FF padding on each side, and about 6 pixels of magenta padding above the head and below the feet. The figure's in-sim hitbox is 26 wide by 52 tall; the drawn silhouette should read as roughly that shape at a glance so combat reads correctly. Weapons NOT drawn on this sheet (weapons are a separate layer).",
+        "layoutDirective": "Strict sprite sheet grid: EXACTLY 6 columns x 12 rows, each frame centered in its 128x128 generation cell (target 64x64 after 2x nearest-neighbor downscale), no gutters. Character facing camera-right in every frame. Every populated character must stay fully inside its own cell; no head, hair, arms, legs, cloth, or motion pose may cross a vertical or horizontal cell cut. Empty cells must be pure #FF00FF only. Character silhouette is a TALL HUMAN FIGURE with aspect approximately 1:2 — roughly 28 pixels wide by 52 pixels tall in the 64x64 final cell. Do NOT draw a square silhouette. Center the body horizontally with about 18 pixels of pure magenta #FF00FF padding on each side, and about 6 pixels of magenta padding above the head and below the feet. The figure's in-sim hitbox is 26 wide by 52 tall; the drawn silhouette should read as roughly that shape at a glance so combat reads correctly. Weapons NOT drawn on this sheet (weapons are a separate layer).",
         "taunt": {
           "sama": "index finger raised as if consulting a graph only they can see",
-          "darrius": "slowly closing a leatherbound folder",
+          "darrius": "slow legalistic empty-hand gesture as if closing an invisible folder; do not draw the folder",
           "demis": "drawing a small diagram in the air",
           "mark": "two-finger salute, chin up"
         },

@@ -54,7 +54,7 @@ export function projectIntoBudget(cfg: BrainConfig): BrainConfig {
   if (sum <= USER_BUDGET) {
     const attrs: Partial<Record<ParamKey, number>> = {};
     for (const k of USER_KNOBS) attrs[k] = uiToNative(k, ui[k]);
-    attrs.hallucination = 0;
+    attrs.hallucination = computedHallucinationForSpend(budgetSpent({ attributes: attrs }));
     return { id: cfg.id, author: cfg.author, seed: cfg.seed, attributes: attrs };
   }
   const scale = USER_BUDGET / sum;

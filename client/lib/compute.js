@@ -348,6 +348,28 @@ class ComputeClient {
     }
   }
 
+  async witnessWebRtc() {
+    if (!this.isConfigured()) throw new Error("compute lab unconfigured");
+    await this.ensureWorkerRegistered();
+    if (!this.workerId) throw new Error("worker registration failed");
+    const observation = {
+      ...connectivityCommonFields(this),
+      transport: "webrtc-signaling",
+      ...(await signaledWebRtcProbe(this, 8000)),
+    };
+    await fetch(computeLabOrigin() + "/compute/connectivity", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        workerId: this.workerId,
+        workerSessionId: this.workerSessionId,
+        workerSessionToken: this.workerSessionToken,
+        ...observation,
+      }),
+    });
+    return observation;
+  }
+
   async acceptAssignment(assignment) {
     const gate = this.currentGate();
     await fetch(computeLabOrigin() + "/compute/assignments/accept", {
@@ -399,7 +421,11 @@ class ComputeClient {
     this.emit();
     try {
       const t0 = performance.now();
-      const probe = await localWebRtcProbe(Number(chunk.params?.timeoutMs) || 1800);
+      const timeoutMs = Number(chunk.params?.timeoutMs) || 1800;
+      const status = await computeLabStatus();
+      const probe = status?.webrtcSignalingEnabled
+        ? await signaledWebRtcProbe(this, Math.max(timeoutMs, 4500))
+        : await localWebRtcProbe(timeoutMs);
       const transcript = webRtcTranscript(this, probe);
       const outputHash = await hashText(stableJson({
         kind: chunk.kind,
@@ -488,6 +514,7 @@ class ComputeClient {
         inputHash: msg.inputHash,
         artifactHash: msg.artifactHash,
         outputHash: { algorithm: "sha256", value: msg.outputHash },
+        derived: msg.derived,
         determinismClass: "bit-exact",
         validationMode: "expected-hash",
         executionMode: msg.executionMode || "cpu",
@@ -544,6 +571,7 @@ function installConsoleHelper(client) {
     stop: () => client.stop({ persist: true }),
     status: () => client.snapshot(),
     mode: (mode) => client.setMode(mode),
+    webrtcWitness: () => client.witnessWebRtc(),
   };
 }
 
@@ -606,6 +634,7 @@ async function buildCapability(runtimeInfo = {}, opts = {}) {
   const kernels = ["m3t4.public_artifact_verify.v0", "prime-search.v0"];
   if (deviceWitness.canvas2dFixture === "ok" || deviceWitness.canvas2dFixture === "mismatch") {
     kernels.push("device_witness.render_fixture.v0");
+    kernels.push("device_witness.derived_buffer.v0");
   }
   if (webgpu.webgpu === "available") kernels.push("device_witness.webgpu.v0");
   if (typeof RTCPeerConnection !== "undefined") kernels.push("device_witness.webrtc.v0");
@@ -749,14 +778,7 @@ function workerDeviceWitnessBucket(runProbe) {
 }
 
 async function buildConnectivityObservations(client) {
-  const common = {
-    mode: client.mode,
-    browserFamily: adapterInfoBucket().userAgentBucket,
-    deviceClass: client.capability?.deviceClass || deviceClass(),
-    visibilityBucket: document.visibilityState === "visible" ? "visible" : "hidden",
-    batteryBucket: batteryBucket(client.battery),
-    ...networkInfoBucket(),
-  };
+  const common = connectivityCommonFields(client);
   const [status, http, webrtc] = await Promise.all([
     computeLabStatus(),
     httpRttProbe(),
@@ -781,6 +803,17 @@ async function buildConnectivityObservations(client) {
     observations.push({ ...common, transport: "webrtc-signaling", ...signaled });
   }
   return observations;
+}
+
+function connectivityCommonFields(client) {
+  return {
+    mode: client.mode,
+    browserFamily: adapterInfoBucket().userAgentBucket,
+    deviceClass: client.capability?.deviceClass || deviceClass(),
+    visibilityBucket: document.visibilityState === "visible" ? "visible" : "hidden",
+    batteryBucket: batteryBucket(client.battery),
+    ...networkInfoBucket(),
+  };
 }
 
 function webRtcTranscript(client, probe) {
@@ -812,6 +845,9 @@ function cleanTranscript(input) {
     "iceRelayBucket",
     "stunSuccessBucket",
     "turnNeedBucket",
+    "dataChannelBucket",
+    "dataWorkBucket",
+    "dataReceiptBucket",
     "visibilityBucket",
     "batteryBucket",
   ]) {
@@ -858,11 +894,13 @@ async function signaledWebRtcProbe(client, timeoutMs) {
   const pairId = joined.pairId;
   const pairToken = joined.pairToken;
   const role = joined.role;
+  const dataEnabled = joined.dataEnabled === true && Array.isArray(joined.channels) && joined.channels.includes("plasma-data");
   const peerId = client.workerId;
   const candidateTypes = { host: false, srflx: false, relay: false };
   const seenRemoteCandidates = new Set();
+  const channels = new Map();
+  const served = { attempted: false, ok: false };
   let pc = null;
-  let channel = null;
   let iceGatherMs = null;
   let pumpTimer = null;
   const t0 = performance.now();
@@ -908,6 +946,20 @@ async function signaledWebRtcProbe(client, timeoutMs) {
     }
     return latest;
   };
+  const attachChannel = (ch) => {
+    channels.set(ch.label || "unknown", ch);
+    if (ch.label === "plasma-data") {
+      ch.onmessage = (ev) => {
+        served.attempted = true;
+        handlePeerWorkMessage(ev.data, channels, served).catch(() => {
+          served.ok = false;
+        });
+      };
+    }
+  };
+  const requiredLabels = dataEnabled
+    ? ["plasma-control", "plasma-data", "plasma-receipts"]
+    : ["plasma-control"];
 
   try {
     pc = new RTCPeerConnection({ iceServers: configuredIceServers() });
@@ -922,18 +974,11 @@ async function signaledWebRtcProbe(client, timeoutMs) {
       }
       maybeGathered();
     };
-    const opened = new Promise((resolve) => {
-      if (role === "offerer") {
-        channel = pc.createDataChannel("plasma-data", { ordered: true });
-        channel.onopen = () => resolve(true);
-      } else {
-        pc.ondatachannel = (ev) => {
-          channel = ev.channel;
-          channel.onopen = () => resolve(true);
-          channel.onmessage = () => {};
-        };
-      }
-    });
+    if (role === "offerer") {
+      for (const label of requiredLabels) attachChannel(pc.createDataChannel(label, { ordered: true }));
+    } else {
+      pc.ondatachannel = (ev) => attachChannel(ev.channel);
+    }
     pumpTimer = setInterval(() => { addRemoteCandidates().catch(() => {}); }, 250);
 
     if (role === "offerer") {
@@ -956,11 +1001,25 @@ async function signaledWebRtcProbe(client, timeoutMs) {
       await pairPost("/answer", { answer: pc.localDescription });
     }
 
-    const ok = await Promise.race([opened, delay(timeoutMs).then(() => false)]);
+    const ok = !!(await waitFor(() => (
+      requiredLabels.every((label) => channels.get(label)?.readyState === "open") ? true : null
+    ), timeoutMs));
     maybeGathered();
+    let dataWorkBucket = dataEnabled ? "not-run" : "disabled";
+    let dataReceiptBucket = dataEnabled ? "not-run" : "disabled";
     if (ok) {
-      try { channel?.send?.("witness"); } catch {}
-      await delay(40);
+      if (dataEnabled && role === "offerer") {
+        const peerResult = await runPeerWorkRequest(channels, Math.min(3000, timeoutMs));
+        dataWorkBucket = peerResult.ok ? "request-ok" : peerResult.status;
+        dataReceiptBucket = peerResult.receiptBucket;
+      } else if (dataEnabled) {
+        const didServe = await waitFor(() => (served.attempted ? true : null), Math.min(1500, timeoutMs));
+        dataWorkBucket = didServe ? (served.ok ? "served-ok" : "served-failed") : "served-none";
+        dataReceiptBucket = didServe ? (served.ok ? "sent" : "failed") : "none";
+      } else {
+        try { channels.get("plasma-control")?.send?.("witness"); } catch {}
+        await delay(40);
+      }
     }
     return {
       status: ok ? "ok" : "timeout",
@@ -972,6 +1031,9 @@ async function signaledWebRtcProbe(client, timeoutMs) {
       stunSuccessBucket: configuredIceServers().length ? yesNo(candidateTypes.srflx) : "unconfigured",
       turnNeedBucket: candidateTypes.relay ? "relay-available" : ok ? "unknown" : "maybe-required",
       signalingRttBucket: bucketMs(performance.now() - t0),
+      dataChannelBucket: dataEnabled ? (ok ? "open" : "timeout") : "disabled",
+      dataWorkBucket,
+      dataReceiptBucket,
     };
   } catch {
     return {
@@ -984,12 +1046,145 @@ async function signaledWebRtcProbe(client, timeoutMs) {
       stunSuccessBucket: configuredIceServers().length ? yesNo(candidateTypes.srflx) : "unconfigured",
       turnNeedBucket: candidateTypes.relay ? "relay-available" : "maybe-required",
       signalingRttBucket: bucketMs(performance.now() - t0),
+      dataChannelBucket: dataEnabled ? "failed" : "disabled",
+      dataWorkBucket: dataEnabled ? "failed" : "disabled",
+      dataReceiptBucket: dataEnabled ? "failed" : "disabled",
     };
   } finally {
     if (pumpTimer) clearInterval(pumpTimer);
-    try { channel?.close?.(); } catch {}
+    for (const ch of channels.values()) {
+      try { ch.close?.(); } catch {}
+    }
     try { pc?.close?.(); } catch {}
     if (pairId && pairToken) pairPost("/close", {}).catch(() => {});
+  }
+}
+
+const PEER_WORK_PARAMS = Object.freeze({ start: 1009, endExclusive: 1033 });
+const PEER_WORK_EXPECTED_HASH = "359233299256766ca1b01116330f3a542d7a9e148a694f33af0f67eb8f0de6ef";
+
+async function runPeerWorkRequest(channels, timeoutMs) {
+  const data = channels.get("plasma-data");
+  const receipts = channels.get("plasma-receipts");
+  if (!data || !receipts) return { ok: false, status: "missing-channel", receiptBucket: "missing" };
+  const requestId = `peer-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const chunk = {
+    chunkId: `${requestId}-chunk`,
+    kind: "prime-search.v0",
+    params: PEER_WORK_PARAMS,
+    kernelId: "prime-search.v0",
+    kernelHash: { algorithm: "sha256", value: await hashText("peer-prime-search.v0") },
+    inputHash: { algorithm: "sha256", value: await hashText(stableJson({ kind: "prime-search.v0", params: PEER_WORK_PARAMS })) },
+  };
+  const receipt = new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), timeoutMs);
+    receipts.onmessage = (ev) => {
+      const msg = parseJsonMessage(ev.data);
+      if (msg?.protocol !== "plasma-receipts.v0" || msg?.type !== "work-result" || msg?.requestId !== requestId) return;
+      clearTimeout(timer);
+      resolve(msg);
+    };
+  });
+  data.send(JSON.stringify({
+    protocol: "plasma-data.v0",
+    type: "work",
+    requestId,
+    chunk,
+  }));
+  const msg = await receipt;
+  if (!msg) return { ok: false, status: "timeout", receiptBucket: "timeout" };
+  if (!msg.ok) return { ok: false, status: "peer-failed", receiptBucket: "failed" };
+  if (msg.outputHash !== PEER_WORK_EXPECTED_HASH) return { ok: false, status: "mismatch", receiptBucket: "mismatch" };
+  return { ok: true, status: "request-ok", receiptBucket: "ok" };
+}
+
+async function handlePeerWorkMessage(raw, channels, served) {
+  const msg = parseJsonMessage(raw);
+  if (msg?.protocol !== "plasma-data.v0" || msg?.type !== "work" || typeof msg.requestId !== "string") return;
+  const receiptChannel = await waitFor(() => (
+    channels.get("plasma-receipts")?.readyState === "open" ? channels.get("plasma-receipts") : null
+  ), 1000);
+  if (!receiptChannel) return;
+  try {
+    const chunk = safePeerChunk(msg.chunk);
+    const result = await executeWorkerChunk(chunk, msg.requestId, 2500);
+    served.ok = result.outputHash === PEER_WORK_EXPECTED_HASH;
+    receiptChannel.send(JSON.stringify({
+      protocol: "plasma-receipts.v0",
+      type: "work-result",
+      requestId: msg.requestId,
+      ok: served.ok,
+      kernelId: result.kernelId,
+      outputHash: result.outputHash,
+      computeMs: Math.round(result.computeMs),
+      executionMode: result.executionMode || "cpu",
+    }));
+  } catch (e) {
+    served.ok = false;
+    receiptChannel.send(JSON.stringify({
+      protocol: "plasma-receipts.v0",
+      type: "work-result",
+      requestId: msg.requestId,
+      ok: false,
+      error: message(e),
+    }));
+  }
+}
+
+function safePeerChunk(chunk) {
+  if (!chunk || chunk.kind !== "prime-search.v0") throw new Error("unsupported peer chunk");
+  const start = Number(chunk.params?.start);
+  const endExclusive = Number(chunk.params?.endExclusive);
+  if (start !== PEER_WORK_PARAMS.start || endExclusive !== PEER_WORK_PARAMS.endExclusive) {
+    throw new Error("unexpected peer chunk params");
+  }
+  return {
+    chunkId: String(chunk.chunkId || "peer-chunk"),
+    kind: "prime-search.v0",
+    params: PEER_WORK_PARAMS,
+    kernelId: "prime-search.v0",
+    kernelHash: chunk.kernelHash,
+    inputHash: chunk.inputHash,
+  };
+}
+
+function executeWorkerChunk(chunk, assignmentId, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let worker = null;
+    const timer = setTimeout(() => {
+      try { worker?.terminate(); } catch {}
+      reject(new Error("peer worker timeout"));
+    }, timeoutMs);
+    try {
+      worker = new Worker(new URL("../workers/plasma-worker.js", import.meta.url), { type: "module" });
+      worker.onmessage = (ev) => {
+        const msg = ev.data;
+        if (msg?.assignmentId !== assignmentId) return;
+        clearTimeout(timer);
+        try { worker?.terminate(); } catch {}
+        if (msg.type === "done") resolve(msg);
+        else reject(new Error(msg?.message || "peer worker failed"));
+      };
+      worker.onerror = (err) => {
+        clearTimeout(timer);
+        try { worker?.terminate(); } catch {}
+        reject(new Error(err.message || "peer worker error"));
+      };
+      worker.postMessage({ type: "run", assignmentId, chunk });
+    } catch (e) {
+      clearTimeout(timer);
+      try { worker?.terminate(); } catch {}
+      reject(e);
+    }
+  });
+}
+
+function parseJsonMessage(raw) {
+  if (typeof raw !== "string") return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
   }
 }
 

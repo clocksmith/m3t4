@@ -33,11 +33,15 @@
 
   <script src="config.js"></script>
   <script>
-    if (!window.__M3T4_API_ORIGIN__ && !["localhost", "127.0.0.1"].includes(location.hostname)) {
-      window.__M3T4_API_ORIGIN__ = "https://api.m3t4.ai";
+    const isLocalM3t4 = ["localhost", "127.0.0.1"].includes(location.hostname);
+    if (!window.__M3T4_API_ORIGIN__) {
+      window.__M3T4_API_ORIGIN__ = isLocalM3t4 ? "http://localhost:7777" : window.location.origin;
+    }
+    if (!window.__M3T4_WS_ORIGIN__ && !isLocalM3t4) {
+      window.__M3T4_WS_ORIGIN__ = "wss://arena-server-789525635095.us-central1.run.app";
     }
     if (!window.__M3T4_AUTH_MODE__) {
-      window.__M3T4_AUTH_MODE__ = ["localhost", "127.0.0.1"].includes(location.hostname) ? "dev" : "firebase";
+      window.__M3T4_AUTH_MODE__ = isLocalM3t4 ? "dev" : "firebase";
     }
   </script>
   <script type="module">

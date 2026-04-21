@@ -1,10 +1,13 @@
 import {
+  DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_HASH,
+  DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID,
   DEVICE_WITNESS_RENDER_KERNEL_HASH,
   DEVICE_WITNESS_RENDER_KERNEL_ID,
   DEVICE_WITNESS_WEBRTC_KERNEL_HASH,
   DEVICE_WITNESS_WEBRTC_KERNEL_ID,
   DEVICE_WITNESS_WEBGPU_KERNEL_HASH,
   DEVICE_WITNESS_WEBGPU_KERNEL_ID,
+  runDeviceWitnessDerivedBufferReference,
   runDeviceWitnessRenderReference,
   runDeviceWitnessWebGpuReference,
 } from "./kernels/device-witness.js";
@@ -27,6 +30,7 @@ import {
 import { hashCanonical, randomId, randomToken } from "./plasma/hash.js";
 import type {
   ContentHash,
+  DerivedExecutionEvidence,
   ExecutionMode,
   GovernorMode,
   ReceiptDecision,
@@ -64,6 +68,7 @@ const KNOWN_KERNELS = [
   DEVICE_WITNESS_WEBGPU_KERNEL_ID,
   DEVICE_WITNESS_RENDER_KERNEL_ID,
   DEVICE_WITNESS_WEBRTC_KERNEL_ID,
+  DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID,
   PUBLIC_ARTIFACT_VERIFY_KERNEL_ID,
   SEED_SWEEP_KERNEL_ID,
 ];
@@ -122,6 +127,9 @@ export interface ConnectivityObservation {
   stunSuccessBucket?: string;
   turnNeedBucket?: string;
   signalingRttBucket?: string;
+  dataChannelBucket?: string;
+  dataWorkBucket?: string;
+  dataReceiptBucket?: string;
   visibilityBucket?: string;
   batteryBucket?: string;
   notes?: string;
@@ -159,6 +167,20 @@ export interface WebRtcPairRecord {
   offer?: unknown;
   answer?: unknown;
   candidates: WebRtcCandidateRecord[];
+}
+
+export interface WebRtcPairSummary {
+  pairId: string;
+  status: WebRtcPairRecord["status"];
+  createdAt: number;
+  expiresAt: number;
+  offererWorkerId: string;
+  answererWorkerId?: string;
+  hasOffer: boolean;
+  hasAnswer: boolean;
+  candidateCount: number;
+  peerCount: number;
+  lastCandidateAt?: number;
 }
 
 export interface ComputeChunk {
@@ -217,6 +239,7 @@ export interface ExecutionReceipt {
   governorMode?: GovernorMode;
   deviceClass?: string;
   adapterInfo?: Record<string, unknown>;
+  derived?: DerivedExecutionEvidence;
   computeMs: number;
   receivedAt: number;
   clientVersion?: string;
@@ -637,6 +660,60 @@ export class ComputeLabStore {
         minExecutions,
         minAgreeing,
         expectedOutputHash,
+      },
+      chunks: [chunk],
+    };
+    this.tasks.set(taskId, task);
+    return task;
+  }
+
+  seedDeviceWitnessDerivedBufferTask(input: {
+    seed?: number;
+    count?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+  } = {}): ComputeTask {
+    const seed = asInt(input.seed ?? 11, "seed");
+    const count = asInt(input.count ?? 128, "count");
+    if (count <= 0 || count > 4096) throw new Error("count must be 1..4096");
+    const taskId = randomId("task");
+    const minExecutions = Math.max(1, input.minExecutions ?? 1);
+    const minAgreeing = Math.min(minExecutions, Math.max(1, input.minAgreeing ?? 1));
+    const reference = runDeviceWitnessDerivedBufferReference({ seed, count });
+    const params = {
+      seed,
+      count,
+      sourceId: reference.sourceId,
+      regionId: reference.regionId,
+      outputId: reference.outputId,
+      sourceHash: reference.sourceHash.value,
+      regionHash: reference.regionHash.value,
+      producerKernelHash: reference.producerKernelHash.value,
+    };
+    const chunk: ComputeChunk = {
+      chunkId: `${taskId}-chunk-0`,
+      taskId,
+      ordinal: 0,
+      kind: DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID,
+      params,
+      kernelId: DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID,
+      kernelHash: DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_HASH,
+      inputHash: hashCanonical({ kind: DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID, params }),
+      artifactHash: reference.sourceHash,
+      expectedOutputHash: reference.outputHash,
+      status: "pending",
+    };
+    const task: ComputeTask = {
+      taskId,
+      kind: DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID,
+      status: "running",
+      createdAt: this.now(),
+      validationPolicy: {
+        determinismClass: "bit-exact",
+        validationMode: "expected-hash",
+        minExecutions,
+        minAgreeing,
+        expectedOutputHash: reference.outputHash,
       },
       chunks: [chunk],
     };
@@ -1100,6 +1177,27 @@ export class ComputeLabStore {
     return pair;
   }
 
+  webRtcPairSummaries(): WebRtcPairSummary[] {
+    this.expireWebRtcPairs();
+    return Array.from(this.webrtcPairs.values())
+      .map((pair) => ({
+        pairId: pair.pairId,
+        status: pair.status,
+        createdAt: pair.createdAt,
+        expiresAt: pair.expiresAt,
+        offererWorkerId: pair.offererWorkerId,
+        answererWorkerId: pair.answererWorkerId,
+        hasOffer: pair.offer !== undefined,
+        hasAnswer: pair.answer !== undefined,
+        candidateCount: pair.candidates.length,
+        peerCount: new Set(pair.candidates.map((candidate) => candidate.peerId).filter(Boolean)).size,
+        lastCandidateAt: pair.candidates.length
+          ? Math.max(...pair.candidates.map((candidate) => candidate.createdAt))
+          : undefined,
+      }))
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }
+
   summary(): {
     acceptAssignments: boolean;
     collections: typeof COMPUTE_COLLECTIONS;
@@ -1250,6 +1348,7 @@ export class ComputeLabStore {
       networkClassProfiles: this.networkClassProfiles(),
       publicStats: this.publicStats({ suppressSmall: false }),
       replayBadges: this.replayBadges().slice(0, 50),
+      webRtcPairList: this.webRtcPairSummaries().slice(0, 50),
       workerList: workers.map((worker) => ({
         workerId: worker.workerId,
         label: worker.label,
@@ -1521,7 +1620,7 @@ export class ComputeLabStore {
 
 function receiptMismatch(
   chunk: ComputeChunk,
-  input: Pick<ExecutionReceipt, "kernelId" | "kernelHash" | "inputHash" | "artifactHash">,
+  input: Pick<ExecutionReceipt, "kernelId" | "kernelHash" | "inputHash" | "artifactHash" | "outputHash" | "derived">,
 ): { decision: ReceiptDecision; reason: string } | null {
   if (input.kernelId !== chunk.kernelId || !hashesEqual(input.kernelHash, chunk.kernelHash)) {
     return { decision: "kernel-mismatch", reason: "kernel did not match assignment" };
@@ -1532,7 +1631,39 @@ function receiptMismatch(
   if (chunk.artifactHash && (!input.artifactHash || !hashesEqual(input.artifactHash, chunk.artifactHash))) {
     return { decision: "input-mismatch", reason: "artifact hash did not match assignment" };
   }
+  if (chunk.kind === DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID) {
+    const derived = input.derived;
+    const sourceId = stringParam(chunk.params.sourceId);
+    const regionId = stringParam(chunk.params.regionId);
+    const outputId = stringParam(chunk.params.outputId);
+    if (!derived || derived.contractVersion !== "derived-compute-extension.v0") {
+      return { decision: "malformed", reason: "derived evidence required" };
+    }
+    if (!hashesEqual(derived.sourceHashes?.[sourceId], hashParam(chunk.params.sourceHash))) {
+      return { decision: "input-mismatch", reason: "derived source hash mismatch" };
+    }
+    if (!hashesEqual(derived.bufferRegionHashes?.[regionId], hashParam(chunk.params.regionHash))) {
+      return { decision: "input-mismatch", reason: "derived buffer region hash mismatch" };
+    }
+    if (!hashesEqual(derived.producerKernelHashes?.[outputId], hashParam(chunk.params.producerKernelHash))) {
+      return { decision: "kernel-mismatch", reason: "derived producer kernel hash mismatch" };
+    }
+    if (!hashesEqual(derived.outputHashes?.[outputId], input.outputHash)) {
+      return { decision: "output-mismatch", reason: "derived output hash mismatch" };
+    }
+    if (!hashesEqual(derived.derivedOutputHash, input.outputHash)) {
+      return { decision: "output-mismatch", reason: "derived output hash mismatch" };
+    }
+  }
   return null;
+}
+
+function hashParam(value: unknown): ContentHash {
+  return { algorithm: "sha256", value: stringParam(value) };
+}
+
+function stringParam(value: unknown): string {
+  return typeof value === "string" ? value : String(value ?? "");
 }
 
 function hashesEqual(a: ContentHash | undefined, b: ContentHash | undefined): boolean {
@@ -1564,6 +1695,9 @@ function measurementTranscript(adapterInfo: Record<string, unknown> | undefined)
     "iceRelayBucket",
     "stunSuccessBucket",
     "turnNeedBucket",
+    "dataChannelBucket",
+    "dataWorkBucket",
+    "dataReceiptBucket",
     "visibilityBucket",
     "batteryBucket",
   ]) {
@@ -1653,6 +1787,9 @@ function connectivityObservationMap(observations: ConnectivityObservation[]): Re
     inc(out, "stunSuccessBucket", bucketOrUnknown(observation.stunSuccessBucket));
     inc(out, "turnNeedBucket", bucketOrUnknown(observation.turnNeedBucket));
     inc(out, "signalingRttBucket", bucketOrUnknown(observation.signalingRttBucket));
+    inc(out, "dataChannelBucket", bucketOrUnknown(observation.dataChannelBucket));
+    inc(out, "dataWorkBucket", bucketOrUnknown(observation.dataWorkBucket));
+    inc(out, "dataReceiptBucket", bucketOrUnknown(observation.dataReceiptBucket));
     inc(out, "visibilityBucket", bucketOrUnknown(observation.visibilityBucket));
     inc(out, "batteryBucket", bucketOrUnknown(observation.batteryBucket));
   }
@@ -1949,6 +2086,9 @@ function sanitizeConnectivityObservation(
     stunSuccessBucket: stringBucket(input.stunSuccessBucket),
     turnNeedBucket: stringBucket(input.turnNeedBucket),
     signalingRttBucket: stringBucket(input.signalingRttBucket),
+    dataChannelBucket: stringBucket(input.dataChannelBucket),
+    dataWorkBucket: stringBucket(input.dataWorkBucket),
+    dataReceiptBucket: stringBucket(input.dataReceiptBucket),
     visibilityBucket: stringBucket(input.visibilityBucket),
     batteryBucket: stringBucket(input.batteryBucket),
     notes: stringBucket(input.notes),
@@ -1995,14 +2135,26 @@ function asInt(value: unknown, label: string): number {
 
 export function referenceReceiptFields(chunk: ComputeChunk): Pick<
   ExecutionReceipt,
-  "kernelId" | "kernelHash" | "inputHash" | "artifactHash" | "outputHash" | "determinismClass" | "validationMode"
+  "kernelId" | "kernelHash" | "inputHash" | "artifactHash" | "outputHash" | "derived" | "determinismClass" | "validationMode"
 > {
+  const outputHash = chunk.expectedOutputHash;
+  const derived = chunk.kind === DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID
+    ? {
+      contractVersion: "derived-compute-extension.v0" as const,
+      sourceHashes: { [stringParam(chunk.params.sourceId)]: hashParam(chunk.params.sourceHash) },
+      bufferRegionHashes: { [stringParam(chunk.params.regionId)]: hashParam(chunk.params.regionHash) },
+      producerKernelHashes: { [stringParam(chunk.params.outputId)]: hashParam(chunk.params.producerKernelHash) },
+      outputHashes: { [stringParam(chunk.params.outputId)]: outputHash },
+      derivedOutputHash: outputHash,
+    }
+    : undefined;
   return {
     kernelId: chunk.kernelId,
     kernelHash: chunk.kernelHash,
     inputHash: chunk.inputHash,
     artifactHash: chunk.artifactHash,
-    outputHash: chunk.expectedOutputHash,
+    outputHash,
+    derived,
     determinismClass: "bit-exact",
     validationMode: "expected-hash",
   };

@@ -5,13 +5,20 @@
 // The canonical sim runs server-side; the browser receives sanitized frames.
 
 import {
-  USER_BUDGET,
-  HALLUCINATION_PER_OVERAGE,
+  MIN_CLEAN_SPEND,
   MAX_DERIVED_HALLUCINATION,
-  MAX_USER_SPEND,
   computedHallucinationForSpend,
   STAGES,
 } from "../lib/public-sim.js";
+import {
+  BUDGET,
+  HARD_CAP,
+  KNOBS as SHARED_KNOBS,
+  configFromState,
+  remainingCeilingForState,
+  scaledStateFromValues,
+  stateSpent,
+} from "../lib/build-config.js";
 import { setupCanvas, drawFrame, W, H } from "../lib/render.js";
 import { simulateBuildPreview } from "../lib/api.js";
 import { auth } from "../lib/auth.js";
@@ -21,8 +28,6 @@ import {
 } from "../lib/analytics.js";
 import presetRanking from "../data/preset-ranking.v1.json" with { type: "json" };
 
-const BUDGET = USER_BUDGET;
-const HARD_CAP = MAX_USER_SPEND ?? (BUDGET + MAX_DERIVED_HALLUCINATION / HALLUCINATION_PER_OVERAGE);
 const DEFAULT_PRESET_NAMES = [
   "standby", "blitz", "intern", "pivot",
   "unicorn", "incumbent", "operator", "oracle",
@@ -30,23 +35,7 @@ const DEFAULT_PRESET_NAMES = [
   "acolyte", "disruptor", "troll", "acquirer",
 ];
 
-const KNOBS = [
-  { id: "burnRate",   label: "burn rate",   desc: "swing eagerness + range",          range: [0, 1],    init: 25 },
-  { id: "moat",       label: "moat",        desc: "preferred distance (px)",          range: [0, 300],  init: 25 },
-  { id: "shipRate",   label: "ship rate",   desc: "token delivery priority",          range: [0, 1],    init: 35 },
-  { id: "foresight",  label: "foresight",   desc: "predict opp lookahead (s)",        range: [0, 0.25], init: 20 },
-  { id: "pivotSpeed", label: "pivot speed", desc: "retreat from active blades",       range: [0, 1],    init: 25 },
-  { id: "leverage",   label: "leverage",    desc: "vertical pref. (50 = neutral)",    range: [-1, 1],   init: 50 },
-  { id: "networking", label: "networking",  desc: "wall-jump / climb usage",          range: [0, 1],    init: 15 },
-  { id: "spite",      label: "spite",       desc: "selfish (100) vs denying (0)",     range: [-1, 1],   init: 50 },
-  { id: "greed",      label: "greed",       desc: "push delivery through danger",     range: [0, 1],    init: 20 },
-  { id: "pacing",     label: "pacing",      desc: "bursty rhythm (0=steady)",         range: [0, 1],    init: 15 },
-  { id: "cunning",    label: "cunning",     desc: "patient swing timing",             range: [0, 1],    init: 15 },
-  { id: "lift",       label: "lift",        desc: "commit to reachable high goals",   range: [0, 1],    init: 20 },
-  { id: "parry",      label: "parry",       desc: "counter-swing in clash windows",   range: [0, 1],    init: 10 },
-  { id: "chase",      label: "chase",       desc: "post-kill pursuit pressure",       range: [0, 1],    init: 15 },
-  { id: "discipline", label: "discipline",  desc: "route commitment / plan holding",  range: [0, 1],    init: 20 },
-];
+const KNOBS = SHARED_KNOBS.map(([id, label, desc, init]) => ({ id, label, desc, init }));
 
 // --- per-slot state ---
 // Neutral fallback used only if the preset-based generator fails (no
@@ -80,20 +69,6 @@ function seededUnit(seed, i) {
   x = Math.imul(x, 0x846ca68b) >>> 0;
   x ^= x >>> 16;
   return (x >>> 0) / 0x100000000;
-}
-
-function scaledStateFromValues(values, cap = BUDGET) {
-  const s = {};
-  let total = 0;
-  for (const k of KNOBS) {
-    s[k.id] = Math.max(0, Math.min(100, Math.round(values[k.id] ?? k.init)));
-    total += s[k.id];
-  }
-  if (total > cap) {
-    const scale = cap / total;
-    for (const k of KNOBS) s[k.id] = Math.round(s[k.id] * scale);
-  }
-  return s;
 }
 
 function presetDisplayState(name) {
@@ -131,7 +106,7 @@ const modes = ["user", "preset"]; // "user" | "preset"; no browser-executed brai
 
 // --- remote preview playback ---
 const SIM_HZ = 120;
-const STAGE_IDS = ["datacenter", "boardroom"];
+const STAGE_IDS = Object.keys(STAGES);
 const KEY_MAP = [
   { left: "KeyA", right: "KeyD", up: "KeyW", down: "KeyS", act: "KeyF", moveHint: "W/A/S/D", strikeHint: "F" },
   { left: "KeyL", right: "Quote", up: "KeyP", down: "Semicolon", act: "BracketLeft", moveHint: "P/L/;/'", strikeHint: "[" },
@@ -142,7 +117,7 @@ const GAME_KEYS = new Set([
 ]);
 const keyset = new Set();
 
-let stageId = STAGE_IDS[0];
+let stageId = STAGE_IDS.includes("datacenter") ? "datacenter" : STAGE_IDS[0];
 let testCtx = null;
 let testCanvas = null;
 let testRafId = 0;
@@ -272,27 +247,14 @@ function readKeyboard(idx) {
 }
 
 // --- config helpers ---
-function denormalize(k, ui) {
-  const [lo, hi] = k.range;
-  return lo + (hi - lo) * (Math.max(0, Math.min(100, ui)) / 100);
-}
 function slotSpent(slot) {
-  const s = slotStates[slot];
-  return KNOBS.reduce((sum, k) => sum + s[k.id], 0);
+  return stateSpent(slotStates[slot]);
 }
 function slotConfig(slot, opts = {}) {
-  const s = slotStates[slot];
-  const attrs = {};
-  for (const k of KNOBS) attrs[k.id] = +denormalize(k, s[k.id]).toFixed(4);
-  attrs.hallucination = computedHallucinationForSpend(slotSpent(slot));
-  const cfg = { attributes: attrs };
-  if (opts.runtimeId) cfg.id = `build-slot-${slot}`;
-  return cfg;
+  return configFromState(slotStates[slot], { id: opts.runtimeId ? `build-slot-${slot}` : "" });
 }
 function remainingCeilingFor(slot, id) {
-  const s = slotStates[slot];
-  const spentWithoutThis = slotSpent(slot) - (s[id] ?? 0);
-  return Math.max(0, Math.min(100, HARD_CAP - spentWithoutThis));
+  return remainingCeilingForState(slotStates[slot], id);
 }
 
 // ==================== MOUNT ====================
@@ -304,7 +266,7 @@ export function mount(root, { setStatus }) {
       <div class="page-header-row">
         <div class="page-title-stack">
           <h1 class="page-title">Tune</h1>
-          <div class="page-subtitle tight">Server preview. Not ranked until sent live.</div>
+          <div class="page-subtitle tight">server preview · not ranked until sent live</div>
         </div>
         <label class="inline-control"><span class="tight">stage</span>
           <select id="test-stage">${STAGE_IDS.map((s) => `<option value="${s}" ${s === stageId ? "selected" : ""}>${s}</option>`).join("")}</select>
@@ -315,7 +277,10 @@ export function mount(root, { setStatus }) {
       </div>
       <section class="context-card build-context-card">
         <div class="context-card-kicker">remote simulation</div>
-        <p>Tune policy tendencies here. Test fights run on the server and return replay frames; the browser only renders what comes back.</p>
+        <div class="context-card-copy">
+          <strong>Tune policy tendencies here.</strong>
+          <span>Test fights run on the server and return replay frames; the browser only renders what comes back.</span>
+        </div>
       </section>
 
       <div class="grid-3">
@@ -700,6 +665,7 @@ function renderKnobsForSlot(slot) {
 function updateSlot(slot) {
   const spent = slotSpent(slot);
   const over = Math.max(0, spent - BUDGET);
+  const under = Math.max(0, MIN_CLEAN_SPEND - spent);
   const remaining = Math.max(0, BUDGET - spent);
   const hallucination = computedHallucinationForSpend(spent);
 
@@ -714,16 +680,16 @@ function updateSlot(slot) {
 
   if (spentEl) {
     spentEl.textContent = spent;
-    spentEl.classList.toggle("is-over", over > 0);
+    spentEl.classList.toggle("is-over", over > 0 || under > 0);
   }
   if (barEl) barEl.style.width = Math.min(100, (spent / BUDGET) * 100) + "%";
   if (overEl) overEl.style.width = ((over / BUDGET) * 100) + "%";
   if (remEl) {
-    remEl.textContent = over > 0 ? `over by ${over}` : remaining;
-    remEl.classList.toggle("is-over", over > 0);
+    remEl.textContent = over > 0 ? `over by ${over}` : under > 0 ? `under by ${under}` : remaining;
+    remEl.classList.toggle("is-over", over > 0 || under > 0);
   }
   if (hallBlock && hallBar && hallVal) {
-    hallBlock.hidden = !(over > 0);
+    hallBlock.hidden = hallucination <= 0;
     hallBar.style.width = ((hallucination / MAX_DERIVED_HALLUCINATION) * 100) + "%";
     hallVal.textContent = `${hallucination} / ${MAX_DERIVED_HALLUCINATION}`;
   }
@@ -854,6 +820,7 @@ function currentPreviewFrame() {
 function emptyFrame() {
   return {
     tick: 0,
+    roundStartTick: 0,
     p0: { x: 300, y: 590, vx: 0, vy: 0, facing: 1, onGround: true, wall: 0, stun: 0, swipeT: 0, diveT: 0, lastClashTick: -9999, dead: false },
     p1: { x: 980, y: 590, vx: 0, vy: 0, facing: -1, onGround: true, wall: 0, stun: 0, swipeT: 0, diveT: 0, lastClashTick: -9999, dead: false },
     token: { exists: false, x: 0, y: 0, carrier: -1, dwellT: 0 },

@@ -10,7 +10,15 @@ export const DEVICE_WITNESS_RENDER_KERNEL_HASH = sha256(`${DEVICE_WITNESS_RENDER
 export const DEVICE_WITNESS_WEBRTC_KERNEL_ID = "device_witness.webrtc.v0";
 export const DEVICE_WITNESS_WEBRTC_KERNEL_HASH = sha256(`${DEVICE_WITNESS_WEBRTC_KERNEL_ID}:local-datachannel-transcript-v1`);
 
+export const DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID = "device_witness.derived_buffer.v0";
+export const DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_HASH = sha256(`${DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID}:synthetic-u32-region-v1`);
+
 export interface DeviceWitnessWebGpuParams {
+  seed: number;
+  count: number;
+}
+
+export interface DeviceWitnessDerivedBufferParams {
   seed: number;
   count: number;
 }
@@ -18,6 +26,15 @@ export interface DeviceWitnessWebGpuParams {
 export interface KernelOutput {
   outputBytes: Uint8Array;
   outputHash: ContentHash;
+}
+
+export interface DerivedBufferOutput extends KernelOutput {
+  sourceHash: ContentHash;
+  regionHash: ContentHash;
+  producerKernelHash: ContentHash;
+  sourceId: string;
+  regionId: string;
+  outputId: string;
 }
 
 export function runDeviceWitnessWebGpuReference(params: DeviceWitnessWebGpuParams): KernelOutput {
@@ -40,6 +57,31 @@ export function runDeviceWitnessRenderReference(): KernelOutput {
     96, 0, 64, 255,
     0, 0, 64, 255,
   ]));
+}
+
+export function runDeviceWitnessDerivedBufferReference(params: DeviceWitnessDerivedBufferParams): DerivedBufferOutput {
+  const seed = asInt(params.seed, "seed");
+  const count = asInt(params.count, "count");
+  if (count <= 0 || count > 4096) throw new Error("count must be 1..4096");
+  const sourceBytes = new Uint8Array(count * 4);
+  const outputBytes = new Uint8Array(count * 4);
+  const sourceView = new DataView(sourceBytes.buffer);
+  const outputView = new DataView(outputBytes.buffer);
+  for (let i = 0; i < count; i++) {
+    const x = witnessInput(seed, i);
+    sourceView.setUint32(i * 4, x, true);
+    outputView.setUint32(i * 4, (witnessTransform(x, i) ^ 0xa5a5a5a5) >>> 0, true);
+  }
+  const out = output(outputBytes);
+  return {
+    ...out,
+    sourceHash: sha256(sourceBytes),
+    regionHash: sha256(sourceBytes),
+    producerKernelHash: DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_HASH,
+    sourceId: "synthetic-frame",
+    regionId: "synthetic-u32-region",
+    outputId: "synthetic-derived-u32",
+  };
 }
 
 function witnessInput(seed: number, index: number): number {

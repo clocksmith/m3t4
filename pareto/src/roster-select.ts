@@ -326,9 +326,10 @@ function selectAnnealing(
   iterations: number,
   seed: Candidate[] | null,
   opts: SelectorOptions,
+  rngSeed: number,
 ): { roster: Candidate[]; eval: RosterEval; history: number[] } {
   const rng = (() => {
-    let s = 0x12345678;
+    let s = rngSeed >>> 0;
     return () => {
       s = (s * 1664525 + 1013904223) >>> 0;
       return s / 0x100000000;
@@ -392,6 +393,8 @@ async function main(): Promise<void> {
 
   const bankPath = args.bank ?? "/tmp/new-roster-v4.json";
   const iterations = parseInt(args.iterations ?? "2000", 10);
+  const restarts = parseInt(args.restarts ?? "1", 10);
+  const annealSeed = parseInt(args["anneal-seed"] ?? "305419896", 10);
   const poolCap = parseInt(args.poolCap ?? "80", 10);
   const workers = parseInt(args.workers ?? `${os.cpus().length}`, 10);
   const internalSeeds = parseInt(args["internal-seeds"] ?? "2", 10);
@@ -457,8 +460,21 @@ async function main(): Promise<void> {
     workers,
   });
 
-  console.error(`Starting annealing: ${iterations} iterations over ${pool.length}C16 subsets...`);
-  const result = selectAnnealing(pool, iterations, null, selectorOpts);
+  console.error(`Starting annealing: ${restarts} restart(s) × ${iterations} iterations over ${pool.length}C16 subsets...`);
+  let result = selectAnnealing(pool, iterations, null, selectorOpts, annealSeed);
+  console.error(
+    `  restart 1/${restarts}: fitness=${result.eval.fitness.toFixed(3)} ` +
+    `cycles=${result.eval.cycleDensity} long=${(result.eval.longRate * 100).toFixed(1)}% draw=${(result.eval.drawRate * 100).toFixed(1)}%`,
+  );
+  for (let r = 1; r < restarts; r++) {
+    const seed = (annealSeed + r * 0x9e3779b9) >>> 0;
+    const trial = selectAnnealing(pool, iterations, null, selectorOpts, seed);
+    console.error(
+      `  restart ${r + 1}/${restarts}: fitness=${trial.eval.fitness.toFixed(3)} ` +
+      `cycles=${trial.eval.cycleDensity} long=${(trial.eval.longRate * 100).toFixed(1)}% draw=${(trial.eval.drawRate * 100).toFixed(1)}%`,
+    );
+    if (trial.eval.fitness > result.eval.fitness) result = trial;
+  }
 
   console.log(`\n# Roster selection — ${iterations} annealing iterations\n`);
   console.log(`## Selected roster\n`);
@@ -496,6 +512,8 @@ async function main(): Promise<void> {
       ...selectorOpts,
       minShipRate,
       internalSeeds,
+      restarts,
+      annealSeed,
       longThresholdTicks: LONG_THRESHOLD_TICKS,
     },
     historyTail: result.history.slice(-50),

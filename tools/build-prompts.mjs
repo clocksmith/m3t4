@@ -170,10 +170,11 @@ function collectCharacterSheets() {
           `Exact canvas: ${stripGenW}x${stripGenH}. Exact grid: ${shared.cols} columns x ${rows.length} rows. Each cell is exactly ${shared.genCellW}x${shared.genCellH}.`,
           ...rowLines,
           `Invisible cell boundaries are exact vertical cuts every ${shared.genCellW}px and exact horizontal cuts every ${shared.genCellH}px; no visible grid lines, no separators, no gutters, no margins, no contact sheet labels.`,
+          `Hard containment rule: every populated pose must fit fully inside the central ${rawCoreW}x${rawCoreH} raw-pixel area of its own ${shared.genCellW}x${shared.genCellH} cell. Do not let hair, hands, feet, elbows, knees, clothing, or dive poses cross into neighboring cells.`,
           "Same character, same outfit, same scale, same camera-facing-right orientation in every populated cell.",
-          "Character-only animation frames: do not draw walls, floors, platforms, scenery, props, weapons, slash arcs, hit sparks, UI, or effects. Express actions through body pose only.",
+          "Character-only animation frames: draw only the character body and outfit. Do not draw walls, floors, platforms, ledges, contact surfaces, scenery, props, carried objects, coins, orbs, documents, folders, bags, weapons, slash arcs, hit sparks, UI, effects, visible grid lines, borders, or labels. Express all actions through body pose only.",
           `Character silhouette is a TALL HUMAN FIGURE with aspect approximately 1:2 — in the final ${shared.cellW}x${shared.cellH} cell, the figure should read as ~${Math.round(shared.cellW * 0.44)} pixels wide by ~${Math.round(shared.cellH * 0.81)} pixels tall (matches the sim hitbox aspect). At the raw ${shared.genCellW}x${shared.genCellH} cell size, center the body with about ${Math.round((shared.genCellW - shared.genCellW * 0.44) / 2)}px pure magenta padding on each side and about ${Math.round((shared.genCellH - shared.genCellH * 0.81) / 2)}px magenta padding above the head and below the feet. Do NOT draw a square silhouette — human figures are roughly 1:2 tall.`,
-          "Do not draw weapons on this strip.",
+          "Game objects are rendered separately by the engine; never include a Proof Core, Demand Node, weapon, folder, document, coin, orb, wall, or platform in the character strip.",
         ].filter(Boolean).join("\n"),
         grid: {
           cols: shared.cols,

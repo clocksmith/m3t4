@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  HALLUCINATION_PER_UNDERSPEND,
   MAX_DERIVED_HALLUCINATION,
   MAX_USER_SPEND,
+  MIN_CLEAN_SPEND,
   USER_BUDGET,
   USER_KNOBS,
   computedHallucinationForSpend,
@@ -39,6 +41,42 @@ test("validateUserSubmission accepts configs at the hard budget", () => {
   assert.equal(validation.spent, USER_BUDGET);
   assert.equal(validation.hallucination, 0);
   assert.equal(validation.config?.attributes.hallucination, 0);
+});
+
+test("validateUserSubmission derives hallucination for deeply under-spent configs", () => {
+  const cfg = cfgFromUi({
+    burnRate: 20,
+    shipRate: 20,
+    lift: 20,
+    discipline: 30,
+  });
+
+  const validation = validateUserSubmission(cfg);
+
+  assert.equal(validation.ok, true, validation.errors.join("; "));
+  assert.equal(validation.spent, 90);
+  assert.equal(validation.hallucination, (MIN_CLEAN_SPEND - 90) * HALLUCINATION_PER_UNDERSPEND);
+  assert.equal(validation.config?.attributes.hallucination, validation.hallucination);
+});
+
+test("validateUserSubmission keeps the clean band hallucination-free", () => {
+  const cfg = cfgFromUi({
+    burnRate: 60,
+    shipRate: 60,
+    lift: 60,
+  });
+
+  const validation = validateUserSubmission(cfg);
+
+  assert.equal(validation.ok, true, validation.errors.join("; "));
+  assert.equal(validation.spent, MIN_CLEAN_SPEND);
+  assert.equal(validation.hallucination, 0);
+});
+
+test("computedHallucinationForSpend ramps under-spend below the clean band", () => {
+  assert.equal(computedHallucinationForSpend(MIN_CLEAN_SPEND), 0);
+  assert.equal(computedHallucinationForSpend(MIN_CLEAN_SPEND - 1), HALLUCINATION_PER_UNDERSPEND);
+  assert.equal(computedHallucinationForSpend(0), MAX_DERIVED_HALLUCINATION);
 });
 
 test("validateUserSubmission accepts capped over-budget configs when hallucination matches", () => {

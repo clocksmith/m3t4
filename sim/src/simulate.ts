@@ -1088,6 +1088,7 @@ export function stepWorld(w: World, actA: Action, actB: Action): StepResult {
 export function worldToFrame(w: World): TraceFrame {
   return {
     tick: w.tick,
+    roundStartTick: w.roundStartTick,
     p0: fighterToFrame(w.fighters[0]),
     p1: fighterToFrame(w.fighters[1]),
     token: w.gold
@@ -1139,6 +1140,7 @@ export interface TraceFighterFrame {
 
 export interface TraceFrame {
   tick: number;
+  roundStartTick: number;
   p0: TraceFighterFrame;
   p1: TraceFighterFrame;
   token: { exists: boolean; x: number; y: number; carrier: 0 | 1 | -1; dwellT: number };
@@ -1178,6 +1180,7 @@ export function simulateTrace(opts: SimulateOptions): TraceResult {
 
   const snap = (): TraceFrame => ({
     tick: w.tick,
+    roundStartTick: w.roundStartTick,
     p0: fighterToFrame(w.fighters[0]),
     p1: fighterToFrame(w.fighters[1]),
     token: w.gold ? { exists: true, x: w.gold.x, y: w.gold.y, carrier: w.gold.carrier, dwellT: w.gold.dwellT } : { exists: false, x: 0, y: 0, carrier: -1, dwellT: 0 },

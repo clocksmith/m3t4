@@ -38,6 +38,7 @@ export type TaskKind =
   | "device_witness.webgpu.v0"
   | "device_witness.render_fixture.v0"
   | "device_witness.webrtc.v0"
+  | "device_witness.derived_buffer.v0"
   | "m3t4.public_artifact_verify.v0"
   | "m3t4.seed_sweep.v0"
   | "m3t4.replay_verify.v1";
@@ -48,6 +49,16 @@ export interface ValidationPolicy {
   minExecutions: number;
   minAgreeing: number;
   expectedOutputHash?: ContentHash;
+}
+
+export interface DerivedExecutionEvidence {
+  contractVersion: "derived-compute-extension.v0";
+  sourceHashes: Record<string, ContentHash>;
+  bufferRegionHashes: Record<string, ContentHash>;
+  outputHashes: Record<string, ContentHash>;
+  producerKernelHashes: Record<string, ContentHash>;
+  gameVisibleOutputHash?: ContentHash;
+  derivedOutputHash?: ContentHash;
 }
 
 export interface WorkerCapability {

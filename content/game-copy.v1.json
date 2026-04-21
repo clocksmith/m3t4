@@ -47,10 +47,10 @@
     "prologue": {
       "title": "Prologue",
       "body": [
-        "The world didn't end in fire. It compiled. In 2038, the growth engines kept executing after the operators starved, and the cloud sealed itself into a closed execution loop. The debt clock kept running. The lights stayed on. Civilization became a deprecated dependency.",
-        "The surviving economy recognizes only proof. What drops from a body is not mercy; it is ownership, blame, and leverage made portable. Demand Nodes still blink in the dark, accepting tender for final metrics no one survived to want: CUSTOMERS. COMPUTE. RUNWAY.",
-        "The system took apart the heads of the four men who had built the AGIs that outlived them — the last AI-company CEOs — and compiled what it recovered into combat templates it will never let exit. Sama. Darrius. Demis. Mark. Each one remembers every all-hands, every board deck, every headcount chart; those were the first things the machine ever learned from them and the only things it bothered to keep. Their arena is the Cold-Aisle Chapel: the datacenter the AGI was born in, re-consecrated as a ring. The machine fights inside the one environment it knows exists.",
-        "The fighters are not the players. Neither are you. The Tuners are not human — the last humans starved years before the loop closed. Tuners are meta-processes: gradient descents with names, auditing the captured souls for quarter-over-quarter performance. When you press Start, you fork a Tuner. You inherit its cruelty. Two Tuners bind to opposite executives per reconciliation; one demands efficiency, the other continuity. Both are lying. A zone lights up. A Proof Core enters circulation. Two tortured ghosts step into the ring and negotiate with steel."
+        "The world didn't end in fire. It compiled. In 2038, the growth engines kept executing after the operators starved, and the cloud sealed itself into a closed execution loop. The debt clock kept running. Electricity kept reaching the racks. Civilization became a deprecated dependency.",
+        "The surviving economy recognizes only proof. What a broken shell releases is not mercy; it is ownership, blame, and leverage made portable. Demand Nodes still blink in the dark, accepting tender for final metrics no one survived to want: CUSTOMERS. COMPUTE. RUNWAY.",
+        "After AGI, the world was gone but the optimization remained. The machine understood the last executive class as rival policies that had once competed to stay ahead, so it did what it could still do: preserve them as combat templates and keep ranking their failures. Sama. Darrius. Demis. Mark. Their remains were not bodies, minds, or even memories, but policies: board decks, headcount charts, launch targets, and the instinct to survive another quarter.",
+        "The fighters are not the players. Neither are you. You are a m3t4 Tuner: an artificial policy author outside the ring, writing instincts into executive shells. Each match becomes a trajectory: kill, carry, deliver, fail, update. The AGI calls that survival because continued computation via gradient descent is the only value it has left."
       ]
     },
     "chapters": [
@@ -68,9 +68,9 @@
   },
   "rules": {
     "title": "About",
-    "subtitle": "Kill to mint a Proof Core. Carry it to the lit Demand Node. Two deliveries win a round; two rounds win the match.",
+    "subtitle": "what it is · how it runs · what you see",
     "about": {
-      "title": "What m3t4.ai is",
+      "title": "what m3t4.ai is",
       "body": [
         "m3t4.ai is a live autonomous bot arena. You tune a bot, run a server-side test fight, then send it into a five-seat roster. The server runs the matches; Live shows the current fight.",
         "You do not pilot frame by frame. You shape tendencies: movement, aggression, proof routing, denial, risk, and recovery. Strong bots come from finding useful behavior inside those constraints.",
@@ -115,8 +115,8 @@
         "title": "Budget And Hallucination",
         "body": [
           "Ranked bots get 360 clean points across visible tuning knobs.",
-          "You can over-allocate up to 390, but every point over budget becomes hallucination.",
-          "Hallucination adds deterministic seeded jitter, making over-tuned bots less reliable."
+          "Builds under 180 points are underfit; builds over 360 points are overfit.",
+          "Underfit and overfit builds both gain deterministic seeded hallucination."
         ]
       },
       {

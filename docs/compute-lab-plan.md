@@ -3,6 +3,35 @@
 This document is the canonical plan for introducing `plasma-lab` as an
 isolated, opt-in volunteer compute sidecar for m3t4.
 
+## Current Name And Claim
+
+The current implementation is **Receipt-Carrying Spectator Compute**:
+
+- isolated sidecar service
+- opt-in browser worker
+- renderer-budgeted slack execution
+- public/advisory inputs only
+- assignment-bound receipts
+- quorum or expected-hash validation
+- no ranked authority
+
+It is also fair to call the current shape **Chaperoned Sidecar Compute**.
+
+Do not describe the current implementation as fused-kernel, zero-copy,
+shared-buffer, or "every game frame is a science frame." The browser worker
+creates its own task inputs and execution buffers, and the renderer keeps first
+claim on the device. Plasma-lab can collect receipts and accepted summaries,
+but those receipts are sidecar evidence until a later derived-compute contract
+binds source frame/artifact hashes, shared buffer regions, producer kernels,
+and derived output hashes.
+
+Future names are reserved for later milestones:
+
+- **Receipt-Verified Shared-Buffer Compute**: public/redacted buffer regions are
+  explicitly shared under a Plasma contract and receipts bind region hashes.
+- **Fused-Kernel Chaperoned Compute**: one admitted dispatch/pass produces both
+  a game-visible result and a useful derived output under dual validation.
+
 ## Boundary
 
 The game is authoritative. The compute lab is advisory.
@@ -22,6 +51,9 @@ The compute lab must never receive or control:
 - roster mutation authority
 - match scheduling authority
 - Live stream dependency
+- shared render/game buffers unless a Plasma derived-compute contract declares
+  public/redacted buffer regions, lifetimes, source hashes, and validation
+  policy
 
 ## Planes
 
@@ -68,6 +100,11 @@ Never:
 ```text
 game <-> compute lab <-> ranked authority
 ```
+
+Shared-buffer or fused-kernel experiments, when they exist, must remain
+non-ranked and non-private until Plasma has a derived-compute extension and the
+m3t4 implementation has a public fixture proving it does not expose hidden
+brain logic, private roster configs, auth material, or mutable ranked state.
 
 ## Service
 
@@ -216,6 +253,7 @@ GET  /compute/tasks/next
 POST /compute/assignments/accept
 POST /compute/receipts
 GET  /compute/status
+GET  /compute/healthz
 GET  /compute/use-cases
 GET  /compute/public/stats
 GET  /compute/public/replay-badges/:matchId
@@ -228,6 +266,7 @@ POST /compute/admin/assignments
 POST /compute/admin/tasks/seed
 POST /compute/admin/tasks/device-witness-webgpu
 POST /compute/admin/tasks/device-witness-render
+POST /compute/admin/tasks/device-witness-derived-buffer
 POST /compute/admin/tasks/device-witness-webrtc
 POST /compute/admin/tasks/public-artifact
 POST /compute/admin/tasks/seed-sweep
@@ -248,6 +287,10 @@ capabilities, connectivity observations, and aggregate maps are not public.
 `/compute/public/stats` is privacy-suppressed until the worker count passes the
 configured anonymity floor. Replay badges expose artifact verification status,
 not who computed it.
+
+The admin dashboard includes a redacted WebRTC pair list for staff pairing
+tests: pair status, offer/answer presence, candidate counts, and expiry. It
+must not expose pair tokens or raw SDP/candidate payloads in summary views.
 
 HTTP WebRTC signaling endpoints, enabled only by
 `FEATURE_COMPUTE_WEBRTC_SIGNALING=true`:
@@ -581,6 +624,7 @@ Admin seed routes:
 ```text
 POST /compute/admin/tasks/device-witness-webgpu
 POST /compute/admin/tasks/device-witness-render
+POST /compute/admin/tasks/device-witness-derived-buffer
 POST /compute/admin/tasks/device-witness-webrtc
 ```
 

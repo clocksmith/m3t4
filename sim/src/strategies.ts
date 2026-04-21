@@ -1,6 +1,6 @@
-// Named strategy presets — v13 refined roster. Names are preserved from
-// the prior roster; attributes come from legal-HOF selection with a
-// ship-rate floor against the v13 behavior.
+// Named strategy presets — v13 stall-aware refined roster. Names are
+// preserved from the prior roster; attributes come from legal-HOF
+// selection with ship/lift floors and long/draw penalties.
 
 import type { BrainConfig } from "./types.js";
 
@@ -25,9 +25,19 @@ export const STRATEGY_NAMES = [
 export type StrategyName = (typeof STRATEGY_NAMES)[number];
 
 export const STRATEGIES: Record<StrategyName, BrainConfig> = {
-  // v13 refined source=g4-x11 spent=347
+  // v13 stall-aware source=g10-m21 spent=278
   standby: {
     id: "standby",
+    attributes: {
+      burnRate: 0, moat: 27, shipRate: 0.81, foresight: 0,
+      pivotSpeed: 0, leverage: -1, networking: 0, spite: -1,
+      greed: 0, pacing: 0.06, cunning: 0, lift: 0,
+      parry: 0.95, chase: 0.82, discipline: 0.05, hallucination: 0,
+    },
+  },
+  // v13 stall-aware source=g4-x11 spent=347
+  blitz: {
+    id: "blitz",
     attributes: {
       burnRate: 0.09, moat: 0, shipRate: 0.93, foresight: 0.155,
       pivotSpeed: 0.09, leverage: -0.92, networking: 0.17, spite: 0.8,
@@ -35,19 +45,19 @@ export const STRATEGIES: Record<StrategyName, BrainConfig> = {
       parry: 0.22, chase: 0.14, discipline: 0.22, hallucination: 0,
     },
   },
-  // v13 refined source=g1-m3 spent=294
-  blitz: {
-    id: "blitz",
-    attributes: {
-      burnRate: 0.04, moat: 51, shipRate: 0.59, foresight: 0.0525,
-      pivotSpeed: 0.03, leverage: -0.88, networking: 0.13, spite: -0.5,
-      greed: 0.15, pacing: 0.16, cunning: 0.07, lift: 0.01,
-      parry: 0.17, chase: 0.03, discipline: 0.87, hallucination: 0,
-    },
-  },
-  // v13 refined source=g11-axis_anchor-14 spent=282
+  // v13 stall-aware source=g6-x12 spent=279
   intern: {
     id: "intern",
+    attributes: {
+      burnRate: 0, moat: 0, shipRate: 0.46, foresight: 0,
+      pivotSpeed: 0.98, leverage: -1, networking: 0.07, spite: 0.72,
+      greed: 0, pacing: 0, cunning: 0.03, lift: 0.22,
+      parry: 0.17, chase: 0, discipline: 0, hallucination: 0,
+    },
+  },
+  // v13 stall-aware source=g11-axis_anchor-14 spent=282
+  pivot: {
+    id: "pivot",
     attributes: {
       burnRate: 0.26, moat: 3, shipRate: 0.45, foresight: 0.05,
       pivotSpeed: 0.01, leverage: -0.92, networking: 0.1, spite: -0.92,
@@ -55,27 +65,17 @@ export const STRATEGIES: Record<StrategyName, BrainConfig> = {
       parry: 0.17, chase: 0.13, discipline: 0.01, hallucination: 0,
     },
   },
-  // v13 refined source=g2-m20 spent=318
-  pivot: {
-    id: "pivot",
-    attributes: {
-      burnRate: 0, moat: 66, shipRate: 0.61, foresight: 0.07,
-      pivotSpeed: 0.02, leverage: -0.84, networking: 0.16, spite: -0.8,
-      greed: 0.04, pacing: 0.27, cunning: 0.09, lift: 0.06,
-      parry: 0.08, chase: 0.17, discipline: 1, hallucination: 0,
-    },
-  },
-  // v13 refined source=g11-x18 spent=324
+  // v13 stall-aware source=g5-m17 spent=337
   unicorn: {
     id: "unicorn",
     attributes: {
-      burnRate: 0, moat: 27, shipRate: 0.81, foresight: 0,
-      pivotSpeed: 0.43, leverage: -1, networking: 0.25, spite: 0.34,
-      greed: 0, pacing: 0.06, cunning: 0, lift: 0,
-      parry: 0, chase: 0.82, discipline: 0.11, hallucination: 0,
+      burnRate: 0, moat: 0, shipRate: 0.93, foresight: 0.1425,
+      pivotSpeed: 0.09, leverage: -0.92, networking: 0, spite: 0.8,
+      greed: 0, pacing: 0, cunning: 0, lift: 0.05,
+      parry: 0.48, chase: 0.26, discipline: 0.05, hallucination: 0,
     },
   },
-  // v13 refined source=g10-s31 spent=360
+  // v13 stall-aware source=g8-dirichlet_balanced-8 spent=360
   incumbent: {
     id: "incumbent",
     attributes: {
@@ -85,49 +85,69 @@ export const STRATEGIES: Record<StrategyName, BrainConfig> = {
       parry: 0.69, chase: 0, discipline: 0, hallucination: 0,
     },
   },
-  // v13 refined source=g10-m10 spent=278
+  // v13 stall-aware source=g8-m25 spent=347
   operator: {
     id: "operator",
     attributes: {
-      burnRate: 0, moat: 27, shipRate: 0.81, foresight: 0,
-      pivotSpeed: 0, leverage: -1, networking: 0, spite: -1,
-      greed: 0, pacing: 0.01, cunning: 0, lift: 0.05,
-      parry: 1, chase: 0.82, discipline: 0, hallucination: 0,
+      burnRate: 0.09, moat: 0, shipRate: 0.93, foresight: 0.155,
+      pivotSpeed: 0.06, leverage: -0.86, networking: 0.17, spite: 0.8,
+      greed: 0, pacing: 0, cunning: 0, lift: 0.05,
+      parry: 0.22, chase: 0.14, discipline: 0.22, hallucination: 0,
     },
   },
-  // v13 refined source=g1-m14 spent=360
+  // v13 stall-aware source=g2-m20 spent=318
   oracle: {
     id: "oracle",
     attributes: {
-      burnRate: 0, moat: 54, shipRate: 0.37, foresight: 0.1025,
-      pivotSpeed: 0.32, leverage: -0.9, networking: 0, spite: -0.62,
-      greed: 0.06, pacing: 0.17, cunning: 0.49, lift: 0.92,
-      parry: 0.07, chase: 0.22, discipline: 0.15, hallucination: 0,
+      burnRate: 0, moat: 66, shipRate: 0.61, foresight: 0.07,
+      pivotSpeed: 0.02, leverage: -0.84, networking: 0.16, spite: -0.8,
+      greed: 0.04, pacing: 0.27, cunning: 0.09, lift: 0.06,
+      parry: 0.08, chase: 0.17, discipline: 1, hallucination: 0,
     },
   },
-  // v13 refined source=g8-dirichlet_balanced-8 spent=360
+  // v13 stall-aware source=g1-m3 spent=294
   shipper: {
     id: "shipper",
     attributes: {
-      burnRate: 0.55, moat: 93, shipRate: 0.62, foresight: 0,
-      pivotSpeed: 0, leverage: -1, networking: 0.48, spite: -0.5,
+      burnRate: 0.04, moat: 51, shipRate: 0.59, foresight: 0.0525,
+      pivotSpeed: 0.03, leverage: -0.88, networking: 0.13, spite: -0.5,
+      greed: 0.15, pacing: 0.16, cunning: 0.07, lift: 0.01,
+      parry: 0.17, chase: 0.03, discipline: 0.87, hallucination: 0,
+    },
+  },
+  // v13 stall-aware source=g10-m11 spent=360
+  moonshot: {
+    id: "moonshot",
+    attributes: {
+      burnRate: 0.55, moat: 33, shipRate: 0.62, foresight: 0,
+      pivotSpeed: 0, leverage: -0.6, networking: 0.48, spite: -0.5,
       greed: 0, pacing: 0, cunning: 0, lift: 0.7,
       parry: 0.69, chase: 0, discipline: 0, hallucination: 0,
     },
   },
-  // v13 refined source=g6-x12 spent=279
-  moonshot: {
-    id: "moonshot",
+  // v13 stall-aware source=g4-m19 spent=258
+  regulatory: {
+    id: "regulatory",
     attributes: {
-      burnRate: 0, moat: 0, shipRate: 0.46, foresight: 0,
-      pivotSpeed: 0.98, leverage: -1, networking: 0.07, spite: 0.72,
-      greed: 0, pacing: 0, cunning: 0.03, lift: 0.22,
+      burnRate: 0, moat: 51, shipRate: 0.46, foresight: 0.06,
+      pivotSpeed: 0.88, leverage: -0.88, networking: 0.13, spite: -0.3,
+      greed: 0, pacing: 0, cunning: 0.07, lift: 0.05,
       parry: 0.17, chase: 0, discipline: 0, hallucination: 0,
     },
   },
-  // v13 refined source=g1-m22 spent=327
-  regulatory: {
-    id: "regulatory",
+  // v13 stall-aware source=g11-x17 spent=255
+  founder: {
+    id: "founder",
+    attributes: {
+      burnRate: 0, moat: 0, shipRate: 0.81, foresight: 0.0225,
+      pivotSpeed: 0, leverage: -0.5504, networking: 0, spite: -1,
+      greed: 0, pacing: 0.06, cunning: 0, lift: 0.2248,
+      parry: 1, chase: 0, discipline: 0.1405, hallucination: 0,
+    },
+  },
+  // v13 stall-aware source=g2-x28 spent=327
+  acolyte: {
+    id: "acolyte",
     attributes: {
       burnRate: 0.13, moat: 66, shipRate: 0.93, foresight: 0.0675,
       pivotSpeed: 0.07, leverage: -0.92, networking: 0.07, spite: -0.52,
@@ -135,54 +155,34 @@ export const STRATEGIES: Record<StrategyName, BrainConfig> = {
       parry: 0.26, chase: 0.26, discipline: 0.03, hallucination: 0,
     },
   },
-  // v13 refined source=g10-m8 spent=278
-  founder: {
-    id: "founder",
-    attributes: {
-      burnRate: 0, moat: 0, shipRate: 0.81, foresight: 0.0225,
-      pivotSpeed: 0, leverage: -1, networking: 0, spite: -1,
-      greed: 0, pacing: 0.06, cunning: 0, lift: 0,
-      parry: 1, chase: 0.82, discipline: 0, hallucination: 0,
-    },
-  },
-  // v13 refined source=g11-x24 spent=339
-  acolyte: {
-    id: "acolyte",
-    attributes: {
-      burnRate: 0.55, moat: 93, shipRate: 0.62, foresight: 0.0225,
-      pivotSpeed: 0, leverage: -1, networking: 0, spite: -0.5,
-      greed: 0, pacing: 0.06, cunning: 0, lift: 0,
-      parry: 0.69, chase: 0.82, discipline: 0, hallucination: 0,
-    },
-  },
-  // v13 refined source=g10-m21 spent=278
+  // v13 stall-aware source=g9-dirichlet_sparse-17 spent=278
   disruptor: {
     id: "disruptor",
     attributes: {
       burnRate: 0, moat: 27, shipRate: 0.81, foresight: 0,
       pivotSpeed: 0, leverage: -1, networking: 0, spite: -1,
       greed: 0, pacing: 0.06, cunning: 0, lift: 0,
-      parry: 0.95, chase: 0.82, discipline: 0.05, hallucination: 0,
+      parry: 1, chase: 0.82, discipline: 0, hallucination: 0,
     },
   },
-  // v13 refined source=g5-m17 spent=337
+  // v13 stall-aware source=g11-x18 spent=324
   troll: {
     id: "troll",
     attributes: {
-      burnRate: 0, moat: 0, shipRate: 0.93, foresight: 0.1425,
-      pivotSpeed: 0.09, leverage: -0.92, networking: 0, spite: 0.8,
-      greed: 0, pacing: 0, cunning: 0, lift: 0.05,
-      parry: 0.48, chase: 0.26, discipline: 0.05, hallucination: 0,
+      burnRate: 0, moat: 27, shipRate: 0.81, foresight: 0,
+      pivotSpeed: 0.43, leverage: -1, networking: 0.25, spite: 0.34,
+      greed: 0, pacing: 0.06, cunning: 0, lift: 0,
+      parry: 0, chase: 0.82, discipline: 0.11, hallucination: 0,
     },
   },
-  // v13 refined source=g9-dirichlet_sparse-17 spent=278
+  // v13 stall-aware source=g5-x30 spent=360
   acquirer: {
     id: "acquirer",
     attributes: {
-      burnRate: 0, moat: 27, shipRate: 0.81, foresight: 0,
-      pivotSpeed: 0, leverage: -1, networking: 0, spite: -1,
-      greed: 0, pacing: 0.06, cunning: 0, lift: 0,
-      parry: 1, chase: 0.82, discipline: 0, hallucination: 0,
+      burnRate: 0, moat: 89.2562, shipRate: 0.9124, foresight: 0.0446,
+      pivotSpeed: 0.9322, leverage: -1, networking: 0, spite: -0.6033,
+      greed: 0.0298, pacing: 0, cunning: 0, lift: 0,
+      parry: 0.9025, chase: 0, discipline: 0.1488, hallucination: 0,
     },
   },
 };

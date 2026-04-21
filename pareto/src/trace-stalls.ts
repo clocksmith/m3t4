@@ -17,6 +17,7 @@
 //     --exploits pareto/exploits/v8-brain-v3 pareto/exploits/v7-brain-v3 \
 //     --hof /tmp/new-roster-v8.hof.json --hof-top 20 \
 //     --random 10 --seeds 3 --workers 8 \
+//     --stage datacenter \
 //     --top-long 20 --top-draw 20 \
 //     --out /tmp/trace-stalls-v8.json
 
@@ -56,9 +57,15 @@ const RANDOM_N = parseInt((args.random as string) ?? "10", 10);
 const TOP_LONG = parseInt((args["top-long"] as string) ?? "20", 10);
 const TOP_DRAW = parseInt((args["top-draw"] as string) ?? "20", 10);
 const OUT = (args.out as string) ?? "/tmp/trace-stalls.json";
+const STAGE_FILTER = stringList(args.stage);
 
 const MAX_TICKS = ROUND_TIMER_MAX_TICKS * ROUNDS_TO_WIN_MATCH * 2;
 const LONG_THRESHOLD_TICKS = Math.floor(MAX_TICKS * 0.9);
+
+function stringList(value: string | string[] | undefined): string[] {
+  if (value === undefined) return [];
+  return Array.isArray(value) ? value : [value];
+}
 
 // ---------------------------- pool assembly (same as meta-health) ----------------------------
 
@@ -130,7 +137,14 @@ for (const [f, n] of Object.entries(counts)) console.error(`  ${f}: ${n}`);
 
 // ---------------------------- run matches with telemetry ----------------------------
 
-const stages = Object.values(STAGES);
+const stages = Object.values(STAGES).filter((s) => STAGE_FILTER.length === 0 || STAGE_FILTER.includes(s.id));
+if (stages.length === 0) {
+  const valid = Object.values(STAGES).map((s) => s.id).join(", ");
+  throw new Error(`no stages matched --stage ${STAGE_FILTER.join(", ")}; valid stages: ${valid}`);
+}
+if (STAGE_FILTER.length > 0) {
+  console.error(`[trace-stalls] stages: ${stages.map((s) => s.id).join(", ")}`);
+}
 interface MatchRecord {
   i: number; j: number;
   stageId: string; seed: number;
@@ -140,6 +154,9 @@ interface MatchRecord {
   telemetry: [FighterTelemetry, FighterTelemetry];
 }
 const records: MatchRecord[] = [];
+
+const allStageIds = Object.values(STAGES).map((s) => s.id);
+const stageIndex = new Map(allStageIds.map((id, i) => [id, i]));
 
 // Serial execution with telemetry — runMatches worker pool doesn't
 // thread telemetry back. For a diagnostic run this is fine; if we need
@@ -151,7 +168,9 @@ for (let i = 0; i < pool.length; i++) {
   for (let j = i + 1; j < pool.length; j++) {
     for (const stage of stages) {
       for (let s = 0; s < SEEDS; s++) {
-        const seed = ((s * 101 + stage.id.length * 37 + totalRun * 13) | 0) >>> 0;
+        const pairOrdinal = i * pool.length + j;
+        const stOrdinal = stageIndex.get(stage.id) ?? 0;
+        const seed = ((s * 101 + stage.id.length * 37 + (pairOrdinal * allStageIds.length + stOrdinal) * 13) | 0) >>> 0;
         const r = simulate({
           stage, brainA: pool[i].cfg, brainB: pool[j].cfg, seed,
           telemetry: true,
@@ -272,6 +291,7 @@ const topDraws = draws.slice().sort((a, b) => b.ticks - a.ticks).slice(0, TOP_DR
 const report = {
   generatedAt: new Date().toISOString(),
   pool: { composition: counts, total: pool.length },
+  stages: stages.map((s) => s.id),
   totalMatches: records.length,
   thresholds: { longTicks: LONG_THRESHOLD_TICKS, maxTicks: MAX_TICKS },
   summary: {
@@ -295,6 +315,7 @@ console.error(`[trace-stalls] wrote ${OUT}\n`);
 
 // Pretty print
 console.log(`# Trace stalls report\n`);
+console.log(`Stages: ${stages.map((s) => s.id).join(", ")}`);
 console.log(`Total matches: ${records.length}`);
 console.log(`Long (≥90% cap): ${longs.length}`);
 console.log(`Draws: ${draws.length}`);

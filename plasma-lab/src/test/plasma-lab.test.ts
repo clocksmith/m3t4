@@ -42,6 +42,7 @@ const webgpuCapability: WorkerCapability = {
     "device_witness.webgpu.v0",
     "device_witness.render_fixture.v0",
     "device_witness.webrtc.v0",
+    "device_witness.derived_buffer.v0",
   ],
   runtimeSurfaces: ["browser-js", "browser-webgpu"],
   deviceClass: "desktop-high",
@@ -372,6 +373,9 @@ test("device witness connectivity observations stay bucketed and aggregate for a
       iceRelayBucket: "no",
       stunSuccessBucket: "unconfigured",
       turnNeedBucket: "unknown",
+      dataChannelBucket: "open",
+      dataWorkBucket: "request-ok",
+      dataReceiptBucket: "ok",
       visibilityBucket: "visible",
       batteryBucket: "charging",
       notes: "opaque raw candidate should be discarded 192.168.1.10",
@@ -383,6 +387,7 @@ test("device witness connectivity observations stay bucketed and aggregate for a
   assert.equal(dashboard.connectivityMap.transport["webrtc-local"], 1);
   assert.equal(dashboard.connectivityMap.iceHostBucket.yes, 1);
   assert.equal(dashboard.connectivityMap.networkTypeBucket["4g"], 1);
+  assert.equal(dashboard.connectivityMap.dataWorkBucket["request-ok"], 1);
 });
 
 test("Device Witness WebGPU challenge validates as an assignment-bound receipt", () => {
@@ -447,6 +452,70 @@ test("Device Witness render fixture validates as an assignment-bound receipt", (
   assert.equal(store.getTask(task.taskId)?.status, "complete");
 });
 
+test("Device Witness derived buffer fixture binds source region kernel and output hashes", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const task = store.seedDeviceWitnessDerivedBufferTask({ seed: 5, count: 16 });
+  const worker = store.registerWorker({ capability: webgpuCapability });
+  const nextBody = store.assignNext(auth(worker))!;
+  assert.equal(nextBody.task.kind, "device_witness.derived_buffer.v0");
+  assert.equal(nextBody.chunk.chunkId, task.chunks[0].chunkId);
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const result = store.submitReceipt({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: nextBody.task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...referenceReceiptFields(nextBody.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 3,
+  });
+  assert.equal(result.receipt.decision, "accepted");
+  assert.equal(result.validation?.status, "accepted");
+  assert.equal(result.receipt.derived?.contractVersion, "derived-compute-extension.v0");
+  assert.equal(
+    result.receipt.derived?.sourceHashes[nextBody.chunk.params.sourceId as string]?.value,
+    nextBody.chunk.params.sourceHash,
+  );
+  assert.equal(store.getTask(task.taskId)?.status, "complete");
+});
+
+test("Device Witness derived buffer fixture rejects mismatched derived output hash", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const task = store.seedDeviceWitnessDerivedBufferTask({ seed: 5, count: 16 });
+  const worker = store.registerWorker({ capability: webgpuCapability });
+  const nextBody = store.assignNext(auth(worker))!;
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const fields = referenceReceiptFields(nextBody.chunk);
+  const result = store.submitReceipt({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: nextBody.task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...fields,
+    derived: {
+      ...fields.derived!,
+      derivedOutputHash: { algorithm: "sha256", value: "00".repeat(32) },
+    },
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 3,
+  });
+  assert.equal(result.receipt.decision, "output-mismatch");
+  assert.equal(result.receipt.reason, "derived output hash mismatch");
+  assert.notEqual(store.getTask(task.taskId)?.status, "complete");
+});
+
 test("Device Witness WebRTC challenge validates as an assignment-bound measurement receipt", () => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const task = store.seedDeviceWitnessWebRtcTask({ timeoutMs: 500 });
@@ -474,6 +543,9 @@ test("Device Witness WebRTC challenge validates as an assignment-bound measureme
     iceRelayBucket: "no",
     stunSuccessBucket: "unconfigured",
     turnNeedBucket: "unknown",
+    dataChannelBucket: "open",
+    dataWorkBucket: "request-ok",
+    dataReceiptBucket: "ok",
     visibilityBucket: "visible",
     batteryBucket: "charging",
   };
@@ -635,6 +707,16 @@ test("HTTP admin can seed Device Witness receipt workloads", async (t) => {
   assert.equal(webrtc.status, 200);
   assert.equal(webrtc.body.chunks, 1);
   assert.equal(webrtc.body.validationPolicy.validationMode, "measurement");
+
+  const derived = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/device-witness-derived-buffer",
+    { seed: 13, count: 16 },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(derived.status, 200);
+  assert.equal(derived.body.chunks, 1);
 
   const worker = await register(srv.port, webgpuCapability);
   const first = await next(srv.port, worker);
@@ -878,6 +960,7 @@ test("WebRTC pairing joins two workers and exchanges offer answer candidates", a
     webrtcSignalingEnabled: true,
     webrtcDataEnabled: true,
     stunUrls: ["stun:stun.example.test:19302"],
+    adminToken: "secret",
   });
   t.after(() => srv.close());
   const w1 = await register(srv.port, webgpuCapability);
@@ -918,6 +1001,19 @@ test("WebRTC pairing joins two workers and exchanges offer answer candidates", a
   const fetched = await req(srv.port, "GET", `/compute/webrtc/pairs/${p1.body.pairId}`, undefined, headers);
   assert.equal(fetched.status, 200);
   assert.equal(fetched.body.candidates.length, 1);
+
+  const dashboard = await req(srv.port, "GET", "/compute/admin/dashboard", undefined, { "x-plasma-admin-token": "secret" });
+  assert.equal(dashboard.status, 200);
+  assert.equal(dashboard.body.webRtcPairList.length, 1);
+  assert.equal(dashboard.body.webRtcPairList[0].pairId, p1.body.pairId);
+  assert.equal(dashboard.body.webRtcPairList[0].status, "matched");
+  assert.equal(dashboard.body.webRtcPairList[0].hasOffer, true);
+  assert.equal(dashboard.body.webRtcPairList[0].hasAnswer, true);
+  assert.equal(dashboard.body.webRtcPairList[0].candidateCount, 1);
+  assert.equal("pairToken" in dashboard.body.webRtcPairList[0], false);
+  assert.equal("token" in dashboard.body.webRtcPairList[0], false);
+  assert.equal("offer" in dashboard.body.webRtcPairList[0], false);
+  assert.equal("answer" in dashboard.body.webRtcPairList[0], false);
 });
 
 test("HTTP task assignment is disabled behind the assignment kill switch", async (t) => {

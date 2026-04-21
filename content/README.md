@@ -12,3 +12,7 @@ This directory owns:
 
 Visual paths and generation prompts belong in `theming/`. Runtime selection
 belongs in `config/`. Balance output belongs in `data/`.
+
+Edit source files here, not the mirrored files under `client/content/`.
+`npm run build` and Firebase Hosting deploys run `npm run sync:content`,
+which copies the browser-shipped content into `client/content/`.

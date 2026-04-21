@@ -118,6 +118,17 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     return out;
   }
 
+  seedDeviceWitnessDerivedBufferTask(input: {
+    seed?: number;
+    count?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+  } = {}): ComputeTask {
+    const out = super.seedDeviceWitnessDerivedBufferTask(input);
+    this.persist();
+    return out;
+  }
+
   seedDeviceWitnessWebRtcTask(input: {
     timeoutMs?: number;
     minExecutions?: number;

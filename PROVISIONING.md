@@ -198,14 +198,40 @@ also seed assignment-bound Device Witness WebGPU, rendering fixture, and WebRTC
 measurement tasks; those return normal `compute_receipts` and are admin-only.
 It also derives worker/device/network profiles, privacy-suppressed public stats,
 and replay verification badges from accepted public-artifact receipts.
+Browser connectivity witnesses should probe `/compute/healthz` as the stable
+same-origin lab health endpoint; `/compute/status` remains the richer debug
+surface.
 
 Two-browser WebRTC measurement is available only when
 `FEATURE_COMPUTE_WEBRTC_SIGNALING=true`. It uses `/compute/webrtc/pairs/*` for
 short-lived offer/answer/candidate exchange, then stores only bucketed
-connectivity observations. TURN remains off unless
+connectivity observations. When `FEATURE_COMPUTE_WEBRTC_DATA=true`, paired
+staff browsers also open `plasma-control`, `plasma-data`, and
+`plasma-receipts`, send a tiny deterministic `prime-search.v0` witness chunk
+over the data channel, and store only bucketed data-channel outcome fields.
+This does not enable ranked authority, private config access, or public
+assignment intake. TURN remains off unless
 `FEATURE_COMPUTE_WEBRTC_TURN=true` plus `COMPUTE_TURN_URLS`,
 `COMPUTE_TURN_USERNAME`, and `COMPUTE_TURN_CREDENTIAL` are set. Treat TURN as a
-measured fallback with cost/abuse monitoring, not a default.
+measured fallback with cost/abuse monitoring, not a default. The admin
+dashboard shows redacted WebRTC pair status, offer/answer presence, and
+candidate counts for staff pairing tests; it does not expose pair tokens or raw
+SDP/candidate payloads in the summary table. The dashboard can also seed
+`device_witness.derived_buffer.v0`, a synthetic public-buffer fixture that
+exercises derived-compute evidence without touching live render buffers or
+ranked game state.
+
+Staff data-channel witness from two browser tabs/devices:
+
+```js
+window.__M3T4_COMPUTE_SLACK_WORKER__ = true;
+await window.m3t4Compute.webrtcWitness();
+```
+
+Run that in two opted-in browsers within the same pairing window. The offerer
+should report `dataWorkBucket: "request-ok"` and `dataReceiptBucket: "ok"` if a
+peer executed the witness chunk and returned the expected receipt over
+`plasma-receipts`.
 
 To run the receipt-path smoke against the deploy:
 

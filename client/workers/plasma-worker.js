@@ -31,6 +31,7 @@ const KERNELS = {
   },
   "device_witness.webgpu.v0": runDeviceWitnessWebGpu,
   "device_witness.render_fixture.v0": () => canvas2dFixtureBytes(),
+  "device_witness.derived_buffer.v0": runDeviceWitnessDerivedBuffer,
 };
 
 async function hashHex(bytes) {
@@ -54,7 +55,8 @@ self.onmessage = async (ev) => {
   }
   const t0 = performance.now();
   try {
-    const bytes = await kernel(chunk.params);
+    const result = await kernel(chunk.params);
+    const bytes = result instanceof Uint8Array ? result : result.bytes;
     const outputHash = await hashHex(bytes);
     const computeMs = performance.now() - t0;
     self.postMessage({
@@ -66,6 +68,7 @@ self.onmessage = async (ev) => {
       inputHash: chunk.inputHash,
       artifactHash: chunk.artifactHash,
       outputHash,
+      derived: result?.derived,
       computeMs,
       executionMode: chunk.kind === "device_witness.webgpu.v0" ? "webgpu" : "cpu",
     });
@@ -189,6 +192,37 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     try { readBuffer?.destroy?.(); } catch {}
     try { device?.destroy?.(); } catch {}
   }
+}
+
+function runDeviceWitnessDerivedBuffer(params) {
+  const seed = asInt(params.seed);
+  const count = asInt(params.count);
+  if (count <= 0 || count > 4096) throw new Error("count must be 1..4096");
+  const sourceBytes = new Uint8Array(count * 4);
+  const outputBytes = new Uint8Array(count * 4);
+  const sourceView = new DataView(sourceBytes.buffer);
+  const outputView = new DataView(outputBytes.buffer);
+  for (let i = 0; i < count; i++) {
+    const x = witnessInput(seed, i);
+    sourceView.setUint32(i * 4, x, true);
+    outputView.setUint32(i * 4, (witnessTransform(x, i) ^ 0xa5a5a5a5) >>> 0, true);
+  }
+  return hashHex(sourceBytes).then((sourceHash) => hashHex(outputBytes).then((outputHash) => ({
+    bytes: outputBytes,
+    derived: {
+      contractVersion: "derived-compute-extension.v0",
+      sourceHashes: { [String(params.sourceId || "synthetic-frame")]: { algorithm: "sha256", value: sourceHash } },
+      bufferRegionHashes: { [String(params.regionId || "synthetic-u32-region")]: { algorithm: "sha256", value: sourceHash } },
+      producerKernelHashes: {
+        [String(params.outputId || "synthetic-derived-u32")]: {
+          algorithm: "sha256",
+          value: String(params.producerKernelHash || ""),
+        },
+      },
+      outputHashes: { [String(params.outputId || "synthetic-derived-u32")]: { algorithm: "sha256", value: outputHash } },
+      derivedOutputHash: { algorithm: "sha256", value: outputHash },
+    },
+  })));
 }
 
 function witnessInput(seed, index) {

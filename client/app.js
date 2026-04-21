@@ -39,6 +39,8 @@ const whoamiEl = document.getElementById("whoami");
 const statusEl = document.getElementById("status");
 
 let current = null;
+let currentRoute = null;
+let currentHash = null;
 
 function featureForRoute(route) {
   if (route === "duel") return "p2pDuel";
@@ -69,9 +71,13 @@ function render() {
     a.classList.toggle("active", a.dataset.route === activeName);
   });
 
+  if (current && activeName === "spectate" && currentRoute === activeName && currentHash === hash) return;
+
   if (current && current.unmount) current.unmount();
   appEl.innerHTML = "";
   current = mode;
+  currentRoute = activeName;
+  currentHash = hash;
   mode.mount(appEl, { setStatus: (s) => (statusEl.textContent = s) });
   trackPageView(activeName);
 }

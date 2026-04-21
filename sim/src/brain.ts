@@ -12,7 +12,12 @@ import {
 // commitment window. Replaces v2's per-tick reactive ladder. Params
 // bias mode transitions and tactical details within each mode; they no
 // longer drive behavior directly via a flat if/else.
-export const BEHAVIOR_VERSION = 13;
+// v15: objective navigation gets a tiny platform graph, and clash-loop
+// symmetry breaking treats near-dominant anti-loop traits as equivalent.
+// Bots still see the same platform rectangles, but vertical routing now
+// chooses the next surface on a route instead of greedily picking one
+// platform above.
+export const BEHAVIOR_VERSION = 15;
 
 // ---------- Opp-model buffer sizing ----------
 //
@@ -277,6 +282,241 @@ function onDropThroughPlatform(obs: Observation): Platform | null {
   return null;
 }
 
+interface NavSurface {
+  id: number;
+  x1: number;
+  x2: number;
+  y: number;
+  platform: Platform | null;
+}
+
+type NavMove = "walk" | "jump" | "drop";
+
+interface NavEdge {
+  to: number;
+  move: NavMove;
+  cost: number;
+}
+
+interface NavRouteStep {
+  surface: NavSurface;
+  move: NavMove;
+}
+
+const NAV_MARGIN = 14;
+const NAV_SURFACE_Y_TOLERANCE = 9;
+const NAV_TARGET_SUPPORT_MAX_SCORE = 130;
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, n));
+}
+
+function rangeGap(a1: number, a2: number, b1: number, b2: number): number {
+  if (a2 < b1) return b1 - a2;
+  if (b2 < a1) return a1 - b2;
+  return 0;
+}
+
+function pointRangeGap(x: number, s: NavSurface): number {
+  if (x < s.x1) return s.x1 - x;
+  if (x > s.x2) return x - s.x2;
+  return 0;
+}
+
+function buildNavSurfaces(obs: Observation): NavSurface[] {
+  const surfaces: NavSurface[] = [];
+  let floorAdded = false;
+
+  for (const p of obs.platforms) {
+    const usableW = p.w - NAV_MARGIN * 2;
+    if (usableW <= STATS.bodyW) continue;
+    surfaces.push({
+      id: surfaces.length,
+      x1: p.x + NAV_MARGIN,
+      x2: p.x + p.w - NAV_MARGIN,
+      y: p.y - STATS.bodyH * 0.5,
+      platform: p,
+    });
+    if (p.solid) floorAdded = true;
+  }
+
+  if (!floorAdded) {
+    surfaces.push({
+      id: surfaces.length,
+      x1: obs.arena.left + NAV_MARGIN,
+      x2: obs.arena.right - NAV_MARGIN,
+      y: obs.arena.floor - STATS.bodyH * 0.5,
+      platform: null,
+    });
+  }
+
+  return surfaces;
+}
+
+function currentSurface(obs: Observation, surfaces: NavSurface[]): NavSurface | null {
+  if (!obs.self.onGround) return null;
+  let best: NavSurface | null = null;
+  let bestScore = Infinity;
+  const feetY = obs.self.y + STATS.bodyH * 0.5;
+
+  for (const s of surfaces) {
+    const surfaceY = s.platform?.y ?? obs.arena.floor;
+    const yDiff = Math.abs(feetY - surfaceY);
+    const xGap = pointRangeGap(obs.self.x, s);
+    if (yDiff > NAV_SURFACE_Y_TOLERANCE || xGap > STATS.bodyW) continue;
+    const score = yDiff * 10 + xGap;
+    if (score < bestScore) {
+      best = s;
+      bestScore = score;
+    }
+  }
+
+  return best;
+}
+
+function targetSurface(tx: number, ty: number, surfaces: NavSurface[]): NavSurface | null {
+  let best: NavSurface | null = null;
+  let bestScore = Infinity;
+
+  for (const s of surfaces) {
+    const yDiff = Math.abs(s.y - ty);
+    const xGap = pointRangeGap(tx, s);
+    const score = yDiff + xGap * 0.35;
+    if (score < bestScore) {
+      best = s;
+      bestScore = score;
+    }
+  }
+
+  return bestScore <= NAV_TARGET_SUPPORT_MAX_SCORE ? best : null;
+}
+
+function surfaceContestedCost(obs: Observation, s: NavSurface, params: Params): number {
+  if (obs.opp.dead) return 0;
+  const x = clamp(obs.opp.x, s.x1, s.x2);
+  const dx = Math.abs(obs.opp.x - x);
+  const dy = Math.abs(obs.opp.y - s.y);
+  if (dx > 110 || dy > 90) return 0;
+  const discipline = unit(params.discipline);
+  const greed = unit(params.greed, 0.5);
+  return Math.max(0.15, 0.55 + discipline * 0.65 - greed * 0.35);
+}
+
+function navEdge(obs: Observation, params: Params, from: NavSurface, to: NavSurface): NavEdge | null {
+  if (from.id === to.id) return null;
+
+  const gap = rangeGap(from.x1, from.x2, to.x1, to.x2);
+  const rise = from.y - to.y;
+  const absRise = Math.abs(rise);
+  const lift = unit(params.lift);
+  const networking = unit(params.networking);
+  const contested = surfaceContestedCost(obs, to, params);
+
+  if (absRise <= 34) {
+    if (gap > 120 + networking * 80) return null;
+    const move: NavMove = gap <= 24 ? "walk" : "jump";
+    const cost = 1 + gap / 120 + (move === "jump" ? 0.8 - lift * 0.25 : 0) + contested;
+    return { to: to.id, move, cost };
+  }
+
+  if (rise > 0) {
+    const maxRise = 220 + lift * 45;
+    const maxGap = 145 + networking * 90 + lift * 80;
+    if (rise > maxRise || gap > maxGap) return null;
+    const cost = 1.25 + rise / 130 + gap / 110 + (1 - lift) * 0.45 + contested;
+    return { to: to.id, move: "jump", cost };
+  }
+
+  const drop = -rise;
+  const maxDrift = 135 + networking * 90;
+  if (gap > maxDrift) return null;
+  const cunning = unit(params.cunning, 0.5);
+  const cost = 0.8 + drop / 240 + gap / 140 + (1 - cunning) * 0.15 + contested;
+  return { to: to.id, move: "drop", cost };
+}
+
+function nextSurfaceOnRoute(
+  obs: Observation, params: Params, surfaces: NavSurface[],
+  start: NavSurface, target: NavSurface,
+): NavRouteStep | null {
+  const dist = surfaces.map(() => Infinity);
+  const prev = surfaces.map(() => -1);
+  const prevMove = surfaces.map<NavMove | null>(() => null);
+  const seen = surfaces.map(() => false);
+  dist[start.id] = 0;
+
+  for (;;) {
+    let at = -1;
+    let best = Infinity;
+    for (const s of surfaces) {
+      if (!seen[s.id] && dist[s.id] < best) {
+        at = s.id;
+        best = dist[s.id];
+      }
+    }
+    if (at < 0 || at === target.id) break;
+    seen[at] = true;
+
+    const from = surfaces[at];
+    for (const to of surfaces) {
+      const edge = navEdge(obs, params, from, to);
+      if (!edge) continue;
+      const next = dist[at] + edge.cost;
+      if (next < dist[edge.to]) {
+        dist[edge.to] = next;
+        prev[edge.to] = at;
+        prevMove[edge.to] = edge.move;
+      }
+    }
+  }
+
+  if (!Number.isFinite(dist[target.id])) return null;
+
+  let cursor = target.id;
+  while (prev[cursor] !== start.id) {
+    cursor = prev[cursor];
+    if (cursor < 0) return null;
+  }
+
+  const move = prevMove[cursor];
+  if (!move) return null;
+  return { surface: surfaces[cursor], move };
+}
+
+function platformRouteStep(
+  obs: Observation, tx: number, ty: number, params: Params,
+): NavRouteStep | null {
+  const surfaces = buildNavSurfaces(obs);
+  const start = currentSurface(obs, surfaces);
+  if (!start) return null;
+  const target = targetSurface(tx, ty, surfaces);
+  if (!target || target.id === start.id) return null;
+  return nextSurfaceOnRoute(obs, params, surfaces, start, target);
+}
+
+function driveTowardRouteStep(obs: Observation, tx: number, step: NavRouteStep): Action {
+  const s = step.surface;
+  const waypointX = clamp(tx, s.x1, s.x2);
+  const nearestX = clamp(obs.self.x, s.x1, s.x2);
+  const dx = (obs.self.x < s.x1 || obs.self.x > s.x2) ? nearestX - obs.self.x : waypointX - obs.self.x;
+  const left = dx < -10;
+  const right = dx > 10;
+
+  if (step.move === "drop") {
+    const overTarget = obs.self.x > s.x1 - 20 && obs.self.x < s.x2 + 20;
+    return { left, right, down: overTarget };
+  }
+
+  if (step.move === "jump") {
+    const launchSlack = 105;
+    const inLaunchRange = obs.self.x > s.x1 - launchSlack && obs.self.x < s.x2 + launchSlack;
+    const stillRising = !obs.self.onGround && obs.self.vy < -150;
+    return { left, right, up: (obs.self.onGround && inLaunchRange) || stillRising };
+  }
+
+  return { left, right };
+}
+
 function directJumpReachable(
   obs: Observation, tx: number, ty: number, lift: number,
   forceEligible = false,
@@ -308,6 +548,10 @@ function navigateTo(
     if (directJumpReachable(obs, tx, ty, lift, forceDirectJumpEligible)) {
       const dx = tx - obs.self.x;
       return { left: dx < -10, right: dx > 10, up: true };
+    }
+    if (params) {
+      const route = platformRouteStep(obs, tx, ty, params);
+      if (route) return driveTowardRouteStep(obs, tx, route);
     }
     const step = climbStep(obs, ty);
     if (step) {
@@ -596,7 +840,7 @@ function dominantAntiLoopTrait(
     ["parry", params.parry ?? 0],
   ];
   entries.sort((a, b) => b[1] - a[1]);
-  if (entries[0][1] - entries[1][1] < 0.1 && state.id === 1) {
+  if (entries[0][1] - entries[1][1] < 0.25 && state.id === 1) {
     return entries[1][0];
   }
   return entries[0][0];

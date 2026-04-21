@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { PlasmaLabConfig } from "./config.js";
 import { header, html, json, readJson } from "./http.js";
 import { canonicalJson } from "./plasma/hash.js";
-import type { ContentHash, ExecutionMode, GovernorMode, TransportKind, WorkerCapability, WorkerRefusalReason } from "./plasma/types.js";
+import type { ContentHash, DerivedExecutionEvidence, ExecutionMode, GovernorMode, TransportKind, WorkerCapability, WorkerRefusalReason } from "./plasma/types.js";
 import { ComputeLabStore, type WebRtcPairRecord, type WebRtcSessionRecord } from "./store.js";
 import { COMPUTE_USE_CASES } from "./use-cases.js";
 
@@ -111,6 +111,9 @@ export async function handleComputeLabRequest(
       stunSuccessBucket?: string;
       turnNeedBucket?: string;
       signalingRttBucket?: string;
+      dataChannelBucket?: string;
+      dataWorkBucket?: string;
+      dataReceiptBucket?: string;
       visibilityBucket?: string;
       batteryBucket?: string;
       notes?: string;
@@ -135,6 +138,9 @@ export async function handleComputeLabRequest(
           stunSuccessBucket: body?.stunSuccessBucket,
           turnNeedBucket: body?.turnNeedBucket,
           signalingRttBucket: body?.signalingRttBucket,
+          dataChannelBucket: body?.dataChannelBucket,
+          dataWorkBucket: body?.dataWorkBucket,
+          dataReceiptBucket: body?.dataReceiptBucket,
           visibilityBucket: body?.visibilityBucket,
           batteryBucket: body?.batteryBucket,
           notes: body?.notes,
@@ -210,6 +216,7 @@ export async function handleComputeLabRequest(
       governorMode?: GovernorMode;
       deviceClass?: string;
       adapterInfo?: Record<string, unknown>;
+      derived?: DerivedExecutionEvidence;
       computeMs?: number;
       clientVersion?: string;
       signature?: string;
@@ -233,6 +240,7 @@ export async function handleComputeLabRequest(
         governorMode: body.governorMode,
         deviceClass: body.deviceClass,
         adapterInfo: body.adapterInfo,
+        derived: body.derived,
         computeMs: Number(body.computeMs) || 0,
         clientVersion: body.clientVersion,
         signature: body.signature,
@@ -521,6 +529,26 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     }
     return true;
   }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/device-witness-derived-buffer") {
+    const body = await readJson<{
+      seed?: number;
+      count?: number;
+      minExecutions?: number;
+      minAgreeing?: number;
+    }>(req);
+    try {
+      const task = deps.store.seedDeviceWitnessDerivedBufferTask({
+        seed: body?.seed,
+        count: body?.count,
+        minExecutions: body?.minExecutions,
+        minAgreeing: body?.minAgreeing,
+      });
+      json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/device-witness-webrtc") {
     const body = await readJson<{
       timeoutMs?: number;
@@ -797,6 +825,7 @@ td,th{border-bottom:1px solid #252b3a;padding:7px;text-align:left;vertical-align
       <button id="seedWitnessWebgpu">seed WebGPU</button>
       <button id="seedWitnessRender">seed render</button>
       <button id="seedWitnessWebrtc">seed WebRTC</button>
+      <button id="seedWitnessDerived">seed derived buffer</button>
     </div>
   </div>
   <div class="card">
@@ -833,6 +862,7 @@ td,th{border-bottom:1px solid #252b3a;padding:7px;text-align:left;vertical-align
 <h2>worker profiles</h2><div id="workerProfiles"></div>
 <h2>device classes</h2><div id="deviceClasses"></div>
 <h2>network classes</h2><div id="networkClasses"></div>
+<h2>WebRTC pairs</h2><div id="webRtcPairs"></div>
 <h2>replay badges</h2><div id="replayBadges"></div>
 <h2>current capability map</h2><div id="capabilityMap"></div>
 <h2>observed capability map</h2><div id="capabilityObservationMap"></div>
@@ -859,6 +889,10 @@ document.getElementById("seedWitnessWebgpu").onclick = () => adminPost("/compute
 });
 document.getElementById("seedWitnessRender").onclick = () => adminPost("/compute/admin/tasks/device-witness-render", {});
 document.getElementById("seedWitnessWebrtc").onclick = () => adminPost("/compute/admin/tasks/device-witness-webrtc", {});
+document.getElementById("seedWitnessDerived").onclick = () => adminPost("/compute/admin/tasks/device-witness-derived-buffer", {
+  seed: asNum("witnessSeed"),
+  count: asNum("witnessCount"),
+});
 document.getElementById("seedSweep").onclick = () => adminPost("/compute/admin/tasks/seed-sweep", {
   stageId: val("sweepStage"),
   brainA: val("sweepA"),
@@ -923,6 +957,7 @@ function render(data, useCases) {
   document.getElementById("workerProfiles").innerHTML = table(["workerId","browserFamily","deviceClass","adapterClass","webgpuAvailable","webgpuCorrectnessScore","renderFixtureScore","webrtcDirectSuccessRate","turnRequiredRate","p95KernelMs","allowedWorkloadTier","acceptedReceipts","rejectedReceipts"], data.workerProfiles || []);
   document.getElementById("deviceClasses").innerHTML = table(["classId","workers","activeWorkers","webgpuCorrectnessScore","renderFixtureScore","webrtcDirectSuccessRate","turnRequiredRate","p95KernelMs"], data.deviceClassProfiles || []);
   document.getElementById("networkClasses").innerHTML = table(["classId","workers","activeWorkers","webrtcDirectSuccessRate","turnRequiredRate","p95KernelMs"], data.networkClassProfiles || []);
+  document.getElementById("webRtcPairs").innerHTML = table(["pairId","status","offererWorkerId","answererWorkerId","hasOffer","hasAnswer","candidateCount","peerCount","expiresAt"], data.webRtcPairList || []);
   document.getElementById("replayBadges").innerHTML = table(["matchId","status","agreedReceipts","requiredReceipts","rulesHash","stageHash","verifiedAt"], data.replayBadges || []);
   document.getElementById("capabilityMap").innerHTML = table(["dimension","bucket","count"], flattenMap(data.capabilityMap || {}));
   document.getElementById("capabilityObservationMap").innerHTML = table(["dimension","bucket","count"], flattenMap(data.capabilityObservationMap || {}));

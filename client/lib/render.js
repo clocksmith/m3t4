@@ -1,7 +1,15 @@
 // Shared canvas renderer. Takes a TraceFrame (from sim) + stage and draws
 // the scene. Used by both Spectate (server frames) and Practice (local).
 
-import { STAGES, STATS, GOAL_TIMER_START } from "./public-sim.js";
+import {
+  STAGES,
+  STATS,
+  GOAL_TIMER_START,
+  POINTS_TO_WIN_ROUND,
+  ROUNDS_TO_WIN_MATCH,
+  ROUND_TIMER_MAX_TICKS,
+  SIM_HZ,
+} from "./public-sim.js";
 
 export const W = 1280;
 export const H = 720;
@@ -116,12 +124,21 @@ const BOARDROOM_PACK = {
   floorDetail: imageState("assets/stages/boardroom/fiduciary_basement/textures/floor_detail.png"),
 };
 
+const DEMODAY_PACK = {
+  sky: imageState("assets/stages/demoday/demo_day_afterparty/layers/sky.png"),
+  farParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/far_parallax.png"),
+  midParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/mid_parallax.png"),
+  nearParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/near_parallax.png"),
+  platform: imageState("assets/stages/demoday/demo_day_afterparty/textures/platform.png"),
+  platformEdge: imageState("assets/stages/demoday/demo_day_afterparty/textures/platform_edge.png"),
+  wall: imageState("assets/stages/demoday/demo_day_afterparty/textures/wall.png"),
+  floorDetail: imageState("assets/stages/demoday/demo_day_afterparty/textures/floor_detail.png"),
+};
+
 const STAGE_ASSETS = {
   datacenter: { ...DATACENTER_PACK, tint: null },
   boardroom: { ...BOARDROOM_PACK, tint: null },
-  // Demo Day: subtle drift toward pink/purple. Shifts cyans into
-  // magenta range and nudges saturation. ~15% intensity.
-  demoday: { ...DATACENTER_PACK, tint: "hue-rotate(-14deg) saturate(1.12)" },
+  demoday: { ...DEMODAY_PACK, tint: null },
 };
 
 function imageState(url) {
@@ -705,6 +722,7 @@ function drawHUD(ctx, frame, labels, p1Color, p2Color) {
   const L = labels || {};
   drawHudPortrait(ctx, 0, frame.p0, frame, 36, 20, p1Color);
   drawHudPortrait(ctx, 1, frame.p1, frame, W - 100, 20, p2Color);
+  drawRoundHud(ctx, frame);
 
   ctx.font = "700 20px monospace";
   ctx.fillStyle = p1Color;
@@ -737,6 +755,46 @@ function drawHUD(ctx, frame, labels, p1Color, p2Color) {
     ctx.textAlign = "center";
     ctx.fillText(`tick ${frame.tick ?? L.tick}`, W / 2, 24);
   }
+}
+
+function drawRoundHud(ctx, frame) {
+  const roundWins = frame.rounds ?? [0, 0];
+  const roundScore = frame.scoreboard ?? [0, 0];
+  const totalRoundsPlayed = Math.min(ROUNDS_TO_WIN_MATCH * 2 - 1, roundWins[0] + roundWins[1]);
+  const roundNumber = Math.min(ROUNDS_TO_WIN_MATCH * 2 - 1, totalRoundsPlayed + 1);
+  const startTick = Number.isFinite(frame.roundStartTick) ? frame.roundStartTick : 0;
+  const elapsed = Math.max(0, (frame.tick ?? 0) - startTick);
+  const remainingTicks = Math.max(0, ROUND_TIMER_MAX_TICKS - elapsed);
+  const remainingSeconds = Math.ceil(remainingTicks / SIM_HZ);
+  const danger = remainingSeconds <= 5;
+  const warn = remainingSeconds <= 10;
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.font = "800 15px monospace";
+  ctx.fillStyle = "rgba(0, 0, 0, 0.48)";
+  ctx.fillRect(W / 2 - 168, 16, 336, 48);
+  ctx.strokeStyle = danger
+    ? cssColor("--ui-red", "#ef4444")
+    : warn
+      ? cssColor("--ui-amber", "#f59e0b")
+      : cssColor("--arena-hud-soft", "#d7dfef");
+  ctx.lineWidth = danger && Math.floor((frame.tick ?? 0) / 10) % 2 === 0 ? 2 : 1;
+  ctx.strokeRect(W / 2 - 168.5, 16.5, 337, 48);
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.fillText(`ROUND ${roundNumber} / ${ROUNDS_TO_WIN_MATCH * 2 - 1}  ·  ${formatClock(remainingSeconds)}  ·  ${roundWins[0]}-${roundWins[1]}`, W / 2, 23);
+  ctx.font = "700 11px monospace";
+  ctx.fillStyle = cssColor("--arena-hud-text", "#f8fafc");
+  ctx.fillText(`THIS ROUND ${roundScore[0]}-${roundScore[1]}  ·  FIRST TO ${POINTS_TO_WIN_ROUND}`, W / 2, 44);
+  ctx.restore();
+}
+
+function formatClock(totalSeconds) {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(s / 60);
+  const seconds = String(s % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
 }
 
 function drawHudPortrait(ctx, side, fighter, frame, x, y, accent) {

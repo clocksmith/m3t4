@@ -4,6 +4,9 @@
   },
   "hosting": {
     "public": "client",
+    "predeploy": [
+      "npm run sync:content"
+    ],
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -12,11 +15,20 @@
     ],
     "headers": [
       {
+        "source": "/sw.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store, max-age=0"
+          }
+        ]
+      },
+      {
         "source": "**/*.@(js|css)",
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "public, max-age=300"
+            "value": "no-cache"
           }
         ]
       },

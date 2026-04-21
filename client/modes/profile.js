@@ -4,7 +4,19 @@
 
 import { auth } from "../lib/auth.js";
 import * as api from "../lib/api.js";
-import { validateUserSubmission } from "../lib/public-sim.js";
+import {
+  BUDGET,
+  configFromState,
+  dirtyCount,
+  formatConfigJson,
+  neutralBuildState,
+  normalizeBuildConfig,
+  parseBuildConfigJson,
+  remainingCeilingForState,
+  stateFromConfig,
+  stateSpent,
+} from "../lib/build-config.js";
+import { renderSliderEditor } from "../lib/slider-editor.js";
 import { trackProfileSignIn, trackProfileHandleClaim, trackProfileSubmitConfig } from "../lib/analytics.js";
 
 let root = null;
@@ -13,28 +25,10 @@ let setStatus = () => {};
 const ROSTER_SIZE = 5;
 let selectedSlot = 0;
 let rosterCache = null; // last loaded stable response, or null
-
-const SAMPLE_CONFIG = {
-  attributes: {
-    burnRate: 0.4,
-    moat: 60,
-    shipRate: 0.5,
-    foresight: 0.025,
-    pivotSpeed: 0.35,
-    leverage: -0.4,
-    networking: 0.2,
-    spite: -0.4,
-    greed: 0.25,
-    pacing: 0.15,
-    cunning: 0.15,
-    lift: 0.2,
-    parry: 0.1,
-    chase: 0.15,
-    discipline: 0.15,
-    hallucination: 0,
-  },
-};
-const SAMPLE_CONFIG_JSON = JSON.stringify(SAMPLE_CONFIG, null, 2);
+let editorStateBySeat = new Map();
+let activeEditorTab = "sliders";
+let pendingBuildConfig = null;
+let pendingAutoApplied = false;
 
 function rosterIntroPanelHtml({ needsHandle = false } = {}) {
   const pending = sessionStorage.getItem("m3t4:pendingSubmit");
@@ -167,6 +161,10 @@ function renderFirebaseSignIn(authError) {
 
 async function renderDashboard(user) {
   setStatus(`roster · ${user.uid}`);
+  editorStateBySeat = new Map();
+  activeEditorTab = "sliders";
+  pendingBuildConfig = readPendingBuildConfig();
+  pendingAutoApplied = false;
   root.innerHTML = `
     <div class="page">
       ${rosterPageHeaderHtml({
@@ -188,11 +186,35 @@ async function renderDashboard(user) {
           <div class="profile-submit-row">
             <label>name <input type="text" id="slot-name" placeholder="e.g. bruiser-v2"></label>
             <div class="profile-submit-actions">
-              <button id="paste-pending" class="tight">load build</button>
+              <button id="reset-editor" class="tight">reset</button>
+              <button id="paste-pending" class="tight">load tuned build</button>
               <button id="submit-btn" class="primary">install</button>
             </div>
           </div>
-          <textarea id="config-json" class="config-json-textarea" rows="18" spellcheck="false" placeholder="${escapeHtml(SAMPLE_CONFIG_JSON)}"></textarea>
+          <div class="profile-editor-meter" id="profile-editor-meter"></div>
+          <div class="profile-editor-tabs" role="tablist" aria-label="roster editor mode">
+            <button type="button" data-editor-tab="sliders" class="is-active">sliders</button>
+            <button type="button" data-editor-tab="json">json</button>
+          </div>
+          <div id="profile-slider-panel" class="profile-slider-panel"></div>
+          <div id="profile-json-panel" class="profile-json-panel" hidden>
+            <div class="profile-json-actions">
+              <button type="button" id="copy-config-json">copy json</button>
+              <button type="button" id="import-config-json">import json</button>
+            </div>
+            <pre id="config-json-preview" class="config-json-preview"></pre>
+          </div>
+          <dialog id="json-import-dialog" class="json-import-dialog">
+            <div class="json-import-card">
+              <h3>import json</h3>
+              <textarea id="json-import-textarea" class="config-json-textarea" rows="12" spellcheck="false" placeholder="paste a complete config JSON object"></textarea>
+              <div class="profile-submit-actions">
+                <button type="button" id="cancel-json-import">cancel</button>
+                <button type="button" id="apply-json-import" class="primary">load</button>
+              </div>
+              <div id="json-import-msg" class="tight"></div>
+            </div>
+          </dialog>
           <div id="submit-msg"></div>
         </div>
       </div>
@@ -200,10 +222,7 @@ async function renderDashboard(user) {
 
   root.querySelector("#signout").addEventListener("click", () => auth.signOut());
   if (!user.handle) wireClaimHandle();
-  root.querySelector("#config-json").addEventListener("input", (e) => {
-    e.currentTarget.dataset.dirty = "1";
-    e.currentTarget.dataset.source = "user";
-  });
+  wireEditorControls();
   wireSubmit(user);
   loadStable(user);
   wirePendingBuildConfig();
@@ -228,23 +247,23 @@ function wireSubmit(user) {
     const msg = root.querySelector("#submit-msg");
     msg.className = "tight";
     msg.textContent = "";
+    const wasFilled = isFilled(selectedSlot);
     try {
       if (!(rosterCache?.handle ?? user.handle)) throw new Error("claim a handle first");
       const nameInput = root.querySelector("#slot-name").value.trim();
-      const text = root.querySelector("#config-json").value;
-      const cfg = normalizeProfileConfig(parseConfigJson(text));
-      const validation = validateUserSubmission(cfg);
-      if (!validation.ok || !validation.config) {
-        throw new Error(`invalid config: ${validation.errors.join("; ")}`);
-      }
-      const r = await api.submitSlot(await auth.token(), selectedSlot, validation.config, nameInput || undefined);
+      const draft = draftForSeat(selectedSlot);
+      const cfg = normalizeBuildConfig(configFromState(draft.state));
+      const r = await api.submitSlot(await auth.token(), selectedSlot, cfg, nameInput || undefined);
       msg.className = "ok";
-      msg.textContent = `seat ${selectedSlot} ${isFilled(selectedSlot) ? "revised" : "installed"} · slotId=${r.slotId}`;
+      msg.textContent = `seat ${selectedSlot} ${wasFilled ? "revised" : "installed"} · slotId=${r.slotId}`;
       sessionStorage.removeItem("m3t4:pendingSubmit");
-      const textarea = root.querySelector("#config-json");
-      if (textarea) {
-        textarea.dataset.dirty = "0";
-        textarea.dataset.source = "server";
+      pendingBuildConfig = null;
+      editorStateBySeat.delete(selectedSlot);
+      const pendingButton = root.querySelector("#paste-pending");
+      if (pendingButton) {
+        pendingButton.disabled = true;
+        pendingButton.classList.remove("is-ready");
+        pendingButton.textContent = "load tuned build";
       }
       loadStable(user);
       trackProfileSubmitConfig(true);
@@ -263,88 +282,131 @@ function isFilled(slotIdx) {
 
 function wirePendingBuildConfig() {
   const btn = root.querySelector("#paste-pending");
-  const textarea = root.querySelector("#config-json");
-  const pending = sessionStorage.getItem("m3t4:pendingSubmit");
-  if (!pending) {
+  if (!pendingBuildConfig) {
     btn.disabled = true;
     return;
   }
 
-  function applyPending() {
-    textarea.value = formatJsonForTextarea(pending);
-    textarea.dataset.dirty = "1";
-    textarea.dataset.source = "build";
-  }
-
-  applyPending();
-  btn.textContent = "loaded from Build";
+  btn.textContent = "load tuned build";
   btn.classList.add("is-ready");
-  btn.addEventListener("click", applyPending);
+  btn.addEventListener("click", () => {
+    applyPendingBuildToSeat(selectedSlot);
+    updateEditor();
+  });
 }
 
-function sanitizeConfigPaste(text) {
-  return text
-    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, "\"")
-    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'")
-    .replace(/\u00A0/g, " ")
-    .replace(/[\u200B-\u200D\uFEFF]/g, "")
-    .replace(/\r/g, "")
-    // Terminal / markdown paste wraps can break tokens across lines as
-    // `"paci\n    ng"`. Collapse newline+indent to nothing so wrapped
-    // keys/values rejoin. Valid pretty-printed JSON survives because
-    // JSON.parse accepts any amount of whitespace (including none)
-    // between tokens.
-    .replace(/\n[ \t]*/g, "")
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
-}
-
-function parseConfigJson(text) {
-  const trimmed = sanitizeConfigPaste(text).trim();
-  if (!trimmed) {
-    throw new Error("config JSON is empty — use Tune -> send to live roster, or paste a complete JSON object");
-  }
-  if (trimmed.includes("...")) {
-    throw new Error("config JSON still contains a placeholder (...); paste the complete object");
-  }
+function readPendingBuildConfig() {
+  const raw = sessionStorage.getItem("m3t4:pendingSubmit");
+  if (!raw) return null;
   try {
-    return JSON.parse(trimmed);
-  } catch (e) {
-    throw new Error(`config JSON is invalid: ${(e instanceof Error ? e.message : String(e))}`);
-  }
-}
-
-function normalizeProfileConfig(raw) {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    throw new Error("config JSON must be an object with an attributes object");
-  }
-  const cfg = { ...raw };
-  if (!cfg.attributes && looksLikeAttributeMap(cfg)) {
-    return { attributes: cfg };
-  }
-  if (!cfg.attributes || typeof cfg.attributes !== "object" || Array.isArray(cfg.attributes)) {
-    throw new Error("config JSON must include an attributes object");
-  }
-  if (typeof cfg.id !== "string" || !cfg.id.trim()) {
-    delete cfg.id;
-  }
-  return cfg;
-}
-
-function looksLikeAttributeMap(obj) {
-  return obj && typeof obj === "object" && (
-    "burnRate" in obj ||
-    "moat" in obj ||
-    "shipRate" in obj ||
-    "hallucination" in obj
-  );
-}
-
-function formatJsonForTextarea(raw) {
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2);
+    return parseBuildConfigJson(raw);
   } catch {
-    return raw;
+    return null;
   }
+}
+
+function savedStateForSeat(slotIdx) {
+  const slot = rosterCache?.slots?.[slotIdx];
+  if (!slot?.config) return neutralBuildState();
+  try {
+    return stateFromConfig(slot.config);
+  } catch {
+    return neutralBuildState();
+  }
+}
+
+function cloneState(state) {
+  return { ...state };
+}
+
+function draftForSeat(slotIdx) {
+  const existing = editorStateBySeat.get(slotIdx);
+  if (existing) return existing;
+  const baseState = savedStateForSeat(slotIdx);
+  const draft = { state: cloneState(baseState), baseState: cloneState(baseState), source: "server" };
+  editorStateBySeat.set(slotIdx, draft);
+  return draft;
+}
+
+function setDraftForSeat(slotIdx, state, source = "user") {
+  const baseState = savedStateForSeat(slotIdx);
+  const draft = { state: cloneState(state), baseState: cloneState(baseState), source };
+  editorStateBySeat.set(slotIdx, draft);
+  return draft;
+}
+
+function applyPendingBuildToSeat(slotIdx) {
+  if (!pendingBuildConfig) return null;
+  return setDraftForSeat(slotIdx, stateFromConfig(pendingBuildConfig), "pending");
+}
+
+function maybeAutoApplyPendingBuild() {
+  if (pendingAutoApplied || !pendingBuildConfig) return;
+  applyPendingBuildToSeat(selectedSlot);
+  pendingAutoApplied = true;
+}
+
+function wireEditorControls() {
+  root.querySelectorAll("[data-editor-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      activeEditorTab = button.dataset.editorTab || "sliders";
+      updateEditor();
+    });
+  });
+
+  root.querySelector("#reset-editor").addEventListener("click", () => {
+    editorStateBySeat.delete(selectedSlot);
+    updateEditor();
+  });
+
+  root.querySelector("#copy-config-json").addEventListener("click", async () => {
+    const msg = root.querySelector("#submit-msg");
+    try {
+      const json = formatConfigJson(configFromState(draftForSeat(selectedSlot).state));
+      await navigator.clipboard.writeText(json);
+      msg.className = "ok";
+      msg.textContent = "json copied";
+    } catch (e) {
+      msg.className = "error";
+      msg.textContent = e.message;
+    }
+  });
+
+  root.querySelector("#import-config-json").addEventListener("click", () => {
+    const dialog = root.querySelector("#json-import-dialog");
+    const textarea = root.querySelector("#json-import-textarea");
+    const msg = root.querySelector("#json-import-msg");
+    textarea.value = "";
+    msg.className = "tight";
+    msg.textContent = "";
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+  });
+
+  root.querySelector("#cancel-json-import").addEventListener("click", closeImportDialog);
+  root.querySelector("#apply-json-import").addEventListener("click", () => {
+    const textarea = root.querySelector("#json-import-textarea");
+    const msg = root.querySelector("#json-import-msg");
+    msg.className = "tight";
+    msg.textContent = "";
+    try {
+      const cfg = parseBuildConfigJson(textarea.value);
+      setDraftForSeat(selectedSlot, stateFromConfig(cfg), "json");
+      closeImportDialog();
+      activeEditorTab = "sliders";
+      updateEditor();
+    } catch (e) {
+      msg.className = "error";
+      msg.textContent = e.message;
+    }
+  });
+}
+
+function closeImportDialog() {
+  const dialog = root.querySelector("#json-import-dialog");
+  if (!dialog) return;
+  if (typeof dialog.close === "function") dialog.close();
+  else dialog.removeAttribute("open");
 }
 
 async function loadStable(user) {
@@ -368,6 +430,7 @@ async function loadStable(user) {
         : "vacant boardroom";
     }
     renderRosterGrid(grid, s);
+    maybeAutoApplyPendingBuild();
     updateEditor();
   } catch (e) {
     grid.innerHTML = `<div class="error">roster error: ${escapeHtml(e.message)}</div>`;
@@ -431,30 +494,87 @@ function updateEditor() {
   const note = root.querySelector("#editor-note");
   const btn = root.querySelector("#submit-btn");
   const nameInput = root.querySelector("#slot-name");
-  const textarea = root.querySelector("#config-json");
   if (!title || !btn) return;
   const slot = rosterCache?.slots?.[selectedSlot];
   const filled = !!(slot && slot.slotId);
+  const draft = draftForSeat(selectedSlot);
+  const changes = dirtyCount(draft.baseState, draft.state);
   title.textContent = filled ? `Revise seat ${selectedSlot}` : `Install seat ${selectedSlot}`;
   if (note) {
     note.textContent = filled
       ? `${slot.elo} ELO · ${slot.wins}-${slot.losses}-${slot.draws} · ${slot.lastPlayedAt ? relativeTime(slot.lastPlayedAt) : "unplayed"}`
       : "vacant";
   }
-  btn.textContent = filled ? "revise" : "install";
+  btn.textContent = `${filled ? "revise" : "install"}${changes > 0 ? ` · ${changes} changed` : ""}`;
+  btn.classList.toggle("is-dirty", changes > 0);
   if (filled && nameInput && !nameInput.value.trim()) {
     nameInput.placeholder = slot.name ? `current: ${slot.name}` : "e.g. bruiser-v2";
   } else if (nameInput) {
     nameInput.placeholder = "e.g. bruiser-v2";
   }
-  syncEditorConfig(slot, textarea);
+  updateEditorTabs();
+  renderEditorPanels(draft);
 }
 
-function syncEditorConfig(slot, textarea) {
-  if (!textarea) return;
-  if (textarea.dataset.dirty === "1") return;
-  textarea.dataset.source = slot?.config ? "server" : "";
-  textarea.value = slot?.config ? JSON.stringify(slot.config, null, 2) : "";
+function updateEditorTabs() {
+  root.querySelectorAll("[data-editor-tab]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.editorTab === activeEditorTab);
+  });
+  const sliderPanel = root.querySelector("#profile-slider-panel");
+  const jsonPanel = root.querySelector("#profile-json-panel");
+  if (sliderPanel) sliderPanel.hidden = activeEditorTab !== "sliders";
+  if (jsonPanel) jsonPanel.hidden = activeEditorTab !== "json";
+}
+
+function renderEditorPanels(draft) {
+  const sliderPanel = root.querySelector("#profile-slider-panel");
+  renderSliderEditor(sliderPanel, draft.state, {
+    remainingCeilingFor: (id) => remainingCeilingForState(draft.state, id),
+    onChange: () => {
+      draft.source = "user";
+      updateEditorMeter(draft);
+      updateJsonPreview(draft);
+      updateSubmitButtonState(draft);
+    },
+  });
+  updateEditorMeter(draft);
+  updateJsonPreview(draft);
+  const pendingButton = root.querySelector("#paste-pending");
+  if (pendingButton && pendingBuildConfig) {
+    pendingButton.textContent = draft.source === "pending" ? "tuned build loaded" : "load tuned build";
+  }
+}
+
+function updateSubmitButtonState(draft) {
+  const btn = root.querySelector("#submit-btn");
+  if (!btn) return;
+  const filled = isFilled(selectedSlot);
+  const changes = dirtyCount(draft.baseState, draft.state);
+  btn.textContent = `${filled ? "revise" : "install"}${changes > 0 ? ` · ${changes} changed` : ""}`;
+  btn.classList.toggle("is-dirty", changes > 0);
+}
+
+function updateEditorMeter(draft) {
+  const meter = root.querySelector("#profile-editor-meter");
+  if (!meter) return;
+  const spent = stateSpent(draft.state);
+  const over = Math.max(0, spent - BUDGET);
+  const source = draft.source === "pending" ? " · tuned build" : draft.source === "json" ? " · json import" : "";
+  meter.innerHTML = `
+    <span>spent ${spent} / ${BUDGET}</span>
+    ${over > 0 ? `<span class="is-over">over by ${over}</span>` : `<span>${BUDGET - spent} left</span>`}
+    ${source ? `<span>${source}</span>` : ""}
+  `;
+}
+
+function updateJsonPreview(draft) {
+  const preview = root.querySelector("#config-json-preview");
+  if (!preview) return;
+  try {
+    preview.textContent = formatConfigJson(configFromState(draft.state));
+  } catch (e) {
+    preview.textContent = e.message;
+  }
 }
 
 function relativeTime(iso) {

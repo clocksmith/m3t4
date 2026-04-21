@@ -26,8 +26,14 @@ export const STATS = {
 };
 
 export const GOAL_TIMER_START = 10;
+export const SIM_HZ = 120;
+export const POINTS_TO_WIN_ROUND = 2;
+export const ROUNDS_TO_WIN_MATCH = 2;
+export const ROUND_TIMER_MAX_TICKS = 60 * SIM_HZ;
 export const USER_BUDGET = 360;
 export const HALLUCINATION_PER_OVERAGE = 10;
+export const MIN_CLEAN_SPEND = 180;
+export const HALLUCINATION_PER_UNDERSPEND = 3;
 export const MAX_DERIVED_HALLUCINATION = 300;
 export const MAX_USER_SPEND = USER_BUDGET + Math.floor(MAX_DERIVED_HALLUCINATION / HALLUCINATION_PER_OVERAGE);
 export const USER_SUBMISSION_EPSILON = 1e-6;
@@ -146,8 +152,11 @@ export function uiToNative(k, ui) {
 }
 
 export function computedHallucinationForSpend(spent) {
-  const overage = Math.max(0, Math.round(spent) - USER_BUDGET);
-  return Math.min(MAX_DERIVED_HALLUCINATION, overage * HALLUCINATION_PER_OVERAGE);
+  const rounded = Math.round(spent);
+  const overage = Math.max(0, rounded - USER_BUDGET);
+  const underage = Math.max(0, MIN_CLEAN_SPEND - rounded);
+  const penalty = overage * HALLUCINATION_PER_OVERAGE + underage * HALLUCINATION_PER_UNDERSPEND;
+  return Math.min(MAX_DERIVED_HALLUCINATION, penalty);
 }
 
 export function budgetSpent(cfg) {

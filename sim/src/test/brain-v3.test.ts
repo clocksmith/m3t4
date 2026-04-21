@@ -54,8 +54,8 @@ function defaultParams(overrides: Partial<Params> = {}): Params {
 
 // --- Tests ---
 
-test("BEHAVIOR_VERSION is 13", () => {
-  assert.equal(BEHAVIOR_VERSION, 13);
+test("BEHAVIOR_VERSION is 15", () => {
+  assert.equal(BEHAVIOR_VERSION, 15);
 });
 
 test("createBrainState initializes neutral with empty buffers", () => {
@@ -287,6 +287,37 @@ test("committed direct delivery can force an obvious low-lift high-goal jump", (
   const action = runParamBrain(obs, defaultParams({ lift: 0 }), state);
   assert.equal(action.up, true, "direct delivery takes the reachable jump even with low lift");
   assert.equal(action.right, true, "direct delivery still drives toward the goal x");
+});
+
+test("objective navigation routes through reachable platform steps", () => {
+  const obs = baseObs({
+    tick: 200,
+    self: { ...baseObs().self, hasToken: true, x: 300, y: 614, onGround: true },
+    opp: { ...baseObs().opp, x: 1000, y: 614 },
+    token: { exists: true, x: 300, y: 562, carrier: 0, dwellT: 0 },
+    goal: { exists: true, x: 640, y: 280, label: "COMPUTE", timer: 8 },
+    platforms: [
+      { x: 56, y: 640, w: 1168, h: 80, solid: true },
+      { x: 220, y: 524, w: 240, h: 14, solid: false },
+      { x: 440, y: 414, w: 240, h: 14, solid: false },
+      { x: 560, y: 304, w: 180, h: 14, solid: false },
+    ],
+    dx: 700, absDx: 700, dy: 0,
+  });
+  const state = createBrainState(0);
+  state.mode = "objective";
+  state.substate = "deliver";
+  state.modeEnterTick = 190;
+  state.deliveryPlan = {
+    tactic: "direct",
+    startedAt: 190,
+    expiresAt: 230,
+    score: 1,
+  };
+
+  const action = runParamBrain(obs, defaultParams({ lift: 0, networking: 0 }), state);
+  assert.equal(action.up, true, "carrier starts with the reachable lower platform, not an impossible top route");
+  assert.equal(action.right, true, "carrier drives toward the first route step");
 });
 
 test("parry is silent at zero and counter-swings only in foil windows", () => {

@@ -4,9 +4,13 @@
 // Production can use same-origin Firebase Hosting rewrites for REST /api.
 // WebSockets should use a Cloud Run/custom API host; Hosting rewrites do
 // not reliably proxy WebSocket upgrades.
-window.__M3T4_API_ORIGIN__ = window.location.origin;
-window.__M3T4_WS_ORIGIN__ = window.__M3T4_API_ORIGIN__.replace(/^http/, "ws");
-window.__M3T4_AUTH_MODE__ = "firebase";
+const isLocalM3t4Config = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+
+window.__M3T4_API_ORIGIN__ = isLocalM3t4Config ? "http://localhost:7777" : window.location.origin;
+window.__M3T4_WS_ORIGIN__ = isLocalM3t4Config
+  ? "ws://localhost:7777"
+  : window.__M3T4_API_ORIGIN__.replace(/^http/, "ws");
+window.__M3T4_AUTH_MODE__ = isLocalM3t4Config ? "dev" : "firebase";
 
 // Hidden staff-only volunteer compute. Requires explicit browser opt-in via
 // window.m3t4Compute.start(); leave off for public builds.

@@ -54,24 +54,24 @@ still use the stable internal keys.
 
 ### Playable scope
 
-The current playable art set ships **Character A (Sama) + Character B
-(Darrius)** and **all three stages**: Datacenter, Boardroom, and Demo
-Day. Character C/D and epic/legendary weapon sheets stay marked
-`"status": "deferred"` in the SSOT and stay out of the default batch
-until `--include-deferred` is passed.
+The current playable art prompt set ships all four character bodies:
+**Character A (Sama)**, **Character B (Darrius)**, **Character C
+(Demis)**, and **Character D (Mark)**, plus **all three stages**:
+Datacenter, Boardroom, and Demo Day. The default prompt batch includes
+all character row strips, portrait sheets, large portraits, launch
+weapon sheets, and epic/legendary weapon sheets.
 
 ### Batches
 
 | batch | command | count |
 |---|---|---:|
-| Playable, copy/paste (Chars A+B, all 3 stages) | `node tools/build-prompts.mjs` | **43 files** |
-| Characters A+B, 4-row strip copy/paste | `node tools/build-prompts.mjs --only characters` | 8 files |
-| Playable, GPT-sized copy/paste | `node tools/build-prompts.mjs --format gpt` | **43 files** |
-| Playable, Midjourney copy/paste | `node tools/build-prompts.mjs --format mj` | **43 files** |
-| With deferred (unlocks Chars C+D and epic/legendary weapons) | `node tools/build-prompts.mjs --include-deferred` | 61 |
-| Missing assets, one paste-ready `.txt` per asset | `node tools/build-prompts.mjs --include-deferred --missing-only` | varies |
-| Playable, Gemini JSONL | `node tools/build-prompts.mjs --format gemini-jsonl` | **43** |
-| Playable, GPT image JSONL | `node tools/build-prompts.mjs --format gpt-jsonl` | **43** |
+| Playable, copy/paste (Chars A-D, all 3 stages) | `node tools/build-prompts.mjs` | **61 files** |
+| Characters A-D, 4-row strip copy/paste | `node tools/build-prompts.mjs --only characters` | 16 files |
+| Playable, GPT-sized copy/paste | `node tools/build-prompts.mjs --format gpt` | **61 files** |
+| Playable, Midjourney copy/paste | `node tools/build-prompts.mjs --format mj` | **61 files** |
+| Missing assets, one paste-ready `.txt` per asset | `node tools/build-prompts.mjs --missing-only` | varies |
+| Playable, Gemini JSONL | `node tools/build-prompts.mjs --format gemini-jsonl` | **61** |
+| Playable, GPT image JSONL | `node tools/build-prompts.mjs --format gpt-jsonl` | **61** |
 
 ### Common commands
 
@@ -89,7 +89,7 @@ node tools/build-prompts.mjs --only characters --format chat
 # Easiest manual generation mode: writes one .txt per asset, and every
 # .txt file contains only the prompt body you paste into the generator.
 # INDEX.md in the generated directory maps filenames back to asset paths.
-node tools/build-prompts.mjs --include-deferred --missing-only
+node tools/build-prompts.mjs --missing-only
 
 # Character sheets are generated as 4 strips per character:
 # generate 1152x576 raw strips, then post-process 3x down to 384x192
@@ -112,8 +112,6 @@ node tools/build-prompts.mjs --format gemini --stdout
 # Legacy combined copy/paste file, mostly useful for bulk review.
 node tools/build-prompts.mjs --combined-file
 
-# Include deferred locked characters/weapons (later)
-node tools/build-prompts.mjs --include-deferred --format gemini
 ```
 
 ### Storage
@@ -150,15 +148,9 @@ sprite sheet:
 node tools/assemble-character-sheet.mjs client/assets/chars/sama/monastic_infra
 ```
 
-### Deferred assets
+### Full Batch
 
-Entries with `"status": "deferred"` are skipped in the default playable batch.
-Today's deferred set:
-
-- **Characters C + D** (Demis, Mark) — sprite sheets, portrait sheets,
-  large portraits, and launch weapon sheets. All appear in the UI as
-  locked character slots until unlocked.
-- **Epic + Legendary weapon sheets** (all 4 characters). UI shows the
-  shared `lockedSlot` placeholder in those slots at launch.
-
-Run `node tools/build-prompts.mjs --include-deferred` when unlocking.
+The prompt SSOT no longer defers Character C/D or advanced weapon art.
+All four bodies and all four weapon lines are generated from the default
+command. The shared `lockedSlot` prompt still exists for UI states that
+need a generic locked icon.

@@ -50,9 +50,9 @@ export function renderDuel(root, { setStatus } = {}) {
     el(
       "div",
       { class: "duel-actions" },
-      el("button", { type: "button", onclick: () => go("build") }, "author policy"),
-      el("button", { type: "button", onclick: () => go("spectate") }, "watch receipts"),
-      el("button", { type: "button", onclick: () => go("rules") }, "read about")
+      el("button", { type: "button", class: "ui-button", onclick: () => go("build") }, "author policy"),
+      el("button", { type: "button", class: "ui-button", onclick: () => go("spectate") }, "watch receipts"),
+      el("button", { type: "button", class: "ui-button", onclick: () => go("rules") }, "read about")
     )
   );
 

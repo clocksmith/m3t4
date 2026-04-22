@@ -12,8 +12,11 @@
 
 import { WS_ORIGIN, leaderboard } from "../lib/api.js";
 import { STAGES } from "../lib/public-sim.js";
-import { setupCanvas, drawFrame, W, H } from "../lib/render.js";
+import { createFrameRenderer, W, H } from "../render/index.js";
 import { getComputeClient } from "../lib/compute.js";
+import { escapeHtml } from "../ui/html.js";
+import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
+import { statListHtml } from "../ui/stats.js";
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
 
 const SIM_HZ = 120;                // canonical sim rate
@@ -29,6 +32,12 @@ const SIDE_BINDINGS = [
   bindingInfo("sama", "capacity_mystic", "worldcoin_orb_flail"),
   bindingInfo("darrius", "policy_undertaker", "rolled_constitution_bat"),
 ];
+const BODY_VARIANTS = {
+  sama: "capacity_mystic",
+  darrius: "policy_undertaker",
+  demis: "quiet_solver",
+  mark: "sunlit_operator",
+};
 
 let ws = null;
 let renderState = {
@@ -49,6 +58,8 @@ let lbTimer = null;
 let leaderboardEl = null;
 let canvas = null;
 let ctx = null;
+let renderer = null;
+let rendererMountId = 0;
 let rafId = 0;
 let statusCb = () => {};
 let computeClient = null;
@@ -97,20 +108,17 @@ export function mount(root, { setStatus }) {
   statusCb = setStatus;
   root.innerHTML = `
     <div class="page">
-      <div class="page-header-row">
-        <div class="page-title-stack">
-          <h1 class="page-title">Live</h1>
-          <div class="page-subtitle tight">whatever match is happening right now</div>
-        </div>
-      </div>
-      <section class="context-card live-briefing-card">
+      ${pageHeaderHtml({ title: "Live", subtitle: "whatever match is happening right now" })}
+      ${contextCardHtml({
+        className: "live-briefing-card",
+        body: `
         <div class="context-card-kicker" id="match-hud">now playing</div>
         <div class="live-briefing-sides">
           ${liveBriefingSideHtml(0)}
           <div class="live-briefing-vs">VS</div>
           ${liveBriefingSideHtml(1)}
-        </div>
-      </section>
+        </div>`,
+      })}
       <div class="spectate-grid">
         <aside class="panel lb spectate-side">
           <h3>Leaderboard</h3>
@@ -121,16 +129,16 @@ export function mount(root, { setStatus }) {
         </div>
         <aside class="panel spectate-stats spectate-side">
           <h3>Live</h3>
-          <dl class="stat-list">
-            <div class="stat-row"><dt>P1</dt><dd class="p1-accent" id="stat-p1">—</dd></div>
-            <div class="stat-row"><dt>P2</dt><dd class="p2-accent" id="stat-p2">—</dd></div>
-            <div class="stat-row"><dt>stage</dt><dd id="stat-stage">—</dd></div>
-            <div class="stat-row"><dt>ws</dt><dd id="stat-ws">connecting…</dd></div>
-            <div class="stat-row"><dt>next match</dt><dd id="stat-countdown">—</dd></div>
-            <div class="stat-row"><dt>buffer</dt><dd id="stat-buf">—</dd></div>
-            <div class="stat-row"><dt>last result</dt><dd id="stat-result">—</dd></div>
-            <div class="stat-row"><dt>receipt</dt><dd id="stat-verify">—</dd></div>
-          </dl>
+          ${statListHtml([
+            { label: "P1", id: "stat-p1", className: "p1-accent" },
+            { label: "P2", id: "stat-p2", className: "p2-accent" },
+            { label: "stage", id: "stat-stage" },
+            { label: "ws", id: "stat-ws", value: "connecting…" },
+            { label: "next match", id: "stat-countdown" },
+            { label: "buffer", id: "stat-buf" },
+            { label: "last result", id: "stat-result" },
+            { label: "receipt", id: "stat-verify" },
+          ])}
         </aside>
       </div>
       <div class="panel">
@@ -140,8 +148,8 @@ export function mount(root, { setStatus }) {
     </div>`;
   canvas = root.querySelector("#stage-canvas");
   leaderboardEl = root.querySelector("#leaderboard");
-  const { ctx: c } = setupCanvas(canvas);
-  ctx = c;
+  const rendererId = ++rendererMountId;
+  void attachRenderer(rendererId, canvas);
   computeClient = getComputeClient();
   computeClient.setMatchPhase(matchActive ? "active" : "intermission");
   void computeClient.maybeAutoStart();
@@ -154,13 +162,35 @@ export function mount(root, { setStatus }) {
 }
 
 export function unmount() {
+  rendererMountId++;
   running = false;
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
   if (ws) { try { ws.close(); } catch {} ws = null; }
   if (lbTimer) { clearInterval(lbTimer); lbTimer = null; }
   if (rafId) cancelAnimationFrame(rafId);
+  renderer?.destroy();
+  renderer = null;
+  ctx = null;
   resetPlayback();
   computeClient = null;
+}
+
+async function attachRenderer(rendererId, targetCanvas) {
+  let nextRenderer = null;
+  try {
+    nextRenderer = await createFrameRenderer(targetCanvas);
+  } catch (error) {
+    console.error("[m3t4] failed to initialize live renderer", error);
+    return;
+  }
+  if (rendererId !== rendererMountId || !canvas) {
+    nextRenderer.destroy();
+    return;
+  }
+  renderer?.destroy();
+  renderer = nextRenderer;
+  canvas = nextRenderer.canvas ?? targetCanvas;
+  ctx = nextRenderer.ctx;
 }
 
 function connect() {
@@ -243,6 +273,7 @@ function onEvent(m) {
     renderState.labels = {
       p1: `@${handleA} [${mt.a?.name ?? "slot"}]`,
       p2: `@${handleB} [${mt.b?.name ?? "slot"}]`,
+      cosmetics: [mt.a?.cosmetics, mt.b?.cosmetics],
     };
     renderState.stage = STAGES[mt.stageId] ?? STAGES.datacenter;
     const hudEl = document.getElementById("match-hud");
@@ -335,8 +366,8 @@ function liveBriefingSideHtml(side) {
         <span>${label}</span>
         <strong id="brief-p${side + 1}-identity">@${side === 0 ? "p1" : "p2"} · slot · ?</strong>
       </div>
-      <div class="live-briefing-binding">${escapeHtml(binding.characterName)} · ${escapeHtml(binding.characterLabel)}</div>
-      <div class="live-briefing-weapon">${escapeHtml(binding.weaponName)}</div>
+      <div class="live-briefing-binding" id="brief-p${side + 1}-binding">${escapeHtml(binding.characterName)} · ${escapeHtml(binding.characterLabel)}</div>
+      <div class="live-briefing-weapon" id="brief-p${side + 1}-weapon">${escapeHtml(binding.weaponName)}</div>
     </article>`;
 }
 
@@ -352,6 +383,20 @@ function updateBriefingSide(side, data) {
   const name = data?.name ?? "slot";
   const elo = data?.elo ?? "?";
   identityEl.textContent = `@${handle} · ${name} · ${elo}`;
+  const binding = bindingForCosmetics(data?.cosmetics, side);
+  const bindingEl = document.getElementById(`brief-p${side + 1}-binding`);
+  const weaponEl = document.getElementById(`brief-p${side + 1}-weapon`);
+  if (bindingEl) bindingEl.textContent = `${binding.characterName} · ${binding.characterLabel}`;
+  if (weaponEl) weaponEl.textContent = binding.weaponName;
+}
+
+function bindingForCosmetics(cosmetics, side) {
+  const fallback = side === 0
+    ? { body: "sama", weapon: "worldcoin_orb_flail" }
+    : { body: "darrius", weapon: "rolled_constitution_bat" };
+  const body = typeof cosmetics?.body === "string" ? cosmetics.body : fallback.body;
+  const weapon = typeof cosmetics?.weapon === "string" ? cosmetics.weapon : fallback.weapon;
+  return bindingInfo(body, BODY_VARIANTS[body] ?? body, weapon);
 }
 
 function appendFrames(frames) {
@@ -444,22 +489,25 @@ function formatDelta(n) {
   return r > 0 ? `+${r}` : `${r}`;
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
-}
-
 function loop() {
   if (!running) return;
+  if (!renderer || !ctx) {
+    rafId = requestAnimationFrame(loop);
+    return;
+  }
   const frameStart = performance.now();
   const f = signalState ? null : currentFrame();
   if (signalState) {
     drawSignalScreen(signalState.title, signalState.subtitle);
+    renderer.present2D?.();
   } else if (f) {
-    drawFrame(ctx, renderState.stage, f, renderState.labels);
+    renderer?.drawFrame(renderState.stage, f, renderState.labels);
   } else if (matchActive) {
     drawSignalScreen("SIGNAL DEGRADED", "Holding the last verified frame.");
+    renderer.present2D?.();
   } else {
     drawWaitingScreen();
+    renderer.present2D?.();
   }
   computeClient?.recordFrame(performance.now() - frameStart);
   updateWaitStat();

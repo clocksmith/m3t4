@@ -4,16 +4,11 @@
 
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
 import { getComputeClient } from "../lib/compute.js";
+import { escapeHtml } from "../ui/html.js";
+import { buttonHtml, linkButtonHtml } from "../ui/actions.js";
+import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
 
 let computeWitnessOff = null;
-
-function escapeHtml(s) {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 function sectionHtml(section) {
   const body = Array.isArray(section.body) ? section.body : [];
@@ -31,14 +26,12 @@ function aboutCardHtml(about) {
   if (!body.length) return "";
   const firstSentence = body[0].split(/(?<=\.)\s+/)[0] ?? body[0];
   const rest = body[0].slice(firstSentence.length).trim();
-  return `
-    <section class="context-card rules-card-feature">
-      <div class="context-card-kicker">${escapeHtml(about.title ?? "about")}</div>
-      <div class="context-card-copy">
-        <strong>${escapeHtml(firstSentence)}</strong>
-        ${rest ? `<span>${escapeHtml(rest)}</span>` : ""}
-      </div>
-    </section>`;
+  return contextCardHtml({
+    className: "rules-card-feature",
+    kicker: about.title ?? "about",
+    strong: firstSentence,
+    copy: rest,
+  });
 }
 
 function aboutDetailHtml(about) {
@@ -64,13 +57,13 @@ function computeWitnessHtml() {
         <span id="compute-witness-status" class="tight">off</span>
       </div>
       <div class="compute-witness-controls" role="group" aria-label="Device Witness mode">
-        <button class="compute-witness-mode" data-mode="quiet">quiet</button>
-        <button class="compute-witness-mode" data-mode="after-match">after-match</button>
-        <button class="compute-witness-mode" data-mode="standard">standard</button>
+        ${buttonHtml({ className: "compute-witness-mode", attrs: { "data-mode": "quiet" }, text: "quiet" })}
+        ${buttonHtml({ className: "compute-witness-mode", attrs: { "data-mode": "after-match" }, text: "after-match" })}
+        ${buttonHtml({ className: "compute-witness-mode", attrs: { "data-mode": "standard" }, text: "standard" })}
       </div>
       <div class="compute-witness-actions">
-        <button id="compute-witness-start" class="primary">start</button>
-        <button id="compute-witness-stop">stop</button>
+        ${buttonHtml({ id: "compute-witness-start", variant: "primary", text: "start" })}
+        ${buttonHtml({ id: "compute-witness-stop", text: "stop" })}
       </div>
     </section>`;
 }
@@ -82,13 +75,12 @@ export function mount(root, { setStatus }) {
 
   root.innerHTML = `
     <div class="page rules-page">
-      <div class="page-header-row rules-hero">
-        <div class="page-title-stack">
-          <h1 class="page-title">${escapeHtml(rules.title ?? "Rules")}</h1>
-          <div class="page-subtitle tight">${escapeHtml(rules.subtitle ?? "")}</div>
-        </div>
-        <a class="buttonish primary" href="#spectate">watch live</a>
-      </div>
+      ${pageHeaderHtml({
+        title: rules.title ?? "Rules",
+        subtitle: rules.subtitle ?? "",
+        className: "rules-hero",
+        action: linkButtonHtml({ href: "#spectate", variant: "danger", text: "watch live" }),
+      })}
 
       ${aboutCardHtml(rules.about)}
       ${aboutDetailHtml(rules.about)}

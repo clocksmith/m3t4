@@ -36,7 +36,7 @@ export const CONFIG = {
   isProd: IS_PROD,
 
   // Stable rules
-  maxSlots: parseInt(process.env.STABLE_MAX_SLOTS ?? "5", 10),
+  maxSlots: parseInt(process.env.STABLE_MAX_SLOTS ?? "4", 10),
   minSlots: parseInt(process.env.STABLE_MIN_SLOTS ?? "3", 10),
   submitRateMs: parseInt(process.env.SUBMIT_RATE_MS ?? "900000", 10), // 15m per slot
   submitIpRateLimitWindowMs: parseInt(process.env.SUBMIT_IP_RATE_LIMIT_WINDOW_MS ?? "600000", 10),

@@ -43,7 +43,7 @@
         },
         "playModes": {
           "type": "object",
-          "description": "Names + descriptions for the two Tuner input modes. 'direct' = keyboard, 'strategy' = uploaded combat policy.",
+          "description": "Names + descriptions for the two tuner input modes. 'direct' = keyboard, 'strategy' = uploaded combat policy.",
           "properties": {
             "direct":   { "type": "object", "properties": { "label": { "type": "string" }, "description": { "type": "string" } } },
             "strategy": { "type": "object", "properties": { "label": { "type": "string" }, "description": { "type": "string" } } }

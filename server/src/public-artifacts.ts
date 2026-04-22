@@ -23,6 +23,7 @@ export interface PublicReplayPlayerRefV1 {
   slotId?: string;
   slotName?: string;
   configHash?: string;
+  cosmetics?: ReplayPlayerV1["cosmetics"];
 }
 
 export interface PublicReplayTupleV1 {
@@ -150,6 +151,7 @@ function publicPlayerRef(player: ReplayPlayerV1): PublicReplayPlayerRefV1 {
     slotId: player.slotId,
     slotName: player.slotName,
     configHash: player.configHash,
+    cosmetics: player.cosmetics,
   };
 }
 

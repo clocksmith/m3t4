@@ -4,10 +4,17 @@ import crypto from "node:crypto";
 import { compileBrain, STRATEGIES, type BrainConfig, type ReplayArtifactV1 } from "@m3t4/sim";
 import { CONFIG } from "./config.js";
 import {
+  activeRosterSlots,
+  assertUniqueBodyInStable,
   computeAggregate,
+  defaultSlotCosmetics,
+  normalizeSlotCosmetics,
+  normalizeStableSlotCosmetics,
+  slotCosmetics,
   stablePublic,
   type MatchUpdate,
   type Slot,
+  type SlotCosmeticsInput,
   type Stable,
   type StablePublic,
   type StableStore,
@@ -97,7 +104,13 @@ export class FirestoreStableStore implements StableStore {
     });
   }
 
-  async submitToSlot(userId: string, slotIdx: number, config: BrainConfig, name?: string): Promise<{ slotId: string }> {
+  async submitToSlot(
+    userId: string,
+    slotIdx: number,
+    config: BrainConfig,
+    name?: string,
+    cosmetics?: SlotCosmeticsInput,
+  ): Promise<{ slotId: string }> {
     await this.ready;
     if (slotIdx < 0 || slotIdx >= CONFIG.maxSlots) throw new Error(`slot out of range 0..${CONFIG.maxSlots - 1}`);
     compileBrain(config);
@@ -115,11 +128,14 @@ export class FirestoreStableStore implements StableStore {
         throw new Error(`rate limited — try again in ${wait} min`);
       }
 
+      const slotCos = normalizeSlotCosmetics(cosmetics, slotIdx, existing ? slotCosmetics(existing, slotIdx) : defaultSlotCosmetics(slotIdx));
+      assertUniqueBodyInStable(st, slotIdx, slotCos);
       const slotId = existing?.slotId ?? randomId();
       const slot: Slot = {
         slotId,
         config,
         name: name ?? existing?.name ?? `slot-${slotIdx + 1}`,
+        cosmetics: slotCos,
         submittedAt: now,
         rateLockedUntil: now + CONFIG.submitRateMs,
         elo: existing?.elo ?? CONFIG.eloAnchor,
@@ -129,6 +145,7 @@ export class FirestoreStableStore implements StableStore {
         lastPlayedAt: existing?.lastPlayedAt ?? 0,
       };
       st.slots[slotIdx] = slot;
+      normalizeStableSlotCosmetics(st);
       st.updatedAt = now;
       this.writeStable(tx, st);
       return { slotId };
@@ -141,7 +158,7 @@ export class FirestoreStableStore implements StableStore {
     const snap = await this.db.collection(FIRESTORE_COLLECTIONS.stables).get();
     return snap.docs
       .map((doc) => doc.data() as Stable)
-      .filter((st) => st.slots.some((s) => s.submittedAt >= cutoff || s.lastPlayedAt >= cutoff));
+      .filter((st) => activeRosterSlots(st.slots).some((s) => s.submittedAt >= cutoff || s.lastPlayedAt >= cutoff));
   }
 
   async updateAfterMatch(res: MatchUpdate): Promise<void> {
@@ -212,7 +229,7 @@ export class FirestoreStableStore implements StableStore {
 
     for (const doc of snap.docs) {
       const st = doc.data() as Stable;
-      for (const s of st.slots) {
+      for (const s of activeRosterSlots(st.slots)) {
         s.elo = Math.round(s.elo * alpha + CONFIG.eloAnchor * CONFIG.eloDecayPerWeek);
         count++;
       }
@@ -232,7 +249,9 @@ export class FirestoreStableStore implements StableStore {
     const batch = this.db.batch();
     let ops = 0;
     const now = Date.now();
+    let cosmeticIdx = 0;
     for (const [name, cfg] of Object.entries(STRATEGIES)) {
+      const seededCosmetics = defaultSlotCosmetics(cosmeticIdx++);
       const uid = `system:${name}`;
       const ref = this.stableRef(uid);
       const snap = await ref.get();
@@ -244,6 +263,7 @@ export class FirestoreStableStore implements StableStore {
           slot.config = cfg;
           slot.name = name;
           slot.rateLockedUntil = 0;
+          slot.cosmetics = normalizeSlotCosmetics(slot.cosmetics, 0, seededCosmetics);
         }
         st.handle = `sys_${name}`;
         st.updatedAt = now;
@@ -255,6 +275,7 @@ export class FirestoreStableStore implements StableStore {
             slotId: `sys-${name}`,
             config: cfg,
             name,
+            cosmetics: seededCosmetics,
             submittedAt: now,
             rateLockedUntil: 0,
             elo: CONFIG.eloAnchor,
@@ -312,13 +333,15 @@ export class FirestoreStableStore implements StableStore {
   }
 
   private writeStable(writer: { set: (ref: DocumentReference, data: DocumentData) => unknown }, st: Stable): void {
+    normalizeStableSlotCosmetics(st);
+    const activeSlots = activeRosterSlots(st.slots);
     writer.set(this.stableRef(st.userId), stripUndefined(st));
     writer.set(this.publicStableRef(st.userId), stripUndefined({
       ...stablePublic(st),
-      slotCount: st.slots.length,
+      slotCount: activeSlots.length,
       updatedAt: st.updatedAt,
-      activeSlotIds: st.slots.map((s) => s.slotId),
-      eloAggregate: computeAggregate(st.slots),
+      activeSlotIds: activeSlots.map((s) => s.slotId),
+      eloAggregate: computeAggregate(activeSlots),
     } satisfies StablePublic & { slotCount: number; updatedAt: number; activeSlotIds: string[] }));
   }
 }

@@ -8,8 +8,12 @@ const KEY_HANDLE = "m3t4:handle";
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", ""]);
 const IS_LOCAL = typeof location === "undefined" || LOCAL_HOSTS.has(location.hostname);
 
+function runtimeWindow() {
+  return typeof window === "undefined" ? {} : window;
+}
+
 function configuredAuthMode() {
-  const requested = window.__M3T4_AUTH_MODE__ || (IS_LOCAL ? "dev" : "firebase");
+  const requested = runtimeWindow().__M3T4_AUTH_MODE__ || (IS_LOCAL ? "dev" : "firebase");
   if (!IS_LOCAL && requested === "dev") return "firebase";
   return requested;
 }
@@ -153,8 +157,9 @@ class FirebaseAuth {
 }
 
 const mode = configuredAuthMode();
+const authWindow = runtimeWindow();
 export const auth = mode === "dev"
   ? new DevAuth()
   : mode === "alpha-token"
     ? new AlphaTokenAuth()
-    : new FirebaseAuth(window.__M3T4_FIREBASE_CONFIG__);
+    : new FirebaseAuth(authWindow.__M3T4_FIREBASE_CONFIG__);

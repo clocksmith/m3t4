@@ -2,10 +2,9 @@
 // Expand theming/visual-theme.v1.json into one prompt-per-asset,
 // ready to paste into an image generator (Gemini / GPT image / Midjourney).
 //
-// Playable batch (default): 43 prompts. Emits three-row character sprite
-// strips plus all current playable stage/objective/UI assets. Skips
-// anything marked "status": "deferred" in the SSOT — locked characters
-// and epic/legendary weapon sheets.
+// Playable batch (default): 61 prompts. Emits three-row character sprite
+// strips plus all current stage/objective/UI assets and all four character
+// weapon lines.
 //
 // Usage:
 //   node tools/build-prompts.mjs                       # playable batch, one Gemini .txt per asset
@@ -15,7 +14,6 @@
 //   node tools/build-prompts.mjs --only weapons        #  objectives | ui)
 //   node tools/build-prompts.mjs --only objectives
 //   node tools/build-prompts.mjs --only ui             # locked-slot placeholder
-//   node tools/build-prompts.mjs --include-deferred    # playable + deferred
 //   node tools/build-prompts.mjs --format gemini       # one Gemini copy/paste .txt per asset
 //   node tools/build-prompts.mjs --format gpt          # one GPT image copy/paste .txt per asset
 //   node tools/build-prompts.mjs --format chat         # alias for Gemini copy/paste files
@@ -29,8 +27,7 @@
 //   node tools/build-prompts.mjs --missing-only        # only assets missing from client/
 //   node tools/build-prompts.mjs --stdout              # print copy/paste formats instead
 //
-// Playable → 43 prompts. With --include-deferred → 61 (adds locked
-// character assets + epic/legendary weapon sheets).
+// Playable → 61 prompts.
 //
 // Each emitted record has:
 //   out          — asset path the renderer expects
@@ -64,11 +61,6 @@ const outputDir = arg("--output-dir") ?? path.resolve(__dirname, "../theming/gen
 const forceSplitFiles = args.includes("--split-files") || args.includes("--one-file-per-prompt");
 const combinedFile = args.includes("--combined-file");
 const missingOnly = args.includes("--missing-only");
-// Deferred assets (locked characters, epic+legendary weapons) are hidden
-// from the playable batch. Pass --include-deferred to emit them when
-// unlocking those character or weapon tiers.
-const includeDeferred = args.includes("--include-deferred");
-
 const records = [];
 if (!only || only === "stages")     records.push(...collectStages());
 if (!only || only === "characters") records.push(...collectCharacterSheets());
@@ -77,8 +69,7 @@ if (!only || only === "weapons")    records.push(...collectWeapons());
 if (!only || only === "objectives") records.push(...collectObjectives());
 if (!only || only === "ui")         records.push(...collectUi());
 
-// Filter deferred unless explicitly opted in.
-const scoped = includeDeferred ? records : records.filter((r) => !r.deferred);
+const scoped = records;
 const filtered = missingOnly ? scoped.filter((r) => !assetExists(r.out)) : scoped;
 const rendered = renderRecords(format, filtered);
 const splitFiles = forceSplitFiles || (!combinedFile && !stdout && !explicitOut && isSplitPromptFormat(format));
@@ -118,7 +109,6 @@ function collectStages() {
       seed: v.seed,
       basePrompt: v.base,
       kind: v.kind,
-      deferred: v.status === "deferred",
     }));
   }
   return out;
@@ -141,7 +131,6 @@ function collectCharacterSheets() {
   const out = [];
   for (const [char, v] of Object.entries(doc.prompts.characterSheets)) {
     if (char.startsWith("_")) continue;
-    const characterDeferred = v.status === "deferred";
     const characterBase = stripFullSheetInstruction(v.base);
     for (let start = 0; start < shared.animationRows.length; start += rowsPerPrompt) {
       const rows = shared.animationRows.slice(start, start + rowsPerPrompt);
@@ -201,7 +190,6 @@ function collectCharacterSheets() {
           source: stripName,
           finalSheetSize: { width: shared.outW, height: shared.outH },
         },
-        deferred: characterDeferred,
       }));
     }
   }
@@ -224,7 +212,6 @@ function collectPortraits() {
         basePrompt: `${v.base}\n\n${shared.layoutDirective}`,
         grid: { cols: shared.cols, rows: shared.rows, cellW: shared.cellW, cellH: shared.cellH,
                 genCellW: shared.genCellW, genCellH: shared.genCellH, cellOrder: shared.cellOrder },
-        deferred: v.status === "deferred",
       }));
     }
   }
@@ -238,7 +225,6 @@ function collectPortraits() {
         outW: shared.outW, outH: shared.outH, genW: shared.genW, genH: shared.genH,
         seed: v.seed,
         basePrompt: `${stripTrailingPeriod(v.base)}. ${shared.layoutDirective}`,
-        deferred: v.status === "deferred",
       }));
     }
   }
@@ -246,9 +232,8 @@ function collectPortraits() {
 }
 
 function collectWeapons() {
-  // Launch = common+rare per character. Deferred = epic+legendary per
-  // character, hidden unless --include-deferred. lockedSlot is the
-  // shared locked-placeholder icon, always included in launch.
+  // Launch = common+rare per character. Advanced = epic+legendary per
+  // character. lockedSlot is the shared locked-placeholder icon.
   const out = [];
   const launch = doc.prompts.weaponSheetsLaunch;
   if (launch) {
@@ -262,14 +247,13 @@ function collectWeapons() {
         basePrompt: `${v.base}\n\n${shared.layoutDirective}`,
         grid: { cols: shared.cols, rows: shared.rows, cellW: shared.cellW, cellH: shared.cellH,
                 genCellW: shared.genCellW, genCellH: shared.genCellH, cellOrder: shared.cellOrder },
-        deferred: v.status === "deferred",
       }));
     }
   }
-  const deferred = doc.prompts.weaponSheetsDeferred;
-  if (deferred) {
-    const shared = deferred._sharedRules;
-    for (const [char, v] of Object.entries(deferred)) {
+  const advanced = doc.prompts.weaponSheetsAdvanced;
+  if (advanced) {
+    const shared = advanced._sharedRules;
+    for (const [char, v] of Object.entries(advanced)) {
       if (char.startsWith("_")) continue;
       out.push(promptRecord({
         out: v.out,
@@ -278,7 +262,6 @@ function collectWeapons() {
         basePrompt: `${v.base}\n\n${shared.layoutDirective}`,
         grid: { cols: shared.cols, rows: shared.rows, cellW: shared.cellW, cellH: shared.cellH,
                 genCellW: shared.genCellW, genCellH: shared.genCellH, cellOrder: shared.cellOrder },
-        deferred: true,
       }));
     }
   }
@@ -332,7 +315,7 @@ function stripTrailingPeriod(value) {
   return String(value).replace(/\.+\s*$/u, "");
 }
 
-function promptRecord({ out, finalOut, outW, outH, genW, genH, seed, basePrompt, kind, grid, assembly, deferred }) {
+function promptRecord({ out, finalOut, outW, outH, genW, genH, seed, basePrompt, kind, grid, assembly }) {
   const sourceScale = validateSourceScale({ out, outW, outH, genW, genH, grid });
   const contract = scaleContractFor(out);
   return {
@@ -341,7 +324,6 @@ function promptRecord({ out, finalOut, outW, outH, genW, genH, seed, basePrompt,
     negative: NEG,
     grid,
     assembly,
-    deferred: deferred ?? false,
   };
 }
 
@@ -404,7 +386,7 @@ function renderRecords(format, sourceRecords) {
       const ar = reduceAr(r.genW, r.genH);
       text +=
         `/imagine prompt: ${r.prompt} --ar ${ar} --style raw --seed ${r.seed} --stylize 100\n` +
-        `# out: ${r.out}  target ${r.outW}x${r.outH}  from ${r.genW}x${r.genH}${r.deferred ? "  DEFERRED" : ""}\n\n`;
+        `# out: ${r.out}  target ${r.outW}x${r.outH}  from ${r.genW}x${r.genH}\n\n`;
     }
     return { text, ext: "txt", label: "Midjourney copy/paste text", autoFile: true };
   }
@@ -426,7 +408,7 @@ function renderRecords(format, sourceRecords) {
   }
   if (format === "text") {
     for (const r of sourceRecords) {
-      const header = `=== ${r.out}  (gen ${r.genW}x${r.genH} -> out ${r.outW}x${r.outH}, seed ${r.seed}${r.deferred ? ", DEFERRED" : ""})`;
+      const header = `=== ${r.out}  (gen ${r.genW}x${r.genH} -> out ${r.outW}x${r.outH}, seed ${r.seed})`;
       text += header + "\n" + r.prompt + "\n\nNEGATIVE: " + r.negative + "\n\n";
       if (r.grid) text += "GRID: " + JSON.stringify(r.grid) + "\n\n";
     }
@@ -484,7 +466,6 @@ function splitIndex(format, rows) {
     "",
     `- Format: ${formatFileSlug(format)}`,
     `- Bucket: ${bucket}`,
-    `- Include deferred: ${includeDeferred ? "yes" : "no"}`,
     `- Missing only: ${missingOnly ? "yes" : "no"}`,
     `- Count: ${rows.length}`,
     "",
@@ -496,7 +477,7 @@ function splitIndex(format, rows) {
   for (const row of rows) {
     const r = row.record;
     const final = r.finalOut ? `${r.outW}x${r.outH} -> ${r.finalOut}` : `${r.outW}x${r.outH}`;
-    const asset = `${r.out}${r.deferred ? " (deferred)" : ""}`;
+    const asset = `${r.out}`;
     lines.push(`| ${row.n} | [${row.file}](./${row.file}) | \`${asset}\` | ${r.genW}x${r.genH} | ${final} | ${r.seed} |`);
   }
   return lines.join("\n") + "\n";
@@ -548,7 +529,6 @@ function providerRecord(provider, r) {
     postProcess,
     grid: r.grid ?? null,
     assembly: r.assembly ?? null,
-    deferred: r.deferred,
   };
 }
 
@@ -563,7 +543,6 @@ function copyPasteBlock(provider, r) {
   const assembly = r.assembly
     ? [`ASSEMBLY: ${JSON.stringify(r.assembly)}`]
     : [];
-  const deferred = r.deferred ? "  DEFERRED" : "";
   const aspect = reduceAr(r.genW, r.genH);
   const canvasHint = provider === "gpt"
     ? `GENERATOR CANVAS: use ${nearestGptSizeLabel(r.genW, r.genH)} if the tool requires a fixed canvas; preserve logical ${aspect}.`
@@ -571,7 +550,7 @@ function copyPasteBlock(provider, r) {
   const finalOut = r.finalOut ? [`FINAL SHEET: ${r.finalOut}`] : [];
   return [
     "================================================================================",
-    `ASSET: ${r.out}${deferred}`,
+    `ASSET: ${r.out}`,
     ...finalOut,
     canvasHint,
     `SEED: ${r.seed}`,
@@ -701,18 +680,16 @@ function formatFileSlug(format) {
 
 function defaultOutputPath(format, ext) {
   const bucket = only ?? "launch";
-  const deferred = includeDeferred ? "-with-deferred" : "";
   const missing = missingOnly ? "-missing" : "";
   const stamp = timestamp();
-  return path.join(outputDir, `${stamp}-${slug(bucket)}-${formatFileSlug(format)}${deferred}${missing}.${ext}`);
+  return path.join(outputDir, `${stamp}-${slug(bucket)}-${formatFileSlug(format)}${missing}.${ext}`);
 }
 
 function defaultOutputDir(format) {
   const bucket = only ?? "launch";
-  const deferred = includeDeferred ? "-with-deferred" : "";
   const missing = missingOnly ? "-missing" : "";
   const stamp = timestamp();
-  return path.join(outputDir, `${stamp}-${slug(bucket)}-${formatFileSlug(format)}${deferred}${missing}-files`);
+  return path.join(outputDir, `${stamp}-${slug(bucket)}-${formatFileSlug(format)}${missing}-files`);
 }
 
 function timestamp() {

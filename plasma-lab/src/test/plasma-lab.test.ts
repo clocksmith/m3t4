@@ -88,6 +88,22 @@ const unwitnessedBrowserCapability: WorkerCapability = {
   },
 };
 
+test("canonical JSON key ordering matches browser receipt signing", () => {
+  const value = {
+    signaturePublicKeyHash: { algorithm: "sha256", value: "b".repeat(64) },
+    peerSubreceipt: {
+      workerSessionId: "cs-peer",
+      requesterWorkerId: "cw-requester",
+      artifactHash: undefined,
+      kernelHash: { algorithm: "sha256", value: "a".repeat(64) },
+      outputHash: { algorithm: "sha256", value: "c".repeat(64) },
+    },
+    Z: 1,
+    a: 2,
+  };
+  assert.equal(canonicalJson(value), browserStableJson(value));
+});
+
 test("prime-search receipts require two expected-hash executions before acceptance", () => {
   const now = clock();
   const store = new ComputeLabStore({
@@ -2187,6 +2203,19 @@ function signedReceiptFields(
       { key: privateKey, dsaEncoding: "ieee-p1363" },
     ).toString("base64url"),
   };
+}
+
+function browserStableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(browserStableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .filter((key) => record[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${browserStableJson(record[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function signedPeerSubreceipt(input: {

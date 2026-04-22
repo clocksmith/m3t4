@@ -452,6 +452,10 @@ Set `PLASMA_LAB_SMOKE_REPEAT=5` or pass `--repeat=5` to run the hosted
 WebRTC artifact smoke repeatedly in one controlled command. Each pass refuses
 to start if assignment intake is already open, opens intake with a bounded
 server-side window, and disables it again in `finally`.
+Set `PLASMA_LAB_SMOKE_KERNEL=replay-verify` or pass
+`--kernel=replay-verify` to run the same hosted WebRTC path with
+`m3t4.replay_verify.v1` public action-log replay verification instead of the
+public artifact hash kernel.
 
 The local smoke starts its own in-memory lab. The remote smoke requires
 `FEATURE_COMPUTE_LAB_ROUTES=true` and `FEATURE_COMPUTE_TASK_ADMIN=true`; keep

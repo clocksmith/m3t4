@@ -1,3 +1,5 @@
+import { replayArtifactToResultV1, stableReplayJson } from "../sim/index.js";
+
 // Plasma compute worker. Runs deterministic kernels off the main
 // thread so the spectator render loop stays smooth.
 //
@@ -29,6 +31,7 @@ const KERNELS = {
     }
     return new TextEncoder().encode(params.artifactJson);
   },
+  "m3t4.replay_verify.v1": runReplayVerify,
   "device_witness.webgpu.v0": runDeviceWitnessWebGpu,
   "device_witness.render_fixture.v0": () => canvas2dFixtureBytes(),
   "device_witness.derived_buffer.v0": runDeviceWitnessDerivedBuffer,
@@ -132,6 +135,36 @@ function canvas2dFixtureBytes() {
     ...pixel(data, 1, 5),
     ...pixel(data, 5, 5),
   ]);
+}
+
+function runReplayVerify(params) {
+  if (typeof params.replayArtifactJson !== "string" || params.replayArtifactJson.length === 0) {
+    throw new Error("replayArtifactJson required");
+  }
+  if (params.replayArtifactJson.length > 1024 * 1024) throw new Error("replayArtifactJson too large");
+  const artifact = JSON.parse(params.replayArtifactJson);
+  if (!artifact || artifact.schema !== "m3t4.replay" || artifact.version !== 1) {
+    throw new Error("replay artifact v1 required");
+  }
+  if (Array.isArray(artifact.players) && artifact.players.some((player) => player?.config !== undefined)) {
+    throw new Error("private player config is not allowed in replay verify tasks");
+  }
+  const decoded = replayArtifactToResultV1(artifact, {
+    allowConstantsMismatch: params.allowConstantsMismatch === true,
+  });
+  return new TextEncoder().encode(stableReplayJson({
+    kind: "m3t4.replay_verify.v1",
+    matchId: artifact.match.matchId,
+    mode: artifact.match.mode,
+    stageId: artifact.match.stageId,
+    seed: artifact.match.seed,
+    actionLogHash: artifact.actions.hash,
+    actionLogSha256: artifact.actions.sha256,
+    simConstantsHash: artifact.sim.constantsHash,
+    behaviorVersion: artifact.trust?.behaviorVersion,
+    consumedDecisionTicks: decoded.consumedDecisionTicks,
+    result: decoded.result,
+  }));
 }
 
 async function runDeviceWitnessWebGpu(params) {

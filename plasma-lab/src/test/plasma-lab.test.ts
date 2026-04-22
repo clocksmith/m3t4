@@ -8,7 +8,16 @@ import { json } from "../http.js";
 import type { WorkerCapability } from "../plasma/types.js";
 import { canonicalJson, hashCanonical, sha256 } from "../plasma/hash.js";
 import { PersistentComputeLabStore } from "../persistent-store.js";
+import { runReplayVerify } from "../kernels/replay-verify.js";
 import { runSeedSweep } from "../kernels/seed-sweep.js";
+import {
+  createReplayArtifactV1,
+  DEFAULT_CHARS,
+  simulate,
+  stableReplayJson,
+  STAGES,
+  STRATEGIES,
+} from "@m3t4/sim";
 
 const baseConfig: PlasmaLabConfig = {
   port: 0,
@@ -27,7 +36,7 @@ const baseConfig: PlasmaLabConfig = {
 };
 
 const capability: WorkerCapability = {
-  kernels: ["prime-search.v0", "m3t4.public_artifact_verify.v0", "m3t4.seed_sweep.v0"],
+  kernels: ["prime-search.v0", "m3t4.public_artifact_verify.v0", "m3t4.replay_verify.v1", "m3t4.seed_sweep.v0"],
   runtimeSurfaces: ["cpu-reference"],
   maxChunkBytes: 1024 * 1024,
   maxConcurrentChunks: 1,
@@ -190,6 +199,59 @@ test("public artifact verification receipts accept exported artifact hashes", ()
   });
   assert.equal(second.receipt.decision, "accepted");
   assert.equal(second.validation?.status, "accepted");
+});
+
+test("replay verify receipts accept public action-log replay artifacts", () => {
+  const now = clock();
+  const store = new ComputeLabStore({ now, acceptAssignments: true });
+  const replayArtifactJson = publicReplayArtifactJson("rv-store");
+  const task = store.seedReplayVerifyTask({ replayArtifactJson });
+  const w1 = store.registerWorker({ capability });
+  const w2 = store.registerWorker({ capability });
+  const a1 = store.assignNext(auth(w1))!;
+  const a2 = store.assignNext(auth(w2))!;
+
+  assert.equal(a1.task.kind, "m3t4.replay_verify.v1");
+  assert.equal(a1.chunk.chunkId, task.chunks[0].chunkId);
+  assert.equal(task.validationPolicy.expectedOutputHash?.value, runReplayVerify({ replayArtifactJson }).outputHash.value);
+  store.acceptAssignment({ ...auth(w1), assignmentId: a1.assignment.assignmentId, assignmentToken: a1.assignment.assignmentToken });
+  store.acceptAssignment({ ...auth(w2), assignmentId: a2.assignment.assignmentId, assignmentToken: a2.assignment.assignmentToken });
+
+  const first = store.submitReceipt({
+    ...auth(w1),
+    assignmentId: a1.assignment.assignmentId,
+    assignmentToken: a1.assignment.assignmentToken,
+    taskId: a1.task.taskId,
+    chunkId: a1.chunk.chunkId,
+    ...referenceReceiptFields(a1.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 2,
+  });
+  assert.equal(first.receipt.decision, "pending");
+
+  const second = store.submitReceipt({
+    ...auth(w2),
+    assignmentId: a2.assignment.assignmentId,
+    assignmentToken: a2.assignment.assignmentToken,
+    taskId: a2.task.taskId,
+    chunkId: a2.chunk.chunkId,
+    ...referenceReceiptFields(a2.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 2,
+  });
+  assert.equal(second.receipt.decision, "accepted");
+  assert.equal(second.validation?.status, "accepted");
+});
+
+test("replay verify rejects private player configs before assignment", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const replayArtifactJson = publicReplayArtifactJson("rv-private", { includePrivateConfig: true });
+  assert.throws(
+    () => store.seedReplayVerifyTask({ replayArtifactJson }),
+    /private player config is not allowed/,
+  );
 });
 
 test("dashboard separates WebRTC public artifact receipts from measurement receipts", () => {
@@ -797,6 +859,27 @@ test("HTTP admin can seed public artifact verification from exported artifact", 
   assert.equal(n.task.kind, "m3t4.public_artifact_verify.v0");
 });
 
+test("HTTP admin can seed public replay verification artifacts", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const srv = await boot(store, { ...baseConfig, adminToken: "secret" });
+  t.after(() => srv.close());
+  const replayArtifact = JSON.parse(publicReplayArtifactJson("rv-http"));
+
+  const seeded = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/replay-verify",
+    { replayArtifact },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(seeded.status, 200);
+  assert.equal(seeded.body.chunks, 1);
+
+  const worker = await register(srv.port);
+  const n = await next(srv.port, worker);
+  assert.equal(n.task.kind, "m3t4.replay_verify.v1");
+});
+
 test("HTTP admin can seed public preset seed sweeps", async (t) => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const srv = await boot(store, { ...baseConfig, adminToken: "secret" });
@@ -1025,8 +1108,12 @@ test("HTTP use case registry reports implemented advisory workloads", async (t) 
   assert.equal(resp.status, 200);
   assert.ok(resp.body.useCases.some((useCase: any) =>
     useCase.id === "replay-verification" &&
-    useCase.workload === "m3t4.public_artifact_verify.v0" &&
+    useCase.workload === "m3t4.replay_verify.v1" &&
     useCase.authority === "advisory"
+  ));
+  assert.ok(resp.body.useCases.some((useCase: any) =>
+    useCase.id === "public-artifact-verification" &&
+    useCase.workload === "m3t4.public_artifact_verify.v0"
   ));
   assert.ok(resp.body.useCases.some((useCase: any) =>
     useCase.id === "seed-sweeps" &&
@@ -1306,6 +1393,44 @@ test("HTTP worker flow issues assignment-bound receipts", async (t) => {
   assert.equal(adminReceipt.status, 200);
   assert.equal(adminReceipt.body.receiptId, r2.receipt.receiptId);
 });
+
+function publicReplayArtifactJson(matchId: string, options: { includePrivateConfig?: boolean } = {}): string {
+  const stage = STAGES.boardroom;
+  const brainA = STRATEGIES.unicorn;
+  const brainB = STRATEGIES.disruptor;
+  const result = simulate({
+    stage,
+    brainA,
+    brainB,
+    seed: 1234,
+    maxTicks: 180,
+  });
+  const artifact = createReplayArtifactV1({
+    matchId,
+    mode: "test",
+    stage,
+    seed: 1234,
+    chars: DEFAULT_CHARS,
+    players: [
+      {
+        kind: "brain",
+        tier: "system",
+        label: "unicorn",
+        ...(options.includePrivateConfig ? { config: brainA } : {}),
+      },
+      {
+        kind: "brain",
+        tier: "system",
+        label: "disruptor",
+        ...(options.includePrivateConfig ? { config: brainB } : {}),
+      },
+    ],
+    actionLog: result.frameLog,
+    result,
+    createdAt: "2026-04-22T00:00:00.000Z",
+  });
+  return stableReplayJson(artifact);
+}
 
 function clock(): () => number {
   let now = 1_000_000;

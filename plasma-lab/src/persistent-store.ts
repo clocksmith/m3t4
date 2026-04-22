@@ -152,6 +152,18 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     return out;
   }
 
+  seedReplayVerifyTask(input: {
+    replayArtifactJson: string;
+    artifactSha256?: string;
+    allowConstantsMismatch?: boolean;
+    minExecutions?: number;
+    minAgreeing?: number;
+  }): ComputeTask {
+    const out = super.seedReplayVerifyTask(input);
+    this.persist();
+    return out;
+  }
+
   seedSeedSweepTask(input: {
     stageId: string;
     brainA: string;

@@ -619,6 +619,31 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     }
     return true;
   }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/replay-verify") {
+    const body = await readJson<{
+      replayArtifact?: unknown;
+      replayArtifactJson?: string;
+      artifactSha256?: string;
+      allowConstantsMismatch?: boolean;
+      minExecutions?: number;
+      minAgreeing?: number;
+    }>(req);
+    const replayArtifactJson = body?.replayArtifactJson
+      ?? (body?.replayArtifact ? canonicalJson(body.replayArtifact) : "");
+    try {
+      const task = deps.store.seedReplayVerifyTask({
+        replayArtifactJson,
+        artifactSha256: body?.artifactSha256,
+        allowConstantsMismatch: body?.allowConstantsMismatch,
+        minExecutions: body?.minExecutions,
+        minAgreeing: body?.minAgreeing,
+      });
+      json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/seed-sweep") {
     const body = await readJson<{
       stageId?: string;
@@ -934,7 +959,10 @@ td,th{border-bottom:1px solid #252b3a;padding:7px;text-align:left;vertical-align
   <div class="card">
     <div>public artifact verify</div>
     <textarea id="artifactJson" placeholder='paste PublicReplayArtifactV1 JSON'></textarea>
-    <div class="row"><button id="seedArtifact">seed artifact verify</button></div>
+    <div class="row">
+      <button id="seedArtifact">seed artifact verify</button>
+      <button id="seedReplayVerify">seed replay verify</button>
+    </div>
   </div>
   <div class="card">
     <div>prime plumbing</div>
@@ -1002,6 +1030,12 @@ document.getElementById("seedArtifact").onclick = () => {
   const parsed = JSON.parse(raw);
   const body = parsed.artifact ? parsed : { artifact: parsed };
   return adminPost("/compute/admin/tasks/public-artifact", body);
+};
+document.getElementById("seedReplayVerify").onclick = () => {
+  const raw = val("artifactJson");
+  if (!raw) throwStatus("replay artifact JSON required");
+  const parsed = JSON.parse(raw);
+  return adminPost("/compute/admin/tasks/replay-verify", { replayArtifact: parsed });
 };
 async function refresh() {
   localStorage.setItem("plasmaAdminToken", token.value);

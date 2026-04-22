@@ -1325,6 +1325,10 @@ async function runWebRtcArtifactTransfer(client, work, timeoutMs) {
     if (work.chunk.expectedOutputHash?.value && remoteResult.outputHash !== work.chunk.expectedOutputHash.value) {
       throw new Error("artifact peer output mismatch");
     }
+    // Keep the pair alive briefly so the peer can finish its reciprocal request.
+    if (!servedResult) {
+      await waitFor(() => (servedResult ? true : null), Math.min(2500, timeoutMs));
+    }
     return {
       outputHash: remoteResult.outputHash,
       computeMs: Number(remoteResult.computeMs) || 0,

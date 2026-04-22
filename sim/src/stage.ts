@@ -48,7 +48,7 @@ export const STAGE_DEMODAY: Stage = {
   name: "Demo Day",
   platforms: [
     { x: 56, y: 640, w: 1168, h: 80, solid: true },
-    { x: 460, y: 540, w: 360, h: 14, solid: false }, // central stage
+    { x: 400, y: 540, w: 480, h: 14, solid: false }, // central stage
     { x: 100, y: 420, w: 180, h: 14, solid: false },
     { x: 1000, y: 420, w: 180, h: 14, solid: false },
     { x: 380, y: 300, w: 180, h: 14, solid: false },

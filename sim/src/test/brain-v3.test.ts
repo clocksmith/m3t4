@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { BEHAVIOR_VERSION, createBrainState, resetBrainStateForRound, runParamBrain } from "../brain.js";
+import { ROUND_TIMER_MAX_TICKS, ROUNDS_TO_WIN_MATCH } from "../constants.js";
 import { simulate } from "../simulate.js";
 import { STAGES } from "../stage.js";
 import { STRATEGIES } from "../strategies.js";
@@ -641,5 +642,33 @@ test("v5.2: all 8 diagnostic residual pair-stages resolve within seeds 1-20", ()
   assert.equal(
     failed.length, 0,
     `${failed.length} safe-attractor pair-stages still stalemate across 20 seeds:\n  ${failed.join("\n  ")}`,
+  );
+});
+
+test("v18: Demo Day objective-loop regression seeds resolve before long-match threshold", () => {
+  const longThreshold = Math.floor(ROUND_TIMER_MAX_TICKS * ROUNDS_TO_WIN_MATCH * 2 * 0.9);
+  const cases: Array<[string, string, number]> = [
+    ["standby", "oracle", 962],
+    ["oracle", "acquirer", 5238],
+    ["shipper", "founder", 5908],
+    ["pivot", "disruptor", 2664],
+    ["shipper", "disruptor", 5885],
+    ["regulatory", "troll", 7273],
+  ];
+
+  const failed: string[] = [];
+  for (const [a, b, seed] of cases) {
+    const r = simulate({
+      stage: STAGES.demoday,
+      brainA: STRATEGIES[a as keyof typeof STRATEGIES],
+      brainB: STRATEGIES[b as keyof typeof STRATEGIES],
+      seed,
+    });
+    if (r.ticks >= longThreshold) failed.push(`${a} vs ${b} seed ${seed} ticks=${r.ticks}`);
+  }
+
+  assert.equal(
+    failed.length, 0,
+    `${failed.length} Demo Day objective-loop regressions still hit long-match threshold:\n  ${failed.join("\n  ")}`,
   );
 });

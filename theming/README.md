@@ -31,6 +31,14 @@ multiple of the promoted output dimensions. The prompt builder enforces
 this rule before it writes prompts, so fractional downscales and larger
 ratios cannot silently enter the art pipeline.
 
+Stage prompts also receive a shared runtime scale contract: the arena is
+`1280x720`, fighters render from unscaled `64x64` sprite cells, and the
+readable body / sim hitbox target is about `28x56`. Use that contract when
+judging whether props and backgrounds make fighters look correctly sized.
+The prompt builder also injects a depth contract per stage asset so `sky`,
+`far_parallax`, `mid_parallax`, `near_parallax`, platform textures, walls,
+and floor decals each know how far they sit from the combat plane.
+
 ### Character Prompt Aliases
 
 Generated prompt text uses neutral aliases so image tools do not receive

@@ -52,6 +52,7 @@ const doc = JSON.parse(fs.readFileSync(SSOT, "utf8"));
 
 const STYLE = doc.artDirection.styleSuffix;
 const NEG = doc.artDirection.negativePrompt;
+const SCALE_CONTRACT = doc.artDirection.scaleContract ?? {};
 
 const args = process.argv.slice(2);
 const only = arg("--only");
@@ -127,9 +128,12 @@ function collectCharacterSheets() {
   const shared = doc.prompts.characterSheets._sharedRules;
   const rowsPerPrompt = shared.rowsPerPrompt ?? 3;
   const scale = shared.genCellW / shared.cellW;
-  const rawPadding = Math.round(6 * scale);
-  const rawCoreW = shared.genCellW - rawPadding * 2;
-  const rawCoreH = shared.genCellH - rawPadding * 2;
+  const finalBodyW = SCALE_CONTRACT.fighterVisibleBodyW ?? Math.round(shared.cellW * 0.44);
+  const finalBodyH = SCALE_CONTRACT.fighterVisibleBodyH ?? Math.round(shared.cellH * 0.81);
+  const rawCoreW = Math.round(finalBodyW * scale);
+  const rawCoreH = Math.round(finalBodyH * scale);
+  const rawPaddingX = Math.round((shared.genCellW - rawCoreW) / 2);
+  const rawPaddingY = Math.round((shared.genCellH - rawCoreH) / 2);
   const stripGenW = shared.cols * shared.genCellW;
   const stripGenH = rowsPerPrompt * shared.genCellH;
   const stripOutW = shared.cols * shared.cellW;
@@ -174,7 +178,7 @@ function collectCharacterSheets() {
           `Hard containment rule: every populated pose must fit fully inside the central ${rawCoreW}x${rawCoreH} raw-pixel area of its own ${shared.genCellW}x${shared.genCellH} cell. Do not let hair, hands, feet, elbows, knees, clothing, or dive poses cross into neighboring cells.`,
           "Same character, same outfit, same scale, same camera-facing-right orientation in every populated cell.",
           "Character-only animation frames: draw only the character body and outfit. Do not draw walls, floors, platforms, ledges, contact surfaces, scenery, props, carried objects, coins, orbs, documents, folders, bags, weapons, slash arcs, hit sparks, UI, effects, visible grid lines, borders, or labels. Express all actions through body pose only.",
-          `Character silhouette is a TALL HUMAN FIGURE with aspect approximately 1:2 — in the final ${shared.cellW}x${shared.cellH} cell, the figure should read as ~${Math.round(shared.cellW * 0.44)} pixels wide by ~${Math.round(shared.cellH * 0.81)} pixels tall (matches the sim hitbox aspect). At the raw ${shared.genCellW}x${shared.genCellH} cell size, center the body with about ${Math.round((shared.genCellW - shared.genCellW * 0.44) / 2)}px pure magenta padding on each side and about ${Math.round((shared.genCellH - shared.genCellH * 0.81) / 2)}px magenta padding above the head and below the feet. Do NOT draw a square silhouette — human figures are roughly 1:2 tall.`,
+          `Character silhouette is a TALL HUMAN FIGURE with aspect approximately 1:2 — in the final ${shared.cellW}x${shared.cellH} cell, the figure should read as ~${finalBodyW} pixels wide by ~${finalBodyH} pixels tall (matches the sim hitbox and runtime scale contract). At the raw ${shared.genCellW}x${shared.genCellH} cell size, center the body with about ${rawPaddingX}px pure magenta padding on each side and about ${rawPaddingY}px magenta padding above the head and below the feet. Do NOT draw a square silhouette — human figures are roughly 1:2 tall.`,
           "Game objects are rendered separately by the engine; never include a Proof Core, Demand Node, weapon, folder, document, coin, orb, wall, or platform in the character strip.",
         ].filter(Boolean).join("\n"),
         grid: {
@@ -328,16 +332,43 @@ function stripTrailingPeriod(value) {
   return String(value).replace(/\.+\s*$/u, "");
 }
 
-function promptRecord({ out, finalOut, outW, outH, genW, genH, seed, basePrompt, grid, assembly, deferred }) {
+function promptRecord({ out, finalOut, outW, outH, genW, genH, seed, basePrompt, kind, grid, assembly, deferred }) {
   const sourceScale = validateSourceScale({ out, outW, outH, genW, genH, grid });
+  const contract = scaleContractFor(out);
   return {
-    out, finalOut, outW, outH, genW, genH, sourceScale, seed,
-    prompt: `${basePrompt}\n\nSTYLE: ${STYLE}`,
+    out, finalOut, outW, outH, genW, genH, sourceScale, seed, kind,
+    prompt: [basePrompt, contract, `STYLE: ${STYLE}`].filter(Boolean).join("\n\n"),
     negative: NEG,
     grid,
     assembly,
     deferred: deferred ?? false,
   };
+}
+
+function scaleContractFor(out) {
+  if (String(out).startsWith("assets/stages/") && SCALE_CONTRACT.stagePrompt) {
+    return [
+      `RUNTIME SCALE CONTRACT: ${SCALE_CONTRACT.stagePrompt}`,
+      stageDepthContractFor(out),
+    ].filter(Boolean).join("\n");
+  }
+  return "";
+}
+
+function stageDepthContractFor(out) {
+  const depth = SCALE_CONTRACT.stageDepth ?? {};
+  const key =
+    out.endsWith("/ui/preview_thumb.png") ? "previewThumb" :
+    out.endsWith("/layers/sky.png") ? "sky" :
+    out.endsWith("/layers/far_parallax.png") ? "farParallax" :
+    out.endsWith("/layers/mid_parallax.png") ? "midParallax" :
+    out.endsWith("/layers/near_parallax.png") ? "nearParallax" :
+    out.endsWith("/textures/platform.png") ? "platform" :
+    out.endsWith("/textures/platform_edge.png") ? "platformEdge" :
+    out.endsWith("/textures/wall.png") ? "wall" :
+    out.endsWith("/textures/floor_detail.png") ? "floorDetail" :
+    null;
+  return key && depth[key] ? `LAYER DEPTH CONTRACT: ${depth[key]}` : "";
 }
 
 function validateSourceScale({ out, outW, outH, genW, genH, grid }) {

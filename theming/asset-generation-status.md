@@ -17,7 +17,7 @@ Renderer usage:
 | Stage `platform_edge.png` | Tiled over platform tops, up to `16px` high. |
 | Stage `wall.png` | Tiled only inside solid floor bodies below the top edge. |
 | Stage `floor_detail.png` | Drawn once, centered on wide solid floors only. |
-| Character `sprite.png` | `64x64` cells rendered at `1.25x` (`80x80` visual cell). Sim hitbox remains `26x52`; visible body target is roughly `35x65` after render scaling. |
+| Character `sprite.png` | `64x64` cells rendered unscaled. Sim hitbox is `28x56`; visible body target is roughly `28x56` inside the cell. |
 | Weapon `launch.png` | `48x48` cells rendered at about `0.96x` idle and `1.12x` active. |
 | Objective payload | Source `48x48`, rendered `34x34` in-world. |
 | Objective target | Source `96x96`, rendered `96x96`, anchored so the intake ring matches the sim goal point. |
@@ -27,10 +27,10 @@ Renderer usage:
 Missing-file checks are not enough anymore. The current art pass should also
 audit:
 
-- Character/background proportion on all three stages. Current sprites may read
-  small or too clean against dense backgrounds.
-- Whether `SPRITE_RENDER_SCALE = 1.25` should stay, increase slightly, or be
-  replaced by higher-resolution character cells.
+- Character/background proportion on all three stages. Current sprites should
+  read as unscaled `64x64` cells with a roughly `28x56` body.
+- Whether `28x56` is the right default hitbox/body target before any full
+  character regen.
 - Whether stage parallax layers are too detailed compared with 64px character
   sheets.
 - Whether platform textures read as traversable surfaces at gameplay scale.
@@ -40,6 +40,44 @@ audit:
 
 Regeneration priority should be based on screenshots from real gameplay
 framing, not only isolated prompt outputs.
+
+## Runtime Scale Contract
+
+Stage prompts now receive a shared scale contract from
+`theming/visual-theme.v1.json`: arena `1280x720`, fighters rendered from
+unscaled `64x64` cells, readable body and hitbox about `28x56`. Stage props,
+platforms, doors, monitors, furniture, racks, rails, wall panels, podiums,
+crowd elements, and debris should be proportioned so a `56px`-tall fighter
+reads human-sized in the scene.
+
+Each stage asset also receives a depth contract:
+
+| Stage asset | Depth role |
+|---|---|
+| `sky.png` | Deepest atmosphere/architecture; no close gameplay-scale props. |
+| `far_parallax.png` | Distant, lower-contrast background cues. |
+| `mid_parallax.png` | Background props behind platforms and fighters. |
+| `near_parallax.png` | Nearest backdrop dressing, still behind the combat plane. |
+| `platform.png` / `platform_edge.png` | Actual walkable gameplay surface at fighter scale. |
+| `wall.png` | Solid floor/body fill, close to gameplay but not a prop layer. |
+| `floor_detail.png` | Small close-plane decals that must not read as obstacles. |
+
+## Weapon Placement Audit
+
+Current character sheets do not contain skeleton weapon guides or drawn
+weapons. That is intentional: weapons render as a separate layer. Current
+placement is still approximate, though: the renderer computes one generic hand
+point from fighter position, facing, `bodyW`, and `bodyH`, then rotates the
+weapon sprite toward the sim sword tip. Only per-weapon `visualYOffset` exists.
+
+Better next pass:
+
+- Keep character sheets empty-hand.
+- Add per-animation/per-frame hand-anchor metadata, not visible skeleton pixels.
+- Drive the weapon layer from those anchors so idle, run, carry, dive, and swing
+  frames attach to the actual hand pose.
+- Add a debug overlay that draws hand anchor, weapon base, and weapon tip over
+  gameplay screenshots before regenerating weapon art.
 
 ## Generation Source Scale
 

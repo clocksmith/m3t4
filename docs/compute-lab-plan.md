@@ -263,7 +263,7 @@ GET  /compute/public/replay-badges/:matchId
 Admin/debug endpoints behind admin auth:
 
 ```text
-POST /compute/admin/assignments
+POST /compute/admin/assignments  # {acceptAssignments, durationMs?}
 POST /compute/admin/tasks/seed
 POST /compute/admin/tasks/device-witness-webgpu
 POST /compute/admin/tasks/device-witness-render
@@ -694,6 +694,7 @@ WebRTC public-artifact transfer:
 WebRTC client public-artifact transfer:
   command: npm -w plasma-lab run smoke:webrtc-client-artifact
   env: PLASMA_LAB_SMOKE_ORIGIN, PLASMA_LAB_SMOKE_ADMIN_TOKEN, M3T4_SMOKE_GAME_ORIGIN
+  repeat: set PLASMA_LAB_SMOKE_REPEAT=5 or pass --repeat=5 for a hosted soak
   use: launches two real browser clients, sets the staff-only WebRTC artifact flag, opens intake only for assignment issue, and requires two accepted transport=webrtc expected-hash receipts
 
 WebRTC hosted-client public-artifact 5-pass soak:
@@ -1052,19 +1053,21 @@ Rollout order:
 
 Use the runtime assignment toggle as the primary control. Keep the deploy-time
 flags enabled only for the surfaces being measured, but keep assignment intake
-closed until a staff window starts.
+closed until a staff window starts. Prefer the timed toggle or
+`durationMs` API for every staff window; the store reports the active deadline
+as `assignmentIntakeClosesAt` and closes intake automatically when it expires.
 
 ```bash
 export PLASMA_LAB_ORIGIN="https://plasma-lab-789525635095.us-central1.run.app"
 export PLASMA_LAB_ADMIN_TOKEN="$(gcloud secrets versions access latest --secret=plasma-lab-admin-token --project=m3ta-ai)"
 
-# Open the staff window.
+# Open the staff window with an automatic 30-second close.
 curl -fsS -X POST "$PLASMA_LAB_ORIGIN/compute/admin/assignments" \
   -H "content-type: application/json" \
   -H "x-plasma-admin-token: $PLASMA_LAB_ADMIN_TOKEN" \
-  --data '{"acceptAssignments":true}'
+  --data '{"acceptAssignments":true,"durationMs":30000}'
 
-# Close the staff window.
+# Close the staff window immediately.
 curl -fsS -X POST "$PLASMA_LAB_ORIGIN/compute/admin/assignments" \
   -H "content-type: application/json" \
   -H "x-plasma-admin-token: $PLASMA_LAB_ADMIN_TOKEN" \
@@ -1109,6 +1112,7 @@ Rollback note:
 
 ```text
 primary rollback: POST /compute/admin/assignments {"acceptAssignments":false}
+window guard: use POST /compute/admin/assignments {"acceptAssignments":true,"durationMs":30000} or the dashboard timed button
 task rollback: POST /compute/admin/tasks/:taskId/cancel for the active seeded task
 client rollback: staff runs window.m3t4Compute.stop(); hidden opt-in remains off by default
 transport rollback: set FEATURE_COMPUTE_WEBRTC_ARTIFACTS=false, FEATURE_COMPUTE_WEBRTC_DATA=false, or FEATURE_COMPUTE_WEBRTC_SIGNALING=false

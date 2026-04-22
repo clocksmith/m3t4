@@ -9,6 +9,7 @@ import {
   configFromState,
   dirtyCount,
   formatConfigJson,
+  formatConfigJsonV2,
   neutralBuildState,
   normalizeBuildConfig,
   parseBuildConfigJson,
@@ -362,7 +363,7 @@ function wireEditorControls() {
   root.querySelector("#copy-config-json").addEventListener("click", async () => {
     const msg = root.querySelector("#submit-msg");
     try {
-      const json = formatConfigJson(configFromState(draftForSeat(selectedSlot).state));
+      const json = formatConfigJsonV2(configFromState(draftForSeat(selectedSlot).state));
       await navigator.clipboard.writeText(json);
       msg.className = "ok";
       msg.textContent = "json copied";
@@ -571,7 +572,7 @@ function updateJsonPreview(draft) {
   const preview = root.querySelector("#config-json-preview");
   if (!preview) return;
   try {
-    preview.textContent = formatConfigJson(configFromState(draft.state));
+    preview.textContent = formatConfigJsonV2(configFromState(draft.state));
   } catch (e) {
     preview.textContent = e.message;
   }

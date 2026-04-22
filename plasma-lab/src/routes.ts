@@ -3,12 +3,13 @@ import type { PlasmaLabConfig } from "./config.js";
 import { header, html, json, readJson } from "./http.js";
 import { canonicalJson } from "./plasma/hash.js";
 import type { ContentHash, DerivedExecutionEvidence, ExecutionMode, GovernorMode, TransportKind, WorkerCapability, WorkerRefusalReason } from "./plasma/types.js";
-import { ComputeLabStore, type WebRtcPairRecord, type WebRtcSessionRecord } from "./store.js";
+import { ComputeLabStore, type ExecutionReceipt, type ValidationRecord, type WebRtcPairRecord, type WebRtcSessionRecord } from "./store.js";
 import { COMPUTE_USE_CASES } from "./use-cases.js";
 
 export interface RouteDeps {
   store: ComputeLabStore;
   config: PlasmaLabConfig;
+  eventLog?: (event: Record<string, unknown>) => void;
 }
 
 interface WorkerAuthBody {
@@ -245,6 +246,7 @@ export async function handleComputeLabRequest(
         clientVersion: body.clientVersion,
         signature: body.signature,
       }));
+      logDerivedReceiptOutcome(deps, result);
       json(res, 200, result);
     } catch (e) {
       json(res, 400, { error: message(e) });
@@ -760,6 +762,74 @@ function authFrom<T extends Record<string, unknown>>(
     workerSessionToken: body?.workerSessionToken ?? header(req, "x-worker-session-token"),
     ...rest,
   };
+}
+
+function logDerivedReceiptOutcome(
+  deps: RouteDeps,
+  result: { receipt: ExecutionReceipt; validation?: ValidationRecord },
+): void {
+  const { receipt } = result;
+  if (!receipt.derived && receipt.kernelId !== "device_witness.derived_buffer.v0") return;
+  const chunk = deps.store.getTask(receipt.taskId)?.chunks.find((candidate) => candidate.chunkId === receipt.chunkId);
+  const sourceId = paramString(chunk?.params.sourceId);
+  const regionId = paramString(chunk?.params.regionId);
+  const outputId = paramString(chunk?.params.outputId);
+  const event = {
+    event: "plasma-lab.derived-receipt",
+    accepted: receipt.decision === "accepted",
+    decision: receipt.decision,
+    reason: receipt.reason,
+    validationStatus: result.validation?.status,
+    taskId: receipt.taskId,
+    chunkId: receipt.chunkId,
+    receiptId: receipt.receiptId,
+    workerId: receipt.workerId,
+    derivedFields: {
+      sourceFrameHash: mappedHashStatus(receipt.derived?.sourceHashes, sourceId, hashFromParam(chunk?.params.sourceHash)),
+      bufferRegionHash: mappedHashStatus(receipt.derived?.bufferRegionHashes, regionId, hashFromParam(chunk?.params.regionHash)),
+      producerKernelHash: mappedHashStatus(
+        receipt.derived?.producerKernelHashes,
+        outputId,
+        hashFromParam(chunk?.params.producerKernelHash),
+      ),
+      outputHash: mappedHashStatus(receipt.derived?.outputHashes, outputId, receipt.outputHash),
+      derivedOutputHash: singleHashStatus(receipt.derived?.derivedOutputHash, receipt.outputHash),
+    },
+  };
+  if (deps.eventLog) deps.eventLog(event);
+  else console.log(JSON.stringify(event));
+}
+
+function mappedHashStatus(
+  values: Record<string, ContentHash> | undefined,
+  key: string | undefined,
+  expected: ContentHash | undefined,
+): "missing" | "present" | "matches" | "mismatch" {
+  const value = key ? values?.[key] : undefined;
+  if (!value) return "missing";
+  if (!expected) return "present";
+  return routeHashesEqual(value, expected) ? "matches" : "mismatch";
+}
+
+function singleHashStatus(
+  value: ContentHash | undefined,
+  expected: ContentHash | undefined,
+): "missing" | "present" | "matches" | "mismatch" {
+  if (!value) return "missing";
+  if (!expected) return "present";
+  return routeHashesEqual(value, expected) ? "matches" : "mismatch";
+}
+
+function hashFromParam(value: unknown): ContentHash | undefined {
+  return typeof value === "string" && value ? { algorithm: "sha256", value } : undefined;
+}
+
+function paramString(value: unknown): string | undefined {
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function routeHashesEqual(a: ContentHash, b: ContentHash): boolean {
+  return a.algorithm === b.algorithm && a.value.toLowerCase() === b.value.toLowerCase();
 }
 
 function message(e: unknown): string {

@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   configFromState,
+  formatConfigJsonV2,
   normalizeBuildConfig,
+  parseBuildConfigJson,
   stateFromConfig,
 } from "../lib/build-config.js";
 
@@ -52,4 +54,36 @@ test("top-level attribute maps normalize to the same config shape", () => {
   });
 
   assert.deepEqual(normalizeBuildConfig(cfg.attributes), normalizeBuildConfig(cfg));
+});
+
+test("formatConfigJsonV2 emits slider-space JSON and imports back to native", () => {
+  const state = {
+    burnRate: 10,
+    moat: 9,
+    shipRate: 81,
+    foresight: 8,
+    pivotSpeed: 47,
+    leverage: 50,
+    networking: 25,
+    spite: 50,
+    greed: 5,
+    pacing: 6,
+    cunning: 0,
+    lift: 15,
+    parry: 0,
+    chase: 39,
+    discipline: 15,
+  };
+  const native = normalizeBuildConfig(configFromState(state, { id: "roundtrip" }));
+  const exported = JSON.parse(formatConfigJsonV2(native));
+
+  assert.equal(exported.configVersion, 2);
+  assert.equal(exported.attributes.moat, 9);
+  assert.equal(exported.attributes.foresight, 8);
+  assert.equal(exported.attributes.shipRate, 81);
+  assert.equal(exported.attributes.leverage, 50);
+  assert.equal(exported.attributes.spite, 50);
+  assert.equal(exported.attributes.hallucination, 0);
+
+  assert.deepEqual(parseBuildConfigJson(JSON.stringify(exported)), native);
 });

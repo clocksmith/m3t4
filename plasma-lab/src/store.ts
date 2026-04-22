@@ -1639,16 +1639,35 @@ function receiptMismatch(
     if (!derived || derived.contractVersion !== "derived-compute-extension.v0") {
       return { decision: "malformed", reason: "derived evidence required" };
     }
-    if (!hashesEqual(derived.sourceHashes?.[sourceId], hashParam(chunk.params.sourceHash))) {
+    const sourceHash = derived.sourceHashes?.[sourceId];
+    const bufferRegionHash = derived.bufferRegionHashes?.[regionId];
+    const producerKernelHash = derived.producerKernelHashes?.[outputId];
+    const outputHash = derived.outputHashes?.[outputId];
+    if (!sourceHash) {
+      return { decision: "malformed", reason: "derived source hash required" };
+    }
+    if (!bufferRegionHash) {
+      return { decision: "malformed", reason: "derived buffer region hash required" };
+    }
+    if (!producerKernelHash) {
+      return { decision: "malformed", reason: "derived producer kernel hash required" };
+    }
+    if (!outputHash) {
+      return { decision: "malformed", reason: "derived output hash required" };
+    }
+    if (!derived.derivedOutputHash) {
+      return { decision: "malformed", reason: "derived output hash required" };
+    }
+    if (!hashesEqual(sourceHash, hashParam(chunk.params.sourceHash))) {
       return { decision: "input-mismatch", reason: "derived source hash mismatch" };
     }
-    if (!hashesEqual(derived.bufferRegionHashes?.[regionId], hashParam(chunk.params.regionHash))) {
+    if (!hashesEqual(bufferRegionHash, hashParam(chunk.params.regionHash))) {
       return { decision: "input-mismatch", reason: "derived buffer region hash mismatch" };
     }
-    if (!hashesEqual(derived.producerKernelHashes?.[outputId], hashParam(chunk.params.producerKernelHash))) {
+    if (!hashesEqual(producerKernelHash, hashParam(chunk.params.producerKernelHash))) {
       return { decision: "kernel-mismatch", reason: "derived producer kernel hash mismatch" };
     }
-    if (!hashesEqual(derived.outputHashes?.[outputId], input.outputHash)) {
+    if (!hashesEqual(outputHash, input.outputHash)) {
       return { decision: "output-mismatch", reason: "derived output hash mismatch" };
     }
     if (!hashesEqual(derived.derivedOutputHash, input.outputHash)) {

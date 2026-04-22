@@ -60,10 +60,22 @@ export type AttributeSpec =
       triggers?: Array<{ when: string; value: number }>;
     };
 
+// `configVersion` selects the encoding of numeric scalar attributes.
+// - 1 (default when omitted): native units per RANGES table (moat in px,
+//   foresight in seconds, leverage/spite signed -1..1, etc.). Back-compat;
+//   internal storage format.
+// - 2: UI-space (0..100 for every knob; matches slider positions). Any
+//   validator input in this format is converted to native before use.
+//   Emitted by user-facing JSON surfaces (Tune copy/send, Profile JSON tab).
+// DSL-based attribute specs (AttributeSpec that aren't plain numbers) are
+// always evaluated in native — configVersion applies only to scalar numbers.
+export type ConfigVersion = 1 | 2;
+
 export interface BrainConfig {
   id: string;
   author?: string;
   seed?: number; // per-brain RNG offset (server can override)
+  configVersion?: ConfigVersion;
   attributes: Partial<Record<ParamKey, AttributeSpec>>;
 }
 

@@ -15,6 +15,7 @@ import {
   HARD_CAP,
   KNOBS as SHARED_KNOBS,
   configFromState,
+  formatConfigJsonV2,
   remainingCeilingForState,
   scaledStateFromValues,
   stateSpent,
@@ -696,7 +697,7 @@ function updateSlot(slot) {
   if (exportEl) {
     exportEl.textContent = modes[slot] === "preset"
       ? JSON.stringify({ preset: slotPresetNames[slot], attributes: "server-side" }, null, 2)
-      : JSON.stringify(slotConfig(slot), null, 2);
+      : formatConfigJsonV2(slotConfig(slot));
   }
 
   // Repaint --fill on each slider so drag-beyond-ceiling clamps don't

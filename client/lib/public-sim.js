@@ -168,18 +168,20 @@ export function budgetSpent(cfg) {
 export function validateUserSubmission(cfg) {
   const errors = [];
   const attrs = {};
+  const configVersion = cfg?.configVersion === 2 ? 2 : 1;
   for (const k of USER_KNOBS) {
     const raw = cfg?.attributes?.[k];
     if (typeof raw !== "number" || !Number.isFinite(raw)) {
       errors.push(`${k} must be a finite numeric scalar`);
       continue;
     }
-    const [lo, hi] = RANGES[k];
+    const [lo, hi] = configVersion === 2 ? [0, 100] : RANGES[k];
     if (raw < lo - USER_SUBMISSION_EPSILON || raw > hi + USER_SUBMISSION_EPSILON) {
-      errors.push(`${k} must be within [${lo}, ${hi}]`);
+      errors.push(`${k} must be within [${lo}, ${hi}] (configVersion ${configVersion})`);
       continue;
     }
-    attrs[k] = clamp(raw, lo, hi);
+    const clamped = clamp(raw, lo, hi);
+    attrs[k] = configVersion === 2 ? uiToNative(k, clamped) : clamped;
   }
 
   const spent = errors.length === 0 ? budgetSpent({ attributes: attrs }) : 0;
@@ -187,18 +189,25 @@ export function validateUserSubmission(cfg) {
   const rawHallucination = cfg?.attributes?.hallucination;
   if (typeof rawHallucination !== "number" || !Number.isFinite(rawHallucination)) {
     errors.push(`hallucination must be the computed numeric scalar ${hallucination}`);
-  } else if (errors.length === 0 && Math.abs(rawHallucination - hallucination) > USER_SUBMISSION_EPSILON) {
-    errors.push(`hallucination must equal computed value ${hallucination}`);
+  } else if (errors.length === 0) {
+    const rawNative = configVersion === 2 ? uiToNative("hallucination", rawHallucination) : rawHallucination;
+    if (Math.abs(rawNative - hallucination) > USER_SUBMISSION_EPSILON) {
+      errors.push(`hallucination must equal computed value ${hallucination}`);
+    }
   }
   if (errors.length === 0 && spent > MAX_USER_SPEND) {
     errors.push(`total budget spend ${spent} exceeds hallucination cap ${MAX_USER_SPEND}`);
   }
 
+  // Output config is always canonical native; strip configVersion so
+  // downstream consumers never need to branch on encoding.
+  const outAttrs = { ...attrs, hallucination };
+  const { configVersion: _dropped, ...cfgSansVersion } = cfg || {};
   return {
     ok: errors.length === 0,
     errors,
     spent,
     hallucination,
-    config: errors.length === 0 ? { ...cfg, attributes: { ...attrs, hallucination } } : undefined,
+    config: errors.length === 0 ? { ...cfgSansVersion, attributes: outAttrs } : undefined,
   };
 }

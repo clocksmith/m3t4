@@ -516,6 +516,74 @@ test("Device Witness derived buffer fixture rejects mismatched derived output ha
   assert.notEqual(store.getTask(task.taskId)?.status, "complete");
 });
 
+test("Device Witness derived buffer fixture rejects missing source hash evidence", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const task = store.seedDeviceWitnessDerivedBufferTask({ seed: 5, count: 16 });
+  const worker = store.registerWorker({ capability: webgpuCapability });
+  const nextBody = store.assignNext(auth(worker))!;
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const fields = referenceReceiptFields(nextBody.chunk);
+  const derived = {
+    ...fields.derived!,
+    sourceHashes: { ...fields.derived!.sourceHashes },
+  };
+  delete derived.sourceHashes[nextBody.chunk.params.sourceId as string];
+  const result = store.submitReceipt({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: nextBody.task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...fields,
+    derived,
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 3,
+  });
+  assert.equal(result.receipt.decision, "malformed");
+  assert.equal(result.receipt.reason, "derived source hash required");
+  assert.notEqual(store.getTask(task.taskId)?.status, "complete");
+});
+
+test("Device Witness derived buffer fixture rejects unknown producer kernel evidence", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const task = store.seedDeviceWitnessDerivedBufferTask({ seed: 5, count: 16 });
+  const worker = store.registerWorker({ capability: webgpuCapability });
+  const nextBody = store.assignNext(auth(worker))!;
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const fields = referenceReceiptFields(nextBody.chunk);
+  const outputId = nextBody.chunk.params.outputId as string;
+  const result = store.submitReceipt({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: nextBody.task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...fields,
+    derived: {
+      ...fields.derived!,
+      producerKernelHashes: {
+        ...fields.derived!.producerKernelHashes,
+        [outputId]: { algorithm: "sha256", value: "11".repeat(32) },
+      },
+    },
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 3,
+  });
+  assert.equal(result.receipt.decision, "kernel-mismatch");
+  assert.equal(result.receipt.reason, "derived producer kernel hash mismatch");
+  assert.notEqual(store.getTask(task.taskId)?.status, "complete");
+});
+
 test("Device Witness WebRTC challenge validates as an assignment-bound measurement receipt", () => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const task = store.seedDeviceWitnessWebRtcTask({ timeoutMs: 500 });
@@ -712,11 +780,13 @@ test("HTTP admin can seed Device Witness receipt workloads", async (t) => {
     srv.port,
     "POST",
     "/compute/admin/tasks/device-witness-derived-buffer",
-    { seed: 13, count: 16 },
+    { seed: 13, count: 16, minExecutions: 1, minAgreeing: 1 },
     { "x-plasma-admin-token": "secret" },
   );
   assert.equal(derived.status, 200);
   assert.equal(derived.body.chunks, 1);
+  assert.equal(derived.body.validationPolicy.minExecutions, 1);
+  assert.equal(derived.body.validationPolicy.minAgreeing, 1);
 
   const worker = await register(srv.port, webgpuCapability);
   const first = await next(srv.port, worker);
@@ -761,6 +831,46 @@ test("HTTP admin can toggle assignment acceptance without redeploying", async (t
   );
   assert.equal(disabled.status, 200);
   assert.equal(disabled.body.acceptAssignments, false);
+});
+
+test("HTTP derived receipts log structured evidence field status", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  store.seedDeviceWitnessDerivedBufferTask({ seed: 13, count: 16, minExecutions: 1, minAgreeing: 1 });
+  const events: Record<string, any>[] = [];
+  const srv = await boot(store, baseConfig, { eventLog: (event) => events.push(event) });
+  t.after(() => srv.close());
+
+  const worker = await register(srv.port, webgpuCapability);
+  const nextBody = await next(srv.port, worker);
+  assert.equal(nextBody.task.kind, "device_witness.derived_buffer.v0");
+  await accept(srv.port, worker, nextBody.assignment.assignmentId, nextBody.assignment.assignmentToken);
+
+  const fields = referenceReceiptFields(nextBody.chunk);
+  const resp = await req(srv.port, "POST", "/compute/receipts", {
+    ...worker,
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: nextBody.task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...fields,
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 5,
+  });
+  assert.equal(resp.status, 200);
+  assert.equal(resp.body.receipt.decision, "accepted");
+
+  const event = events.find((entry) => entry.event === "plasma-lab.derived-receipt")!;
+  assert.equal(event.accepted, true);
+  assert.equal(event.decision, "accepted");
+  assert.equal(event.validationStatus, "accepted");
+  assert.deepEqual(event.derivedFields, {
+    sourceFrameHash: "matches",
+    bufferRegionHash: "matches",
+    producerKernelHash: "matches",
+    outputHash: "matches",
+    derivedOutputHash: "matches",
+  });
 });
 
 test("HTTP compute routes are disabled behind the lab route flag", async (t) => {
@@ -1086,10 +1196,11 @@ function auth(reg: ReturnType<ComputeLabStore["registerWorker"]>) {
 async function boot(
   store: ComputeLabStore,
   config: PlasmaLabConfig,
+  options: { eventLog?: (event: Record<string, unknown>) => void } = {},
 ): Promise<{ port: number; close: () => Promise<void> }> {
   const server = http.createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
-    if (await handleComputeLabRequest(request, response, url, { store, config })) return;
+    if (await handleComputeLabRequest(request, response, url, { store, config, ...options })) return;
     json(response, 404, { error: "not found" });
   });
   return new Promise((resolve) => {

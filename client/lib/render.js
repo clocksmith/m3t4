@@ -509,8 +509,11 @@ function drawSpriteFighter(ctx, f, side, frame) {
   ctx.imageSmoothingEnabled = false;
   ctx.translate(Math.round(f.x), Math.round(f.y));
   // Source sheets face camera-right. Facing left is a horizontal flip.
-  // Do not flip Y; canvas Y grows downward and a Y flip would invert the body.
-  if (f.facing < 0) ctx.scale(-1, 1);
+  // Wall-slide art should face the contacted wall, not whatever the brain was
+  // aiming at that tick. Do not flip Y; canvas Y grows downward and a Y flip
+  // would invert the body.
+  const renderFacing = animName === "wallSlide" && f.wall ? f.wall : f.facing;
+  if (renderFacing < 0) ctx.scale(-1, 1);
   // Render scale: draw the 64x64 sprite cell at ~1.25x so fighters read
   // at a closer-to-genre-norm stage proportion (~11% of stage height
   // vs. 8.9% at 1:1). The hitbox stays sim-authoritative — visual only.

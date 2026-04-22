@@ -19,10 +19,12 @@ export type AttributeSpec = number | string | {
         value: number;
     }>;
 };
+export type ConfigVersion = 1 | 2;
 export interface BrainConfig {
     id: string;
     author?: string;
     seed?: number;
+    configVersion?: ConfigVersion;
     attributes: Partial<Record<ParamKey, AttributeSpec>>;
 }
 export type FighterStateLabel = "idle" | "walk" | "jump" | "fall" | "wallSlide" | "swipe" | "dive" | "stun" | "dead";

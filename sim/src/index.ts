@@ -14,3 +14,4 @@ export {
 } from "./simulate.js";
 export { makeRng, type Rng } from "./rng.js";
 export { STRATEGIES, STRATEGY_NAMES, SAMPLE_TRAJECTORIES, type StrategyName } from "./strategies.js";
+export { evaluateReciprocalSideBias, type ReciprocalSideBiasOptions, type ReciprocalSideBiasResult } from "./side-bias.js";

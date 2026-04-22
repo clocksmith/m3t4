@@ -8,6 +8,7 @@ import {
   USER_BUDGET,
   USER_KNOBS,
   computedHallucinationForSpend,
+  nativeToUI,
   uiToNative,
   validateUserSubmission,
 } from "../budget.js";
@@ -25,6 +26,19 @@ function cfgFromUi(values: Partial<Record<ParamKey, number>>, hallucination?: nu
   }
   attributes.hallucination = hallucination ?? computedHallucinationForSpend(spent);
   return { id: "budget-test", attributes };
+}
+
+function cfgV2FromUi(values: Partial<Record<ParamKey, number>>, hallucinationUi?: number): BrainConfig {
+  const attributes: BrainConfig["attributes"] = {};
+  let spent = 0;
+  for (const key of USER_KNOBS) {
+    const ui = values[key] ?? 0;
+    attributes[key] = ui;
+    spent += ui;
+  }
+  const hallucination = computedHallucinationForSpend(spent);
+  attributes.hallucination = hallucinationUi ?? nativeToUI("hallucination", hallucination);
+  return { id: "budget-test-v2", configVersion: 2, attributes };
 }
 
 test("validateUserSubmission accepts configs at the hard budget", () => {
@@ -98,7 +112,7 @@ test("validateUserSubmission accepts capped over-budget configs when hallucinati
 test("validateUserSubmission rejects configs beyond the hallucination cap", () => {
   const spent = 400;
   const cfg = cfgFromUi({
-    burnRate: 100,
+    burnRate: 10,
     moat: 100,
     shipRate: 100,
     foresight: 100,
@@ -146,4 +160,65 @@ test("validateUserSubmission rejects out-of-range knob values", () => {
     `expected a range error, got ${JSON.stringify(validation.errors)}`,
   );
   assert.equal(validation.config, undefined);
+});
+
+test("validateUserSubmission accepts v2 UI-space configs and normalizes to native", () => {
+  const cfg = cfgV2FromUi({
+    burnRate: 100,
+    moat: 9,
+    shipRate: 81,
+    foresight: 8,
+    pivotSpeed: 47,
+    leverage: 50,
+    networking: 25,
+    spite: 50,
+    greed: 5,
+    pacing: 6,
+    lift: 15,
+    chase: 39,
+    discipline: 15,
+  });
+
+  const validation = validateUserSubmission(cfg);
+
+  assert.equal(validation.ok, true, validation.errors.join("; "));
+  assert.equal(validation.spent, USER_BUDGET);
+  assert.equal(validation.hallucination, 0);
+  assert.equal(validation.config?.configVersion, undefined);
+  assert.equal(validation.config?.attributes.moat, 27);
+  assert.equal(validation.config?.attributes.foresight, 0.02);
+  assert.equal(validation.config?.attributes.leverage, 0);
+  assert.equal(validation.config?.attributes.spite, 0);
+});
+
+test("validateUserSubmission accepts v2 hallucination as UI-space percent", () => {
+  const cfg = cfgV2FromUi({
+    burnRate: 100,
+    moat: 100,
+    shipRate: 100,
+    foresight: 90,
+  }, 100);
+
+  const validation = validateUserSubmission(cfg);
+
+  assert.equal(validation.ok, true, validation.errors.join("; "));
+  assert.equal(validation.spent, MAX_USER_SPEND);
+  assert.equal(validation.hallucination, MAX_DERIVED_HALLUCINATION);
+  assert.equal(validation.config?.attributes.hallucination, MAX_DERIVED_HALLUCINATION);
+});
+
+test("validateUserSubmission rejects v2 values outside UI range", () => {
+  const cfg = cfgV2FromUi({
+    burnRate: 100,
+    moat: 101,
+    shipRate: 100,
+  });
+
+  const validation = validateUserSubmission(cfg);
+
+  assert.equal(validation.ok, false);
+  assert.ok(
+    validation.errors.some((error) => error.includes("moat must be within [0, 100] (configVersion 2)")),
+    `expected a v2 range error, got ${JSON.stringify(validation.errors)}`,
+  );
 });

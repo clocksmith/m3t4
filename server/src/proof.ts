@@ -268,8 +268,8 @@ export async function handleProofReveal(
         actionLog,
         result: out.result,
         players: [
-          { kind: "brain", tier: "user", label: rec.uid, userId: rec.uid, config: config as BrainConfig },
-          { kind: "brain", tier: "user", label: "opponent", config: opponentConfig as BrainConfig },
+          { kind: "brain", tier: "user", label: rec.uid, userId: rec.uid, config: validation.config },
+          { kind: "brain", tier: "user", label: "opponent", config: opponentValidation.config },
         ],
         sim: { constantsHash: REPLAY_CONSTANTS_HASH },
         trust,

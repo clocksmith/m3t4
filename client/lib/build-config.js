@@ -71,19 +71,30 @@ export function remainingCeilingForState(state, id) {
   return clamp(HARD_CAP - spentWithout, 0, 100);
 }
 
+// Build a BrainConfig from editor state.
+// - opts.configVersion === 2 → emit UI-space (0..100) attributes + configVersion:2.
+//   This is the user-facing form. Values read as they appear on the sliders.
+// - default (omitted / 1) → emit native (pixels, seconds, signed -1..1).
+//   Canonical internal/transport form; downstream sim consumers never need to
+//   branch on version.
 export function configFromState(state, opts = {}) {
+  const asUI = opts.configVersion === 2;
   const attributes = {};
   for (const [id] of KNOBS) {
     const ui = clamp(Math.round(finiteNumber(state?.[id], 0)), 0, 100);
-    attributes[id] = +uiToNative(id, ui).toFixed(4);
+    attributes[id] = asUI ? ui : +uiToNative(id, ui).toFixed(4);
   }
-  attributes.hallucination = Math.min(
+  const halluNative = Math.min(
     MAX_DERIVED_HALLUCINATION,
     computedHallucinationForSpend(stateSpent(state)),
   );
+  attributes.hallucination = asUI
+    ? Math.round(nativeToUI("hallucination", halluNative))
+    : halluNative;
 
   const config = { attributes };
   if (opts.id && String(opts.id).trim()) config.id = String(opts.id).trim();
+  if (asUI) config.configVersion = 2;
   return config;
 }
 
@@ -105,21 +116,33 @@ function coerceConfigObject(raw) {
     throw new Error("config must include an attributes object");
   }
   const id = typeof cfg.id === "string" && cfg.id.trim() ? cfg.id.trim() : undefined;
-  return { id, attributes: { ...cfg.attributes } };
+  const configVersion = cfg.configVersion === 2 ? 2 : 1;
+  return { id, configVersion, attributes: { ...cfg.attributes } };
 }
 
+// Parse a BrainConfig into editor state (0..100 UI-space). Accepts either
+// native (configVersion omitted / 1) or UI-space (configVersion: 2) input.
+// Output is always UI-space state suitable for sliders.
 export function stateFromConfig(raw) {
   const cfg = coerceConfigObject(raw);
   const state = {};
   for (const [id, , , init] of KNOBS) {
-    const range = RANGES[id];
-    const native = finiteNumber(cfg.attributes[id], uiToNative(id, init));
-    const clampedNative = clamp(native, range[0], range[1]);
-    state[id] = clamp(Math.round(nativeToUI(id, clampedNative)), 0, 100);
+    if (cfg.configVersion === 2) {
+      const ui = finiteNumber(cfg.attributes[id], init);
+      state[id] = clamp(Math.round(ui), 0, 100);
+    } else {
+      const range = RANGES[id];
+      const native = finiteNumber(cfg.attributes[id], uiToNative(id, init));
+      const clampedNative = clamp(native, range[0], range[1]);
+      state[id] = clamp(Math.round(nativeToUI(id, clampedNative)), 0, 100);
+    }
   }
   return state;
 }
 
+// Normalize to canonical native-format BrainConfig suitable for transport
+// and server-side consumers. Accepts either v1 or v2 input; output is
+// always v1 (no configVersion field, attributes in native units).
 export function normalizeBuildConfig(raw) {
   const cfg = coerceConfigObject(raw);
   for (const [id] of KNOBS) {
@@ -166,6 +189,18 @@ export function parseBuildConfigJson(text) {
 
 export function formatConfigJson(raw) {
   return JSON.stringify(normalizeBuildConfig(raw), null, 2);
+}
+
+// User-facing JSON: values on 0..100 UI scale (match the sliders), plus
+// `configVersion: 2` so the server/import path can convert back to native.
+// Use this for Tune copy/send, Profile JSON tab, and any clipboard-facing
+// surface. Internal transport should keep using formatConfigJson() /
+// normalizeBuildConfig() which emit canonical native.
+export function formatConfigJsonV2(raw) {
+  const native = normalizeBuildConfig(raw);
+  const state = stateFromConfig(native);
+  const v2 = configFromState(state, { id: native.id, configVersion: 2 });
+  return JSON.stringify(v2, null, 2);
 }
 
 export function dirtyCount(baseState, currentState) {

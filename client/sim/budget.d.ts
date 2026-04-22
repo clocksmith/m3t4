@@ -1,4 +1,4 @@
-import type { BrainConfig, ParamKey } from "./types.js";
+import type { BrainConfig, ConfigVersion, ParamKey } from "./types.js";
 export declare const USER_BUDGET = 360;
 export declare const HALLUCINATION_PER_OVERAGE = 10;
 export declare const MIN_CLEAN_SPEND = 180;
@@ -20,5 +20,6 @@ export interface UserSubmissionValidation {
     hallucination: number;
     config?: BrainConfig;
 }
+export declare function coerceSubmittedScalar(k: ParamKey, raw: number, configVersion: ConfigVersion): number;
 export declare function validateUserSubmission(cfg: BrainConfig): UserSubmissionValidation;
 export declare function isWithinBudget(cfg: BrainConfig): boolean;

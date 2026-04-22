@@ -21,7 +21,7 @@ test("micro attribute drift is always active at zero hallucination", () => {
   assert.equal(drifted.hallucination, 0);
 });
 
-test("micro attribute drift is capped to sixteen total UI points", () => {
+test("micro attribute drift is capped to thirty-two total UI points", () => {
   const base = midParams();
   const drifted = applyMicroAttributeDrift(base, 37, 1, 0x5eed);
   const deltas = uiDeltas(base, drifted);
@@ -29,14 +29,14 @@ test("micro attribute drift is capped to sixteen total UI points", () => {
   const total = deltas.reduce((sum, delta) => sum + delta, 0);
 
   assert.equal(changed.length, 8);
-  assert.ok(changed.every((delta) => delta <= 2 + 1e-9));
-  assert.ok(total <= 16 + 1e-9);
+  assert.ok(changed.every((delta) => delta <= 4 + 1e-9));
+  assert.ok(total <= 32 + 1e-9);
 });
 
 test("micro attribute drift is stable inside one drift window", () => {
   const base = midParams();
   assert.deepEqual(
-    applyMicroAttributeDrift(base, 30, 0, 0x5eed),
-    applyMicroAttributeDrift(base, 59, 0, 0x5eed),
+    applyMicroAttributeDrift(base, 120, 0, 0x5eed),
+    applyMicroAttributeDrift(base, 239, 0, 0x5eed),
   );
 });

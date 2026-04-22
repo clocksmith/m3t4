@@ -1,4 +1,4 @@
-import type { AttributeSpec, BrainConfig, ParamKey } from "./types.js";
+import type { AttributeSpec, BrainConfig, ConfigVersion, ParamKey } from "./types.js";
 import { DEFAULT_PARAMS } from "./types.js";
 
 // User submissions spend UI-space points across these knobs. Spending too far
@@ -97,9 +97,26 @@ export interface UserSubmissionValidation {
   config?: BrainConfig;
 }
 
+// Convert a user-submitted scalar attribute into native units given the
+// declared configVersion. v1 = already native (no-op), v2 = UI-space 0..100.
+// For hallucination the UI range is 0..100 even though its native range is
+// 0..MAX_DERIVED_HALLUCINATION — nativeToUI/uiToNative handle that via RANGES.
+export function coerceSubmittedScalar(k: ParamKey, raw: number, configVersion: ConfigVersion): number {
+  if (configVersion === 2) return uiToNative(k, raw);
+  return raw;
+}
+
+// UI-space scalars are bounded 0..100 (signed knobs map 0=−1 .. 100=+1 via
+// RANGES). Native scalars are bounded by the knob's own RANGES entry.
+function scalarBoundsForVersion(k: ParamKey, configVersion: ConfigVersion): [number, number] {
+  if (configVersion === 2) return [0, 100];
+  return RANGES[k];
+}
+
 export function validateUserSubmission(cfg: BrainConfig): UserSubmissionValidation {
   const errors: string[] = [];
   const attrs: Partial<Record<ParamKey, number>> = {};
+  const configVersion: ConfigVersion = cfg.configVersion === 2 ? 2 : 1;
 
   for (const k of USER_KNOBS) {
     const raw = cfg.attributes?.[k];
@@ -107,12 +124,13 @@ export function validateUserSubmission(cfg: BrainConfig): UserSubmissionValidati
       errors.push(`${k} must be a finite numeric scalar`);
       continue;
     }
-    const [lo, hi] = RANGES[k];
+    const [lo, hi] = scalarBoundsForVersion(k, configVersion);
     if (raw < lo - USER_SUBMISSION_EPSILON || raw > hi + USER_SUBMISSION_EPSILON) {
-      errors.push(`${k} must be within [${lo}, ${hi}]`);
+      errors.push(`${k} must be within [${lo}, ${hi}] (configVersion ${configVersion})`);
       continue;
     }
-    attrs[k] = clamp(raw, lo, hi);
+    const clamped = clamp(raw, lo, hi);
+    attrs[k] = configVersion === 2 ? uiToNative(k, clamped) : clamped;
   }
 
   const spent = errors.length === 0 ? budgetSpent({ attributes: attrs }) : 0;
@@ -123,11 +141,19 @@ export function validateUserSubmission(cfg: BrainConfig): UserSubmissionValidati
   const rawHallucination = cfg.attributes?.hallucination;
   if (typeof rawHallucination !== "number" || !Number.isFinite(rawHallucination)) {
     errors.push(`hallucination must be the computed numeric scalar ${hallucination}`);
-  } else if (errors.length === 0 && Math.abs(rawHallucination - hallucination) > USER_SUBMISSION_EPSILON) {
-    errors.push(`hallucination must equal ${hallucination} for spent=${spent}`);
+  } else if (errors.length === 0) {
+    // v2 submissions declare hallucination in 0..100 UI-space; v1 in native
+    // 0..MAX_DERIVED_HALLUCINATION. Compare both sides in native units.
+    const rawNative = configVersion === 2 ? uiToNative("hallucination", rawHallucination) : rawHallucination;
+    if (Math.abs(rawNative - hallucination) > USER_SUBMISSION_EPSILON) {
+      errors.push(`hallucination must equal ${hallucination} for spent=${spent}`);
+    }
   }
   attrs.hallucination = hallucination;
 
+  // The accepted config is always stored in native (configVersion omitted)
+  // so downstream sim/brain consumers never need to know about the
+  // submission encoding.
   return {
     ok: errors.length === 0,
     errors,

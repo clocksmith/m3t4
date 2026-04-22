@@ -15,7 +15,10 @@ COPY server server
 COPY pareto pareto
 COPY plasma-lab plasma-lab
 
-RUN npm run build
+RUN npm -w sim run build && \
+    npm -w server run build && \
+    npm -w pareto run build && \
+    npm -w plasma-lab run build
 
 ENV NODE_ENV=production
 WORKDIR /app/plasma-lab

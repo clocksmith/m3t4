@@ -15,7 +15,7 @@ import crypto from "node:crypto";
 import {
   BEHAVIOR_VERSION, DEFAULT_CHARS, REPLAY_CONSTANTS_HASH,
   STAGES, STRATEGIES, createReplayArtifactV1, simulate,
-  validateUserSubmission,
+  USER_KNOBS, computedHallucinationForSpend, nativeToUI, validateUserSubmission,
   type BrainConfig,
   type ReplayArtifactV1,
 } from "@m3t4/sim";
@@ -148,6 +148,26 @@ function legalSubmittedConfig(cfg: BrainConfig): BrainConfig {
   assert.equal(validation.ok, true, validation.errors.join("; "));
   assert.ok(validation.config);
   return validation.config;
+}
+
+function v2ConfigFromNative(cfg: BrainConfig): BrainConfig {
+  const native = legalSubmittedConfig(cfg);
+  const attributes: BrainConfig["attributes"] = {};
+  let spent = 0;
+  for (const key of USER_KNOBS) {
+    const value = native.attributes[key];
+    const ui = Math.round(nativeToUI(key, typeof value === "number" ? value : 0));
+    attributes[key] = ui;
+    spent += ui;
+  }
+  attributes.hallucination = Math.round(nativeToUI("hallucination", computedHallucinationForSpend(spent)));
+  return {
+    id: native.id,
+    author: native.author,
+    seed: native.seed,
+    configVersion: 2,
+    attributes,
+  };
 }
 
 async function req(port: number, method: string, url: string, body?: unknown, headers: Record<string, string> = {}): Promise<{ status: number; body: any }> {
@@ -421,6 +441,49 @@ test("proof L1 commit-reveal: valid reveal stamps proof-carrying label", async (
   assert.equal(revealR.status, 200);
   assert.equal(revealR.body.tier, "proof-carrying");
   assert.equal(revealR.body.proof.subtier, "L1-commit-reveal");
+});
+
+test("proof L1 standalone replay archives normalized native configs for v2 reveals", async (t) => {
+  const srv = await bootTestServer();
+  t.after(() => srv.close());
+  const salt = "saltsaltsalt";
+  const config = v2ConfigFromNative(STRATEGIES.blitz);
+  const opponentConfig = v2ConfigFromNative(STRATEGIES.shipper);
+  const configValidation = validateUserSubmission(config);
+  const opponentValidation = validateUserSubmission(opponentConfig);
+  assert.ok(configValidation.config);
+  assert.ok(opponentValidation.config);
+  const canonical = canonicalJson(config);
+  const commitmentHash = crypto.createHash("sha256").update(canonical + ":" + salt).digest("hex");
+  const commitR = await req(srv.port, "POST", "/api/proof/commit", { commitmentHash });
+  assert.equal(commitR.status, 200);
+  const result = simulate({
+    stage: STAGES.datacenter,
+    brainA: STRATEGIES.blitz, brainB: STRATEGIES.shipper,
+    seed: 202, maxTicks: 240,
+  });
+
+  const revealR = await req(srv.port, "POST", "/api/proof/reveal", {
+    commitmentId: commitR.body.commitmentId,
+    config,
+    salt,
+    matchContext: {
+      opponentConfig,
+      stageId: "datacenter",
+      seed: 202,
+      actionLogB64: Buffer.from(result.frameLog).toString("base64"),
+      maxTicks: 240,
+    },
+  });
+
+  assert.equal(revealR.status, 200);
+  assert.equal(revealR.body.tier, "proof-carrying");
+  const replay = await srv.store.getReplay(revealR.body.matchId);
+  assert.ok(replay);
+  assert.deepEqual(replay.players[0].config, configValidation.config);
+  assert.deepEqual(replay.players[1].config, opponentValidation.config);
+  assert.equal(replay.players[0].config?.configVersion, undefined);
+  assert.equal(replay.players[1].config?.configVersion, undefined);
 });
 
 test("proof L3: no verifier registered for unknown proof system returns 501-like", async (t) => {

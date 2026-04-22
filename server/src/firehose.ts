@@ -31,6 +31,11 @@ type MatchPair = {
   a: Stable; aSlot: Slot; b: Stable; bSlot: Slot; stageId: string;
 };
 
+type SideEntrant = {
+  stable: Stable;
+  slot: Slot;
+};
+
 type PublicMatchPreview = {
   a: { userId: string; handle: string; slotId: string; name: string; elo: number };
   b: { userId: string; handle: string; slotId: string; name: string; elo: number };
@@ -52,6 +57,30 @@ const HUMAN_PAIR_ELO_BONUS_MAX = 200;
 const LEAST_RECENTLY_PLAYED_BONUS = 25;
 const RECENTLY_PLAYED_WINDOW_MS = 10 * 60 * 1000;
 
+function mix32(x: number): number {
+  x >>>= 0;
+  x ^= x >>> 16;
+  x = Math.imul(x, 0x7feb352d) >>> 0;
+  x ^= x >>> 15;
+  x = Math.imul(x, 0x846ca68b) >>> 0;
+  x ^= x >>> 16;
+  return x >>> 0;
+}
+
+export function rankedSideSwap(seed: number): boolean {
+  return (mix32((seed >>> 0) ^ 0x51de5eed) & 1) === 1;
+}
+
+function publicSlot(entry: SideEntrant): PublicMatchPreview["a"] {
+  return {
+    userId: entry.stable.userId,
+    handle: entry.stable.handle,
+    slotId: entry.slot.slotId,
+    name: entry.slot.name,
+    elo: entry.slot.elo,
+  };
+}
+
 export class Firehose {
   private clients = new Set<Client>();
   private nextClientId = 1;
@@ -67,6 +96,7 @@ export class Firehose {
     a: { userId: string; handle: string; slotId: string; name: string; elo: number };
     b: { userId: string; handle: string; slotId: string; name: string; elo: number };
     stageId: string;
+    sideSwap?: boolean;
     watchlist?: { a: WatchlistTag[]; b: WatchlistTag[] };
   } | null = null;
   private currentWait: {
@@ -228,15 +258,23 @@ export class Firehose {
     const matchId = `${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
     const stage = STAGES[p.stageId as keyof typeof STAGES];
     const seed = (Date.now() ^ (p.aSlot.elo << 3) ^ p.bSlot.elo) >>> 0;
+    const sideSwap = rankedSideSwap(seed);
+    const sideA: SideEntrant = sideSwap
+      ? { stable: p.b, slot: p.bSlot }
+      : { stable: p.a, slot: p.aSlot };
+    const sideB: SideEntrant = sideSwap
+      ? { stable: p.a, slot: p.aSlot }
+      : { stable: p.b, slot: p.bSlot };
     const watchlistTags = {
-      a: watchlistTagsForSlot(p.aSlot),
-      b: watchlistTagsForSlot(p.bSlot),
+      a: watchlistTagsForSlot(sideA.slot),
+      b: watchlistTagsForSlot(sideB.slot),
     };
     this.currentMatch = {
       matchId,
-      a: { userId: p.a.userId, handle: p.a.handle, slotId: p.aSlot.slotId, name: p.aSlot.name, elo: p.aSlot.elo },
-      b: { userId: p.b.userId, handle: p.b.handle, slotId: p.bSlot.slotId, name: p.bSlot.name, elo: p.bSlot.elo },
+      a: publicSlot(sideA),
+      b: publicSlot(sideB),
       stageId: p.stageId,
+      sideSwap,
       watchlist: watchlistTags,
     };
     this.currentWait = null;
@@ -248,7 +286,7 @@ export class Firehose {
     });
 
     // Simulate (server-authoritative)
-    const trace = simulateTrace({ stage, brainA: p.aSlot.config, brainB: p.bSlot.config, seed });
+    const trace = simulateTrace({ stage, brainA: sideA.slot.config, brainB: sideB.slot.config, seed });
     const replay = createReplayArtifactV1({
       matchId,
       mode: "ranked",
@@ -258,23 +296,23 @@ export class Firehose {
       players: [
         {
           kind: "brain",
-          tier: p.a.userId.startsWith("system:") ? "system" : "user",
-          label: p.aSlot.name,
-          handle: p.a.handle,
-          userId: p.a.userId,
-          slotId: p.aSlot.slotId,
-          slotName: p.aSlot.name,
-          config: p.aSlot.config,
+          tier: sideA.stable.userId.startsWith("system:") ? "system" : "user",
+          label: sideA.slot.name,
+          handle: sideA.stable.handle,
+          userId: sideA.stable.userId,
+          slotId: sideA.slot.slotId,
+          slotName: sideA.slot.name,
+          config: sideA.slot.config,
         },
         {
           kind: "brain",
-          tier: p.b.userId.startsWith("system:") ? "system" : "user",
-          label: p.bSlot.name,
-          handle: p.b.handle,
-          userId: p.b.userId,
-          slotId: p.bSlot.slotId,
-          slotName: p.bSlot.name,
-          config: p.bSlot.config,
+          tier: sideB.stable.userId.startsWith("system:") ? "system" : "user",
+          label: sideB.slot.name,
+          handle: sideB.stable.handle,
+          userId: sideB.stable.userId,
+          slotId: sideB.slot.slotId,
+          slotName: sideB.slot.name,
+          config: sideB.slot.config,
         },
       ],
       chars: DEFAULT_CHARS,
@@ -301,7 +339,7 @@ export class Firehose {
     }
 
     // ELO + score update
-    const { a: newA, b: newB } = updatePair(p.aSlot.elo, p.bSlot.elo, trace.result.winner);
+    const { a: newA, b: newB } = updatePair(sideA.slot.elo, sideB.slot.elo, trace.result.winner);
     const now = Date.now();
     const watchlist = summarizeWatchlistMatch(trace.result, watchlistTags);
     if (shouldLogWatchlist(watchlist)) {
@@ -309,8 +347,8 @@ export class Firehose {
     }
     await this.store.archiveReplay(replay);
     await this.store.updateAfterMatch({
-      aUserId: p.a.userId, aSlotId: p.aSlot.slotId, aEloBefore: p.aSlot.elo, aEloAfter: newA,
-      bUserId: p.b.userId, bSlotId: p.bSlot.slotId, bEloBefore: p.bSlot.elo, bEloAfter: newB,
+      aUserId: sideA.stable.userId, aSlotId: sideA.slot.slotId, aEloBefore: sideA.slot.elo, aEloAfter: newA,
+      bUserId: sideB.stable.userId, bSlotId: sideB.slot.slotId, bEloBefore: sideB.slot.elo, bEloAfter: newB,
       winner: trace.result.winner,
       playedAt: now,
     });
@@ -323,8 +361,9 @@ export class Firehose {
       finalRounds: trace.result.finalRounds,
       logHash: trace.result.logHash,
       replayArchived: true,
-      eloBefore: [p.aSlot.elo, p.bSlot.elo],
+      eloBefore: [sideA.slot.elo, sideB.slot.elo],
       eloAfter: [newA, newB],
+      sideSwap,
       watchlist,
     });
     this.currentMatch = null;

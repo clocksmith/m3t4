@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { JsonWebKey } from "node:crypto";
 import type { PlasmaLabConfig } from "./config.js";
 import { header, html, json, readJson } from "./http.js";
 import { canonicalJson } from "./plasma/hash.js";
@@ -52,7 +53,7 @@ export async function handleComputeLabRequest(
   }
 
   if (req.method === "POST" && url.pathname === "/compute/workers/register") {
-    const body = await readJson<{ label?: string; capability?: WorkerCapability }>(req);
+    const body = await readJson<{ label?: string; capability?: WorkerCapability; signingPublicKey?: JsonWebKey }>(req);
     if (!body?.capability || !Array.isArray(body.capability.kernels)) {
       json(res, 400, { error: "capability.kernels required" });
       return true;
@@ -60,6 +61,7 @@ export async function handleComputeLabRequest(
     const { worker, session, acceptedKernels } = deps.store.registerWorker({
       label: body.label,
       capability: body.capability,
+      signingPublicKey: body.signingPublicKey,
     });
     await flushStore(deps.store);
     json(res, 200, {
@@ -67,6 +69,9 @@ export async function handleComputeLabRequest(
       workerSessionId: session.workerSessionId,
       workerSessionToken: session.token,
       expiresAt: session.expiresAt,
+      receiptSigning: session.signingPublicKeyHash
+        ? { algorithm: "ecdsa-p256-sha256", publicKeyHash: session.signingPublicKeyHash }
+        : undefined,
       acceptedKernels,
     });
     return true;
@@ -239,6 +244,7 @@ export async function handleComputeLabRequest(
       derived?: DerivedExecutionEvidence;
       computeMs?: number;
       clientVersion?: string;
+      receiptHash?: ContentHash;
       signature?: string;
     }>(req);
     try {
@@ -263,6 +269,7 @@ export async function handleComputeLabRequest(
         derived: body.derived,
         computeMs: Number(body.computeMs) || 0,
         clientVersion: body.clientVersion,
+        receiptHash: body.receiptHash,
         signature: body.signature,
       }));
       logDerivedReceiptOutcome(deps, result);
@@ -304,6 +311,14 @@ export async function handleComputeLabRequest(
     const badge = deps.store.replayBadge(matchId);
     if (!badge || badge.status !== "verified") json(res, 404, { error: "verified replay badge not found" });
     else json(res, 200, badge);
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname.startsWith("/compute/receipts/") && url.pathname.endsWith("/verify")) {
+    const receiptId = url.pathname.slice("/compute/receipts/".length, -"/verify".length);
+    const verification = deps.store.verifyReceipt(receiptId);
+    if (!verification) json(res, 404, { error: "receipt not found" });
+    else json(res, 200, verification);
     return true;
   }
 

@@ -1,0 +1,122 @@
+import { stableReplayJson, type ReplayArtifactV1 } from "@m3t4/sim";
+import { publicReplayArtifactFromReplay } from "../public-artifacts.js";
+
+export interface ComputeAutoSeedConfig {
+  enabled: boolean;
+  computeLabOrigin: string;
+  adminToken?: string;
+  timeoutMs?: number;
+}
+
+export interface ComputeAutoSeedResult {
+  endpoint: string;
+  ok: boolean;
+  status: number;
+  taskId?: string;
+  error?: string;
+}
+
+type FetchLike = (url: string, init: RequestInit) => Promise<Pick<Response, "ok" | "status" | "json" | "text">>;
+
+export async function seedReplayComputeTasks(
+  config: ComputeAutoSeedConfig,
+  replay: ReplayArtifactV1,
+  fetchImpl: FetchLike = fetch,
+): Promise<ComputeAutoSeedResult[]> {
+  const origin = config.computeLabOrigin.replace(/\/+$/, "");
+  if (!config.enabled || !origin || !config.adminToken) return [];
+  const redactedReplay = redactedReplayForCompute(replay);
+  const publicArtifact = publicReplayArtifactFromReplay(replay);
+  const requests = [
+    {
+      endpoint: "/compute/admin/tasks/public-artifact",
+      body: { artifact: publicArtifact, minExecutions: 2, minAgreeing: 2 },
+    },
+    {
+      endpoint: "/compute/admin/tasks/replay-verify",
+      body: { replayArtifact: redactedReplay, artifactSha256: undefined, minExecutions: 2, minAgreeing: 2 },
+    },
+  ];
+  const out: ComputeAutoSeedResult[] = [];
+  for (const request of requests) {
+    out.push(await postComputeSeedTask({
+      url: origin + request.endpoint,
+      endpoint: request.endpoint,
+      adminToken: config.adminToken,
+      body: request.body,
+      timeoutMs: config.timeoutMs ?? 1500,
+      fetchImpl,
+    }));
+  }
+  return out;
+}
+
+export function redactedReplayForCompute(replay: ReplayArtifactV1): ReplayArtifactV1 {
+  return JSON.parse(stableReplayJson({
+    ...replay,
+    players: replay.players.map((player) => {
+      const { config: _config, ...publicPlayer } = player;
+      return publicPlayer;
+    }),
+  })) as ReplayArtifactV1;
+}
+
+async function postComputeSeedTask(input: {
+  url: string;
+  endpoint: string;
+  adminToken: string;
+  body: unknown;
+  timeoutMs: number;
+  fetchImpl: FetchLike;
+}): Promise<ComputeAutoSeedResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), input.timeoutMs);
+  try {
+    const response = await input.fetchImpl(input.url, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "content-type": "application/json",
+        "x-plasma-admin-token": input.adminToken,
+      },
+      body: JSON.stringify(input.body),
+    });
+    const body = await safeJson(response);
+    return {
+      endpoint: input.endpoint,
+      ok: response.ok,
+      status: response.status,
+      taskId: typeof body?.taskId === "string" ? body.taskId : undefined,
+      error: response.ok ? undefined : stringValue(body?.error) ?? await safeText(response),
+    };
+  } catch (e) {
+    return {
+      endpoint: input.endpoint,
+      ok: false,
+      status: 0,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function safeJson(response: Pick<Response, "json">): Promise<any> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function safeText(response: Pick<Response, "text">): Promise<string | undefined> {
+  try {
+    return await response.text();
+  } catch {
+    return undefined;
+  }
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}

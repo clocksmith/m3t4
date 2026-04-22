@@ -30,6 +30,9 @@ class ComputeClient {
     this.workerId = null;
     this.workerSessionId = null;
     this.workerSessionToken = null;
+    this.receiptSigningKey = null;
+    this.receiptSigningPublicKey = null;
+    this.receiptSigningPublicKeyHash = null;
     this.state = "idle";
     this.current = null;
     this.totals = { accepted: 0, rejected: 0, pending: 0 };
@@ -200,6 +203,7 @@ class ComputeClient {
   async ensureWorkerRegistered() {
     if (this.workerId && this.workerSessionId && this.workerSessionToken) return;
     try {
+      await this.ensureReceiptSigningKey();
       this.capability = await buildCapability(runtimeInfoBucket(this), { benchmark: true });
       const res = await fetch(computeLabOrigin() + "/compute/workers/register", {
         method: "POST",
@@ -207,6 +211,7 @@ class ComputeClient {
         body: JSON.stringify({
           label: "browser-spectator",
           capability: this.capability,
+          signingPublicKey: this.receiptSigningPublicKey,
         }),
       });
       if (!res.ok) throw new Error(`register failed: ${res.status}`);
@@ -214,12 +219,63 @@ class ComputeClient {
       this.workerId = body.workerId;
       this.workerSessionId = body.workerSessionId;
       this.workerSessionToken = body.workerSessionToken;
+      this.receiptSigningPublicKeyHash = body.receiptSigning?.publicKeyHash ?? this.receiptSigningPublicKeyHash;
       this.lastCapabilityUpdateAt = performance.now();
     } catch (e) {
       this.state = `register-failed: ${message(e)}`;
       this.enabled = false;
       persistOptIn(false);
     }
+  }
+
+  async ensureReceiptSigningKey() {
+    if (this.receiptSigningKey && this.receiptSigningPublicKey) return;
+    const keyPair = await crypto.subtle.generateKey(
+      { name: "ECDSA", namedCurve: "P-256" },
+      true,
+      ["sign", "verify"],
+    );
+    const publicKey = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+    this.receiptSigningKey = keyPair.privateKey;
+    this.receiptSigningPublicKey = {
+      kty: publicKey.kty,
+      crv: publicKey.crv,
+      x: publicKey.x,
+      y: publicKey.y,
+    };
+    this.receiptSigningPublicKeyHash = {
+      algorithm: "sha256",
+      value: await hashText(stableJson(this.receiptSigningPublicKey)),
+    };
+  }
+
+  async signReceipt(receipt) {
+    if (!this.receiptSigningKey) return receipt;
+    const receiptHash = {
+      algorithm: "sha256",
+      value: await hashText(stableJson(receiptHashPayload(receipt))),
+    };
+    const signatureBytes = await crypto.subtle.sign(
+      { name: "ECDSA", hash: "SHA-256" },
+      this.receiptSigningKey,
+      new TextEncoder().encode(receiptHash.value),
+    );
+    return {
+      ...receipt,
+      receiptHash,
+      signature: base64Url(signatureBytes),
+    };
+  }
+
+  async submitReceipt(receipt) {
+    const signed = await this.signReceipt(receipt);
+    const res = await fetch(computeLabOrigin() + "/compute/receipts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(signed),
+    });
+    if (!res.ok) throw new Error(`receipt failed: ${res.status}`);
+    return res.json();
   }
 
   reevaluate() {
@@ -467,13 +523,7 @@ class ComputeClient {
         computeMs: performance.now() - t0,
         clientVersion: CLIENT_VERSION,
       };
-      const res = await fetch(computeLabOrigin() + "/compute/receipts", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(receipt),
-      });
-      if (!res.ok) throw new Error(`receipt failed: ${res.status}`);
-      const body = await res.json();
+      const body = await this.submitReceipt(receipt);
       this.health.receiptsSubmitted++;
       const decision = body.receipt?.decision ?? "pending";
       if (decision === "accepted") this.totals.accepted++;
@@ -534,13 +584,7 @@ class ComputeClient {
         computeMs: transfer.computeMs,
         clientVersion: CLIENT_VERSION,
       };
-      const res = await fetch(computeLabOrigin() + "/compute/receipts", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(receipt),
-      });
-      if (!res.ok) throw new Error(`receipt failed: ${res.status}`);
-      const body = await res.json();
+      const body = await this.submitReceipt(receipt);
       this.health.receiptsSubmitted++;
       const decision = body.receipt?.decision ?? "pending";
       if (decision === "accepted") this.totals.accepted++;
@@ -613,13 +657,7 @@ class ComputeClient {
         computeMs: msg.computeMs,
         clientVersion: CLIENT_VERSION,
       };
-      const res = await fetch(computeLabOrigin() + "/compute/receipts", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(receipt),
-      });
-      if (!res.ok) throw new Error(`receipt failed: ${res.status}`);
-      const body = await res.json();
+      const body = await this.submitReceipt(receipt);
       this.health.receiptsSubmitted++;
       const decision = body.receipt?.decision ?? "pending";
       if (decision === "accepted") this.totals.accepted++;
@@ -1862,7 +1900,11 @@ function batteryBucket(battery) {
 function stableJson(value) {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
   if (value && typeof value === "object") {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+    return `{${Object.keys(value)
+      .filter((key) => value[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
+      .join(",")}}`;
   }
   return JSON.stringify(value);
 }
@@ -1870,6 +1912,38 @@ function stableJson(value) {
 async function hashText(text) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function receiptHashPayload(receipt) {
+  return {
+    receiptVersion: 1,
+    workerId: receipt.workerId,
+    workerSessionId: receipt.workerSessionId,
+    assignmentId: receipt.assignmentId,
+    taskId: receipt.taskId,
+    chunkId: receipt.chunkId,
+    kernelId: receipt.kernelId,
+    kernelHash: receipt.kernelHash,
+    inputHash: receipt.inputHash,
+    artifactHash: receipt.artifactHash,
+    outputHash: receipt.outputHash,
+    determinismClass: receipt.determinismClass,
+    validationMode: receipt.validationMode,
+    executionMode: receipt.executionMode,
+    transport: receipt.transport,
+    governorMode: receipt.governorMode,
+    deviceClass: receipt.deviceClass,
+    adapterInfo: receipt.adapterInfo,
+    derived: receipt.derived,
+    computeMs: receipt.computeMs,
+    clientVersion: receipt.clientVersion,
+  };
+}
+
+function base64Url(buffer) {
+  let binary = "";
+  for (const byte of new Uint8Array(buffer)) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 function message(e) {

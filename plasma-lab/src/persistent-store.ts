@@ -1,3 +1,4 @@
+import type { JsonWebKey } from "node:crypto";
 import {
   ComputeLabStore,
   type Assignment,
@@ -49,7 +50,7 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     this.persist((snapshot) => ({ control: snapshot.control }));
   }
 
-  registerWorker(input: { label?: string; capability: WorkerCapability }): {
+  registerWorker(input: { label?: string; capability: WorkerCapability; signingPublicKey?: JsonWebKey }): {
     worker: WorkerRecord;
     session: WorkerSession;
     acceptedKernels: string[];

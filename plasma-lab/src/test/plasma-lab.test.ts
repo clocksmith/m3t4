@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
+import { generateKeyPairSync, sign as signData, type JsonWebKey, type KeyObject } from "node:crypto";
 import http from "node:http";
 import test from "node:test";
 import { handleComputeLabRequest } from "../routes.js";
-import { ComputeLabStore, type ComputeLabSnapshot, referencePrimeReceiptFields, referenceReceiptFields } from "../store.js";
+import { computeReceiptHash, ComputeLabStore, type ComputeLabSnapshot, referencePrimeReceiptFields, referenceReceiptFields } from "../store.js";
 import type { PlasmaLabConfig } from "../config.js";
 import { json } from "../http.js";
 import type { WorkerCapability } from "../plasma/types.js";
@@ -147,6 +148,163 @@ test("receipt submission rejects assignment token mismatches", () => {
   });
   assert.equal(result.receipt.decision, "assignment-mismatch");
   assert.equal(store.workerStatus(worker.worker.workerId)?.reputation.rejected, 1);
+});
+
+test("signed receipts verify against the registered worker session key", () => {
+  const now = clock();
+  const store = new ComputeLabStore({ now, acceptAssignments: true });
+  store.seedPrimeTask({ start: 10, endExclusive: 20, chunkSize: 10, minExecutions: 1, minAgreeing: 1 });
+  const signing = signingKeyPair();
+  const worker = store.registerWorker({ capability, signingPublicKey: signing.publicJwk });
+  const next = store.assignNext(auth(worker))!;
+  store.acceptAssignment({ ...auth(worker), assignmentId: next.assignment.assignmentId, assignmentToken: next.assignment.assignmentToken });
+  const receiptFields = {
+    ...auth(worker),
+    assignmentId: next.assignment.assignmentId,
+    assignmentToken: next.assignment.assignmentToken,
+    taskId: next.task.taskId,
+    chunkId: next.chunk.chunkId,
+    ...referencePrimeReceiptFields(next.chunk),
+    executionMode: "cpu" as const,
+    transport: "http" as const,
+    governorMode: "quiet" as const,
+    computeMs: 5,
+    clientVersion: "signed-test",
+  };
+  const result = store.submitReceipt({
+    ...receiptFields,
+    ...signedReceiptFields(receiptFields, signing.privateKey),
+  });
+  assert.equal(result.receipt.decision, "accepted");
+  assert.equal((result.receipt as any).assignmentToken, undefined);
+  assert.equal((result.receipt as any).workerSessionToken, undefined);
+  assert.equal(result.receipt.signatureStatus, "verified");
+  assert.ok(result.receipt.receiptHash?.value);
+  assert.equal(result.receipt.signaturePublicKeyHash?.value, worker.session.signingPublicKeyHash?.value);
+  const verification = store.verifyReceipt(result.receipt.receiptId);
+  assert.equal(verification?.ok, true);
+  assert.equal(verification?.receiptHashMatches, true);
+  assert.equal(verification?.signatureVerified, true);
+});
+
+test("signed worker sessions reject missing and invalid receipt signatures", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const signing = signingKeyPair();
+  const unsignedWorker = store.registerWorker({ capability, signingPublicKey: signing.publicJwk });
+  store.seedPrimeTask({ start: 20, endExclusive: 30, chunkSize: 10, minExecutions: 1, minAgreeing: 1 });
+  const unsignedNext = store.assignNext(auth(unsignedWorker))!;
+  store.acceptAssignment({
+    ...auth(unsignedWorker),
+    assignmentId: unsignedNext.assignment.assignmentId,
+    assignmentToken: unsignedNext.assignment.assignmentToken,
+  });
+  const unsigned = store.submitReceipt({
+    ...auth(unsignedWorker),
+    assignmentId: unsignedNext.assignment.assignmentId,
+    assignmentToken: unsignedNext.assignment.assignmentToken,
+    taskId: unsignedNext.task.taskId,
+    chunkId: unsignedNext.chunk.chunkId,
+    ...referencePrimeReceiptFields(unsignedNext.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 1,
+  });
+  assert.equal(unsigned.receipt.decision, "malformed");
+  assert.equal(unsigned.receipt.reason, "receipt signature required");
+  assert.equal(unsigned.receipt.signatureStatus, "missing");
+
+  const invalidWorker = store.registerWorker({ capability, signingPublicKey: signing.publicJwk });
+  store.seedPrimeTask({ start: 30, endExclusive: 40, chunkSize: 10, minExecutions: 1, minAgreeing: 1 });
+  const invalidNext = store.assignNext(auth(invalidWorker))!;
+  store.acceptAssignment({
+    ...auth(invalidWorker),
+    assignmentId: invalidNext.assignment.assignmentId,
+    assignmentToken: invalidNext.assignment.assignmentToken,
+  });
+  const invalidFields = {
+    ...auth(invalidWorker),
+    assignmentId: invalidNext.assignment.assignmentId,
+    assignmentToken: invalidNext.assignment.assignmentToken,
+    taskId: invalidNext.task.taskId,
+    chunkId: invalidNext.chunk.chunkId,
+    ...referencePrimeReceiptFields(invalidNext.chunk),
+    executionMode: "cpu" as const,
+    transport: "http" as const,
+    computeMs: 2,
+  };
+  const invalid = store.submitReceipt({
+    ...invalidFields,
+    receiptHash: computeReceiptHash(invalidFields),
+    signature: "bad-signature",
+  });
+  assert.equal(invalid.receipt.decision, "malformed");
+  assert.equal(invalid.receipt.reason, "receipt signature invalid");
+  assert.equal(invalid.receipt.signatureStatus, "invalid");
+  assert.equal(store.verifyReceipt(invalid.receipt.receiptId)?.ok, false);
+});
+
+test("HTTP receipt verifier returns canonical hash and signature status", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const signing = signingKeyPair();
+  const worker = store.registerWorker({ capability, signingPublicKey: signing.publicJwk });
+  store.seedPrimeTask({ start: 40, endExclusive: 50, chunkSize: 10, minExecutions: 1, minAgreeing: 1 });
+  const next = store.assignNext(auth(worker))!;
+  store.acceptAssignment({ ...auth(worker), assignmentId: next.assignment.assignmentId, assignmentToken: next.assignment.assignmentToken });
+  const receiptFields = {
+    ...auth(worker),
+    assignmentId: next.assignment.assignmentId,
+    assignmentToken: next.assignment.assignmentToken,
+    taskId: next.task.taskId,
+    chunkId: next.chunk.chunkId,
+    ...referencePrimeReceiptFields(next.chunk),
+    executionMode: "cpu" as const,
+    transport: "http" as const,
+    computeMs: 3,
+  };
+  const submitted = store.submitReceipt({
+    ...receiptFields,
+    ...signedReceiptFields(receiptFields, signing.privateKey),
+  });
+  const srv = await boot(store, baseConfig);
+  t.after(() => srv.close());
+  const verified = await req(srv.port, "GET", `/compute/receipts/${submitted.receipt.receiptId}/verify`);
+  assert.equal(verified.status, 200);
+  assert.equal(verified.body.ok, true);
+  assert.equal(verified.body.receiptHashMatches, true);
+  assert.equal(verified.body.signatureVerified, true);
+  assert.equal(verified.body.receipt.signature, undefined);
+});
+
+test("scheduler honors worker concurrency and quarantines repeated bad receipts", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const oneAtATime: WorkerCapability = { ...capability, maxConcurrentChunks: 1 };
+  store.seedPrimeTask({ start: 100, endExclusive: 140, chunkSize: 20, minExecutions: 1, minAgreeing: 1 });
+  const worker = store.registerWorker({ capability: oneAtATime });
+  const first = store.assignNext(auth(worker));
+  assert.ok(first);
+  assert.equal(store.assignNext(auth(worker)), null);
+
+  const badWorker = store.registerWorker({ capability });
+  for (let i = 0; i < 3; i++) {
+    store.seedPrimeTask({ start: 200 + i * 10, endExclusive: 210 + i * 10, chunkSize: 10, minExecutions: 1, minAgreeing: 1 });
+    const next = store.assignNext(auth(badWorker))!;
+    store.acceptAssignment({ ...auth(badWorker), assignmentId: next.assignment.assignmentId, assignmentToken: next.assignment.assignmentToken });
+    store.submitReceipt({
+      ...auth(badWorker),
+      assignmentId: next.assignment.assignmentId,
+      assignmentToken: next.assignment.assignmentToken,
+      taskId: next.task.taskId,
+      chunkId: next.chunk.chunkId,
+      ...referencePrimeReceiptFields(next.chunk),
+      outputHash: { algorithm: "sha256", value: "0".repeat(64) },
+      executionMode: "cpu",
+      transport: "http",
+      computeMs: 1,
+    });
+  }
+  assert.equal(store.workerTrustState(badWorker.worker.workerId).quarantined, true);
+  store.seedPrimeTask({ start: 500, endExclusive: 510, chunkSize: 10, minExecutions: 1, minAgreeing: 1 });
+  assert.equal(store.assignNext(auth(badWorker)), null);
 });
 
 test("public artifact verification receipts accept exported artifact hashes", () => {
@@ -1358,11 +1516,25 @@ test("WebRTC pairing joins two workers and exchanges offer answer candidates", a
   assert.equal(p1.body.status, "waiting");
   assert.equal(p1.body.iceServers[0].urls[0], "stun:stun.example.test:19302");
 
+  const p1Retry = await req(srv.port, "POST", "/compute/webrtc/pairs/join", w1);
+  assert.equal(p1Retry.status, 200);
+  assert.equal(p1Retry.body.role, "offerer");
+  assert.equal(p1Retry.body.status, "waiting");
+  assert.equal(p1Retry.body.pairId, p1.body.pairId);
+  assert.equal(p1Retry.body.pairToken, p1.body.pairToken);
+
   const p2 = await req(srv.port, "POST", "/compute/webrtc/pairs/join", w2);
   assert.equal(p2.status, 200);
   assert.equal(p2.body.role, "answerer");
   assert.equal(p2.body.status, "matched");
   assert.equal(p2.body.pairId, p1.body.pairId);
+
+  const p2Retry = await req(srv.port, "POST", "/compute/webrtc/pairs/join", w2);
+  assert.equal(p2Retry.status, 200);
+  assert.equal(p2Retry.body.role, "answerer");
+  assert.equal(p2Retry.body.status, "matched");
+  assert.equal(p2Retry.body.pairId, p1.body.pairId);
+  assert.equal(p2Retry.body.pairToken, p1.body.pairToken);
 
   const headers = { "x-webrtc-pair-token": p1.body.pairToken };
   const offer = await req(srv.port, "POST", `/compute/webrtc/pairs/${p1.body.pairId}/offer`, {
@@ -1508,6 +1680,35 @@ function auth(reg: ReturnType<ComputeLabStore["registerWorker"]>) {
     workerId: reg.worker.workerId,
     workerSessionId: reg.session.workerSessionId,
     workerSessionToken: reg.session.token,
+  };
+}
+
+function signingKeyPair(): { publicJwk: JsonWebKey; privateKey: KeyObject } {
+  const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+  const exported = publicKey.export({ format: "jwk" }) as JsonWebKey;
+  return {
+    publicJwk: {
+      kty: exported.kty,
+      crv: exported.crv,
+      x: exported.x,
+      y: exported.y,
+    },
+    privateKey,
+  };
+}
+
+function signedReceiptFields(
+  receiptFields: Parameters<typeof computeReceiptHash>[0],
+  privateKey: KeyObject,
+): { receiptHash: ReturnType<typeof computeReceiptHash>; signature: string } {
+  const receiptHash = computeReceiptHash(receiptFields);
+  return {
+    receiptHash,
+    signature: signData(
+      "sha256",
+      Buffer.from(receiptHash.value, "utf8"),
+      { key: privateKey, dsaEncoding: "ieee-p1363" },
+    ).toString("base64url"),
   };
 }
 

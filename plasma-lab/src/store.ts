@@ -312,6 +312,8 @@ export interface WorkerProfile {
   p95KernelMs: number | null;
   avgFrameRegressionMs: number | null;
   allowedWorkloadTier: "observe-only" | "cpu-light" | "webgpu-light";
+  trustScore: number;
+  recentFailureRate: number | null;
   acceptedReceipts: number;
   rejectedReceipts: number;
   timeoutAssignments: number;
@@ -1040,32 +1042,48 @@ export class ComputeLabStore {
     if (this.activeAssignmentsForWorker(worker.workerId) >= Math.max(1, worker.capability.maxConcurrentChunks || 1)) {
       return null;
     }
+    const profile = this.workerProfiles().find((candidate) => candidate.workerId === worker.workerId);
+    if (!profile) return null;
+    const candidates: Array<{
+      task: ComputeTask;
+      chunk: ComputeChunk;
+      score: number;
+    }> = [];
     for (const task of this.tasks.values()) {
       if (task.status !== "running") continue;
-      if (!worker.capability.kernels.includes(task.kind)) continue;
+      if (!schedulerEligible(worker, profile, task)) continue;
       for (const chunk of task.chunks) {
-        if (chunk.status === "accepted" || chunk.status === "rejected") continue;
+        if (chunk.status !== "pending") continue;
         if (this.receiptsFor(chunk.chunkId).some((receipt) => receipt.workerId === worker.workerId)) continue;
         const liveAssignments = this.assignmentsFor(chunk.chunkId)
           .filter((assignment) => assignment.status === "offered" || assignment.status === "accepted");
         if (liveAssignments.length >= task.validationPolicy.minExecutions * 2) continue;
-        const assignment: Assignment = {
-          assignmentId: randomId("as"),
-          assignmentToken: randomToken("atok"),
-          taskId: task.taskId,
-          chunkId: chunk.chunkId,
-          workerId: worker.workerId,
-          workerSessionId: session.workerSessionId,
-          status: "offered",
-          assignedAt: this.now(),
-          expiresAt: this.now() + this.assignmentTimeoutMs,
-        };
-        this.assignments.set(assignment.assignmentId, assignment);
-        if (chunk.status === "pending") chunk.status = "pending";
-        return { assignment, chunk, task };
+        candidates.push({
+          task,
+          chunk,
+          score: schedulerCandidateScore(profile, task, liveAssignments.length),
+        });
       }
     }
-    return null;
+    const selected = candidates.sort((a, b) =>
+      b.score - a.score ||
+      a.task.createdAt - b.task.createdAt ||
+      a.chunk.ordinal - b.chunk.ordinal
+    )[0];
+    if (!selected) return null;
+    const assignment: Assignment = {
+      assignmentId: randomId("as"),
+      assignmentToken: randomToken("atok"),
+      taskId: selected.task.taskId,
+      chunkId: selected.chunk.chunkId,
+      workerId: worker.workerId,
+      workerSessionId: session.workerSessionId,
+      status: "offered",
+      assignedAt: this.now(),
+      expiresAt: this.now() + this.assignmentTimeoutMs,
+    };
+    this.assignments.set(assignment.assignmentId, assignment);
+    return { assignment, chunk: selected.chunk, task: selected.task };
   }
 
   acceptAssignment(input: {
@@ -2216,6 +2234,16 @@ function buildWorkerProfiles(input: {
       .filter((ms) => Number.isFinite(ms) && ms >= 0);
     const acceptedReceipts = workerReceipts.filter((receipt) => receipt.decision === "accepted").length;
     const rejectedReceipts = workerReceipts.filter((receipt) => isRejectedDecision(receipt.decision)).length;
+    const timeoutAssignments = workerAssignments.filter((assignment) => assignment.status === "timeout").length;
+    const recentWindowStart = input.now - 30 * 60_000;
+    const recentReceipts = workerReceipts.filter((receipt) =>
+      receipt.receivedAt >= recentWindowStart && receipt.decision !== "pending"
+    );
+    const recentTimeouts = workerAssignments.filter((assignment) =>
+      assignment.assignedAt >= recentWindowStart && assignment.status === "timeout"
+    ).length;
+    const recentFailures = recentReceipts.filter((receipt) => isRejectedDecision(receipt.decision)).length + recentTimeouts;
+    const recentFailureRate = ratio(recentFailures, recentReceipts.length + recentTimeouts, null);
     const failureBuckets: Record<string, number> = {};
     for (const receipt of workerReceipts) {
       if (isRejectedDecision(receipt.decision)) incFlat(failureBuckets, receipt.reason ?? receipt.decision);
@@ -2246,11 +2274,23 @@ function buildWorkerProfiles(input: {
       observation.turnNeedBucket === "required"
     ).length;
     const p95KernelMs = percentile(kernelTimes, 0.95);
+    const webrtcDirectSuccessRate = ratio(directSuccess, webrtc.length, null);
     const tier = allowedWorkloadTier({
+      cpuReferenceAvailable: worker.capability.runtimeSurfaces.includes("cpu-reference"),
       webgpuAvailable,
       webgpuCorrectnessScore,
       renderFixtureScore,
       p95KernelMs,
+      acceptedReceipts,
+    });
+    const trustScore = workerTrustScore({
+      acceptedReceipts,
+      rejectedReceipts,
+      timeoutAssignments,
+      recentFailureRate,
+      webgpuCorrectnessScore,
+      renderFixtureScore,
+      webrtcDirectSuccessRate,
     });
     return {
       workerId: worker.workerId,
@@ -2261,15 +2301,17 @@ function buildWorkerProfiles(input: {
       webgpuAvailable,
       webgpuCorrectnessScore,
       renderFixtureScore,
-      webrtcDirectSuccessRate: ratio(directSuccess, webrtc.length, null),
+      webrtcDirectSuccessRate,
       turnRequiredRate: ratio(turnRequired, webrtc.length, null),
       avgKernelMs: average(kernelTimes),
       p95KernelMs,
       avgFrameRegressionMs: null,
       allowedWorkloadTier: tier,
+      trustScore,
+      recentFailureRate,
       acceptedReceipts,
       rejectedReceipts,
-      timeoutAssignments: workerAssignments.filter((assignment) => assignment.status === "timeout").length,
+      timeoutAssignments,
       failureBuckets,
     };
   }).sort((a, b) => b.lastSeenAt - a.lastSeenAt);
@@ -2439,11 +2481,87 @@ function uniqueStrings(values: unknown[]): string[] {
   return Array.from(new Set(values.map(stringBucket).filter((value): value is string => !!value))).sort();
 }
 
+type WorkloadTier = WorkerProfile["allowedWorkloadTier"];
+
+const WORKLOAD_TIER_RANK: Record<WorkloadTier, number> = {
+  "observe-only": 0,
+  "cpu-light": 1,
+  "webgpu-light": 2,
+};
+
+function schedulerEligible(worker: WorkerRecord, profile: WorkerProfile, task: ComputeTask): boolean {
+  if (!worker.capability.kernels.includes(task.kind)) return false;
+  if (!tierSatisfies(profile.allowedWorkloadTier, taskRequiredWorkloadTier(task))) return false;
+  return true;
+}
+
+function schedulerCandidateScore(profile: WorkerProfile, task: ComputeTask, liveAssignmentCount: number): number {
+  let score = profile.trustScore * 100 - liveAssignmentCount * 10;
+  score += WORKLOAD_TIER_RANK[profile.allowedWorkloadTier] * 8;
+  if (task.kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID || task.kind === REPLAY_VERIFY_KERNEL_ID) {
+    score += (profile.webrtcDirectSuccessRate ?? 0) * 10;
+    score -= (profile.turnRequiredRate ?? 0) * 4;
+  }
+  if (task.kind === SEED_SWEEP_KERNEL_ID) {
+    score += (profile.webgpuCorrectnessScore ?? 0) * 6;
+    if (profile.p95KernelMs !== null) score -= Math.min(20, profile.p95KernelMs / 50);
+  }
+  if (isDeviceWitnessTask(task.kind) && profile.acceptedReceipts === 0) score += 15;
+  if (profile.recentFailureRate !== null) score -= profile.recentFailureRate * 30;
+  return score;
+}
+
+function taskRequiredWorkloadTier(task: ComputeTask): WorkloadTier {
+  if (
+    task.kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID ||
+    task.kind === REPLAY_VERIFY_KERNEL_ID ||
+    task.kind === SEED_SWEEP_KERNEL_ID
+  ) {
+    return "cpu-light";
+  }
+  return "observe-only";
+}
+
+function isDeviceWitnessTask(kind: TaskKind): boolean {
+  return (
+    kind === DEVICE_WITNESS_WEBGPU_KERNEL_ID ||
+    kind === DEVICE_WITNESS_RENDER_KERNEL_ID ||
+    kind === DEVICE_WITNESS_WEBRTC_KERNEL_ID ||
+    kind === DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID
+  );
+}
+
+function tierSatisfies(actual: WorkloadTier, required: WorkloadTier): boolean {
+  return WORKLOAD_TIER_RANK[actual] >= WORKLOAD_TIER_RANK[required];
+}
+
+function workerTrustScore(input: {
+  acceptedReceipts: number;
+  rejectedReceipts: number;
+  timeoutAssignments: number;
+  recentFailureRate: number | null;
+  webgpuCorrectnessScore: number | null;
+  renderFixtureScore: number | null;
+  webrtcDirectSuccessRate: number | null;
+}): number {
+  let score = 0.45;
+  score += Math.min(0.25, input.acceptedReceipts * 0.03);
+  score -= Math.min(0.25, input.rejectedReceipts * 0.06);
+  score -= Math.min(0.15, input.timeoutAssignments * 0.03);
+  if (input.renderFixtureScore !== null) score += input.renderFixtureScore >= 1 ? 0.08 : -0.08;
+  if (input.webgpuCorrectnessScore !== null) score += input.webgpuCorrectnessScore >= 1 ? 0.08 : -0.12;
+  if (input.webrtcDirectSuccessRate !== null) score += input.webrtcDirectSuccessRate * 0.05;
+  if (input.recentFailureRate !== null) score -= input.recentFailureRate * 0.2;
+  return clamp01(score);
+}
+
 function allowedWorkloadTier(input: {
+  cpuReferenceAvailable: boolean;
   webgpuAvailable: boolean;
   webgpuCorrectnessScore: number | null;
   renderFixtureScore: number | null;
   p95KernelMs: number | null;
+  acceptedReceipts: number;
 }): WorkerProfile["allowedWorkloadTier"] {
   if (
     input.webgpuAvailable &&
@@ -2453,8 +2571,18 @@ function allowedWorkloadTier(input: {
   ) {
     return "webgpu-light";
   }
-  if (input.renderFixtureScore !== null && input.renderFixtureScore >= 1) return "cpu-light";
+  if (
+    input.cpuReferenceAvailable ||
+    input.acceptedReceipts > 0 ||
+    (input.renderFixtureScore !== null && input.renderFixtureScore >= 1)
+  ) {
+    return "cpu-light";
+  }
   return "observe-only";
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }
 
 function isRejectedDecision(decision: ReceiptDecision): boolean {

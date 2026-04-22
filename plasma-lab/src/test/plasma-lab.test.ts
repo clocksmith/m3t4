@@ -75,6 +75,18 @@ const webgpuCapability: WorkerCapability = {
   },
 };
 
+const unwitnessedBrowserCapability: WorkerCapability = {
+  ...capability,
+  runtimeSurfaces: ["browser-js"],
+  deviceClass: "desktop-unwitnessed",
+  adapterInfo: {
+    userAgentBucket: "chromium",
+    workerFixture: "unknown",
+    canvas2dFixture: "unknown",
+    frameP95Bucket: "unknown",
+  },
+};
+
 test("prime-search receipts require two expected-hash executions before acceptance", () => {
   const now = clock();
   const store = new ComputeLabStore({
@@ -305,6 +317,35 @@ test("scheduler honors worker concurrency and quarantines repeated bad receipts"
   assert.equal(store.workerTrustState(badWorker.worker.workerId).quarantined, true);
   store.seedPrimeTask({ start: 500, endExclusive: 510, chunkSize: 10, minExecutions: 1, minAgreeing: 1 });
   assert.equal(store.assignNext(auth(badWorker)), null);
+});
+
+test("scheduler gates public artifact work behind witnessed cpu-light profiles", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const payload = {
+    matchId: "tier-gate",
+    tuple: { matchId: "tier-gate", expectedLogHash: "abc123" },
+  };
+  const artifactJson = canonicalJson(payload);
+  const task = store.seedPublicArtifactVerifyTask({
+    matchId: "tier-gate",
+    artifactHash: "artifact-tier-gate",
+    artifactSha256: sha256(artifactJson).value,
+    artifactJson,
+    minExecutions: 1,
+    minAgreeing: 1,
+  });
+
+  const unwitnessed = store.registerWorker({ capability: unwitnessedBrowserCapability });
+  assert.equal(store.workerProfiles().find((profile) => profile.workerId === unwitnessed.worker.workerId)?.allowedWorkloadTier, "observe-only");
+  assert.equal(store.assignNext(auth(unwitnessed)), null);
+
+  const trusted = store.registerWorker({ capability: webgpuCapability });
+  const next = store.assignNext(auth(trusted));
+  assert.equal(next?.task.taskId, task.taskId);
+  assert.equal(next?.task.kind, "m3t4.public_artifact_verify.v0");
+  const profile = store.workerProfiles().find((candidate) => candidate.workerId === trusted.worker.workerId);
+  assert.equal(profile?.allowedWorkloadTier, "webgpu-light");
+  assert.ok((profile?.trustScore ?? 0) > 0.5);
 });
 
 test("public artifact verification receipts accept exported artifact hashes", () => {
@@ -774,6 +815,8 @@ test("dashboard derives worker profiles, class profiles, and public-safe stats",
   assert.equal(dashboard.workerProfiles.length, 1);
   assert.equal(dashboard.workerProfiles[0].allowedWorkloadTier, "webgpu-light");
   assert.equal(dashboard.workerProfiles[0].webrtcDirectSuccessRate, 1);
+  assert.ok(dashboard.workerProfiles[0].trustScore > 0.5);
+  assert.equal(dashboard.workerProfiles[0].recentFailureRate, null);
   assert.equal(dashboard.deviceClassProfiles[0].classId, "desktop-high");
   assert.equal(dashboard.networkClassProfiles[0].classId, "4g");
   assert.equal(dashboard.publicStats.privacy, "full");

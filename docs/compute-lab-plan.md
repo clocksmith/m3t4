@@ -717,6 +717,7 @@ WebRTC client public-artifact transfer:
   env: PLASMA_LAB_SMOKE_ORIGIN, PLASMA_LAB_SMOKE_ADMIN_TOKEN, M3T4_SMOKE_GAME_ORIGIN
   repeat: set PLASMA_LAB_SMOKE_REPEAT=5 or pass --repeat=5 for a hosted soak
   replay verify: set PLASMA_LAB_SMOKE_KERNEL=replay-verify or pass --kernel=replay-verify
+  seed sweep: set PLASMA_LAB_SMOKE_KERNEL=seed-sweep or pass --kernel=seed-sweep
   use: launches two real browser clients, sets the staff-only WebRTC artifact flag, opens intake only for assignment issue, and requires two accepted transport=webrtc expected-hash receipts
 
 WebRTC hosted-client public-artifact 5-pass soak:
@@ -853,14 +854,14 @@ workers verify artifactSha256 by hashing canonical payload JSON
 npm -w plasma-lab run smoke exercises this path locally or against a deploy
 ```
 
-`m3t4.seed_sweep.v0` is implemented as a server-side/reference workload only:
+`m3t4.seed_sweep.v0` is now implemented on both sides of the compute path:
 
 ```text
 inputs: public stage id, public preset A, public preset B, seed range
 outputs: canonical summary JSON hash with winner/score/round/tick/logHash rows
 limits: max 512 seeds per task, max 64 seeds per chunk
 route: POST /compute/admin/tasks/seed-sweep
-browser: not advertised by the hidden spectator worker yet
+browser: advertised by opted-in hidden spectator workers and executable over HTTP or WebRTC data channels
 ```
 
 This targets use cases 2 and 8 from the ladder: seed sweeps and balance
@@ -1163,11 +1164,12 @@ frame guard: disable intake if staff browsers report repeated render-struggling 
 
 `FEATURE_COMPUTE_WEBRTC_ARTIFACTS` is a client flag served by arena-server in
 `/api/status`. It only lets the hidden browser worker try
-`m3t4.public_artifact_verify.v0` over `plasma-data`; it does not open
-assignment intake, create tasks, or bypass receipt validation. The client still
-requires plasma-lab `FEATURE_COMPUTE_WEBRTC_SIGNALING=true` and
-`FEATURE_COMPUTE_WEBRTC_DATA=true` from `/compute/status`, then falls back to
-the normal HTTP worker path if pairing fails.
+`m3t4.public_artifact_verify.v0`, `m3t4.replay_verify.v1`, and
+`m3t4.seed_sweep.v0` over `plasma-data`; it does not open assignment intake,
+create tasks, or bypass receipt validation. The client still requires
+plasma-lab `FEATURE_COMPUTE_WEBRTC_SIGNALING=true` and
+`FEATURE_COMPUTE_WEBRTC_DATA=true` from `/compute/status`, then falls back to the
+normal HTTP worker path if pairing fails.
 `window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__=true` is a staff smoke flag
 only: it disables that HTTP fallback so a controlled WebRTC transfer failure
 cannot be mistaken for a successful WebRTC receipt.

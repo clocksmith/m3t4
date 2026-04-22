@@ -1094,6 +1094,9 @@ assignment intake, create tasks, or bypass receipt validation. The client still
 requires plasma-lab `FEATURE_COMPUTE_WEBRTC_SIGNALING=true` and
 `FEATURE_COMPUTE_WEBRTC_DATA=true` from `/compute/status`, then falls back to
 the normal HTTP worker path if pairing fails.
+`window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__=true` is a staff smoke flag
+only: it disables that HTTP fallback so a controlled WebRTC transfer failure
+cannot be mistaken for a successful WebRTC receipt.
 
 For the pre-panel staff rehearsal, keep `computeSlackWorker=false` and
 `computeWebRtcArtifacts=false` in `/api/status` and opt in from staff devtools

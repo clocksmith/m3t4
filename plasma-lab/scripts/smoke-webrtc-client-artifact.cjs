@@ -59,12 +59,14 @@ async function runOnce(chromium, config, pass) {
       page.evaluate(() => window.__M3T4_COMPUTE_CLIENT__?.poll())
     ));
     const acceptedWitness = await waitForAcceptedTask(config, witness.taskId);
+    await waitForComputeClientsIdle(pages);
 
     const seeded = await seedTask(config, pass);
     if (seeded.chunks !== 1) throw new Error(`expected 1 chunk, got ${seeded.chunks}`);
     await Promise.all(pages.map((page) =>
       page.evaluate(() => window.__M3T4_COMPUTE_CLIENT__?.poll())
     ));
+    await waitForTaskAssignments(config, pages, seeded.taskId, 2);
     const accepted = await waitForAcceptedTask(config, seeded.taskId);
     const elapsedMs = Date.now() - startedAt;
     const finalStatus = await disableAssignments(config);
@@ -291,6 +293,39 @@ async function waitForAcceptedTask(config, taskId) {
     validations: last?.dashboard?.validationList?.filter((entry) => entry.taskId === taskId),
     receipts: last?.dashboard?.receiptList?.filter((entry) => entry.taskId === taskId),
   })}`);
+}
+
+async function waitForComputeClientsIdle(pages, timeoutMs = 15_000) {
+  const startedAt = Date.now();
+  let last = [];
+  while (Date.now() - startedAt < timeoutMs) {
+    last = await Promise.all(pages.map((page) =>
+      page.evaluate(() => window.m3t4Compute.status()).catch((error) => ({ error: message(error) }))
+    ));
+    if (last.every((status) => status && !status.current && !String(status.state || "").startsWith("running "))) return;
+    await delay(250);
+  }
+  throw new Error(`timed out waiting for compute clients to idle: ${JSON.stringify(last)}`);
+}
+
+async function waitForTaskAssignments(config, pages, taskId, expected, timeoutMs = 15_000) {
+  const startedAt = Date.now();
+  let last = [];
+  while (Date.now() - startedAt < timeoutMs) {
+    const dashboard = await adminGet(config, "/compute/admin/dashboard");
+    last = (dashboard.assignmentList || []).filter((entry) => entry.taskId === taskId);
+    if (last.length >= expected) return last;
+    await Promise.all(pages.map((page) =>
+      page.evaluate(() => {
+        const client = window.__M3T4_COMPUTE_CLIENT__;
+        const status = window.m3t4Compute.status();
+        if (!client || status.current) return null;
+        return client.poll();
+      }).catch(() => undefined)
+    ));
+    await delay(500);
+  }
+  throw new Error(`timed out waiting for ${expected} task assignments: ${JSON.stringify(last)}`);
 }
 
 function assertWebRtcArtifactReceipts(receipts, chunk) {

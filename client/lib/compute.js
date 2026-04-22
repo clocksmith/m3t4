@@ -1167,6 +1167,19 @@ async function signaledWebRtcProbe(client, timeoutMs) {
 }
 
 async function runWebRtcArtifactTransfer(client, work, timeoutMs) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await runWebRtcArtifactTransferOnce(client, work, timeoutMs);
+    } catch (e) {
+      lastError = e;
+      await delay(150 + Math.floor(Math.random() * 350) + attempt * 250);
+    }
+  }
+  throw lastError || new Error("webrtc artifact transfer failed");
+}
+
+async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
   if (typeof RTCPeerConnection === "undefined") throw new Error("RTCPeerConnection unavailable");
   const join = await fetch(computeLabOrigin() + "/compute/webrtc/pairs/join", {
     method: "POST",

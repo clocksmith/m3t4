@@ -1132,6 +1132,17 @@ export class ComputeLabStore {
     ) {
       return this.rejectDetachedReceipt(input, "assignment-mismatch", "assignment fields mismatch");
     }
+    const existingReceipt = this.assignmentReceipt(input.assignmentId);
+    if (existingReceipt) {
+      const receipt = this.makeReceipt(
+        input,
+        "duplicate-receipt",
+        `assignment already receipted by ${existingReceipt.receiptId}`,
+      );
+      this.receipts.set(receipt.receiptId, receipt);
+      this.bumpReputation(input.workerId, "rejected");
+      return { receipt };
+    }
     const task = this.requireTask(input.taskId);
     const chunk = this.requireChunk(input.chunkId);
     const mismatch = receiptMismatch(chunk, input);
@@ -1783,7 +1794,8 @@ export class ComputeLabStore {
   }
 
   private evaluateChunk(task: ComputeTask, chunk: ComputeChunk): ValidationRecord | undefined {
-    const receipts = this.receiptsFor(chunk.chunkId);
+    if (chunk.status !== "pending") return undefined;
+    const receipts = this.validationReceiptsFor(chunk.chunkId);
     const matching = receipts.filter((receipt) =>
       receipt.decision === "pending" && hashesEqual(receipt.outputHash, chunk.expectedOutputHash),
     );
@@ -1812,7 +1824,8 @@ export class ComputeLabStore {
   }
 
   private evaluateMeasurementChunk(task: ComputeTask, chunk: ComputeChunk): ValidationRecord | undefined {
-    const receipts = this.receiptsFor(chunk.chunkId);
+    if (chunk.status !== "pending") return undefined;
+    const receipts = this.validationReceiptsFor(chunk.chunkId);
     const valid = receipts.filter((receipt) => receipt.decision === "pending");
     if (valid.length >= task.validationPolicy.minAgreeing && receipts.length >= task.validationPolicy.minExecutions) {
       for (const receipt of valid) {
@@ -1901,6 +1914,47 @@ export class ComputeLabStore {
 
   private receiptsFor(chunkId: string): ExecutionReceipt[] {
     return Array.from(this.receipts.values()).filter((receipt) => receipt.chunkId === chunkId);
+  }
+
+  private validationReceiptsFor(chunkId: string): ExecutionReceipt[] {
+    const seenAssignments = new Set<string>();
+    const receipts: ExecutionReceipt[] = [];
+    for (const receipt of this.receiptsFor(chunkId)) {
+      if (!this.isValidationReceipt(receipt)) continue;
+      if (seenAssignments.has(receipt.assignmentId)) continue;
+      seenAssignments.add(receipt.assignmentId);
+      receipts.push(receipt);
+    }
+    return receipts;
+  }
+
+  private assignmentReceipt(assignmentId: string): ExecutionReceipt | null {
+    return Array.from(this.receipts.values()).find((receipt) =>
+      receipt.assignmentId === assignmentId &&
+      this.isAssignmentBoundReceipt(receipt) &&
+      receipt.decision !== "duplicate-receipt"
+    ) ?? null;
+  }
+
+  private isValidationReceipt(receipt: ExecutionReceipt): boolean {
+    if (!this.isAssignmentBoundReceipt(receipt)) return false;
+    return (
+      receipt.decision === "pending" ||
+      receipt.decision === "accepted" ||
+      receipt.decision === "output-mismatch" ||
+      receipt.decision === "disagreement"
+    );
+  }
+
+  private isAssignmentBoundReceipt(receipt: ExecutionReceipt): boolean {
+    const assignment = this.assignments.get(receipt.assignmentId);
+    return !!assignment &&
+      assignment.workerId === receipt.workerId &&
+      assignment.workerSessionId === receipt.workerSessionId &&
+      assignment.taskId === receipt.taskId &&
+      assignment.chunkId === receipt.chunkId &&
+      receipt.decision !== "assignment-mismatch" &&
+      receipt.decision !== "malformed";
   }
 
   private bumpReputation(workerId: string, kind: "accepted" | "rejected" | "timeout" | "disagreement"): void {

@@ -204,6 +204,7 @@ Initial flags:
 FEATURE_COMPUTE_LAB_ROUTES=false
 FEATURE_COMPUTE_TASK_ADMIN=false
 FEATURE_COMPUTE_SLACK_WORKER=false
+FEATURE_COMPUTE_WEBRTC_ARTIFACTS=false
 FEATURE_COMPUTE_WEBRTC_SIGNALING=false
 FEATURE_COMPUTE_WEBRTC_DATA=false
 FEATURE_COMPUTE_RECEIPT_DASHBOARD=false
@@ -690,6 +691,11 @@ WebRTC public-artifact transfer:
   authority: normal HTTP receipt ingestion accepted both transport=webrtc expected-hash receipts
   safety: assignment intake closed before the P2P transfer began and remained closed afterward
 
+WebRTC client public-artifact transfer:
+  command: npm -w plasma-lab run smoke:webrtc-client-artifact
+  env: PLASMA_LAB_SMOKE_ORIGIN, PLASMA_LAB_SMOKE_ADMIN_TOKEN, M3T4_SMOKE_GAME_ORIGIN
+  use: launches two real browser clients, sets the staff-only WebRTC artifact flag, opens intake only for assignment issue, and requires two accepted transport=webrtc expected-hash receipts
+
 WebRTC public-artifact 3-pass soak:
   tasks: task-a9c8f3fef1a1e3ce, task-23dab3bae4588a78, task-19d7fbce279393e6
   validations: val-8debca2b894eaf09, val-75d547cf5c0fd5a8, val-c043d91e7115c91f
@@ -1071,12 +1077,22 @@ dashboard guard: disable intake if running assignments exceed 4
 frame guard: disable intake if staff browsers report repeated render-struggling pauses
 ```
 
-For the pre-panel staff rehearsal, keep `computeSlackWorker=false` in
-`/api/status` and opt in from staff devtools only:
+`FEATURE_COMPUTE_WEBRTC_ARTIFACTS` is a client flag served by arena-server in
+`/api/status`. It only lets the hidden browser worker try
+`m3t4.public_artifact_verify.v0` over `plasma-data`; it does not open
+assignment intake, create tasks, or bypass receipt validation. The client still
+requires plasma-lab `FEATURE_COMPUTE_WEBRTC_SIGNALING=true` and
+`FEATURE_COMPUTE_WEBRTC_DATA=true` from `/compute/status`, then falls back to
+the normal HTTP worker path if pairing fails.
+
+For the pre-panel staff rehearsal, keep `computeSlackWorker=false` and
+`computeWebRtcArtifacts=false` in `/api/status` and opt in from staff devtools
+only:
 
 ```js
 window.__M3T4_COMPUTE_LAB_ORIGIN__ = "https://plasma-lab-789525635095.us-central1.run.app";
 window.__M3T4_COMPUTE_SLACK_WORKER__ = true;
+window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS__ = true;
 const { getComputeClient } = await import("/lib/compute.js");
 getComputeClient();
 await window.m3t4Compute.start("quiet");
@@ -1088,7 +1104,7 @@ Rollback note:
 primary rollback: POST /compute/admin/assignments {"acceptAssignments":false}
 task rollback: POST /compute/admin/tasks/:taskId/cancel for the active seeded task
 client rollback: staff runs window.m3t4Compute.stop(); hidden opt-in remains off by default
-transport rollback: set FEATURE_COMPUTE_WEBRTC_DATA=false or FEATURE_COMPUTE_WEBRTC_SIGNALING=false
+transport rollback: set FEATURE_COMPUTE_WEBRTC_ARTIFACTS=false, FEATURE_COMPUTE_WEBRTC_DATA=false, or FEATURE_COMPUTE_WEBRTC_SIGNALING=false
 service rollback: set COMPUTE_ACCEPT_ASSIGNMENTS=false on deploy or scale plasma-lab to zero
 hosting rollback: Firebase Hosting release rollback if a client config flag is wrong
 ```
@@ -1097,6 +1113,7 @@ Rollback options:
 
 ```text
 FEATURE_COMPUTE_SLACK_WORKER=false
+FEATURE_COMPUTE_WEBRTC_ARTIFACTS=false
 FEATURE_COMPUTE_WEBRTC_DATA=false
 FEATURE_COMPUTE_WEBRTC_SIGNALING=false
 FEATURE_COMPUTE_LAB_ROUTES=false

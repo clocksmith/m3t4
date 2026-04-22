@@ -239,6 +239,14 @@ Keep `COMPUTE_ACCEPT_ASSIGNMENTS=false` until you are intentionally running a
 staging smoke or staff alpha. After deploy, the admin dashboard is available at
 `/compute/admin/dashboard.html`; it can toggle assignment intake and seed
 public-artifact or public seed-sweep tasks without redeploying env vars. It
+also has a timed assignment-intake button; use that for staff windows so the
+store closes intake automatically even if the operator misses the manual
+disable step. The same control is available through
+`POST /compute/admin/assignments` with
+`{"acceptAssignments":true,"durationMs":30000}`.
+Manual `{"acceptAssignments":false}` remains the primary immediate rollback.
+The runtime deadline is reported as `assignmentIntakeClosesAt` in
+`/compute/status` and the admin dashboard. It
 also shows admin-only Device Witness maps for bucketed WebGPU correctness,
 WebRTC/ICE connectivity, and rendering fixture observations. The dashboard can
 also seed assignment-bound Device Witness WebGPU, rendering fixture, and WebRTC
@@ -436,10 +444,15 @@ M3T4_SMOKE_GAME_ORIGIN=https://m3t4.ai \
 npm -w plasma-lab run smoke:webrtc-client-artifact
 ```
 
+Set `PLASMA_LAB_SMOKE_REPEAT=5` or pass `--repeat=5` to run the hosted
+WebRTC artifact smoke repeatedly in one controlled command. Each pass refuses
+to start if assignment intake is already open, opens intake with a bounded
+server-side window, and disables it again in `finally`.
+
 The local smoke starts its own in-memory lab. The remote smoke requires
-`FEATURE_COMPUTE_LAB_ROUTES=true`, `FEATURE_COMPUTE_TASK_ADMIN=true`, and
-`COMPUTE_ACCEPT_ASSIGNMENTS=true`; flip assignment acceptance back off after
-the check unless you are in staff alpha.
+`FEATURE_COMPUTE_LAB_ROUTES=true` and `FEATURE_COMPUTE_TASK_ADMIN=true`; keep
+`COMPUTE_ACCEPT_ASSIGNMENTS=false` as the deploy-time default and let the smoke
+open the bounded runtime intake window itself.
 
 Watchlist check: Cloud Run logs should contain `[watchlist]` entries for
 matches involving `unicorn`, `disruptor`, `shipper`, long matches, or draws.

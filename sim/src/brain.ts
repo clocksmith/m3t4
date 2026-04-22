@@ -17,7 +17,9 @@ import {
 // v17: physics integration order is seed-flipped by the simulator, so
 // fighter 0 no longer always receives first integration order. Brain
 // anti-mirror policy remains id-asymmetric to preserve counter-cycles.
-export const BEHAVIOR_VERSION = 17;
+// v18: repeated-clash mixups trigger sooner, so fights leave foil-locks
+// before they read as the same collision loop.
+export const BEHAVIOR_VERSION = 18;
 
 // ---------- Opp-model buffer sizing ----------
 //
@@ -50,7 +52,7 @@ const SWIPE_FULL_CD_TICKS = Math.ceil(STATS.swipeTime * 1.6 / STEP);
 const RECOVERY_WINDOW_START = SWIPE_ACTIVE_TICKS;
 const RECOVERY_WINDOW_END = SWIPE_FULL_CD_TICKS + 2; // small slack
 const PASSIVE_FOIL_DANGER_RANGE = STATS.sword + STATS.bodyW;
-const CLASH_LOOP_THRESHOLD = 10;
+const CLASH_LOOP_THRESHOLD = 8;
 
 // v5.1 anti-stalemate constants
 //

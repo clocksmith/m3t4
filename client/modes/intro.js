@@ -6,13 +6,17 @@
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
 
 const REVEAL_SPEED_MULTIPLIER = 1.5;
-const TICK_MS_FAST = Math.round(22 / REVEAL_SPEED_MULTIPLIER); // headers, tagline, tail, stinger
-const TICK_MS_SLOW = Math.round(38 / REVEAL_SPEED_MULTIPLIER); // prologue paragraphs
+const REVEAL_SLOWDOWN_MULTIPLIER = 1.2;
+const TICK_MS_FAST = Math.round((22 / REVEAL_SPEED_MULTIPLIER) * REVEAL_SLOWDOWN_MULTIPLIER); // headers, tagline, tail, stinger
+const TICK_MS_SLOW = Math.round((38 / REVEAL_SPEED_MULTIPLIER) * REVEAL_SLOWDOWN_MULTIPLIER); // prologue paragraphs
 const CHARS_PER_TICK_FAST = 2;
 const CHARS_PER_TICK_SLOW = 1;
 const PAUSE_BETWEEN_BLOCKS_MS = Math.round(1300 / REVEAL_SPEED_MULTIPLIER);
 const PAUSE_AFTER_STINGER_MS = Math.round(1700 / REVEAL_SPEED_MULTIPLIER);
 const PAUSE_BETWEEN_STINGER_LINES_MS = Math.round(420 / REVEAL_SPEED_MULTIPLIER);
+const THINKING_PAUSE_MS = 2000;
+const THINKING_DOT_MS = 240;
+const THINKING_STATES = ["Thinking.", "Thinking..", "Thinking..."];
 
 function blockCadence(kind) {
   if (kind === "paragraph") {
@@ -60,16 +64,11 @@ export function mount(mountEl, { setStatus }) {
       <div class="intro-vignette"></div>
       <section class="intro-fork" aria-label="start">
         <div class="intro-fork-kicker">// START HERE</div>
-        <h1>Your inputs end at policy.</h1>
+        <h1>Your inputs end at policy</h1>
         <div class="intro-fork-lines">
-          <span>tune a bot</span>
-          <span>watch it fail</span>
-          <span>make it public</span>
-        </div>
-        <div class="intro-actions">
-          <a class="buttonish primary intro-cta-blue" href="#build" data-intro-nav>tune bot</a>
-          <a class="buttonish intro-cta-purple" href="#spectate" data-intro-nav>watch live</a>
-          <a class="buttonish intro-cta-red" href="#about" data-intro-nav>about</a>
+          <a class="intro-line-cta is-blue" href="#build" data-intro-nav>tune a bot</a>
+          <a class="intro-line-cta is-red" href="#spectate" data-intro-nav>watch it fail</a>
+          <a class="intro-line-cta is-purple" href="#profile" data-intro-nav>make it public</a>
         </div>
       </section>
       <div class="intro-crawl" id="intro-crawl"></div>
@@ -89,6 +88,9 @@ export function mount(mountEl, { setStatus }) {
   let currentEl = null;
   let lastTick = 0;
   let pausedUntil = 0;
+  let thinkingEl = null;
+  let thinkingStartedAt = 0;
+  let thinkingUntil = 0;
   let finished = false;
   let autoFollowCrawl = true;
 
@@ -113,6 +115,33 @@ export function mount(mountEl, { setStatus }) {
     finished = true;
     hintEl.textContent = "[ click / space / enter to watch live ]";
     hintEl.classList.add("is-final");
+  }
+
+  function shouldThinkBeforeNextParagraph(completedBlock) {
+    return completedBlock.kind === "paragraph" && sequence[idx]?.kind === "paragraph";
+  }
+
+  function renderThinking(now) {
+    if (!thinkingEl) return;
+    const stateIdx = Math.floor((now - thinkingStartedAt) / THINKING_DOT_MS) % THINKING_STATES.length;
+    thinkingEl.textContent = THINKING_STATES[stateIdx];
+  }
+
+  function startThinkingPause(now) {
+    thinkingEl = document.createElement("div");
+    thinkingEl.className = "intro-thinking";
+    crawlEl.appendChild(thinkingEl);
+    thinkingStartedAt = now;
+    thinkingUntil = now + THINKING_PAUSE_MS;
+    renderThinking(now);
+    followCrawl();
+  }
+
+  function clearThinking() {
+    thinkingEl?.remove();
+    thinkingEl = null;
+    thinkingStartedAt = 0;
+    thinkingUntil = 0;
   }
 
   function enter() {
@@ -146,6 +175,18 @@ export function mount(mountEl, { setStatus }) {
 
   function tick(now) {
     if (!running) return;
+    if (thinkingEl) {
+      renderThinking(now);
+      followCrawl();
+      if (now < thinkingUntil) {
+        rafHandle = requestAnimationFrame(tick);
+        return;
+      }
+      clearThinking();
+      lastTick = now;
+      rafHandle = requestAnimationFrame(tick);
+      return;
+    }
     if (now < pausedUntil) { rafHandle = requestAnimationFrame(tick); return; }
     if (!currentEl) { nextBlock(); }
     if (finished) return;
@@ -186,7 +227,11 @@ export function mount(mountEl, { setStatus }) {
         idx++;
         currentEl = null;
         charPos = 0;
-        pausedUntil = now + PAUSE_BETWEEN_BLOCKS_MS;
+        if (shouldThinkBeforeNextParagraph(block)) {
+          startThinkingPause(now);
+        } else {
+          pausedUntil = now + PAUSE_BETWEEN_BLOCKS_MS;
+        }
       }
     }
 

@@ -18,6 +18,7 @@ import { registerBuildRoutes } from "../routes/build.js";
 import { registerRankedRoutes } from "../routes/ranked.js";
 import { registerReplayVerifyRoutes } from "../routes/replay.js";
 import type { RouteList } from "../routes/types.js";
+import type { SlotCosmeticsInput } from "../stable.js";
 import { VerifyStore } from "../verify-store.js";
 import { publicReplayArtifactFromReplay, type PublicReplayArtifactV1 } from "../public-artifacts.js";
 
@@ -25,7 +26,7 @@ class MemoryStableStore {
   private replays = new Map<string, ReplayArtifactV1>();
   private publicArtifacts = new Map<string, PublicReplayArtifactV1>();
   private stables = new Map<string, any>();
-  submitted: Array<{ userId: string; slotIdx: number; config: BrainConfig; name?: string }> = [];
+  submitted: Array<{ userId: string; slotIdx: number; config: BrainConfig; name?: string; cosmetics?: SlotCosmeticsInput }> = [];
   setStable(userId: string, stable: any): void { this.stables.set(userId, stable); }
   async archiveReplay(a: ReplayArtifactV1): Promise<void> {
     this.replays.set(a.match.matchId, a);
@@ -44,8 +45,14 @@ class MemoryStableStore {
   async updateStable(): Promise<void> {}
   async claimHandle(): Promise<any> { return null; }
   async addSlot(): Promise<any> { return null; }
-  async submitToSlot(userId: string, slotIdx: number, config: BrainConfig, name?: string): Promise<{ slotId: string }> {
-    this.submitted.push({ userId, slotIdx, config, name });
+  async submitToSlot(
+    userId: string,
+    slotIdx: number,
+    config: BrainConfig,
+    name?: string,
+    cosmetics?: SlotCosmeticsInput,
+  ): Promise<{ slotId: string }> {
+    this.submitted.push({ userId, slotIdx, config, name, cosmetics });
     return { slotId: `${userId}-${slotIdx}` };
   }
   async recordMatch(): Promise<void> {}
@@ -235,6 +242,25 @@ test("ranked submit accepts profile configs without a JSON id", async (t) => {
   assert.match(store.submitted[0].config.id, /^alice-2-/);
 });
 
+test("ranked submit forwards roster cosmetics", async (t) => {
+  const routes: RouteList = [];
+  const store = new MemoryStableStore();
+  registerCore(routes, store);
+  const srv = await boot(routes);
+  t.after(() => srv.close());
+
+  const cosmetics = { body: "demis", weapon: "folded_chess_axe" };
+  const resp = await req(srv.port, "POST", "/api/ranked/submit", {
+    slotIdx: 1,
+    config: configFromUi({}, 0),
+    name: "solver-seat",
+    cosmetics,
+  }, { authorization: "Bearer alice" });
+
+  assert.equal(resp.status, 200);
+  assert.deepEqual(store.submitted[0].cosmetics, cosmetics);
+});
+
 test("public stable strips configs but owner stable returns private configs", async (t) => {
   const routes: RouteList = [];
   const store = new MemoryStableStore();
@@ -246,6 +272,7 @@ test("public stable strips configs but owner stable returns private configs", as
       slotId: "slot-a",
       config: cfg,
       name: "private-build",
+      cosmetics: { body: "mark", weapon: "quest_flail" },
       submittedAt: 1,
       rateLockedUntil: 0,
       elo: 1000,
@@ -264,6 +291,7 @@ test("public stable strips configs but owner stable returns private configs", as
   const pub = await req(srv.port, "GET", "/api/stables/alice");
   assert.equal(pub.status, 200);
   assert.equal(pub.body.slots[0].name, "private-build");
+  assert.deepEqual(pub.body.slots[0].cosmetics, { body: "mark", weapon: "quest_flail" });
   assert.equal(pub.body.slots[0].config, undefined);
 
   const missingAuth = await req(srv.port, "GET", "/api/me/stable");
@@ -277,6 +305,7 @@ test("public stable strips configs but owner stable returns private configs", as
   assert.equal(own.body.wins, 0);
   assert.equal(own.body.losses, 0);
   assert.deepEqual(own.body.slots[0].config, cfg);
+  assert.deepEqual(own.body.slots[0].cosmetics, { body: "mark", weapon: "quest_flail" });
 });
 
 test("production internal routes require the internal token", async (t) => {

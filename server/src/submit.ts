@@ -3,7 +3,7 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { validateUserSubmission, type BrainConfig } from "@m3t4/sim";
-import type { StableStore } from "./stable.js";
+import type { SlotCosmeticsInput, StableStore } from "./stable.js";
 import { verifyAuth } from "./auth.js";
 import { CONFIG } from "./config.js";
 import { corsHeaders } from "./http-utils.js";
@@ -34,6 +34,7 @@ export async function handleSubmit(req: IncomingMessage, res: ServerResponse, st
       slotIdx?: number;
       config?: unknown;
       name?: string;
+      cosmetics?: SlotCosmeticsInput;
     };
     if (typeof body.slotIdx !== "number") return send(res, 400, { error: "slotIdx required" });
     if (!body.config || typeof body.config !== "object") return send(res, 400, { error: "config required" });
@@ -46,7 +47,7 @@ export async function handleSubmit(req: IncomingMessage, res: ServerResponse, st
       return send(res, 400, { error: "invalid user config", details: validation.errors });
     }
 
-    const { slotId } = await store.submitToSlot(auth.uid, body.slotIdx, validation.config, body.name);
+    const { slotId } = await store.submitToSlot(auth.uid, body.slotIdx, validation.config, body.name, body.cosmetics);
     send(res, 200, { ok: true, slotId });
   } catch (e) {
     send(res, 400, { error: (e as Error).message });

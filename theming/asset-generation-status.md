@@ -131,4 +131,6 @@ Source folder: `~/Downloads/demoday`
 |---|---|---|
 | `assets/chars/sama/monastic_infra/sprite.png` | audit scale | Check against all three rendered stage packs; may need higher-detail late-16-bit/arcade regen or a runtime scale adjustment. |
 | `assets/chars/darrius/legal_department_midnight/sprite.png` | audit scale | Check against all three rendered stage packs; hair/glasses should remain readable after any scale/style pass. |
+| `assets/chars/demis/chalk_and_static/sprite.png` | regenerate | Promoted into the full playable prompt batch; generate row strips before enabling the body in roster selection. |
+| `assets/chars/mark/wellness_berserker/sprite.png` | regenerate | Promoted into the full playable prompt batch; generate row strips before enabling the body in roster selection. |
 | `assets/chars/darrius/legal_department_midnight/row-strips/rows-03-05.png` | regenerate later | Current strip can ship, but the latest prompt copy should produce cleaner fall/wall/dive containment. |

@@ -7,7 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { compileBrain, STRATEGIES, type BrainConfig, type ReplayArtifactV1 } from "@m3t4/sim";
+import { compileBrain, STRATEGIES, type BrainConfig, type Character, type ReplayArtifactV1 } from "@m3t4/sim";
 import { CONFIG } from "./config.js";
 import { publicReplayArtifactFromReplay, type PublicReplayArtifactV1 } from "./public-artifacts.js";
 
@@ -16,10 +16,37 @@ import { publicReplayArtifactFromReplay, type PublicReplayArtifactV1 } from "./p
 // provides a "floor" meta that new users can beat their way past.
 const SYSTEM_UID = "system";
 
+export const ROSTER_BODY_IDS = ["sama", "darrius", "demis", "mark"] as const;
+export type RosterBodyId = typeof ROSTER_BODY_IDS[number];
+
+export const ROSTER_WEAPON_IDS_BY_BODY = {
+  sama: ["worldcoin_orb_flail", "backpack_maul", "gpu_server_blade", "heat_sink_greatsword"],
+  darrius: ["rolled_constitution_bat", "alignment_baton", "red_team_pike", "guardrail_greatsword"],
+  demis: ["nobel_medal_flail", "folded_chess_axe", "go_board_maul", "alphafold_blade"],
+  mark: ["sunscreen_bottle_club", "controller_nunchucks", "shareholder_sauce_club", "quest_flail"],
+} as const satisfies Record<RosterBodyId, readonly string[]>;
+
+export type RosterWeaponId = (typeof ROSTER_WEAPON_IDS_BY_BODY)[RosterBodyId][number];
+
+export interface SlotCosmetics {
+  body: RosterBodyId;
+  weapon: RosterWeaponId;
+}
+
+export type SlotCosmeticsInput = Partial<Record<keyof SlotCosmetics, unknown>>;
+
+const ROSTER_BODY_CHARACTERS: Record<RosterBodyId, Omit<Character, "body" | "weapon">> = {
+  sama: { name: "Sama", label: "Capacity Mystic", col: "#6ee7b7", trim: "#d1fae5", shadow: "#047857" },
+  darrius: { name: "Darrius", label: "Policy Undertaker", col: "#fb923c", trim: "#fed7aa", shadow: "#9a3412" },
+  demis: { name: "Demis", label: "Quiet Solver", col: "#60a5fa", trim: "#dbeafe", shadow: "#1e3a8a" },
+  mark: { name: "Mark", label: "Sunlit Operator", col: "#c084fc", trim: "#ede9fe", shadow: "#5b21b6" },
+};
+
 export interface Slot {
   slotId: string;
   config: BrainConfig;        // PRIVATE — never served to clients
   name: string;               // user-given nickname, public
+  cosmetics?: SlotCosmetics;
   submittedAt: number;
   rateLockedUntil: number;
   elo: number;
@@ -50,6 +77,7 @@ export interface StablePublic {
 export interface SlotPublic {
   slotId: string;
   name: string;
+  cosmetics: SlotCosmetics;
   elo: number;
   wins: number;
   losses: number;
@@ -62,18 +90,94 @@ export function computeAggregate(slots: Slot[]): number {
   return Math.round(slots.reduce((s, x) => s + x.elo, 0) / slots.length);
 }
 
+export function activeRosterSlots<T>(slots: readonly (T | null | undefined)[] = []): T[] {
+  return slots.slice(0, CONFIG.maxSlots).filter((slot): slot is T => !!slot);
+}
+
+export function activeRosterSlotEntries<T>(
+  slots: readonly (T | null | undefined)[] = [],
+): Array<{ slot: T; slotIdx: number }> {
+  return slots
+    .slice(0, CONFIG.maxSlots)
+    .map((slot, slotIdx) => ({ slot, slotIdx }))
+    .filter((entry): entry is { slot: T; slotIdx: number } => !!entry.slot);
+}
+
+export function defaultSlotCosmetics(slotIdx: number): SlotCosmetics {
+  const body = ROSTER_BODY_IDS[((slotIdx % ROSTER_BODY_IDS.length) + ROSTER_BODY_IDS.length) % ROSTER_BODY_IDS.length];
+  return { body, weapon: ROSTER_WEAPON_IDS_BY_BODY[body][0] };
+}
+
+export function normalizeSlotCosmetics(
+  input: unknown,
+  slotIdx: number,
+  fallback: SlotCosmetics = defaultSlotCosmetics(slotIdx),
+): SlotCosmetics {
+  const source = input && typeof input === "object" ? input as SlotCosmeticsInput : {};
+  const body = isRosterBodyId(source.body) ? source.body : fallback.body;
+  const fallbackWeapon = weaponBelongsToBody(body, fallback.weapon)
+    ? fallback.weapon
+    : ROSTER_WEAPON_IDS_BY_BODY[body][0];
+  const weapon = weaponBelongsToBody(body, source.weapon)
+    ? source.weapon
+    : fallbackWeapon;
+  return { body, weapon };
+}
+
+export function slotCosmetics(slot: Pick<Slot, "cosmetics"> | null | undefined, slotIdx: number): SlotCosmetics {
+  return normalizeSlotCosmetics(slot?.cosmetics, slotIdx);
+}
+
+export function characterForCosmetics(cosmetics: SlotCosmetics): Character {
+  return {
+    ...ROSTER_BODY_CHARACTERS[cosmetics.body],
+    body: cosmetics.body,
+    weapon: cosmetics.weapon,
+  };
+}
+
+export function charsForSlots(a: Slot, b: Slot): [Character, Character] {
+  return [
+    characterForCosmetics(slotCosmetics(a, 0)),
+    characterForCosmetics(slotCosmetics(b, 1)),
+  ];
+}
+
+export function assertUniqueBodyInStable(st: Stable, slotIdx: number, cosmetics: SlotCosmetics): void {
+  for (let i = 0; i < Math.min(CONFIG.maxSlots, st.slots.length); i++) {
+    if (i === slotIdx) continue;
+    const slot = st.slots[i];
+    if (!slot) continue;
+    const other = slotCosmetics(slot, i);
+    if (other.body === cosmetics.body) {
+      throw new Error(`${cosmetics.body} body already used by seat ${i}`);
+    }
+  }
+}
+
+export function normalizeStableSlotCosmetics(st: Stable): void {
+  for (let i = 0; i < Math.min(CONFIG.maxSlots, st.slots.length); i++) {
+    const slot = st.slots[i];
+    if (!slot) continue;
+    slot.cosmetics = slotCosmetics(slot, i);
+  }
+}
+
 export function stablePublic(st: Stable): StablePublic {
-  const wins = st.slots.reduce((s, x) => s + x.wins, 0);
-  const losses = st.slots.reduce((s, x) => s + x.losses, 0);
+  const entries = activeRosterSlotEntries(st.slots);
+  const slots = entries.map((entry) => entry.slot);
+  const wins = slots.reduce((s, x) => s + x.wins, 0);
+  const losses = slots.reduce((s, x) => s + x.losses, 0);
   return {
     userId: st.userId,
     handle: st.handle,
-    eloAggregate: computeAggregate(st.slots),
+    eloAggregate: computeAggregate(slots),
     wins,
     losses,
-    slots: st.slots.map((s) => ({
+    slots: entries.map(({ slot: s, slotIdx }) => ({
       slotId: s.slotId,
       name: s.name,
+      cosmetics: slotCosmetics(s, slotIdx),
       elo: s.elo,
       wins: s.wins,
       losses: s.losses,
@@ -88,7 +192,13 @@ export function stablePublic(st: Stable): StablePublic {
 export interface StableStore {
   getStable(userId: string): Promise<Stable | null>;
   upsertHandle(userId: string, handle: string): Promise<Stable>;
-  submitToSlot(userId: string, slotIdx: number, config: BrainConfig, name?: string): Promise<{ slotId: string }>;
+  submitToSlot(
+    userId: string,
+    slotIdx: number,
+    config: BrainConfig,
+    name?: string,
+    cosmetics?: SlotCosmeticsInput,
+  ): Promise<{ slotId: string }>;
   listActive(sinceMs: number): Promise<Stable[]>;
   updateAfterMatch(res: MatchUpdate): Promise<void>;
   archiveReplay(artifact: ReplayArtifactV1): Promise<void>;
@@ -157,7 +267,9 @@ export class FileStableStore implements StableStore {
   // Idempotent: preserves ELO/W-L on existing phantoms, refreshes strategy
   // configs after rebalance patches, and adds any newly-added strategies.
   private seedSystemPhantoms(): void {
+    let cosmeticIdx = 0;
     for (const [name, cfg] of Object.entries(STRATEGIES)) {
+      const seededCosmetics = defaultSlotCosmetics(cosmeticIdx++);
       const uid = `system:${name}`;
       const existing = this.data.stables[uid];
       if (existing) {
@@ -166,6 +278,7 @@ export class FileStableStore implements StableStore {
           slot.config = cfg;
           slot.name = name;
           slot.rateLockedUntil = 0;
+          slot.cosmetics = normalizeSlotCosmetics(slot.cosmetics, 0, seededCosmetics);
         }
         existing.handle = `sys_${name}`;
         existing.updatedAt = Date.now();
@@ -181,6 +294,7 @@ export class FileStableStore implements StableStore {
             slotId: `sys-${name}`,
             config: cfg,
             name,
+            cosmetics: seededCosmetics,
             submittedAt: now,
             rateLockedUntil: 0, // phantoms can't be rate-limited
             elo: CONFIG.eloAnchor,
@@ -240,7 +354,13 @@ export class FileStableStore implements StableStore {
     return st;
   }
 
-  async submitToSlot(userId: string, slotIdx: number, config: BrainConfig, name?: string): Promise<{ slotId: string }> {
+  async submitToSlot(
+    userId: string,
+    slotIdx: number,
+    config: BrainConfig,
+    name?: string,
+    cosmetics?: SlotCosmeticsInput,
+  ): Promise<{ slotId: string }> {
     const st = this.data.stables[userId];
     if (!st) throw new Error("no stable — pick a handle first");
     if (slotIdx < 0 || slotIdx >= CONFIG.maxSlots) throw new Error(`slot out of range 0..${CONFIG.maxSlots - 1}`);
@@ -255,11 +375,14 @@ export class FileStableStore implements StableStore {
       throw new Error(`rate limited — try again in ${wait} min`);
     }
 
+    const slotCos = normalizeSlotCosmetics(cosmetics, slotIdx, existing ? slotCosmetics(existing, slotIdx) : defaultSlotCosmetics(slotIdx));
+    assertUniqueBodyInStable(st, slotIdx, slotCos);
     const slotId = existing?.slotId ?? crypto.randomBytes(8).toString("hex");
     const slot: Slot = {
       slotId,
       config,
       name: name ?? existing?.name ?? `slot-${slotIdx + 1}`,
+      cosmetics: slotCos,
       submittedAt: now,
       rateLockedUntil: now + CONFIG.submitRateMs,
       elo: existing?.elo ?? CONFIG.eloAnchor,
@@ -269,6 +392,7 @@ export class FileStableStore implements StableStore {
       lastPlayedAt: existing?.lastPlayedAt ?? 0,
     };
     st.slots[slotIdx] = slot;
+    normalizeStableSlotCosmetics(st);
     st.updatedAt = now;
     this.flush();
     return { slotId };
@@ -277,7 +401,7 @@ export class FileStableStore implements StableStore {
   async listActive(sinceMs: number): Promise<Stable[]> {
     const cutoff = Date.now() - sinceMs;
     return Object.values(this.data.stables).filter((st) =>
-      st.slots.some((s) => s.submittedAt >= cutoff || s.lastPlayedAt >= cutoff),
+      activeRosterSlots(st.slots).some((s) => s.submittedAt >= cutoff || s.lastPlayedAt >= cutoff),
     );
   }
 
@@ -322,7 +446,7 @@ export class FileStableStore implements StableStore {
     let count = 0;
     const alpha = 1 - CONFIG.eloDecayPerWeek;
     for (const st of Object.values(this.data.stables)) {
-      for (const s of st.slots) {
+      for (const s of activeRosterSlots(st.slots)) {
         s.elo = Math.round(s.elo * alpha + CONFIG.eloAnchor * CONFIG.eloDecayPerWeek);
         count++;
       }
@@ -343,4 +467,12 @@ export class FileStableStore implements StableStore {
         delete this.data.publicReplayArtifacts[matchId];
       });
   }
+}
+
+function isRosterBodyId(value: unknown): value is RosterBodyId {
+  return typeof value === "string" && (ROSTER_BODY_IDS as readonly string[]).includes(value);
+}
+
+function weaponBelongsToBody(body: RosterBodyId, value: unknown): value is RosterWeaponId {
+  return typeof value === "string" && (ROSTER_WEAPON_IDS_BY_BODY[body] as readonly string[]).includes(value);
 }

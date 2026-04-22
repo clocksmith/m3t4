@@ -46,11 +46,11 @@ export async function claimHandle(token, handleStr) {
   }));
 }
 
-export async function submitSlot(token, slotIdx, config, name) {
+export async function submitSlot(token, slotIdx, config, name, cosmetics) {
   return handle(await fetch(API_ORIGIN + "/api/ranked/submit", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: "Bearer " + token },
-    body: JSON.stringify({ slotIdx, config, name }),
+    body: JSON.stringify({ slotIdx, config, name, cosmetics }),
   }));
 }
 

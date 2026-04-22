@@ -20,7 +20,11 @@ import {
   scaledStateFromValues,
   stateSpent,
 } from "../lib/build-config.js";
-import { setupCanvas, drawFrame, W, H } from "../lib/render.js";
+import { createFrameRenderer, W, H } from "../render/index.js";
+import { escapeHtml } from "../ui/html.js";
+import { buttonHtml } from "../ui/actions.js";
+import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
+import { statListHtml } from "../ui/stats.js";
 import { simulateBuildPreview } from "../lib/api.js";
 import { auth } from "../lib/auth.js";
 import {
@@ -119,10 +123,11 @@ const GAME_KEYS = new Set([
 const keyset = new Set();
 
 let stageId = STAGE_IDS.includes("datacenter") ? "datacenter" : STAGE_IDS[0];
-let testCtx = null;
+let testRenderer = null;
 let testCanvas = null;
 let testRafId = 0;
 let testRunning = false;
+let rendererMountId = 0;
 let mountMediaHandler = null;
 let previewFrames = [];
 let previewStage = STAGES.datacenter;
@@ -165,11 +170,6 @@ const HUMAN_QUIPS = [
   "PROVISIONAL HUMAN APPROVED.\nThis clearance expires at end-of-round or at time of death.",
 ];
 function pickHumanQuip() { return HUMAN_QUIPS[Math.floor(Math.random() * HUMAN_QUIPS.length)]; }
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) =>
-    ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
-}
 
 function glitchControlsHtml(keys) {
   return `
@@ -264,25 +264,23 @@ export function mount(root, { setStatus }) {
   setStatus("tune");
   root.innerHTML = `
     <div class="page build-page">
-      <div class="page-header-row">
-        <div class="page-title-stack">
-          <h1 class="page-title">Tune</h1>
-          <div class="page-subtitle tight">server preview · not ranked until sent live</div>
-        </div>
+      ${pageHeaderHtml({
+        title: "Tune",
+        subtitle: "server preview · not ranked until sent live",
+        action: `
         <label class="inline-control"><span class="tight">stage</span>
           <select id="test-stage">${STAGE_IDS.map((s) => `<option value="${s}" ${s === stageId ? "selected" : ""}>${s}</option>`).join("")}</select>
         </label>
-        <button id="test-reset">reset match</button>
-        <button id="test-resim" class="primary">test fight</button>
-        <span class="tight" id="test-hud"></span>
-      </div>
-      <section class="context-card build-context-card">
-        <div class="context-card-kicker">remote simulation</div>
-        <div class="context-card-copy">
-          <strong>Tune policy tendencies here.</strong>
-          <span>Test fights run on the server and return replay frames; the browser only renders what comes back.</span>
-        </div>
-      </section>
+        ${buttonHtml({ id: "test-reset", text: "reset match" })}
+        ${buttonHtml({ id: "test-resim", variant: "primary", text: "test fight" })}
+        <span class="tight" id="test-hud"></span>`,
+      })}
+      ${contextCardHtml({
+        className: "build-context-card",
+        kicker: "remote simulation",
+        strong: "Tune policy tendencies here.",
+        copy: "Test fights run on the server and return replay frames; the browser only renders what comes back.",
+      })}
 
       <div class="grid-3">
         ${playerPanelHtml(0)}
@@ -290,16 +288,16 @@ export function mount(root, { setStatus }) {
           <canvas id="test-canvas" class="u-canvas-fill" width="${W}" height="${H}" tabindex="0"></canvas>
           <div class="build-preview-stats" aria-live="polite">
             <div class="build-preview-copy tight">server test fight</div>
-            <dl class="stat-list">
-              <div class="stat-row"><dt>P1</dt><dd id="build-stat-p1">—</dd></div>
-              <div class="stat-row"><dt>P2</dt><dd id="build-stat-p2">—</dd></div>
-              <div class="stat-row"><dt>stage</dt><dd id="build-stat-stage">—</dd></div>
-              <div class="stat-row"><dt>server</dt><dd id="build-stat-server">—</dd></div>
-              <div class="stat-row"><dt>seed</dt><dd id="build-stat-seed">—</dd></div>
-              <div class="stat-row"><dt>tick</dt><dd id="build-stat-tick">—</dd></div>
-              <div class="stat-row"><dt>frames</dt><dd id="build-stat-frames">—</dd></div>
-              <div class="stat-row"><dt>result</dt><dd id="build-stat-result">—</dd></div>
-            </dl>
+            ${statListHtml([
+              { label: "P1", id: "build-stat-p1" },
+              { label: "P2", id: "build-stat-p2" },
+              { label: "stage", id: "build-stat-stage" },
+              { label: "server", id: "build-stat-server" },
+              { label: "seed", id: "build-stat-seed" },
+              { label: "tick", id: "build-stat-tick" },
+              { label: "frames", id: "build-stat-frames" },
+              { label: "result", id: "build-stat-result" },
+            ])}
           </div>
         </section>
         ${playerPanelHtml(1)}
@@ -308,9 +306,9 @@ export function mount(root, { setStatus }) {
       <div id="build-msg" class="tight"></div>
     </div>`;
 
+  const rendererId = ++rendererMountId;
   testCanvas = root.querySelector("#test-canvas");
-  const { ctx: c } = setupCanvas(testCanvas);
-  testCtx = c;
+  void attachTestRenderer(rendererId, testCanvas);
 
   wireSlot(root, 0);
   wireSlot(root, 1);
@@ -349,13 +347,33 @@ export function mount(root, { setStatus }) {
 }
 
 export function unmount() {
+  rendererMountId++;
   testRunning = false;
   if (testRafId) cancelAnimationFrame(testRafId);
+  testRenderer?.destroy();
+  testRenderer = null;
   removeEventListener("keydown", onKeyDown);
   removeEventListener("keyup", onKeyUp);
   removeEventListener("blur", onBlur);
   keyset.clear();
   if (mountMediaHandler) { mountMediaHandler(); mountMediaHandler = null; }
+}
+
+async function attachTestRenderer(rendererId, canvas) {
+  let nextRenderer = null;
+  try {
+    nextRenderer = await createFrameRenderer(canvas);
+  } catch (error) {
+    console.error("[m3t4] failed to initialize build renderer", error);
+    return;
+  }
+  if (rendererId !== rendererMountId || !testCanvas) {
+    nextRenderer.destroy();
+    return;
+  }
+  testRenderer?.destroy();
+  testRenderer = nextRenderer;
+  testCanvas = nextRenderer.canvas ?? canvas;
 }
 
 // ==================== HTML SCAFFOLDS ====================
@@ -430,10 +448,10 @@ function playerPanelHtml(slot) {
             </div>
           </div>
           <div class="toolbar">
-            <button class="slot-reset" data-slot="${slot}">reset</button>
-            <button class="slot-randomize" data-slot="${slot}">randomize</button>
-            <button class="slot-copy" data-slot="${slot}">copy JSON</button>
-            <button class="slot-submit primary" data-slot="${slot}">send to live roster</button>
+            ${buttonHtml({ className: "slot-reset", attrs: { "data-slot": slot }, text: "reset" })}
+            ${buttonHtml({ className: "slot-randomize", attrs: { "data-slot": slot }, text: "randomize" })}
+            ${buttonHtml({ className: "slot-copy", attrs: { "data-slot": slot }, text: "copy JSON" })}
+            ${buttonHtml({ className: "slot-submit", variant: "primary", attrs: { "data-slot": slot }, text: "send to live roster" })}
           </div>
           <div class="build-install-note tight">Preview only until sent live.</div>
           <details class="json-fold">
@@ -797,14 +815,14 @@ function startLoop() {
 
 function loopTest() {
   if (!testRunning) return;
-  if (testCtx) {
+  if (testRenderer) {
     paintHumanSliderNoise(0);
     paintHumanSliderNoise(1);
     const frame = currentPreviewFrame();
     if (frame) {
-      drawFrame(testCtx, previewStage, frame, previewLabels);
+      testRenderer.drawFrame(previewStage, frame, previewLabels);
     } else {
-      drawFrame(testCtx, previewStage, emptyFrame(), previewLabels);
+      testRenderer.drawFrame(previewStage, emptyFrame(), previewLabels);
     }
     updatePreviewHud(frame);
   }

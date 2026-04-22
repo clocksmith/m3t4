@@ -1,3 +1,5 @@
+import { buttonHtml } from "../ui/actions.js";
+
 const KEY = "m3t4:alphaGate";
 export const ALPHA_TOKEN_KEY = "m3t4:alphaToken";
 
@@ -14,7 +16,7 @@ export async function installAlphaGate() {
       <div class="panel">
         <div class="row">
           <input id="alpha-password" class="u-fill" type="password" placeholder="alpha password">
-          <button id="alpha-enter" class="primary">enter</button>
+          ${buttonHtml({ id: "alpha-enter", variant: "primary", text: "enter" })}
         </div>
         <div id="alpha-error" class="error"></div>
       </div>
@@ -54,7 +56,7 @@ export async function installAlphaGate() {
         <footer id="bottom">
           <span id="status">—</span>
           <span class="spacer"></span>
-          <a href="https://github.com/m3t4-ai" target="_blank" rel="noreferrer">github</a>
+          <a href="https://d4da.com" target="_blank" rel="noreferrer">produced by d4da.com</a>
         </footer>`;
       resolve();
     }

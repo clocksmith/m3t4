@@ -102,6 +102,10 @@ export interface ReplayPlayerV1 {
   controls?: string | ReplayControlsV1;
   config?: BrainConfig;
   configHash?: string;
+  cosmetics?: {
+    body: string;
+    weapon: string;
+  };
 }
 
 export interface ReplayMatchV1 {

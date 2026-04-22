@@ -72,7 +72,7 @@ export const CHARACTER_KITS: CharacterKit[] = [
   {
     id: "demis",
     colors: { primary: "#60a5fa", trim: "#dbeafe", shadow: "#1e3a8a" },
-    sprite: emptySprite(),
+    sprite: emptySprite("assets/chars/demis/chalk_and_static/sprite.png"),
     portraits: {
       neutral: emptyPortrait(),
       hurt:    emptyPortrait(),
@@ -84,7 +84,7 @@ export const CHARACTER_KITS: CharacterKit[] = [
   {
     id: "mark",
     colors: { primary: "#c084fc", trim: "#ede9fe", shadow: "#5b21b6" },
-    sprite: emptySprite(),
+    sprite: emptySprite("assets/chars/mark/wellness_berserker/sprite.png"),
     portraits: {
       neutral: emptyPortrait(),
       hurt:    emptyPortrait(),

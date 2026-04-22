@@ -896,7 +896,7 @@
       "sama": {
         "seed": 170101,
         "out": "assets/chars/sama/monastic_infra/sprite.png",
-        "base": "Character A the Capacity Mystic, 16-bit character sprite: Character A likeness \u2014 adult male in his late 30s to early 40s, lean frame, fair skin, mature but not old. Long oval face with vertically elongated proportions: face reads longer than wide, broad high forehead, noticeable temple width, short fine light-brown to dark-blond hair with slight recession at the temples. Light blue to blue-green medium-sized eyes at standard spacing, mild under-eye definition, light-brown medium-density eyebrows, straight medium-width nose, medium lips in a neutral line, clean-shaven or faint stubble. Critical face geometry: lower face is NOT narrow; jawline is straight and moderately wide, tapering only slightly from cheekbones; chin is medium-to-broad and rounded-square, not pointed, not small, not V-shaped, balanced with forehead width. Wearing a plain grey or navy crewneck sweater or quarter-zip, dark denim, understated sneakers. Quiet founder intensity, direct alert gaze, posture of a medieval saint, cold and ceremonial. Teal #6ee7b7 primary / #d1fae5 trim / #047857 shadow. Silhouette reads as 'minimalist tech-founder as priest' at 64px. Include all 12 animation rows in the shared sprite-sheet layout."
+        "base": "Character A the Capacity Mystic, 16-bit character sprite: Character A likeness \u2014 adult male in his late 30s to early 40s, lean frame, fair skin, mature but not old. Long oval face with vertically elongated proportions: face reads longer than wide, broad high forehead, noticeable temple width, short dark brown hair subtly flecked with gray, with slight recession at the temples. Light blue to blue-green medium-sized eyes at standard spacing, mild under-eye definition, light-brown medium-density eyebrows, straight medium-width nose, medium lips in a neutral line, clean-shaven or faint stubble. Critical face geometry: lower face is NOT narrow; jawline is straight and moderately wide, tapering only slightly from cheekbones; chin is medium-to-broad and rounded-square, not pointed, not small, not V-shaped, balanced with forehead width. Wearing a plain grey or navy crewneck sweater or quarter-zip, dark denim, understated sneakers. Quiet founder intensity, direct alert gaze, posture of a medieval saint, cold and ceremonial. Teal #6ee7b7 primary / #d1fae5 trim / #047857 shadow. Silhouette reads as 'minimalist tech-founder as priest' at 64px. Include all 12 animation rows in the shared sprite-sheet layout."
       },
       "darrius": {
         "seed": 170201,
@@ -906,14 +906,12 @@
       "demis": {
         "seed": 170301,
         "out": "assets/chars/demis/chalk_and_static/sprite.png",
-        "base": "Character C the Quiet Solver, 16-bit character sprite: Character C likeness \u2014 medium build, warm olive light-to-medium complexion, heart-to-diamond face shape with wide intelligent forehead, defined cheekbones, fine tapered jaw, sharp pointed chin, dark brown focused eyes, thick slightly arched dark eyebrows, straight slightly prominent nose, thin lips with a restrained polite smile, clean-shaven. Short dark brown hair with natural wave, neat side part, salt-and-pepper graying at the temples. Wearing a crisp white or pale collared shirt with no tie under a well-fitted dark blazer or tailored sport coat, smart casual trousers. Polished academic-corporate bearing, calm calculated expression, precise stiff economical animations. Cool #60a5fa primary / #dbeafe trim / #1e3a8a shadow. Silhouette reads as 'polished theorem delivering a correction' at 64px. Include all 12 animation rows in the shared sprite-sheet layout.",
-        "status": "deferred"
+        "base": "Character C the Quiet Solver, 16-bit character sprite: Character C likeness \u2014 medium build, warm olive light-to-medium complexion, heart-to-diamond face shape with wide intelligent forehead, defined cheekbones, fine tapered jaw, sharp pointed chin, dark brown focused eyes, thick slightly arched dark eyebrows, straight slightly prominent nose, thin lips with a restrained polite smile, clean-shaven. Short dark brown hair with natural wave, neat side part, salt-and-pepper graying at the temples. Wearing a crisp white or pale collared shirt with no tie under a well-fitted dark blazer or tailored sport coat, smart casual trousers. Polished academic-corporate bearing, calm calculated expression, precise stiff economical animations. Cool #60a5fa primary / #dbeafe trim / #1e3a8a shadow. Silhouette reads as 'polished theorem delivering a correction' at 64px. Include all 12 animation rows in the shared sprite-sheet layout."
       },
       "mark": {
         "seed": 170401,
         "out": "assets/chars/mark/wellness_berserker/sprite.png",
-        "base": "Character D the Sunlit Operator, 16-bit character sprite: Character D likeness \u2014 slender athletic martial-arts build, light skin, sharper square-leaning face, broad high forehead, pronounced cheekbones, newly chiseled jawline, straight proportional nose, medium lips set in a controlled expression, pale blue to green-hazel eyes with fixed analytical stare, light stubble. Longer wavy light-brown hair with volume and curl, textured forward enough to soften the receding hairline. Wearing matte black tactical athleisure layered with an oversized designer tee or jacket, chunky gold or silver chain, white sunscreen war-paint smears on the cheekbones. Aggressive low stance, feral controlled vibe, modern streetwear-meets-MMA. Purple #c084fc primary / #ede9fe trim / #5b21b6 shadow. Silhouette reads as 'influencer combat athlete' at 64px; longer hair, chain, and squared jaw are key anchors. Include all 12 animation rows in the shared sprite-sheet layout.",
-        "status": "deferred"
+        "base": "Character D the Sunlit Operator, 16-bit character sprite: Character D likeness \u2014 slender athletic martial-arts build, light skin, sharper square-leaning face, broad high forehead, pronounced cheekbones, newly chiseled jawline, straight proportional nose, medium lips set in a controlled expression, pale blue to green-hazel eyes with fixed analytical stare, light stubble. Longer wavy light-brown hair with volume and curl, textured forward enough to soften the receding hairline. Wearing matte black tactical athleisure layered with an oversized designer tee or jacket, chunky gold or silver chain, white sunscreen war-paint smears on the cheekbones. Aggressive low stance, feral controlled vibe, modern streetwear-meets-MMA. Purple #c084fc primary / #ede9fe trim / #5b21b6 shadow. Silhouette reads as 'influencer combat athlete' at 64px; longer hair, chain, and squared jaw are key anchors. Include all 12 animation rows in the shared sprite-sheet layout."
       }
     },
     "portraitSheets": {
@@ -939,7 +937,7 @@
       "sama": {
         "seed": 170110,
         "out": "assets/chars/sama/monastic_infra/portraits/sheet.png",
-        "base": "Character A the Capacity Mystic, 2x2 portrait sheet: Character A likeness \u2014 adult male in his late 30s to early 40s, lean build, fair skin with slight natural texture, mature but not old. Long oval face with vertically elongated proportions: face reads longer than wide, broad high forehead, noticeable temple width, short fine light-brown to dark-blond hair receding slightly at the temples. Light blue to blue-green medium-sized eyes at standard spacing, mild under-eye definition, light-brown medium-density eyebrows, straight medium-width nose, medium lips, clean-shaven or faint stubble. Critical face geometry: lower face is NOT narrow; jawline is straight and moderately wide, tapering only slightly from cheekbones; chin is medium-to-broad and rounded-square, not pointed, not small, not V-shaped, clearly proportional to forehead width. Plain grey or navy crewneck sweater or high-collared quarter-zip, teal #6ee7b7 accent. Top-left (neutral): severe calm, direct alert stare, ceremonial-cold founder staring through the lens. Top-right (hurt): tense jaw, restrained rage, rounded-square chin set forward. Bottom-left (ko): glassy posture, upright but defeated, still-resilient aura. Bottom-right (victory): soft smug terrifying certainty, the faintest satisfied half-smile. Same face, same hair, same outfit, same lighting across all four cells."
+        "base": "Character A the Capacity Mystic, 2x2 portrait sheet: Character A likeness \u2014 adult male in his late 30s to early 40s, lean build, fair skin with slight natural texture, mature but not old. Long oval face with vertically elongated proportions: face reads longer than wide, broad high forehead, noticeable temple width, short dark brown hair subtly flecked with gray, receding slightly at the temples. Light blue to blue-green medium-sized eyes at standard spacing, mild under-eye definition, light-brown medium-density eyebrows, straight medium-width nose, medium lips, clean-shaven or faint stubble. Critical face geometry: lower face is NOT narrow; jawline is straight and moderately wide, tapering only slightly from cheekbones; chin is medium-to-broad and rounded-square, not pointed, not small, not V-shaped, clearly proportional to forehead width. Plain grey or navy crewneck sweater or high-collared quarter-zip, teal #6ee7b7 accent. Top-left (neutral): severe calm, direct alert stare, ceremonial-cold founder staring through the lens. Top-right (hurt): tense jaw, restrained rage, rounded-square chin set forward. Bottom-left (ko): glassy posture, upright but defeated, still-resilient aura. Bottom-right (victory): soft smug terrifying certainty, the faintest satisfied half-smile. Same face, same hair, same outfit, same lighting across all four cells."
       },
       "darrius": {
         "seed": 170210,
@@ -949,14 +947,12 @@
       "demis": {
         "seed": 170310,
         "out": "assets/chars/demis/chalk_and_static/portraits/sheet.png",
-        "base": "Character C the Quiet Solver, 2x2 portrait sheet: Character C likeness \u2014 medium build, warm olive complexion, heart-to-diamond face, broad forehead tapering through defined cheekbones to a sharp pointed chin, dark brown focused eyes, thick slightly arched eyebrows, straight slightly prominent nose, thin lips, clean-shaven. Short dark naturally wavy hair, neat side part, salt-and-pepper temples. Crisp pale collared shirt, no tie, under a well-fitted dark blazer, cool blue #60a5fa accent. Top-left (neutral): polished thinker, slightly abstracted gaze. Top-right (hurt): precision-focused pain, wincing at a miscalculation. Bottom-left (ko): elegant collapse, geometric and clean pose. Bottom-right (victory): restrained warm crinkle-eyed smile, absolute proof achieved. Same face, same hair, same outfit, same lighting across all four cells.",
-        "status": "deferred"
+        "base": "Character C the Quiet Solver, 2x2 portrait sheet: Character C likeness \u2014 medium build, warm olive complexion, heart-to-diamond face, broad forehead tapering through defined cheekbones to a sharp pointed chin, dark brown focused eyes, thick slightly arched eyebrows, straight slightly prominent nose, thin lips, clean-shaven. Short dark naturally wavy hair, neat side part, salt-and-pepper temples. Crisp pale collared shirt, no tie, under a well-fitted dark blazer, cool blue #60a5fa accent. Top-left (neutral): polished thinker, slightly abstracted gaze. Top-right (hurt): precision-focused pain, wincing at a miscalculation. Bottom-left (ko): elegant collapse, geometric and clean pose. Bottom-right (victory): restrained warm crinkle-eyed smile, absolute proof achieved. Same face, same hair, same outfit, same lighting across all four cells."
       },
       "mark": {
         "seed": 170410,
         "out": "assets/chars/mark/wellness_berserker/portraits/sheet.png",
-        "base": "Character D the Sunlit Operator, 2x2 portrait sheet: Character D likeness \u2014 light skin, sharper square-leaning face, broad high forehead, pronounced cheekbones, chiseled jawline, straight proportional nose, pale blue to green-hazel eyes with fixed analytical stare, light stubble. Longer wavy light-brown hair with volume and curl, textured forward, not the old cropped cut. Matte black tactical athleisure under an oversized designer tee or jacket, chunky gold or silver chain visible, white sunscreen war-paint smears on cheekbones. Purple #c084fc accent. Top-left (neutral): intense calm, shark-like unblinking. Top-right (hurt): jaw-forward anger, feral. Bottom-left (ko): dramatic but funny-serious, reaching out for a headset. Bottom-right (victory): predatory confidence, totally oblivious to the irony. Same face, same hair, same outfit, same lighting across all four cells.",
-        "status": "deferred"
+        "base": "Character D the Sunlit Operator, 2x2 portrait sheet: Character D likeness \u2014 light skin, sharper square-leaning face, broad high forehead, pronounced cheekbones, chiseled jawline, straight proportional nose, pale blue to green-hazel eyes with fixed analytical stare, light stubble. Longer wavy light-brown hair with volume and curl, textured forward, not the old cropped cut. Matte black tactical athleisure under an oversized designer tee or jacket, chunky gold or silver chain visible, white sunscreen war-paint smears on cheekbones. Purple #c084fc accent. Top-left (neutral): intense calm, shark-like unblinking. Top-right (hurt): jaw-forward anger, feral. Bottom-left (ko): dramatic but funny-serious, reaching out for a headset. Bottom-right (victory): predatory confidence, totally oblivious to the irony. Same face, same hair, same outfit, same lighting across all four cells."
       }
     },
     "portraitsLarge": {
@@ -970,7 +966,7 @@
       "sama": {
         "seed": 170114,
         "out": "assets/chars/sama/monastic_infra/portraits/large.png",
-        "base": "Character A full-body character-select portrait: Character A likeness \u2014 adult male in his late 30s to early 40s, lean frame, fair skin with slight natural texture, mature but not old. Long oval face with vertically elongated proportions: face reads longer than wide, broad high forehead, noticeable temple width, short fine light-brown to dark-blond hair with slight temple recession. Light blue to blue-green medium-sized eyes at standard spacing, mild under-eye definition, light-brown medium-density eyebrows, straight medium-width nose, medium lips, clean-shaven or faint stubble. Critical face geometry: lower face is NOT narrow; jawline is straight and moderately wide, tapering only slightly from cheekbones; chin is medium-to-broad and rounded-square, not pointed, not small, not V-shaped, balanced with forehead width. Plain grey crewneck sweater or high-collared quarter-zip, optionally layered with a lightweight tailored blazer, dark denim, understated sneakers. Ceremonial saint-like stance, monastic-tech founder bearing, quiet founder-priest intensity, teal #6ee7b7 accent. Fixed foreground with stage shadow behind."
+        "base": "Character A full-body character-select portrait: Character A likeness \u2014 adult male in his late 30s to early 40s, lean frame, fair skin with slight natural texture, mature but not old. Long oval face with vertically elongated proportions: face reads longer than wide, broad high forehead, noticeable temple width, short dark brown hair subtly flecked with gray, with slight temple recession. Light blue to blue-green medium-sized eyes at standard spacing, mild under-eye definition, light-brown medium-density eyebrows, straight medium-width nose, medium lips, clean-shaven or faint stubble. Critical face geometry: lower face is NOT narrow; jawline is straight and moderately wide, tapering only slightly from cheekbones; chin is medium-to-broad and rounded-square, not pointed, not small, not V-shaped, balanced with forehead width. Plain grey crewneck sweater or high-collared quarter-zip, optionally layered with a lightweight tailored blazer, dark denim, understated sneakers. Ceremonial saint-like stance, monastic-tech founder bearing, quiet founder-priest intensity, teal #6ee7b7 accent. Fixed foreground with stage shadow behind."
       },
       "darrius": {
         "seed": 170214,
@@ -980,14 +976,12 @@
       "demis": {
         "seed": 170314,
         "out": "assets/chars/demis/chalk_and_static/portraits/large.png",
-        "base": "Character C full-body character-select portrait: Character C likeness \u2014 medium build, warm olive light-to-medium complexion, heart-to-diamond face, wide forehead, defined cheekbones, fine tapered jaw, pointed chin, dark brown focused eyes, thick slightly arched eyebrows, straight slightly prominent nose, thin lips, clean-shaven. Short dark wavy hair neatly parted with salt-and-pepper temples. Crisp pale collared shirt with no tie under a well-fitted dark blazer, smart casual trousers. Polished academic-corporate stance, theorem-warrior bearing, cool blue #60a5fa accent. Fixed foreground with stage shadow behind.",
-        "status": "deferred"
+        "base": "Character C full-body character-select portrait: Character C likeness \u2014 medium build, warm olive light-to-medium complexion, heart-to-diamond face, wide forehead, defined cheekbones, fine tapered jaw, pointed chin, dark brown focused eyes, thick slightly arched eyebrows, straight slightly prominent nose, thin lips, clean-shaven. Short dark wavy hair neatly parted with salt-and-pepper temples. Crisp pale collared shirt with no tie under a well-fitted dark blazer, smart casual trousers. Polished academic-corporate stance, theorem-warrior bearing, cool blue #60a5fa accent. Fixed foreground with stage shadow behind."
       },
       "mark": {
         "seed": 170414,
         "out": "assets/chars/mark/wellness_berserker/portraits/large.png",
-        "base": "Character D full-body character-select portrait: Character D likeness \u2014 slender athletic martial-arts build, light skin, sharper square-leaning face, broad high forehead, pronounced cheekbones, chiseled jawline, pale blue to green-hazel eyes with fixed analytical gaze, straight proportional nose, light stubble. Longer wavy light-brown hair with volume and curl, textured forward, modern post-glow-up styling. Matte black tactical athleisure under an oversized designer tee or jacket, chunky gold or silver chain, white sunscreen war-paint smears on cheekbones. Aggressive low combat stance, platform-crush bearing, modern streetwear-meets-MMA, purple #c084fc accent. Fixed foreground with stage shadow behind.",
-        "status": "deferred"
+        "base": "Character D full-body character-select portrait: Character D likeness \u2014 slender athletic martial-arts build, light skin, sharper square-leaning face, broad high forehead, pronounced cheekbones, chiseled jawline, pale blue to green-hazel eyes with fixed analytical gaze, straight proportional nose, light stubble. Longer wavy light-brown hair with volume and curl, textured forward, modern post-glow-up styling. Matte black tactical athleisure under an oversized designer tee or jacket, chunky gold or silver chain, white sunscreen war-paint smears on cheekbones. Aggressive low combat stance, platform-crush bearing, modern streetwear-meets-MMA, purple #c084fc accent. Fixed foreground with stage shadow behind."
       }
     },
     "objectives": {
@@ -1043,19 +1037,16 @@
       "demis": {
         "seed": 170509,
         "out": "assets/weapons/demis/launch.png",
-        "base": "Character C launch weapon sheet, 1x2 strip. Left cell (common, Nobel Medal Flail): heavy medal on a taut academic lanyard, precise rigid flail silhouette, mass at the medal end. Right cell (rare, Folded Chess Axe): hinged chessboard folded into a dense axe head on a straight haft, geometric and absurdly precise.",
-        "status": "deferred"
+        "base": "Character C launch weapon sheet, 1x2 strip. Left cell (common, Nobel Medal Flail): heavy medal on a taut academic lanyard, precise rigid flail silhouette, mass at the medal end. Right cell (rare, Folded Chess Axe): hinged chessboard folded into a dense axe head on a straight haft, geometric and absurdly precise."
       },
       "mark": {
         "seed": 170513,
         "out": "assets/weapons/mark/launch.png",
-        "base": "Character D launch weapon sheet, 1x2 strip. Left cell (common, Sunscreen Bottle Club): oversized sunscreen bottle reinforced as a club, thick cap as striking mass, blunt and readable. Right cell (rare, Controller Nunchucks): paired game controllers linked by a taut charging cable, clean paired-weight silhouette, mass at the controllers.",
-        "status": "deferred"
+        "base": "Character D launch weapon sheet, 1x2 strip. Left cell (common, Sunscreen Bottle Club): oversized sunscreen bottle reinforced as a club, thick cap as striking mass, blunt and readable. Right cell (rare, Controller Nunchucks): paired game controllers linked by a taut charging cable, clean paired-weight silhouette, mass at the controllers."
       }
     },
-    "weaponSheetsDeferred": {
+    "weaponSheetsAdvanced": {
       "_sharedRules": {
-        "status": "deferred",
         "outW": 96,
         "outH": 48,
         "genW": 288,
@@ -1070,27 +1061,27 @@
           "epic",
           "legendary"
         ],
-        "layoutDirective": "Strict 1x2 horizontal grid, same rules as launch sheets. Left cell = epic rarity. Right cell = legendary rarity. Generate only when epic + legendary rarities unlock for the affected character."
+        "layoutDirective": "Strict 1x2 horizontal grid, same rules as launch sheets. Left cell = epic rarity. Right cell = legendary rarity. Same lighting and scale across both cells. Striking mass must be at the FAR END of each weapon silhouette; weapon holder/handle NOT drawn."
       },
       "sama": {
         "seed": 170503,
-        "out": "assets/weapons/sama/deferred.png",
-        "base": "Character A deferred weapon sheet, 1x2 strip. Left cell (epic, GPU Server Blade): long hot server blade with cooling fins, glowing fault LEDs, rigid sword silhouette, mass at the finned blade end. Right cell (legendary, Heat-Sink Greatsword): oversized finned heat sink slab forged into a greatsword, glowing thermal core, brutal rectangular silhouette."
+        "out": "assets/weapons/sama/epic_legendary.png",
+        "base": "Character A epic/legendary weapon sheet, 1x2 strip. Left cell (epic, GPU Server Blade): long hot server blade with cooling fins, glowing fault LEDs, rigid sword silhouette, mass at the finned blade end. Right cell (legendary, Heat-Sink Greatsword): oversized finned heat sink slab forged into a greatsword, glowing thermal core, brutal rectangular silhouette."
       },
       "darrius": {
         "seed": 170507,
-        "out": "assets/weapons/darrius/deferred.png",
-        "base": "Character B deferred weapon sheet, 1x2 strip. Left cell (epic, Red-Team Pike): long polearm with forked testing spearhead and red warning tags, clean pike silhouette, mass at the forked tip. Right cell (legendary, Guardrail Greatsword): bent highway guardrail with bolted grip, massive protective slab weapon, bureaucratic safety made violent."
+        "out": "assets/weapons/darrius/epic_legendary.png",
+        "base": "Character B epic/legendary weapon sheet, 1x2 strip. Left cell (epic, Red-Team Pike): long polearm with forked testing spearhead and red warning tags, clean pike silhouette, mass at the forked tip. Right cell (legendary, Guardrail Greatsword): bent highway guardrail with bolted grip, massive protective slab weapon, bureaucratic safety made violent."
       },
       "demis": {
         "seed": 170511,
-        "out": "assets/weapons/demis/deferred.png",
-        "base": "Character C deferred weapon sheet, 1x2 strip. Left cell (epic, Go Board Maul): square board slab with inset stone studs mounted as a maul, sober academic brutality, mass at the board end. Right cell (legendary, AlphaFold Blade): rigid spiraling protein structure sharpened into a blade, elegant scientific silhouette, not soft, clearly a sword."
+        "out": "assets/weapons/demis/epic_legendary.png",
+        "base": "Character C epic/legendary weapon sheet, 1x2 strip. Left cell (epic, Go Board Maul): square board slab with inset stone studs mounted as a maul, sober academic brutality, mass at the board end. Right cell (legendary, AlphaFold Blade): rigid spiraling protein structure sharpened into a blade, elegant scientific silhouette, not soft, clearly a sword."
       },
       "mark": {
         "seed": 170515,
-        "out": "assets/weapons/mark/deferred.png",
-        "base": "Character D deferred weapon sheet, 1x2 strip. Left cell (epic, Shareholder Sauce Club): thick crystallized condiment bottle forged into a cudgel, curved bottle silhouette, ridiculous but physically blunt. Right cell (legendary, Quest Flail): cracked headset swung from an elite strap like a flail, heavy visor mass at the striking end, clean silhouette."
+        "out": "assets/weapons/mark/epic_legendary.png",
+        "base": "Character D epic/legendary weapon sheet, 1x2 strip. Left cell (epic, Shareholder Sauce Club): thick crystallized condiment bottle forged into a cudgel, curved bottle silhouette, ridiculous but physically blunt. Right cell (legendary, Quest Flail): cracked headset swung from an elite strap like a flail, heavy visor mass at the striking end, clean silhouette."
       }
     },
     "lockedSlot": {

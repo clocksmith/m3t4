@@ -3,7 +3,6 @@
 // sim worker; broadcasts frames via WebSocket.
 
 import {
-  DEFAULT_CHARS,
   createReplayArtifactV1,
   replayArtifactToResultV1,
   REPLAY_CONSTANTS_HASH as SIM_CONSTANTS_HASH,
@@ -12,7 +11,7 @@ import {
 } from "@m3t4/sim";
 import type { WebSocket } from "ws";
 import { CONFIG } from "./config.js";
-import type { StableStore, Stable, Slot } from "./stable.js";
+import { activeRosterSlots, charsForSlots, slotCosmetics, type StableStore, type Stable, type Slot, type SlotCosmetics } from "./stable.js";
 import { updatePair } from "./elo.js";
 import { shouldLogWatchlist, summarizeWatchlistMatch, watchlistTagsForSlot, type WatchlistTag } from "./watchlist.js";
 import { isHumanStable, matchmakerPressure, type MatchmakerPressure } from "./matchmaker-pressure.js";
@@ -38,8 +37,8 @@ type SideEntrant = {
 };
 
 type PublicMatchPreview = {
-  a: { userId: string; handle: string; slotId: string; name: string; elo: number };
-  b: { userId: string; handle: string; slotId: string; name: string; elo: number };
+  a: { userId: string; handle: string; slotId: string; name: string; elo: number; cosmetics: SlotCosmetics };
+  b: { userId: string; handle: string; slotId: string; name: string; elo: number; cosmetics: SlotCosmetics };
   stageId: string;
   eloDelta: number;
 };
@@ -72,13 +71,14 @@ export function rankedSideSwap(seed: number): boolean {
   return (mix32((seed >>> 0) ^ 0x51de5eed) & 1) === 1;
 }
 
-function publicSlot(entry: SideEntrant): PublicMatchPreview["a"] {
+function publicSlot(entry: SideEntrant, side: 0 | 1): PublicMatchPreview["a"] {
   return {
     userId: entry.stable.userId,
     handle: entry.stable.handle,
     slotId: entry.slot.slotId,
     name: entry.slot.name,
     elo: entry.slot.elo,
+    cosmetics: slotCosmetics(entry.slot, side),
   };
 }
 
@@ -94,8 +94,8 @@ export class Firehose {
   private running = false;
   private currentMatch: {
     matchId: string;
-    a: { userId: string; handle: string; slotId: string; name: string; elo: number };
-    b: { userId: string; handle: string; slotId: string; name: string; elo: number };
+    a: PublicMatchPreview["a"];
+    b: PublicMatchPreview["b"];
     stageId: string;
     sideSwap?: boolean;
     watchlist?: { a: WatchlistTag[]; b: WatchlistTag[] };
@@ -209,8 +209,9 @@ export class Firehose {
     this.rankedMode = pressure.rankedMode;
     // Each stable contributes one randomly-chosen slot for matchmaking
     const entries: Array<{ st: Stable; slot: Slot }> = active.flatMap((st) => {
-      if (st.slots.length === 0) return [];
-      const slot = st.slots[Math.floor(Math.random() * st.slots.length)];
+      const slots = activeRosterSlots(st.slots);
+      if (slots.length === 0) return [];
+      const slot = slots[Math.floor(Math.random() * slots.length)];
       return [{ st, slot }];
     });
     if (entries.length < 2) return null;
@@ -272,8 +273,8 @@ export class Firehose {
     };
     this.currentMatch = {
       matchId,
-      a: publicSlot(sideA),
-      b: publicSlot(sideB),
+      a: publicSlot(sideA, 0),
+      b: publicSlot(sideB, 1),
       stageId: p.stageId,
       sideSwap,
       watchlist: watchlistTags,
@@ -287,7 +288,8 @@ export class Firehose {
     });
 
     // Simulate (server-authoritative)
-    const trace = simulateTrace({ stage, brainA: sideA.slot.config, brainB: sideB.slot.config, seed });
+    const chars = charsForSlots(sideA.slot, sideB.slot);
+    const trace = simulateTrace({ stage, brainA: sideA.slot.config, brainB: sideB.slot.config, seed, chars });
     const replay = createReplayArtifactV1({
       matchId,
       mode: "ranked",
@@ -304,6 +306,7 @@ export class Firehose {
           slotId: sideA.slot.slotId,
           slotName: sideA.slot.name,
           config: sideA.slot.config,
+          cosmetics: slotCosmetics(sideA.slot, 0),
         },
         {
           kind: "brain",
@@ -314,9 +317,10 @@ export class Firehose {
           slotId: sideB.slot.slotId,
           slotName: sideB.slot.name,
           config: sideB.slot.config,
+          cosmetics: slotCosmetics(sideB.slot, 1),
         },
       ],
-      chars: DEFAULT_CHARS,
+      chars,
       actionLog: trace.result.frameLog,
       result: trace.result,
       sim: {
@@ -383,8 +387,8 @@ export class Firehose {
 
   private previewPair(p: MatchPair): PublicMatchPreview {
     return {
-      a: { userId: p.a.userId, handle: p.a.handle, slotId: p.aSlot.slotId, name: p.aSlot.name, elo: p.aSlot.elo },
-      b: { userId: p.b.userId, handle: p.b.handle, slotId: p.bSlot.slotId, name: p.bSlot.name, elo: p.bSlot.elo },
+      a: { userId: p.a.userId, handle: p.a.handle, slotId: p.aSlot.slotId, name: p.aSlot.name, elo: p.aSlot.elo, cosmetics: slotCosmetics(p.aSlot, 0) },
+      b: { userId: p.b.userId, handle: p.b.handle, slotId: p.bSlot.slotId, name: p.bSlot.name, elo: p.bSlot.elo, cosmetics: slotCosmetics(p.bSlot, 1) },
       stageId: p.stageId,
       eloDelta: Math.abs(p.aSlot.elo - p.bSlot.elo),
     };

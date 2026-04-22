@@ -8,8 +8,6 @@ import {
   BUDGET,
   configFromState,
   dirtyCount,
-  formatConfigJson,
-  formatConfigJsonV2,
   neutralBuildState,
   normalizeBuildConfig,
   parseBuildConfigJson,
@@ -19,15 +17,32 @@ import {
 } from "../lib/build-config.js";
 import { renderSliderEditor } from "../lib/slider-editor.js";
 import { trackProfileSignIn, trackProfileHandleClaim, trackProfileSubmitConfig } from "../lib/analytics.js";
+import { escapeHtml } from "../ui/html.js";
+import { buttonHtml } from "../ui/actions.js";
+import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
+import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
 
 let root = null;
 let setStatus = () => {};
 
-const ROSTER_SIZE = 5;
+const ROSTER_SIZE = 4;
+const BODY_IDS = ["sama", "darrius", "demis", "mark"];
+const BODY_VARIANTS = {
+  sama: "capacity_mystic",
+  darrius: "policy_undertaker",
+  demis: "quiet_solver",
+  mark: "sunlit_operator",
+};
+const WEAPON_IDS_BY_BODY = {
+  sama: ["worldcoin_orb_flail", "backpack_maul", "gpu_server_blade", "heat_sink_greatsword"],
+  darrius: ["rolled_constitution_bat", "alignment_baton", "red_team_pike", "guardrail_greatsword"],
+  demis: ["nobel_medal_flail", "folded_chess_axe", "go_board_maul", "alphafold_blade"],
+  mark: ["sunscreen_bottle_club", "controller_nunchucks", "shareholder_sauce_club", "quest_flail"],
+};
 let selectedSlot = 0;
 let rosterCache = null; // last loaded stable response, or null
 let editorStateBySeat = new Map();
-let activeEditorTab = "sliders";
+let cosmeticsBySeat = new Map();
 let pendingBuildConfig = null;
 let pendingAutoApplied = false;
 
@@ -38,19 +53,20 @@ function rosterIntroPanelHtml({ needsHandle = false } = {}) {
         <div class="tight mb-xs">Claim a public handle first. 3-20 chars, lowercase + digits + underscore.</div>
         <div class="row">
           <input type="text" id="handle-input" placeholder="your_handle">
-          <button id="handle-claim" class="primary">claim</button>
+          ${buttonHtml({ id: "handle-claim", variant: "primary", text: "claim" })}
         </div>
         <div class="error" id="handle-err"></div>
       </div>` : "";
-  return `
-    <section class="context-card roster-intro-panel">
+  return contextCardHtml({
+    className: "roster-intro-panel",
+    body: `
       <div class="context-card-kicker">ranked roster</div>
       <div class="roster-intro-copy">
-        <strong>${pending ? "Bot ready for the live roster." : "Your live roster holds five bots."}</strong>
+        <strong>${pending ? "Bot ready for the live roster." : "Your live roster holds four bots."}</strong>
         <span>Tune one, test it, then send it into a seat. The server schedules matches. Live streams the current fight.</span>
       </div>
-      ${claimForm}
-    </section>`;
+      ${claimForm}`,
+  });
 }
 
 export function mount(mountEl, ctx) {
@@ -74,14 +90,7 @@ function render() {
 }
 
 function rosterPageHeaderHtml({ subtitle = "", action = "" } = {}) {
-  return `
-    <div class="page-header-row">
-      <div class="page-title-stack">
-        <h1 class="page-title">Roster</h1>
-        ${subtitle ? `<div class="page-subtitle tight">${subtitle}</div>` : ""}
-      </div>
-      ${action}
-    </div>`;
+  return pageHeaderHtml({ title: "Roster", subtitle, action });
 }
 
 function renderSignIn() {
@@ -103,7 +112,7 @@ function renderSignIn() {
         </p>
         <div class="row">
           <input type="text" id="uid-input" class="u-fill" placeholder="pick a uid (3-64 chars, a-z 0-9 _ -)">
-          <button id="signin-btn" class="primary">sign in</button>
+          ${buttonHtml({ id: "signin-btn", variant: "primary", text: "sign in" })}
         </div>
         <div class="error" id="signin-err"></div>
       </div>
@@ -137,8 +146,8 @@ function renderFirebaseSignIn(authError) {
           provide window.__M3T4_FIREBASE_CONFIG__ before app.js loads.
         </p>
         <div class="row">
-          <button id="signin-google" class="primary">sign in with Google</button>
-          <button id="signin-github">sign in with GitHub</button>
+          ${buttonHtml({ id: "signin-google", variant: "primary", text: "sign in with Google" })}
+          ${buttonHtml({ id: "signin-github", text: "sign in with GitHub" })}
         </div>
         <div class="error" id="signin-err">${authError ? escapeHtml(authError) : ""}</div>
       </div>
@@ -163,14 +172,14 @@ function renderFirebaseSignIn(authError) {
 async function renderDashboard(user) {
   setStatus(`roster · ${user.uid}`);
   editorStateBySeat = new Map();
-  activeEditorTab = "sliders";
+  cosmeticsBySeat = new Map();
   pendingBuildConfig = readPendingBuildConfig();
   pendingAutoApplied = false;
   root.innerHTML = `
     <div class="page">
       ${rosterPageHeaderHtml({
         subtitle: `@${user.handle ?? "unclaimed"} · ${user.uid} · only you can see this`,
-        action: `<button id="signout">sign out</button>`,
+        action: buttonHtml({ id: "signout", text: "sign out" }),
       })}
       ${rosterIntroPanelHtml({ needsHandle: !user.handle })}
       <div class="panel profile-roster-panel">
@@ -186,36 +195,16 @@ async function renderDashboard(user) {
           </div>
           <div class="profile-submit-row">
             <label>name <input type="text" id="slot-name" placeholder="e.g. bruiser-v2"></label>
+            <label>body <select id="slot-body"></select></label>
+            <label>weapon <select id="slot-weapon"></select></label>
             <div class="profile-submit-actions">
-              <button id="reset-editor" class="tight">reset</button>
-              <button id="paste-pending" class="tight">load tuned build</button>
-              <button id="submit-btn" class="primary">install</button>
+              ${buttonHtml({ id: "reset-editor", className: "tight", text: "reset" })}
+              ${buttonHtml({ id: "paste-pending", className: "tight", text: "load tuned build" })}
+              ${buttonHtml({ id: "submit-btn", variant: "primary", text: "install" })}
             </div>
           </div>
           <div class="profile-editor-meter" id="profile-editor-meter"></div>
-          <div class="profile-editor-tabs" role="tablist" aria-label="roster editor mode">
-            <button type="button" data-editor-tab="sliders" class="is-active">sliders</button>
-            <button type="button" data-editor-tab="json">json</button>
-          </div>
           <div id="profile-slider-panel" class="profile-slider-panel"></div>
-          <div id="profile-json-panel" class="profile-json-panel" hidden>
-            <div class="profile-json-actions">
-              <button type="button" id="copy-config-json">copy json</button>
-              <button type="button" id="import-config-json">import json</button>
-            </div>
-            <pre id="config-json-preview" class="config-json-preview"></pre>
-          </div>
-          <dialog id="json-import-dialog" class="json-import-dialog">
-            <div class="json-import-card">
-              <h3>import json</h3>
-              <textarea id="json-import-textarea" class="config-json-textarea" rows="12" spellcheck="false" placeholder="paste a complete config JSON object"></textarea>
-              <div class="profile-submit-actions">
-                <button type="button" id="cancel-json-import">cancel</button>
-                <button type="button" id="apply-json-import" class="primary">load</button>
-              </div>
-              <div id="json-import-msg" class="tight"></div>
-            </div>
-          </dialog>
           <div id="submit-msg"></div>
         </div>
       </div>
@@ -254,12 +243,15 @@ function wireSubmit(user) {
       const nameInput = root.querySelector("#slot-name").value.trim();
       const draft = draftForSeat(selectedSlot);
       const cfg = normalizeBuildConfig(configFromState(draft.state));
-      const r = await api.submitSlot(await auth.token(), selectedSlot, cfg, nameInput || undefined);
+      const cosmetics = selectedCosmeticsForSeat(selectedSlot);
+      assertClientUniqueBody(selectedSlot, cosmetics);
+      const r = await api.submitSlot(await auth.token(), selectedSlot, cfg, nameInput || undefined, cosmetics);
       msg.className = "ok";
       msg.textContent = `seat ${selectedSlot} ${wasFilled ? "revised" : "installed"} · slotId=${r.slotId}`;
       sessionStorage.removeItem("m3t4:pendingSubmit");
       pendingBuildConfig = null;
       editorStateBySeat.delete(selectedSlot);
+      cosmeticsBySeat.delete(selectedSlot);
       const pendingButton = root.querySelector("#paste-pending");
       if (pendingButton) {
         pendingButton.disabled = true;
@@ -348,66 +340,10 @@ function maybeAutoApplyPendingBuild() {
 }
 
 function wireEditorControls() {
-  root.querySelectorAll("[data-editor-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      activeEditorTab = button.dataset.editorTab || "sliders";
-      updateEditor();
-    });
-  });
-
   root.querySelector("#reset-editor").addEventListener("click", () => {
     editorStateBySeat.delete(selectedSlot);
     updateEditor();
   });
-
-  root.querySelector("#copy-config-json").addEventListener("click", async () => {
-    const msg = root.querySelector("#submit-msg");
-    try {
-      const json = formatConfigJsonV2(configFromState(draftForSeat(selectedSlot).state));
-      await navigator.clipboard.writeText(json);
-      msg.className = "ok";
-      msg.textContent = "json copied";
-    } catch (e) {
-      msg.className = "error";
-      msg.textContent = e.message;
-    }
-  });
-
-  root.querySelector("#import-config-json").addEventListener("click", () => {
-    const dialog = root.querySelector("#json-import-dialog");
-    const textarea = root.querySelector("#json-import-textarea");
-    const msg = root.querySelector("#json-import-msg");
-    textarea.value = "";
-    msg.className = "tight";
-    msg.textContent = "";
-    if (typeof dialog.showModal === "function") dialog.showModal();
-    else dialog.setAttribute("open", "");
-  });
-
-  root.querySelector("#cancel-json-import").addEventListener("click", closeImportDialog);
-  root.querySelector("#apply-json-import").addEventListener("click", () => {
-    const textarea = root.querySelector("#json-import-textarea");
-    const msg = root.querySelector("#json-import-msg");
-    msg.className = "tight";
-    msg.textContent = "";
-    try {
-      const cfg = parseBuildConfigJson(textarea.value);
-      setDraftForSeat(selectedSlot, stateFromConfig(cfg), "json");
-      closeImportDialog();
-      activeEditorTab = "sliders";
-      updateEditor();
-    } catch (e) {
-      msg.className = "error";
-      msg.textContent = e.message;
-    }
-  });
-}
-
-function closeImportDialog() {
-  const dialog = root.querySelector("#json-import-dialog");
-  if (!dialog) return;
-  if (typeof dialog.close === "function") dialog.close();
-  else dialog.removeAttribute("open");
 }
 
 async function loadStable(user) {
@@ -442,11 +378,14 @@ function renderRosterGrid(grid, stable) {
   const slots = Array.from({ length: ROSTER_SIZE }, (_, i) => stable?.slots?.[i] ?? null);
   grid.innerHTML = slots.map((slot, i) => {
     const filled = !!(slot && slot.slotId);
+    const cosmetics = cosmeticForSlot(slot, i);
     const active = i === selectedSlot ? "is-active" : "";
     const state = filled ? "is-filled" : "is-empty";
     const name = filled ? escapeHtml(slot.name ?? "unnamed") : "vacant seat";
     const elo = filled ? `<div class="seat-elo">${slot.elo}</div>` : "";
     const wl = filled ? `<div class="seat-wl">${slot.wins}-${slot.losses}-${slot.draws}</div>` : "";
+    const body = bodyLabel(cosmetics.body);
+    const weapon = weaponLabel(cosmetics.body, cosmetics.weapon);
     const last = filled && slot.lastPlayedAt
       ? `<div class="seat-last">${relativeTime(slot.lastPlayedAt)}</div>`
       : filled
@@ -459,6 +398,7 @@ function renderRosterGrid(grid, stable) {
           <span class="seat-state-dot"></span>
         </div>
         <div class="seat-name">${name}</div>
+        <div class="seat-cosmetics">${escapeHtml(body)} · ${escapeHtml(weapon)}</div>
         ${elo}${wl}
         ${last}
       </button>`;
@@ -499,6 +439,7 @@ function updateEditor() {
   const slot = rosterCache?.slots?.[selectedSlot];
   const filled = !!(slot && slot.slotId);
   const draft = draftForSeat(selectedSlot);
+  const cosmetics = selectedCosmeticsForSeat(selectedSlot);
   const changes = dirtyCount(draft.baseState, draft.state);
   title.textContent = filled ? `Revise seat ${selectedSlot}` : `Install seat ${selectedSlot}`;
   if (note) {
@@ -513,18 +454,37 @@ function updateEditor() {
   } else if (nameInput) {
     nameInput.placeholder = "e.g. bruiser-v2";
   }
-  updateEditorTabs();
+  renderCosmeticsControls(cosmetics);
   renderEditorPanels(draft);
 }
 
-function updateEditorTabs() {
-  root.querySelectorAll("[data-editor-tab]").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.editorTab === activeEditorTab);
-  });
-  const sliderPanel = root.querySelector("#profile-slider-panel");
-  const jsonPanel = root.querySelector("#profile-json-panel");
-  if (sliderPanel) sliderPanel.hidden = activeEditorTab !== "sliders";
-  if (jsonPanel) jsonPanel.hidden = activeEditorTab !== "json";
+function renderCosmeticsControls(cosmetics) {
+  const bodySelect = root.querySelector("#slot-body");
+  const weaponSelect = root.querySelector("#slot-weapon");
+  if (!bodySelect || !weaponSelect) return;
+  const used = usedBodiesByOtherSeats(selectedSlot);
+  bodySelect.innerHTML = BODY_IDS.map((body) => {
+    const disabled = used.has(body) ? " disabled" : "";
+    const selected = body === cosmetics.body ? " selected" : "";
+    return `<option value="${body}"${selected}${disabled}>${escapeHtml(bodyLabel(body))}</option>`;
+  }).join("");
+  weaponSelect.innerHTML = (WEAPON_IDS_BY_BODY[cosmetics.body] ?? []).map((weapon) => {
+    const selected = weapon === cosmetics.weapon ? " selected" : "";
+    return `<option value="${weapon}"${selected}>${escapeHtml(weaponLabel(cosmetics.body, weapon))}</option>`;
+  }).join("");
+  bodySelect.onchange = () => {
+    const body = BODY_IDS.includes(bodySelect.value) ? bodySelect.value : defaultCosmetics(selectedSlot).body;
+    const weapon = WEAPON_IDS_BY_BODY[body]?.[0];
+    cosmeticsBySeat.set(selectedSlot, { body, weapon });
+    updateEditor();
+  };
+  weaponSelect.onchange = () => {
+    const current = selectedCosmeticsForSeat(selectedSlot);
+    const weapons = WEAPON_IDS_BY_BODY[current.body] ?? [];
+    const weapon = weapons.includes(weaponSelect.value) ? weaponSelect.value : weapons[0];
+    cosmeticsBySeat.set(selectedSlot, { ...current, weapon });
+    updateEditor();
+  };
 }
 
 function renderEditorPanels(draft) {
@@ -534,12 +494,10 @@ function renderEditorPanels(draft) {
     onChange: () => {
       draft.source = "user";
       updateEditorMeter(draft);
-      updateJsonPreview(draft);
       updateSubmitButtonState(draft);
     },
   });
   updateEditorMeter(draft);
-  updateJsonPreview(draft);
   const pendingButton = root.querySelector("#paste-pending");
   if (pendingButton && pendingBuildConfig) {
     pendingButton.textContent = draft.source === "pending" ? "tuned build loaded" : "load tuned build";
@@ -560,22 +518,12 @@ function updateEditorMeter(draft) {
   if (!meter) return;
   const spent = stateSpent(draft.state);
   const over = Math.max(0, spent - BUDGET);
-  const source = draft.source === "pending" ? " · tuned build" : draft.source === "json" ? " · json import" : "";
+  const source = draft.source === "pending" ? " · tuned build" : "";
   meter.innerHTML = `
     <span>spent ${spent} / ${BUDGET}</span>
     ${over > 0 ? `<span class="is-over">over by ${over}</span>` : `<span>${BUDGET - spent} left</span>`}
     ${source ? `<span>${source}</span>` : ""}
   `;
-}
-
-function updateJsonPreview(draft) {
-  const preview = root.querySelector("#config-json-preview");
-  if (!preview) return;
-  try {
-    preview.textContent = formatConfigJsonV2(configFromState(draft.state));
-  } catch (e) {
-    preview.textContent = e.message;
-  }
 }
 
 function relativeTime(iso) {
@@ -588,12 +536,55 @@ function relativeTime(iso) {
   return `${Math.round(secs / 86400)}d ago`;
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "\"": "&quot;",
-    "'": "&#39;",
-  }[c]));
+function selectedCosmeticsForSeat(slotIdx) {
+  const existing = cosmeticsBySeat.get(slotIdx);
+  if (existing) return normalizeCosmetics(existing, slotIdx);
+  const slot = rosterCache?.slots?.[slotIdx];
+  const normalized = cosmeticForSlot(slot, slotIdx);
+  cosmeticsBySeat.set(slotIdx, normalized);
+  return normalized;
+}
+
+function cosmeticForSlot(slot, slotIdx) {
+  return normalizeCosmetics(slot?.cosmetics, slotIdx);
+}
+
+function normalizeCosmetics(value, slotIdx) {
+  const fallback = defaultCosmetics(slotIdx);
+  const body = BODY_IDS.includes(value?.body) ? value.body : fallback.body;
+  const weapons = WEAPON_IDS_BY_BODY[body] ?? [];
+  const weapon = weapons.includes(value?.weapon) ? value.weapon : weapons[0];
+  return { body, weapon };
+}
+
+function defaultCosmetics(slotIdx) {
+  const body = BODY_IDS[((slotIdx % BODY_IDS.length) + BODY_IDS.length) % BODY_IDS.length];
+  return { body, weapon: WEAPON_IDS_BY_BODY[body][0] };
+}
+
+function usedBodiesByOtherSeats(slotIdx) {
+  const used = new Set();
+  for (let i = 0; i < ROSTER_SIZE; i++) {
+    if (i === slotIdx) continue;
+    const slot = rosterCache?.slots?.[i];
+    if (!slot?.slotId) continue;
+    used.add(cosmeticForSlot(slot, i).body);
+  }
+  return used;
+}
+
+function assertClientUniqueBody(slotIdx, cosmetics) {
+  const used = usedBodiesByOtherSeats(slotIdx);
+  if (used.has(cosmetics.body)) {
+    throw new Error(`${bodyLabel(cosmetics.body)} is already assigned to another seat`);
+  }
+}
+
+function bodyLabel(body) {
+  const variant = BODY_VARIANTS[body];
+  return gameCopy.characters?.[body]?.[variant]?.name ?? body;
+}
+
+function weaponLabel(body, weapon) {
+  return gameCopy.weapons?.[body]?.[weapon]?.name ?? weapon;
 }

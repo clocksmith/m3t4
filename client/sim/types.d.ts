@@ -34,6 +34,8 @@ export interface Character {
     col: string;
     trim: string;
     shadow: string;
+    body?: string;
+    weapon?: string;
 }
 export interface Fighter {
     id: 0 | 1;

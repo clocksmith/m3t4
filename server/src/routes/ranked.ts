@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import type { StableStore } from "../stable.js";
-import { stablePublic } from "../stable.js";
+import { slotCosmetics, stablePublic } from "../stable.js";
 import { handleClaimHandle, handleSubmit } from "../submit.js";
 import { verifyAuth } from "../auth.js";
 import { json } from "../http-utils.js";
@@ -76,7 +76,9 @@ export function registerRankedRoutes(routes: RouteList, deps: RankedRouteDeps): 
         if (!st) json(res, 404, { error: "not found" });
         else json(res, 200, {
           ...stablePublic(st),
-          slots: st.slots,
+          slots: st.slots.slice(0, config.maxSlots).map((slot, slotIdx) => (
+            slot ? { ...slot, cosmetics: slotCosmetics(slot, slotIdx) } : slot
+          )),
           createdAt: st.createdAt,
           updatedAt: st.updatedAt,
         });

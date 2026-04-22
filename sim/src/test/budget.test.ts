@@ -112,7 +112,7 @@ test("validateUserSubmission accepts capped over-budget configs when hallucinati
 test("validateUserSubmission rejects configs beyond the hallucination cap", () => {
   const spent = 400;
   const cfg = cfgFromUi({
-    burnRate: 10,
+    burnRate: 100,
     moat: 100,
     shipRate: 100,
     foresight: 100,
@@ -164,7 +164,7 @@ test("validateUserSubmission rejects out-of-range knob values", () => {
 
 test("validateUserSubmission accepts v2 UI-space configs and normalizes to native", () => {
   const cfg = cfgV2FromUi({
-    burnRate: 100,
+    burnRate: 10,
     moat: 9,
     shipRate: 81,
     foresight: 8,

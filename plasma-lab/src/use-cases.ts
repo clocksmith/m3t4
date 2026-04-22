@@ -17,8 +17,8 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
     workload: "m3t4.replay_verify.v1",
     authority: "advisory",
     inputBoundary: "public replay artifact with action bytes; private player configs rejected",
-    validation: "2-of-2 expected-hash receipts",
-    notes: "First useful workload from the plan. Re-simulates public replay action logs and never receives ranked authority.",
+    validation: "2-of-2 assignment-bound receipts against server-held expected hashes",
+    notes: "First useful workload from the plan. Re-simulates public replay action logs, does not receive expected outputs in assignment payloads, and never receives ranked authority.",
   },
   {
     id: "public-artifact-verification",
@@ -27,8 +27,8 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
     workload: "m3t4.public_artifact_verify.v0",
     authority: "advisory",
     inputBoundary: "public replay artifact payload only",
-    validation: "2-of-2 expected-hash receipts",
-    notes: "Integrity scaffold for exported public artifacts and WebRTC data-plane transport tests.",
+    validation: "2-of-2 assignment-bound receipts against server-held expected hashes",
+    notes: "Integrity scaffold for exported public artifacts and WebRTC data-plane transport tests. Assignment payloads do not expose expected outputs or the server-held artifact hash; WebRTC data receipts require peer-signed subreceipts.",
   },
   {
     id: "seed-sweeps",
@@ -37,8 +37,8 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
     workload: "m3t4.seed_sweep.v0",
     authority: "advisory",
     inputBoundary: "public stage ids and public preset names only",
-    validation: "expected-hash receipts against deterministic reference output",
-    notes: "Useful for meta-health and balance diagnostics. Browser workers do not advertise this kernel yet.",
+    validation: "assignment-bound receipts against server-held deterministic reference output",
+    notes: "Useful for meta-health and balance diagnostics. Opted-in browsers advertise this as a CPU browser-JS workload bound to sim constants and behavior version.",
   },
   {
     id: "device-witness-webgpu",
@@ -86,7 +86,7 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
     status: "experimental",
     authority: "advisory",
     inputBoundary: "short-lived opaque signaling payloads and bucketed connectivity receipts",
-    validation: "same assignment and receipt contract as HTTP",
+    validation: "same assignment and receipt contract as HTTP plus peer-signed data-channel subreceipts",
     notes: "Pairing/signaling and data-channel witness execution are separately flagged; public assignment intake remains independently gated.",
   },
   {
@@ -96,7 +96,7 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
     authority: "advisory",
     inputBoundary: "derived from admin-only receipts and bucketed observations",
     validation: "profile scores are summaries, not task truth",
-    notes: "Feeds scheduler intelligence: allowed workload tier, correctness scores, kernel timing, and WebRTC direct/TURN rates.",
+    notes: "Feeds scheduler intelligence: allowed workload tier comes from accepted witness receipts; self-reported buckets remain scoring and dashboard hints.",
   },
   {
     id: "exploit-search",

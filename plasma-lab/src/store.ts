@@ -33,6 +33,7 @@ import {
   runReplayVerify,
 } from "./kernels/replay-verify.js";
 import {
+  SEED_SWEEP_KERNEL_BINDING,
   SEED_SWEEP_KERNEL_HASH,
   SEED_SWEEP_KERNEL_ID,
   runSeedSweep,
@@ -311,6 +312,8 @@ export interface WorkerProfile {
   avgKernelMs: number | null;
   p95KernelMs: number | null;
   avgFrameRegressionMs: number | null;
+  webgpuWitnessReceipts: number;
+  renderWitnessReceipts: number;
   allowedWorkloadTier: "observe-only" | "cpu-light" | "webgpu-light";
   trustScore: number;
   recentFailureRate: number | null;
@@ -378,6 +381,7 @@ export interface StoreOptions {
   workerSessionTtlMs?: number;
   webrtcSessionTtlMs?: number;
   acceptAssignments?: boolean;
+  requireReceiptSignatures?: boolean;
 }
 
 export interface ComputeLabSnapshot {
@@ -414,6 +418,7 @@ export class ComputeLabStore {
   private readonly assignmentTimeoutMs: number;
   private readonly workerSessionTtlMs: number;
   private readonly webrtcSessionTtlMs: number;
+  private readonly requireReceiptSignatures: boolean;
   private acceptAssignmentsFlag: boolean;
   private assignmentIntakeClosesAt: number | null = null;
 
@@ -422,6 +427,7 @@ export class ComputeLabStore {
     this.assignmentTimeoutMs = options.assignmentTimeoutMs ?? 60_000;
     this.workerSessionTtlMs = options.workerSessionTtlMs ?? 3_600_000;
     this.webrtcSessionTtlMs = options.webrtcSessionTtlMs ?? 600_000;
+    this.requireReceiptSignatures = options.requireReceiptSignatures ?? false;
     this.acceptAssignmentsFlag = options.acceptAssignments ?? false;
   }
 
@@ -992,6 +998,8 @@ export class ComputeLabStore {
         brainB: input.brainB,
         seedStart: cursor,
         seedEndExclusive: Math.min(seedEndExclusive, cursor + seedChunkSize),
+        simConstantsHash: SEED_SWEEP_KERNEL_BINDING.simConstantsHash,
+        behaviorVersion: SEED_SWEEP_KERNEL_BINDING.behaviorVersion,
         ...(input.maxTicks === undefined ? {} : { maxTicks: input.maxTicks }),
       };
       const expectedOutputHash = runSeedSweep(params).outputHash;
@@ -1038,6 +1046,7 @@ export class ComputeLabStore {
     const worker = this.requireWorker(input.workerId);
     worker.lastSeenAt = this.now();
     session.lastSeenAt = worker.lastSeenAt;
+    if (this.requireReceiptSignatures && !session.signingPublicKey) return null;
     if (this.shouldQuarantineWorker(worker.workerId).quarantined) return null;
     if (this.activeAssignmentsForWorker(worker.workerId) >= Math.max(1, worker.capability.maxConcurrentChunks || 1)) {
       return null;
@@ -1134,6 +1143,9 @@ export class ComputeLabStore {
     }
     const existingReceipt = this.assignmentReceipt(input.assignmentId);
     if (existingReceipt) {
+      if (prepared.receipt.receiptHash && hashesEqual(existingReceipt.receiptHash, prepared.receipt.receiptHash)) {
+        return { receipt: existingReceipt };
+      }
       const receipt = this.makeReceipt(
         input,
         "duplicate-receipt",
@@ -1145,6 +1157,14 @@ export class ComputeLabStore {
     }
     const task = this.requireTask(input.taskId);
     const chunk = this.requireChunk(input.chunkId);
+    const peerMismatch = this.peerReceiptMismatch(chunk, input);
+    if (peerMismatch) {
+      const receipt = this.makeReceipt(input, "malformed", peerMismatch);
+      this.receipts.set(receipt.receiptId, receipt);
+      assignment.status = "receipted";
+      this.bumpReputation(input.workerId, "rejected");
+      return { receipt };
+    }
     const mismatch = receiptMismatch(chunk, input);
     if (mismatch) {
       const receipt = this.makeReceipt(input, mismatch.decision, mismatch.reason);
@@ -1781,6 +1801,9 @@ export class ComputeLabStore {
     if (input.receiptHash && !hashesEqual(input.receiptHash, receiptHash)) {
       return { receipt, reason: "receipt hash mismatch" };
     }
+    if (this.requireReceiptSignatures && !session.signingPublicKey) {
+      return { receipt, reason: "receipt signing public key required" };
+    }
     if (session.signingPublicKey && signatureStatus === "missing") {
       return { receipt, reason: "receipt signature required" };
     }
@@ -1957,6 +1980,57 @@ export class ComputeLabStore {
       receipt.decision !== "malformed";
   }
 
+  private peerReceiptMismatch(chunk: ComputeChunk, receipt: Omit<ExecutionReceipt, "receiptId" | "receivedAt" | "decision" | "reason">): string | null {
+    if (receipt.transport !== "webrtc" || !isWebRtcDataTask(chunk.kind)) return null;
+    const subreceipt = peerSubreceiptFromAdapterInfo(receipt.adapterInfo);
+    if (!subreceipt) return "peer subreceipt required";
+    if (subreceipt.requesterWorkerId !== receipt.workerId || subreceipt.requesterSessionId !== receipt.workerSessionId) {
+      return "peer subreceipt requester mismatch";
+    }
+    if (
+      subreceipt.assignmentId !== receipt.assignmentId ||
+      subreceipt.taskId !== receipt.taskId ||
+      subreceipt.chunkId !== receipt.chunkId
+    ) {
+      return "peer subreceipt assignment mismatch";
+    }
+    if (
+      subreceipt.kernelId !== receipt.kernelId ||
+      !hashesEqual(subreceipt.kernelHash, receipt.kernelHash) ||
+      !hashesEqual(subreceipt.inputHash, receipt.inputHash) ||
+      !hashesEqual(subreceipt.outputHash, receipt.outputHash)
+    ) {
+      return "peer subreceipt compute binding mismatch";
+    }
+    if ((subreceipt.artifactHash || receipt.artifactHash) && !hashesEqual(subreceipt.artifactHash, receipt.artifactHash)) {
+      return "peer subreceipt artifact mismatch";
+    }
+    if (subreceipt.workerId === receipt.workerId || subreceipt.workerSessionId === receipt.workerSessionId) {
+      return "peer subreceipt must come from remote worker";
+    }
+    const pair = this.webrtcPairs.get(subreceipt.pairId);
+    if (!pair) return "peer subreceipt pair missing";
+    const pairHasRequester = (
+      (pair.offererWorkerId === receipt.workerId && pair.offererSessionId === receipt.workerSessionId) ||
+      (pair.answererWorkerId === receipt.workerId && pair.answererSessionId === receipt.workerSessionId)
+    );
+    const pairHasPeer = (
+      (pair.offererWorkerId === subreceipt.workerId && pair.offererSessionId === subreceipt.workerSessionId) ||
+      (pair.answererWorkerId === subreceipt.workerId && pair.answererSessionId === subreceipt.workerSessionId)
+    );
+    if (!pairHasRequester || !pairHasPeer) return "peer subreceipt pair participant mismatch";
+    const peerSession = this.sessions.get(subreceipt.workerSessionId);
+    if (!peerSession || peerSession.workerId !== subreceipt.workerId || !peerSession.signingPublicKey) {
+      return "peer subreceipt signing key unavailable";
+    }
+    const expectedHash = peerSubreceiptHash(subreceipt);
+    if (!hashesEqual(subreceipt.peerReceiptHash, expectedHash)) return "peer subreceipt hash mismatch";
+    if (!verifyReceiptSignature(expectedHash, subreceipt.signature, peerSession.signingPublicKey)) {
+      return "peer subreceipt signature invalid";
+    }
+    return null;
+  }
+
   private bumpReputation(workerId: string, kind: "accepted" | "rejected" | "timeout" | "disagreement"): void {
     const rep = this.reputation.get(workerId) ?? {
       workerId,
@@ -1973,6 +2047,128 @@ export class ComputeLabStore {
   }
 }
 
+interface PeerSubreceipt {
+  protocol: "plasma-peer-result.v1";
+  pairId: string;
+  requestId: string;
+  requesterWorkerId: string;
+  requesterSessionId: string;
+  workerId: string;
+  workerSessionId: string;
+  assignmentId: string;
+  taskId: string;
+  chunkId: string;
+  kernelId: string;
+  kernelHash: ContentHash;
+  inputHash: ContentHash;
+  artifactHash?: ContentHash;
+  outputHash: ContentHash;
+  executionMode: ExecutionMode;
+  computeMs: number;
+  clientVersion?: string;
+  peerReceiptHash: ContentHash;
+  signature: string;
+  signaturePublicKeyHash?: ContentHash;
+}
+
+function peerSubreceiptFromAdapterInfo(adapterInfo: Record<string, unknown> | undefined): PeerSubreceipt | null {
+  const raw = adapterInfo?.peerSubreceipt;
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Record<string, unknown>;
+  const subreceipt = {
+    protocol: value.protocol,
+    pairId: value.pairId,
+    requestId: value.requestId,
+    requesterWorkerId: value.requesterWorkerId,
+    requesterSessionId: value.requesterSessionId,
+    workerId: value.workerId,
+    workerSessionId: value.workerSessionId,
+    assignmentId: value.assignmentId,
+    taskId: value.taskId,
+    chunkId: value.chunkId,
+    kernelId: value.kernelId,
+    kernelHash: value.kernelHash,
+    inputHash: value.inputHash,
+    artifactHash: value.artifactHash,
+    outputHash: value.outputHash,
+    executionMode: value.executionMode,
+    computeMs: value.computeMs,
+    clientVersion: value.clientVersion,
+    peerReceiptHash: value.peerReceiptHash,
+    signature: value.signature,
+    signaturePublicKeyHash: value.signaturePublicKeyHash,
+  };
+  if (
+    subreceipt.protocol !== "plasma-peer-result.v1" ||
+    !isNonEmptyString(subreceipt.pairId) ||
+    !isNonEmptyString(subreceipt.requestId) ||
+    !isNonEmptyString(subreceipt.requesterWorkerId) ||
+    !isNonEmptyString(subreceipt.requesterSessionId) ||
+    !isNonEmptyString(subreceipt.workerId) ||
+    !isNonEmptyString(subreceipt.workerSessionId) ||
+    !isNonEmptyString(subreceipt.assignmentId) ||
+    !isNonEmptyString(subreceipt.taskId) ||
+    !isNonEmptyString(subreceipt.chunkId) ||
+    !isNonEmptyString(subreceipt.kernelId) ||
+    !isContentHash(subreceipt.kernelHash) ||
+    !isContentHash(subreceipt.inputHash) ||
+    (subreceipt.artifactHash !== undefined && !isContentHash(subreceipt.artifactHash)) ||
+    !isContentHash(subreceipt.outputHash) ||
+    (subreceipt.executionMode !== "cpu" && subreceipt.executionMode !== "webgpu") ||
+    typeof subreceipt.computeMs !== "number" ||
+    !Number.isFinite(subreceipt.computeMs) ||
+    !isContentHash(subreceipt.peerReceiptHash) ||
+    !isNonEmptyString(subreceipt.signature)
+  ) {
+    return null;
+  }
+  return subreceipt as PeerSubreceipt;
+}
+
+function peerSubreceiptHash(input: PeerSubreceipt): ContentHash {
+  return hashCanonical(peerSubreceiptPayload(input));
+}
+
+function peerSubreceiptPayload(input: Omit<PeerSubreceipt, "peerReceiptHash" | "signature" | "signaturePublicKeyHash">): Record<string, unknown> {
+  return {
+    peerReceiptVersion: 1,
+    protocol: input.protocol,
+    pairId: input.pairId,
+    requestId: input.requestId,
+    requesterWorkerId: input.requesterWorkerId,
+    requesterSessionId: input.requesterSessionId,
+    workerId: input.workerId,
+    workerSessionId: input.workerSessionId,
+    assignmentId: input.assignmentId,
+    taskId: input.taskId,
+    chunkId: input.chunkId,
+    kernelId: input.kernelId,
+    kernelHash: input.kernelHash,
+    inputHash: input.inputHash,
+    artifactHash: input.artifactHash,
+    outputHash: input.outputHash,
+    executionMode: input.executionMode,
+    computeMs: input.computeMs,
+    clientVersion: input.clientVersion,
+  };
+}
+
+function isWebRtcDataTask(kind: TaskKind): boolean {
+  return kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID || kind === REPLAY_VERIFY_KERNEL_ID || kind === SEED_SWEEP_KERNEL_ID;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+function isContentHash(value: unknown): value is ContentHash {
+  return !!value &&
+    typeof value === "object" &&
+    (value as ContentHash).algorithm === "sha256" &&
+    typeof (value as ContentHash).value === "string" &&
+    /^[a-f0-9]{64}$/.test((value as ContentHash).value);
+}
+
 function receiptMismatch(
   chunk: ComputeChunk,
   input: Pick<ExecutionReceipt, "kernelId" | "kernelHash" | "inputHash" | "artifactHash" | "outputHash" | "derived">,
@@ -1983,8 +2179,14 @@ function receiptMismatch(
   if (!hashesEqual(input.inputHash, chunk.inputHash)) {
     return { decision: "input-mismatch", reason: "input hash did not match assignment" };
   }
-  if (chunk.artifactHash && (!input.artifactHash || !hashesEqual(input.artifactHash, chunk.artifactHash))) {
-    return { decision: "input-mismatch", reason: "artifact hash did not match assignment" };
+  if (chunk.artifactHash) {
+    if (!input.artifactHash) {
+      if (chunk.kind !== PUBLIC_ARTIFACT_VERIFY_KERNEL_ID) {
+        return { decision: "input-mismatch", reason: "artifact hash did not match assignment" };
+      }
+    } else if (!hashesEqual(input.artifactHash, chunk.artifactHash)) {
+      return { decision: "input-mismatch", reason: "artifact hash did not match assignment" };
+    }
   }
   if (chunk.kind === DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID) {
     const derived = input.derived;
@@ -2298,6 +2500,8 @@ function buildWorkerProfiles(input: {
       .filter((ms) => Number.isFinite(ms) && ms >= 0);
     const acceptedReceipts = workerReceipts.filter((receipt) => receipt.decision === "accepted").length;
     const rejectedReceipts = workerReceipts.filter((receipt) => isRejectedDecision(receipt.decision)).length;
+    const webgpuWitnessReceipts = webgpuReceipts.filter((receipt) => receipt.decision === "accepted").length;
+    const renderWitnessReceipts = renderReceipts.filter((receipt) => receipt.decision === "accepted").length;
     const timeoutAssignments = workerAssignments.filter((assignment) => assignment.status === "timeout").length;
     const recentWindowStart = input.now - 30 * 60_000;
     const recentReceipts = workerReceipts.filter((receipt) =>
@@ -2344,8 +2548,9 @@ function buildWorkerProfiles(input: {
       webgpuAvailable,
       webgpuCorrectnessScore,
       renderFixtureScore,
+      webgpuWitnessReceipts,
+      renderWitnessReceipts,
       p95KernelMs,
-      acceptedReceipts,
     });
     const trustScore = workerTrustScore({
       acceptedReceipts,
@@ -2370,6 +2575,8 @@ function buildWorkerProfiles(input: {
       avgKernelMs: average(kernelTimes),
       p95KernelMs,
       avgFrameRegressionMs: null,
+      webgpuWitnessReceipts,
+      renderWitnessReceipts,
       allowedWorkloadTier: tier,
       trustScore,
       recentFailureRate,
@@ -2624,11 +2831,13 @@ function allowedWorkloadTier(input: {
   webgpuAvailable: boolean;
   webgpuCorrectnessScore: number | null;
   renderFixtureScore: number | null;
+  webgpuWitnessReceipts: number;
+  renderWitnessReceipts: number;
   p95KernelMs: number | null;
-  acceptedReceipts: number;
 }): WorkerProfile["allowedWorkloadTier"] {
   if (
     input.webgpuAvailable &&
+    input.webgpuWitnessReceipts > 0 &&
     input.webgpuCorrectnessScore !== null &&
     input.webgpuCorrectnessScore >= 1 &&
     (input.p95KernelMs === null || input.p95KernelMs < 100)
@@ -2637,8 +2846,8 @@ function allowedWorkloadTier(input: {
   }
   if (
     input.cpuReferenceAvailable ||
-    input.acceptedReceipts > 0 ||
-    (input.renderFixtureScore !== null && input.renderFixtureScore >= 1)
+    input.webgpuWitnessReceipts > 0 ||
+    input.renderWitnessReceipts > 0
   ) {
     return "cpu-light";
   }
@@ -2807,11 +3016,11 @@ function asInt(value: unknown, label: string): number {
   return n;
 }
 
-export function referenceReceiptFields(chunk: ComputeChunk): Pick<
+export function referenceReceiptFields(chunk: Omit<ComputeChunk, "expectedOutputHash"> & { expectedOutputHash?: ContentHash }): Pick<
   ExecutionReceipt,
   "kernelId" | "kernelHash" | "inputHash" | "artifactHash" | "outputHash" | "derived" | "determinismClass" | "validationMode"
 > {
-  const outputHash = chunk.expectedOutputHash;
+  const outputHash = chunk.expectedOutputHash ?? referenceOutputHash(chunk);
   const derived = chunk.kind === DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID
     ? {
       contractVersion: "derived-compute-extension.v0" as const,
@@ -2835,3 +3044,27 @@ export function referenceReceiptFields(chunk: ComputeChunk): Pick<
 }
 
 export const referencePrimeReceiptFields = referenceReceiptFields;
+
+function referenceOutputHash(chunk: Omit<ComputeChunk, "expectedOutputHash">): ContentHash {
+  switch (chunk.kind) {
+    case PRIME_SEARCH_KERNEL_ID:
+      return runPrimeSearch(chunk.params as unknown as PrimeParams).outputHash;
+    case DEVICE_WITNESS_WEBGPU_KERNEL_ID:
+      return runDeviceWitnessWebGpuReference(chunk.params as { seed: number; count: number }).outputHash;
+    case DEVICE_WITNESS_RENDER_KERNEL_ID:
+      return runDeviceWitnessRenderReference().outputHash;
+    case DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID:
+      return runDeviceWitnessDerivedBufferReference(chunk.params as { seed: number; count: number }).outputHash;
+    case PUBLIC_ARTIFACT_VERIFY_KERNEL_ID:
+      return runPublicArtifactVerify({ artifactJson: stringParam(chunk.params.artifactJson) }).outputHash;
+    case REPLAY_VERIFY_KERNEL_ID:
+      return runReplayVerify({
+        replayArtifactJson: stringParam(chunk.params.replayArtifactJson),
+        allowConstantsMismatch: chunk.params.allowConstantsMismatch === true,
+      }).outputHash;
+    case SEED_SWEEP_KERNEL_ID:
+      return runSeedSweep(chunk.params as unknown as Parameters<typeof runSeedSweep>[0]).outputHash;
+    default:
+      throw new Error(`unsupported reference chunk kind: ${chunk.kind}`);
+  }
+}

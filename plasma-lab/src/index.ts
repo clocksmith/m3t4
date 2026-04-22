@@ -11,6 +11,7 @@ const storeOptions = {
   assignmentTimeoutMs: CONFIG.assignmentTimeoutMs,
   workerSessionTtlMs: CONFIG.workerSessionTtlMs,
   webrtcSessionTtlMs: CONFIG.webrtcSessionTtlMs,
+  requireReceiptSignatures: CONFIG.requireReceiptSignatures,
 };
 
 const store = CONFIG.storeBackend === "firestore"
@@ -38,5 +39,6 @@ server.listen(CONFIG.port, () => {
     webrtcSignalingEnabled: CONFIG.webrtcSignalingEnabled,
     webrtcDataEnabled: CONFIG.webrtcDataEnabled,
     webrtcTurnEnabled: CONFIG.webrtcTurnEnabled,
+    requireReceiptSignatures: CONFIG.requireReceiptSignatures,
   }));
 });

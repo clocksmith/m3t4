@@ -1,9 +1,18 @@
-import { simulate, STAGES, STRATEGIES, type StageId, type StrategyName } from "@m3t4/sim";
+import { BEHAVIOR_VERSION, REPLAY_CONSTANTS_HASH, simulate, STAGES, STRATEGIES, type StageId, type StrategyName } from "@m3t4/sim";
 import { canonicalJson, sha256 } from "../plasma/hash.js";
 import type { ContentHash } from "../plasma/types.js";
 
 export const SEED_SWEEP_KERNEL_ID = "m3t4.seed_sweep.v0";
-export const SEED_SWEEP_KERNEL_HASH = sha256(`${SEED_SWEEP_KERNEL_ID}:public-presets-v1`);
+export const SEED_SWEEP_KERNEL_BINDING = {
+  kernelId: SEED_SWEEP_KERNEL_ID,
+  contract: "public-presets-seed-sweep-v2",
+  simPackage: "@m3t4/sim",
+  simConstantsHash: REPLAY_CONSTANTS_HASH,
+  behaviorVersion: BEHAVIOR_VERSION,
+  serialization: "canonical-json-v1",
+  outputSchema: "seed-sweep-summary-v1",
+};
+export const SEED_SWEEP_KERNEL_HASH = sha256(canonicalJson(SEED_SWEEP_KERNEL_BINDING));
 
 export interface SeedSweepParams {
   stageId: string;
@@ -12,6 +21,8 @@ export interface SeedSweepParams {
   seedStart: number;
   seedEndExclusive: number;
   maxTicks?: number;
+  simConstantsHash?: string;
+  behaviorVersion?: number;
 }
 
 export interface SeedSweepOutput {
@@ -52,6 +63,12 @@ export function runSeedSweep(params: SeedSweepParams): SeedSweepOutput {
   const seedStart = asInt(params.seedStart, "seedStart");
   const seedEndExclusive = asInt(params.seedEndExclusive, "seedEndExclusive");
   const maxTicks = params.maxTicks === undefined ? undefined : asInt(params.maxTicks, "maxTicks");
+  if (params.simConstantsHash !== undefined && params.simConstantsHash !== REPLAY_CONSTANTS_HASH) {
+    throw new Error("simConstantsHash mismatch");
+  }
+  if (params.behaviorVersion !== undefined && params.behaviorVersion !== BEHAVIOR_VERSION) {
+    throw new Error("behaviorVersion mismatch");
+  }
   if (seedEndExclusive <= seedStart) throw new Error("seedEndExclusive must be greater than seedStart");
   if (seedEndExclusive - seedStart > 64) throw new Error("seed sweep chunks are capped at 64 seeds");
 

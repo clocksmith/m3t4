@@ -207,6 +207,7 @@ FEATURE_COMPUTE_SLACK_WORKER=false
 FEATURE_COMPUTE_WEBRTC_ARTIFACTS=false
 FEATURE_COMPUTE_WEBRTC_SIGNALING=false
 FEATURE_COMPUTE_WEBRTC_DATA=false
+FEATURE_COMPUTE_WEBRTC_TURN=false
 FEATURE_COMPUTE_RECEIPT_DASHBOARD=false
 FEATURE_COMPUTE_LIVE_BADGES=false
 FEATURE_COMPUTE_AUTO_SEED_REPLAY_TASKS=false
@@ -216,11 +217,14 @@ Operational kill switch:
 
 ```text
 COMPUTE_ACCEPT_ASSIGNMENTS=false
+COMPUTE_REQUIRE_RECEIPT_SIGNATURES=true
 ```
 
 That stops issuing new work without hiding old receipts or tearing down
 dashboards. If it is flipped off, already-issued assignments may report until
 their deadline; remaining work becomes no-fault timeout/cancelled.
+`COMPUTE_REQUIRE_RECEIPT_SIGNATURES=true` keeps validation-eligible production
+sessions from receiving work unless they registered an ECDSA P-256 receipt key.
 
 ## Transport
 
@@ -480,7 +484,7 @@ chunkId
 kernelId
 kernelHash
 inputHash
-artifactHash
+artifactHash (server-held for public artifact tasks)
 outputHash
 determinismClass
 validationMode
@@ -496,7 +500,13 @@ receiptHash
 signature
 signaturePublicKeyHash
 signatureStatus: unsigned | verified | missing | invalid | key-unavailable
+peerSubreceipt: required for WebRTC data-plane work
 ```
+
+Production validation-eligible workers must register a receipt signing public
+key. Unsigned historical receipts can still be inspected, but assignment intake
+does not issue validation work to unsigned sessions when
+`COMPUTE_REQUIRE_RECEIPT_SIGNATURES=true`.
 
 Durable public-ish receipt logs should avoid raw fingerprinting data. Store
 adapter/device values as buckets or hashes where possible:
@@ -626,7 +636,7 @@ device_witness.webgpu.v0
   coordinator issues seed/count challenge
   browser worker runs the u32 transform on WebGPU
   receipt carries assignmentId, kernelHash, inputHash, outputHash, duration
-  validator checks expected output hash
+  validator checks server-held expected output hash
 
 device_witness.render_fixture.v0
   coordinator issues canvas2d-alpha-samples-v1 challenge
@@ -701,7 +711,7 @@ Closed-alpha WebRTC staff window:
   receipts: rcpt-6f2d05d708b2f3b7, rcpt-68fbcba0733869c7
   validation: val-a53c730737178ec9
   result: 2 browsers, 10.3s window, WebRTC data channel open, measurement receipts accepted
-  data work: request-ok on offerer, served-ok on answerer, relay not used
+  data work: request-ok on offerer, served-ok on answerer, no relay observed
 
 WebRTC public-artifact transfer:
   command: npm -w plasma-lab run smoke:webrtc-artifact
@@ -710,7 +720,7 @@ WebRTC public-artifact transfer:
   receipts: rcpt-ae00c482ed47a6b4, rcpt-d7707d8a14222e3d
   validation: val-ed5af97b3757f671
   result: public-artifact chunks moved over plasma-data, receipt acks over plasma-receipts
-  authority: normal HTTP receipt ingestion accepted both transport=webrtc expected-hash receipts
+  authority: normal HTTP receipt ingestion accepted both transport=webrtc expected-hash receipts (historical, before peer-subreceipt hardening)
   safety: assignment intake closed before the P2P transfer began and remained closed afterward
 
 WebRTC client public-artifact transfer:
@@ -719,27 +729,27 @@ WebRTC client public-artifact transfer:
   repeat: set PLASMA_LAB_SMOKE_REPEAT=5 or pass --repeat=5 for a hosted soak
   replay verify: set PLASMA_LAB_SMOKE_KERNEL=replay-verify or pass --kernel=replay-verify
   seed sweep: set PLASMA_LAB_SMOKE_KERNEL=seed-sweep or pass --kernel=seed-sweep
-  use: launches two real browser clients, sets the staff-only WebRTC artifact flag, opens intake only for assignment issue, and requires two accepted transport=webrtc expected-hash receipts
+  use: launches two real browser clients, first accepts Device Witness render receipts to promote them out of observe-only, sets the staff-only WebRTC artifact flag, opens intake only during the controlled window, and requires two accepted transport=webrtc receipts with peer-signed subreceipts
 
 WebRTC hosted-client public-artifact 5-pass soak:
   origin: https://m3t4.ai
   tasks: task-e74c00a19ca998e5, task-bd5bfed3ddfe4af6, task-1acc1efc996c42be, task-6df61c81c99f98c8, task-42105b57df533f0d
   validations: val-8147f74d62308144, val-ad4010546bb5095f, val-79990272c3c551c3, val-4cc94d054aa8241d, val-ae8a40240b27a535
-  receipts: 10 accepted transport=webrtc expected-hash receipts
-  result: transfer=plasma-data for every receipt, relay not used, no page errors, assignment intake false after each pass
+  receipts: 10 accepted transport=webrtc expected-hash receipts (historical, before peer-subreceipt hardening)
+  result: transfer=plasma-data for every receipt, no relay observed, no page errors, assignment intake false after each pass
 
 WebRTC public-artifact 3-pass soak:
   tasks: task-a9c8f3fef1a1e3ce, task-23dab3bae4588a78, task-19d7fbce279393e6
   validations: val-8debca2b894eaf09, val-75d547cf5c0fd5a8, val-c043d91e7115c91f
   receipts: 6 accepted transport=webrtc receipts
-  result: no relay, no rejected chunks, no timeouts, assignment intake false after each pass
+  result: no relay observed, no rejected chunks, no timeouts, assignment intake false after each pass
 
 WebRTC public-artifact additional 5-pass soak:
   tasks: task-7ac1064b78104db0, task-93bee98cb15335f4, task-afdbf6efa8d2dc8b, task-ffcd36028986aaca, task-bb2f217cd4e36a9d
   validations: val-c939d1e8bc50b237, val-c4ec2779cd86994b, val-52461bfa835a395e, val-3741a016fd4eb26e, val-6fac9eba305f37d8
   receipts: 10 accepted transport=webrtc receipts
   aggregate: 9 public-artifact WebRTC tasks accepted including the first transfer
-  result: no relay, no rejected chunks, no timeouts, assignment intake false after each pass
+  result: no relay observed, no rejected chunks, no timeouts, assignment intake false after each pass
 ```
 
 Observation: every derived evidence field was present in the accepted
@@ -793,7 +803,7 @@ Safety boundary:
 admin-seeded only while in closed alpha
 rejects replay artifacts containing private player configs
 browser workers re-simulate action logs from public initial state and public action bytes only
-accepted receipts still require the normal expected-hash quorum
+accepted receipts require assignment-bound output hashes checked against a server-held expected hash; expected outputs are not exposed in `/compute/tasks/next`
 ```
 
 Arena-server can seed replay verification work automatically after archiving a
@@ -816,9 +826,8 @@ archive and Elo updates must not depend on compute-lab task creation.
 matchId
 rulesHash
 stageHash
-artifactHash
+artifactHash (server-held; not exposed in worker assignment payload)
 public artifact bytes or URL
-expected public output hash
 verification mode
 ```
 
@@ -837,8 +846,8 @@ Acceptance requires:
 ```text
 assignmentId matches an issued assignment
 taskId/chunkId/kernelHash/inputHash match contract
-artifactHash/rulesHash/stageHash match public artifact
-outputHash equals expected public artifact hash
+inputHash/rulesHash/stageHash match public artifact
+outputHash equals the server-held expected public artifact hash
 minAgreeing receipts satisfy validation policy
 validator records a reasoned outcome
 ```
@@ -851,18 +860,18 @@ Current implementation status:
 server exports PublicReplayArtifactV1
 plasma-lab seeds m3t4.public_artifact_verify.v0 from that envelope
 workers verify artifactSha256 by hashing canonical payload JSON
-2-of-2 expected-hash validation accepts the chunk
+2-of-2 assignment-bound expected-hash validation accepts the chunk without exposing expectedOutputHash or the server-held public artifact hash in the worker assignment payload
 npm -w plasma-lab run smoke exercises this path locally or against a deploy
 ```
 
 `m3t4.seed_sweep.v0` is now implemented on both sides of the compute path:
 
 ```text
-inputs: public stage id, public preset A, public preset B, seed range
+inputs: public stage id, public preset A, public preset B, seed range, sim constants hash, behavior version
 outputs: canonical summary JSON hash with winner/score/round/tick/logHash rows
 limits: max 512 seeds per task, max 64 seeds per chunk
 route: POST /compute/admin/tasks/seed-sweep
-browser: advertised by opted-in hidden spectator workers and executable over HTTP or WebRTC data channels
+browser: advertised by opted-in hidden spectator workers and executable as CPU browser JS over HTTP or WebRTC data channels
 ```
 
 This targets use cases 2 and 8 from the ladder: seed sweeps and balance
@@ -975,12 +984,14 @@ webgpu-light
 ```
 
 `cpu-reference` workers enter at `cpu-light`. Browser workers start at
-`observe-only` until bucketed fixture evidence, accepted receipts, or WebGPU
-correctness evidence promotes them. The scheduler also scores candidates with
-trust score, recent failure rate, WebRTC direct-success rate, TURN need,
-kernel timing, live concurrency, and quarantine state. These controls are
-assignment hints only; receipts still require assignment binding, canonical
-hashes, signatures when a session key exists, and normal quorum validation.
+`observe-only` until accepted Device Witness render or WebGPU receipts promote
+them. Self-reported capability buckets can inform dashboards and tie-break
+scores, but they are not promotion evidence. The scheduler also scores
+candidates with trust score, recent failure rate, WebRTC direct-success rate,
+TURN need, kernel timing, live concurrency, and quarantine state. These controls
+are assignment hints only; receipts still require assignment binding, canonical
+hashes, production signing keys, server-held expected-output validation, and
+normal quorum validation.
 
 Connectivity witness reports are submitted through `POST /compute/connectivity`
 after opt-in. The browser records only buckets: HTTP RTT, Network Information
@@ -1156,7 +1167,7 @@ Cap the first closed-alpha window to:
 duration: 10 minutes open assignment intake
 participants: 2-3 staff browsers, all opted in manually
 seeded backlog: one task at a time
-quorum: 2-of-2 for public-artifact and derived-buffer tasks
+quorum: 2-of-2 assignment-bound server-held expected-hash checks for public-artifact and derived-buffer tasks
 transport: HTTP receipts first; WebRTC data only in a named staff pairing test
 stop condition: accepted chunks expected, zero rejected/disagreement chunks
 dashboard guard: disable intake if running assignments exceed 4
@@ -1209,6 +1220,7 @@ FEATURE_COMPUTE_WEBRTC_DATA=false
 FEATURE_COMPUTE_WEBRTC_SIGNALING=false
 FEATURE_COMPUTE_LAB_ROUTES=false
 COMPUTE_ACCEPT_ASSIGNMENTS=false
+COMPUTE_REQUIRE_RECEIPT_SIGNATURES=true
 scale plasma-lab to zero
 ```
 

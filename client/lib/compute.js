@@ -11,7 +11,7 @@
 // the current mode says work should wait until intermission.
 
 const OPT_IN_KEY = "m3t4.compute.optIn";
-const CLIENT_VERSION = "compute-slack-http-v0";
+const CLIENT_VERSION = "compute-slack-http-v1";
 const SESSION_TOKEN_HEADER = "x-worker-session-token";
 const PUBLIC_ARTIFACT_KERNEL = "m3t4.public_artifact_verify.v0";
 const REPLAY_VERIFY_KERNEL = "m3t4.replay_verify.v1";
@@ -265,6 +265,25 @@ class ComputeClient {
       ...receipt,
       receiptHash,
       signature: base64Url(signatureBytes),
+    };
+  }
+
+  async signPeerSubreceipt(payload) {
+    if (!this.receiptSigningKey) throw new Error("peer signing key unavailable");
+    const peerReceiptHash = {
+      algorithm: "sha256",
+      value: await hashText(stableJson(peerSubreceiptHashPayload(payload))),
+    };
+    const signatureBytes = await crypto.subtle.sign(
+      { name: "ECDSA", hash: "SHA-256" },
+      this.receiptSigningKey,
+      new TextEncoder().encode(peerReceiptHash.value),
+    );
+    return {
+      ...payload,
+      peerReceiptHash,
+      signature: base64Url(signatureBytes),
+      signaturePublicKeyHash: this.receiptSigningPublicKeyHash,
     };
   }
 
@@ -581,6 +600,7 @@ class ComputeClient {
         adapterInfo: {
           ...(this.capability?.adapterInfo || adapterInfoBucket()),
           ...transfer.transcript,
+          peerSubreceipt: transfer.peerSubreceipt,
         },
         computeMs: transfer.computeMs,
         clientVersion: CLIENT_VERSION,
@@ -1285,7 +1305,7 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
     channels.set(ch.label || "unknown", ch);
     if (ch.label === "plasma-data") {
       ch.onmessage = (ev) => {
-        handleArtifactWorkMessage(ev.data, channels, timeoutMs).then((ack) => {
+        handleArtifactWorkMessage(ev.data, channels, client, pairId, timeoutMs).then((ack) => {
           if (ack) servedResult = ack;
         }).catch((e) => {
           servedResult = { ok: false, error: message(e) };
@@ -1353,6 +1373,9 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
       protocol: "plasma-data.v0",
       type: "artifact-work",
       requestId,
+      pairId,
+      requesterWorkerId: client.workerId,
+      requesterSessionId: client.workerSessionId,
       assignmentId: work.assignment.assignmentId,
       taskId: work.task.taskId,
       chunk: work.chunk,
@@ -1373,8 +1396,8 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
     if (!remoteResult.ok || typeof remoteResult.outputHash !== "string") {
       throw new Error(`artifact peer failed: ${remoteResult.error || "unknown"}`);
     }
-    if (work.chunk.expectedOutputHash?.value && remoteResult.outputHash !== work.chunk.expectedOutputHash.value) {
-      throw new Error("artifact peer output mismatch");
+    if (!remoteResult.peerSubreceipt || typeof remoteResult.peerSubreceipt !== "object") {
+      throw new Error("artifact peer subreceipt missing");
     }
     // Keep the pair alive briefly so the peer can finish its reciprocal request.
     if (!servedResult) {
@@ -1384,10 +1407,15 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
       outputHash: remoteResult.outputHash,
       computeMs: Number(remoteResult.computeMs) || 0,
       executionMode: remoteResult.executionMode || "cpu",
+      peerSubreceipt: remoteResult.peerSubreceipt,
       transcript: {
         status: "ok",
         transfer: "plasma-data",
         role,
+        pairId,
+        peerWorkerId: remoteResult.peerSubreceipt.workerId,
+        peerWorkerSessionId: remoteResult.peerSubreceipt.workerSessionId,
+        peerReceiptHash: remoteResult.peerSubreceipt.peerReceiptHash?.value,
         dataChannelBucket: "open",
         dataWorkBucket: "artifact-request-ok",
         dataReceiptBucket: "ok",
@@ -1408,7 +1436,7 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
   }
 }
 
-async function handleArtifactWorkMessage(raw, channels, timeoutMs) {
+async function handleArtifactWorkMessage(raw, channels, client, pairId, timeoutMs) {
   const msg = parseJsonMessage(raw);
   if (msg?.protocol !== "plasma-data.v0" || msg?.type !== "artifact-work" || typeof msg.requestId !== "string") {
     return null;
@@ -1421,6 +1449,27 @@ async function handleArtifactWorkMessage(raw, channels, timeoutMs) {
     if (!receiptChannel) throw new Error("receipt channel unavailable");
     const chunk = safeArtifactChunk(msg.chunk);
     const result = await executeWorkerChunk(chunk, msg.requestId, Math.min(3500, timeoutMs));
+    const outputHash = { algorithm: "sha256", value: result.outputHash };
+    const peerSubreceipt = await client.signPeerSubreceipt({
+      protocol: "plasma-peer-result.v1",
+      pairId: String(msg.pairId || pairId || ""),
+      requestId: msg.requestId,
+      requesterWorkerId: String(msg.requesterWorkerId || ""),
+      requesterSessionId: String(msg.requesterSessionId || ""),
+      workerId: client.workerId,
+      workerSessionId: client.workerSessionId,
+      assignmentId: String(msg.assignmentId || ""),
+      taskId: String(msg.taskId || ""),
+      chunkId: chunk.chunkId,
+      kernelId: result.kernelId,
+      kernelHash: result.kernelHash,
+      inputHash: result.inputHash,
+      artifactHash: result.artifactHash,
+      outputHash,
+      executionMode: result.executionMode || "cpu",
+      computeMs: Math.round(result.computeMs),
+      clientVersion: CLIENT_VERSION,
+    });
     const ack = {
       protocol: "plasma-receipts.v0",
       type: "artifact-result",
@@ -1430,6 +1479,7 @@ async function handleArtifactWorkMessage(raw, channels, timeoutMs) {
       outputHash: result.outputHash,
       computeMs: Math.round(result.computeMs),
       executionMode: result.executionMode || "cpu",
+      peerSubreceipt,
     };
     receiptChannel.send(JSON.stringify(ack));
     return ack;
@@ -1490,7 +1540,6 @@ function safeArtifactChunk(chunk) {
     kernelHash: chunk.kernelHash,
     inputHash: chunk.inputHash,
     artifactHash: chunk.artifactHash,
-    expectedOutputHash: chunk.expectedOutputHash,
   };
 }
 
@@ -1959,6 +2008,30 @@ function receiptHashPayload(receipt) {
     derived: receipt.derived,
     computeMs: receipt.computeMs,
     clientVersion: receipt.clientVersion,
+  };
+}
+
+function peerSubreceiptHashPayload(subreceipt) {
+  return {
+    peerReceiptVersion: 1,
+    protocol: subreceipt.protocol,
+    pairId: subreceipt.pairId,
+    requestId: subreceipt.requestId,
+    requesterWorkerId: subreceipt.requesterWorkerId,
+    requesterSessionId: subreceipt.requesterSessionId,
+    workerId: subreceipt.workerId,
+    workerSessionId: subreceipt.workerSessionId,
+    assignmentId: subreceipt.assignmentId,
+    taskId: subreceipt.taskId,
+    chunkId: subreceipt.chunkId,
+    kernelId: subreceipt.kernelId,
+    kernelHash: subreceipt.kernelHash,
+    inputHash: subreceipt.inputHash,
+    artifactHash: subreceipt.artifactHash,
+    outputHash: subreceipt.outputHash,
+    executionMode: subreceipt.executionMode,
+    computeMs: subreceipt.computeMs,
+    clientVersion: subreceipt.clientVersion,
   };
 }
 

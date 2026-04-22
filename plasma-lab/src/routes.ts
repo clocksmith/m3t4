@@ -3,8 +3,8 @@ import type { JsonWebKey } from "node:crypto";
 import type { PlasmaLabConfig } from "./config.js";
 import { header, html, json, readJson } from "./http.js";
 import { canonicalJson } from "./plasma/hash.js";
-import type { ContentHash, DerivedExecutionEvidence, ExecutionMode, GovernorMode, TransportKind, WorkerCapability, WorkerRefusalReason } from "./plasma/types.js";
-import { ComputeLabStore, type ExecutionReceipt, type ValidationRecord, type WebRtcPairRecord, type WebRtcSessionRecord } from "./store.js";
+import type { ContentHash, DerivedExecutionEvidence, ExecutionMode, GovernorMode, TransportKind, ValidationPolicy, WorkerCapability, WorkerRefusalReason } from "./plasma/types.js";
+import { ComputeLabStore, type ComputeChunk, type ExecutionReceipt, type ValidationRecord, type WebRtcPairRecord, type WebRtcSessionRecord } from "./store.js";
 import { COMPUTE_USE_CASES } from "./use-cases.js";
 
 export interface RouteDeps {
@@ -56,6 +56,10 @@ export async function handleComputeLabRequest(
     const body = await readJson<{ label?: string; capability?: WorkerCapability; signingPublicKey?: JsonWebKey }>(req);
     if (!body?.capability || !Array.isArray(body.capability.kernels)) {
       json(res, 400, { error: "capability.kernels required" });
+      return true;
+    }
+    if (deps.config.requireReceiptSignatures && !body.signingPublicKey) {
+      json(res, 400, { error: "signingPublicKey required" });
       return true;
     }
     const { worker, session, acceptedKernels } = deps.store.registerWorker({
@@ -190,11 +194,11 @@ export async function handleComputeLabRequest(
       await flushStore(deps.store);
       json(res, 200, {
         assignment: next.assignment,
-        chunk: next.chunk,
+        chunk: publicComputeChunk(next.chunk),
         task: {
           taskId: next.task.taskId,
           kind: next.task.kind,
-          validationPolicy: next.task.validationPolicy,
+          validationPolicy: publicValidationPolicy(next.task.validationPolicy),
         },
       });
     } catch (e) {
@@ -291,6 +295,7 @@ export async function handleComputeLabRequest(
       webrtcSignalingEnabled: deps.config.webrtcSignalingEnabled,
       webrtcDataEnabled: deps.config.webrtcDataEnabled,
       webrtcTurnEnabled: deps.config.webrtcTurnEnabled,
+      requireReceiptSignatures: deps.config.requireReceiptSignatures,
       iceServers: publicIceServers(deps.config),
     });
     return true;
@@ -820,6 +825,20 @@ function publicWebRtcSession(session: WebRtcSessionRecord, config: PlasmaLabConf
     dataEnabled: config.webrtcDataEnabled,
     iceServers: publicIceServers(config),
   };
+}
+
+function publicComputeChunk(chunk: ComputeChunk): Omit<ComputeChunk, "expectedOutputHash"> {
+  const { expectedOutputHash: _expectedOutputHash, ...publicChunk } = chunk;
+  if (chunk.kind === "m3t4.public_artifact_verify.v0") {
+    const { artifactHash: _artifactHash, ...withoutArtifactHash } = publicChunk;
+    return withoutArtifactHash;
+  }
+  return publicChunk;
+}
+
+function publicValidationPolicy(policy: ValidationPolicy): Omit<ValidationPolicy, "expectedOutputHash"> {
+  const { expectedOutputHash: _expectedOutputHash, ...publicPolicy } = policy;
+  return publicPolicy;
 }
 
 function publicWebRtcPair(pair: WebRtcPairRecord, config: PlasmaLabConfig) {

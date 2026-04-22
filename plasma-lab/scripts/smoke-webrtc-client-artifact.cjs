@@ -36,9 +36,6 @@ async function runOnce(chromium, config, pass) {
     throw new Error("WebRTC signaling and data routes must both be enabled");
   }
 
-  const seeded = await seedTask(config, pass);
-  if (seeded.chunks !== 1) throw new Error(`expected 1 chunk, got ${seeded.chunks}`);
-
   let browser;
   try {
     browser = await chromium.launch({ headless: config.headless });
@@ -53,8 +50,18 @@ async function runOnce(chromium, config, pass) {
       prepareStaffPage(page, config, index === 0 ? "A" : "B")
     ));
 
+    const witness = await seedRenderWitnessTask(config);
+    if (witness.chunks !== 1) throw new Error(`expected 1 witness chunk, got ${witness.chunks}`);
+
     await setAssignments(config, true, config.assignmentWindowMs);
     const startedAt = Date.now();
+    await Promise.all(pages.map((page) =>
+      page.evaluate(() => window.__M3T4_COMPUTE_CLIENT__?.poll())
+    ));
+    const acceptedWitness = await waitForAcceptedTask(config, witness.taskId);
+
+    const seeded = await seedTask(config, pass);
+    if (seeded.chunks !== 1) throw new Error(`expected 1 chunk, got ${seeded.chunks}`);
     await Promise.all(pages.map((page) =>
       page.evaluate(() => window.__M3T4_COMPUTE_CLIENT__?.poll())
     ));
@@ -79,6 +86,8 @@ async function runOnce(chromium, config, pass) {
       computeOrigin: config.computeOrigin,
       gameOrigin: config.gameOrigin,
       taskKind: accepted.task.kind,
+      witnessTaskId: witness.taskId,
+      witnessValidationId: acceptedWitness.validation.validationId,
       taskId: seeded.taskId,
       chunkId: accepted.task.chunks?.[0]?.chunkId,
       validationId: validation.validationId,
@@ -156,6 +165,13 @@ async function seedTask(config, pass) {
   if (config.kernel === "replay-verify") return seedReplayVerifyTask(config, pass);
   if (config.kernel === "seed-sweep") return seedSeedSweepTask(config, pass);
   return seedPublicArtifactTask(config, pass);
+}
+
+async function seedRenderWitnessTask(config) {
+  return adminPost(config, "/compute/admin/tasks/device-witness-render", {
+    minExecutions: 2,
+    minAgreeing: 2,
+  });
 }
 
 async function seedPublicArtifactTask(config, pass) {

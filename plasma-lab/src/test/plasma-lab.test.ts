@@ -192,6 +192,68 @@ test("public artifact verification receipts accept exported artifact hashes", ()
   assert.equal(second.validation?.status, "accepted");
 });
 
+test("dashboard separates WebRTC public artifact receipts from measurement receipts", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const payload = {
+    matchId: "webrtc-artifact-dashboard",
+    tuple: { matchId: "webrtc-artifact-dashboard", expectedLogHash: "abc123" },
+  };
+  const artifactJson = canonicalJson(payload);
+  store.seedPublicArtifactVerifyTask({
+    matchId: "webrtc-artifact-dashboard",
+    artifactHash: "artifact-fnv",
+    artifactSha256: sha256(artifactJson).value,
+    artifactJson,
+  });
+  const w1 = store.registerWorker({ capability });
+  const w2 = store.registerWorker({ capability });
+  const a1 = store.assignNext(auth(w1))!;
+  const a2 = store.assignNext(auth(w2))!;
+  store.acceptAssignment({ ...auth(w1), assignmentId: a1.assignment.assignmentId, assignmentToken: a1.assignment.assignmentToken });
+  store.acceptAssignment({ ...auth(w2), assignmentId: a2.assignment.assignmentId, assignmentToken: a2.assignment.assignmentToken });
+  const adapterInfo = {
+    transfer: "plasma-data",
+    dataChannelBucket: "open",
+    dataReceiptBucket: "ok",
+  };
+  store.submitReceipt({
+    ...auth(w1),
+    assignmentId: a1.assignment.assignmentId,
+    assignmentToken: a1.assignment.assignmentToken,
+    taskId: a1.task.taskId,
+    chunkId: a1.chunk.chunkId,
+    ...referenceReceiptFields(a1.chunk),
+    executionMode: "cpu",
+    transport: "webrtc",
+    adapterInfo,
+    computeMs: 1,
+  });
+  store.submitReceipt({
+    ...auth(w2),
+    assignmentId: a2.assignment.assignmentId,
+    assignmentToken: a2.assignment.assignmentToken,
+    taskId: a2.task.taskId,
+    chunkId: a2.chunk.chunkId,
+    ...referenceReceiptFields(a2.chunk),
+    executionMode: "cpu",
+    transport: "webrtc",
+    adapterInfo,
+    computeMs: 1,
+  });
+
+  const dashboard = store.dashboard() as any;
+  assert.deepEqual(dashboard.receiptTransportSummary, [{
+    taskKind: "m3t4.public_artifact_verify.v0",
+    validationMode: "expected-hash",
+    transport: "webrtc",
+    transfer: "plasma-data",
+    dataChannelBucket: "open",
+    dataReceiptBucket: "ok",
+    decision: "accepted",
+    count: 2,
+  }]);
+});
+
 test("public artifact verification produces replay badge summaries", () => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const payload = {

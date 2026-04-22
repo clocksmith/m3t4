@@ -1343,6 +1343,7 @@ export class ComputeLabStore {
       capabilityMap: capabilityMap(workers),
       capabilityObservationMap: this.publicCapabilityMap().map,
       connectivityMap: this.publicConnectivityMap().map,
+      receiptTransportSummary: receiptTransportSummary(receipts, this.tasks),
       workerProfiles,
       deviceClassProfiles: this.deviceClassProfiles(),
       networkClassProfiles: this.networkClassProfiles(),
@@ -2070,6 +2071,49 @@ function isNumber(value: number | null): value is number {
 function incFlat(out: Record<string, number>, bucket: string): void {
   const clean = stringBucket(bucket) ?? "other";
   out[clean] = (out[clean] ?? 0) + 1;
+}
+
+function receiptTransportSummary(receipts: ExecutionReceipt[], tasks: Map<string, ComputeTask>) {
+  const rows = new Map<string, {
+    taskKind: string;
+    validationMode: string;
+    transport: string;
+    transfer: string;
+    dataChannelBucket: string;
+    dataReceiptBucket: string;
+    decision: string;
+    count: number;
+  }>();
+  for (const receipt of receipts) {
+    const row = {
+      taskKind: bucketOrUnknown(tasks.get(receipt.taskId)?.kind),
+      validationMode: bucketOrUnknown(receipt.validationMode),
+      transport: bucketOrUnknown(receipt.transport),
+      transfer: bucketOrUnknown(receipt.adapterInfo?.transfer),
+      dataChannelBucket: bucketOrUnknown(receipt.adapterInfo?.dataChannelBucket),
+      dataReceiptBucket: bucketOrUnknown(receipt.adapterInfo?.dataReceiptBucket),
+      decision: bucketOrUnknown(receipt.decision),
+      count: 0,
+    };
+    const key = [
+      row.taskKind,
+      row.validationMode,
+      row.transport,
+      row.transfer,
+      row.dataChannelBucket,
+      row.dataReceiptBucket,
+      row.decision,
+    ].join("\t");
+    const existing = rows.get(key) ?? row;
+    existing.count++;
+    rows.set(key, existing);
+  }
+  return Array.from(rows.values()).sort((a, b) =>
+    b.count - a.count ||
+    a.taskKind.localeCompare(b.taskKind) ||
+    a.transport.localeCompare(b.transport) ||
+    a.decision.localeCompare(b.decision)
+  );
 }
 
 function sanitizeBucketRecord(input: Record<string, unknown> | undefined): Record<string, unknown> | undefined {

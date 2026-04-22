@@ -2,8 +2,8 @@
 // Expand theming/visual-theme.v1.json into one prompt-per-asset,
 // ready to paste into an image generator (Gemini / GPT image / Midjourney).
 //
-// Playable batch (default): 61 prompts. Emits three-row character sprite
-// strips plus all current stage/objective/UI assets and all four character
+// Playable batch (default): 55 prompts. Emits packed character sprite
+// sheets plus all current stage/objective/UI assets and all four character
 // weapon lines.
 //
 // Usage:
@@ -27,7 +27,7 @@
 //   node tools/build-prompts.mjs --missing-only        # only assets missing from client/
 //   node tools/build-prompts.mjs --stdout              # print copy/paste formats instead
 //
-// Playable → 61 prompts.
+// Playable → 55 prompts.
 //
 // Each emitted record has:
 //   out          — asset path the renderer expects
@@ -116,7 +116,12 @@ function collectStages() {
 
 function collectCharacterSheets() {
   const shared = doc.prompts.characterSheets._sharedRules;
-  const rowsPerPrompt = shared.rowsPerPrompt ?? 3;
+  const promptCols = shared.promptCols ?? shared.cols;
+  const promptRows = shared.promptRows ?? 2;
+  const promptCellCount = promptCols * promptRows;
+  const promptPopulatedCells = shared.promptPopulatedCells ?? promptCellCount - 1;
+  const sourceFrames = flattenAnimationFrames(shared);
+  const promptCount = shared.promptCount ?? Math.ceil(sourceFrames.length / promptPopulatedCells);
   const scale = shared.genCellW / shared.cellW;
   const finalBodyW = SCALE_CONTRACT.fighterVisibleBodyW ?? Math.round(shared.cellW * 0.44);
   const finalBodyH = SCALE_CONTRACT.fighterVisibleBodyH ?? Math.round(shared.cellH * 0.81);
@@ -124,45 +129,51 @@ function collectCharacterSheets() {
   const rawCoreH = Math.round(finalBodyH * scale);
   const rawPaddingX = Math.round((shared.genCellW - rawCoreW) / 2);
   const rawPaddingY = Math.round((shared.genCellH - rawCoreH) / 2);
-  const stripGenW = shared.cols * shared.genCellW;
-  const stripGenH = rowsPerPrompt * shared.genCellH;
-  const stripOutW = shared.cols * shared.cellW;
-  const stripOutH = rowsPerPrompt * shared.cellH;
+  const packGenW = promptCols * shared.genCellW;
+  const packGenH = promptRows * shared.genCellH;
+  const packOutW = promptCols * shared.cellW;
+  const packOutH = promptRows * shared.cellH;
+  const rowFrameCounts = packedRowFrameCounts(promptCols, promptRows, promptPopulatedCells);
   const out = [];
   for (const [char, v] of Object.entries(doc.prompts.characterSheets)) {
     if (char.startsWith("_")) continue;
     const characterBase = stripFullSheetInstruction(v.base);
-    for (let start = 0; start < shared.animationRows.length; start += rowsPerPrompt) {
-      const rows = shared.animationRows.slice(start, start + rowsPerPrompt);
-      const rowStart = rows[0].row;
-      const rowEnd = rows[rows.length - 1].row;
-      const rowLines = rows.flatMap((row, i) => {
-        const used = row.frames;
-        const empty = shared.cols - used;
-        const emptyInstruction = empty > 0
-          ? `In grid row ${i + 1}, fill cells ${used + 1}-${shared.cols} with only pure magenta #FF00FF background.`
-          : `In grid row ${i + 1}, fill all six cells with animation frames.`;
-        const tauntHint = row.anim === "taunt" && shared.taunt[char]
-          ? [`Grid row ${i + 1} character-specific gesture: ${shared.taunt[char]}.`]
-          : [];
-        return [
-          `Grid row ${i + 1} is source animation row ${row.row}: ${row.anim}.`,
-          `Draw grid row ${i + 1}, frames 1-${used}: ${row.pose}.`,
-          emptyInstruction,
-          ...tauntHint,
-        ];
+    for (let packIndex = 0; packIndex < promptCount; packIndex += 1) {
+      const packCells = packedPromptCells({
+        frames: sourceFrames,
+        packIndex,
+        promptCols,
+        promptRows,
+        promptPopulatedCells,
       });
-      const stripName = `rows-${String(rowStart).padStart(2, "0")}-${String(rowEnd).padStart(2, "0")}.png`;
+      const packName = `pack-${String(packIndex).padStart(2, "0")}.png`;
+      const realCells = packCells.filter((cell) => cell.frame);
+      const fillerCells = packCells.filter((cell) => cell.filler);
+      const cellLines = packCells.map((cell) => {
+        if (cell.blank) {
+          return `Cell ${cell.cell} (bottom-right) must be only pure magenta #FF00FF.`;
+        }
+        if (cell.filler) {
+          return `Cell ${cell.cell}: extra populated overflow cell, draw a neutral in-character full-body hold pose. Local assembly ignores this cell, but it must still match the same character, outfit, scale, and containment rules.`;
+        }
+        const frame = cell.frame;
+        const tauntHint = frame.anim === "taunt" && shared.taunt[char]
+          ? ` Character-specific gesture: ${shared.taunt[char]}.`
+          : "";
+        return `Cell ${cell.cell}: runtime row ${frame.destRow}, ${frame.anim}, frame ${frame.frame + 1}/${frame.frames}; ${frame.pose}.${tauntHint}`;
+      });
       out.push(promptRecord({
-        out: v.out.replace(/\/sprite\.png$/, `/row-strips/${stripName}`),
+        out: v.out.replace(/\/sprite\.png$/, `/packed/${packName}`),
         finalOut: v.out,
-        outW: stripOutW, outH: stripOutH, genW: stripGenW, genH: stripGenH,
-        seed: v.seed + rowStart,
+        outW: packOutW, outH: packOutH, genW: packGenW, genH: packGenH,
+        seed: v.seed + packIndex,
         basePrompt: [
           characterBase,
-          `Animation strip only: source rows ${rowStart}-${rowEnd}.`,
-          `Exact canvas: ${stripGenW}x${stripGenH}. Exact grid: ${shared.cols} columns x ${rows.length} rows. Each cell is exactly ${shared.genCellW}x${shared.genCellH}.`,
-          ...rowLines,
+          `Packed character prompt sheet ${packIndex + 1}/${promptCount}.`,
+          `Exact canvas: ${packGenW}x${packGenH}. Exact grid: ${promptCols} columns x ${promptRows} rows. Each cell is exactly ${shared.genCellW}x${shared.genCellH}.`,
+          `Populate cells 1-${promptPopulatedCells} left-to-right, top-to-bottom. Cell ${promptCellCount} is the intentional bottom-right blank cell and must be pure #FF00FF only.`,
+          `${realCells.length} cells map to runtime animation frames in the final ${shared.cols}x${shared.rows} sheet.${fillerCells.length ? ` ${fillerCells.length} extra populated overflow cells are ignored by local assembly.` : ""}`,
+          ...cellLines,
           `Invisible cell boundaries are exact vertical cuts every ${shared.genCellW}px and exact horizontal cuts every ${shared.genCellH}px; no visible grid lines, no separators, no gutters, no margins, no contact sheet labels.`,
           `Hard containment rule: every populated pose must fit fully inside the central ${rawCoreW}x${rawCoreH} raw-pixel area of its own ${shared.genCellW}x${shared.genCellH} cell. Do not let hair, hands, feet, elbows, knees, clothing, or dive poses cross into neighboring cells.`,
           "Same character, same outfit, same scale, same camera-facing-right orientation in every populated cell.",
@@ -171,12 +182,24 @@ function collectCharacterSheets() {
           "Game objects are rendered separately by the engine; never include a Proof Core, Demand Node, weapon, folder, document, coin, orb, wall, or platform in the character strip.",
         ].filter(Boolean).join("\n"),
         grid: {
-          cols: shared.cols,
-          rows: rows.length,
-          sourceRows: rows.map((row) => row.row),
-          anims: rows.map((row) => row.anim),
-          frames: rows.map((row) => row.frames),
-          fps: rows.map((row) => row.fps),
+          packed: true,
+          cols: promptCols,
+          rows: promptRows,
+          promptPopulatedCells,
+          blankCell: shared.promptBlankCell ?? "bottom-right",
+          sourceFrameOffset: packIndex * promptPopulatedCells,
+          cells: packCells.map((cell) => cell.frame ? {
+            cell: cell.cell,
+            runtimeRow: cell.frame.destRow,
+            runtimeCol: cell.frame.destCol,
+            anim: cell.frame.anim,
+            frame: cell.frame.frame,
+          } : {
+            cell: cell.cell,
+            blank: Boolean(cell.blank),
+            filler: Boolean(cell.filler),
+          }),
+          frames: rowFrameCounts,
           cellW: shared.cellW,
           cellH: shared.cellH,
           genCellW: shared.genCellW,
@@ -185,15 +208,63 @@ function collectCharacterSheets() {
         },
         assembly: {
           finalOut: v.out,
-          rowStart,
-          rowEnd,
-          source: stripName,
+          packed: true,
+          packIndex,
+          source: packName,
+          promptPopulatedCells,
           finalSheetSize: { width: shared.outW, height: shared.outH },
         },
       }));
     }
   }
   return out;
+}
+
+function flattenAnimationFrames(shared) {
+  const frames = [];
+  for (const row of shared.animationRows) {
+    for (let frame = 0; frame < row.frames; frame += 1) {
+      frames.push({
+        destRow: row.row,
+        destCol: frame,
+        anim: row.anim,
+        frame,
+        frames: row.frames,
+        fps: row.fps,
+        pose: row.pose,
+      });
+    }
+  }
+  return frames;
+}
+
+function packedRowFrameCounts(cols, rows, populatedCells) {
+  return Array.from({ length: rows }, (_, row) => {
+    const remaining = populatedCells - row * cols;
+    return Math.max(0, Math.min(cols, remaining));
+  });
+}
+
+function packedPromptCells({ frames, packIndex, promptCols, promptRows, promptPopulatedCells }) {
+  const cells = [];
+  const promptCellCount = promptCols * promptRows;
+  const start = packIndex * promptPopulatedCells;
+  for (let cellIndex = 0; cellIndex < promptCellCount; cellIndex += 1) {
+    const cell = cellIndex + 1;
+    if (cellIndex >= promptPopulatedCells) {
+      cells.push({ cell, col: cellIndex % promptCols, row: Math.floor(cellIndex / promptCols), blank: true });
+      continue;
+    }
+    const frame = frames[start + cellIndex];
+    cells.push({
+      cell,
+      col: cellIndex % promptCols,
+      row: Math.floor(cellIndex / promptCols),
+      frame,
+      filler: !frame,
+    });
+  }
+  return cells;
 }
 
 function collectPortraits() {
@@ -348,7 +419,6 @@ function stageDepthContractFor(out) {
     out.endsWith("/textures/platform.png") ? "platform" :
     out.endsWith("/textures/platform_edge.png") ? "platformEdge" :
     out.endsWith("/textures/wall.png") ? "wall" :
-    out.endsWith("/textures/floor_detail.png") ? "floorDetail" :
     null;
   return key && depth[key] ? `LAYER DEPTH CONTRACT: ${depth[key]}` : "";
 }

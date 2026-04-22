@@ -12,11 +12,10 @@ Renderer usage:
 | Asset class | Runtime use |
 |---|---|
 | Stage `sky.png` | Drawn once at full arena size, `1280x720`. |
-| Stage `far_parallax.png`, `mid_parallax.png`, `near_parallax.png` | Horizontally tiled over the full arena, with integer-snapped scroll offsets. |
+| Stage `far_parallax.png`, `mid_parallax.png`, `near_parallax.png` | Horizontally tiled over the full arena as atmospheric drift layers; built-in transparent pixels define the reveal. |
 | Stage `platform.png` | Tiled onto every platform. Solid floor uses the top `min(36px, platform height)`; one-way platforms use their full `14-16px` height. |
 | Stage `platform_edge.png` | Tiled over platform tops, up to `16px` high. |
-| Stage `wall.png` | Tiled only inside solid floor bodies below the top edge. |
-| Stage `floor_detail.png` | Drawn once, centered on wide solid floors only. |
+| Stage `wall.png` | Tiled inside solid floor bodies below the top edge and into the left/right arena boundary gutters. |
 | Character `sprite.png` | `64x64` cells rendered unscaled. Sim hitbox is `28x56`; visible body target is roughly `28x56` inside the cell. |
 | Weapon `launch.png` | `48x48` cells rendered at about `0.96x` idle and `1.12x` active. |
 | Objective payload | Source `48x48`, rendered `34x34` in-world. |
@@ -59,8 +58,7 @@ Each stage asset also receives a depth contract:
 | `mid_parallax.png` | Background props behind platforms and fighters. |
 | `near_parallax.png` | Nearest backdrop dressing, still behind the combat plane. |
 | `platform.png` / `platform_edge.png` | Actual walkable gameplay surface at fighter scale. |
-| `wall.png` | Solid floor/body fill, close to gameplay but not a prop layer. |
-| `floor_detail.png` | Small close-plane decals that must not read as obstacles. |
+| `wall.png` | Solid floor/body fill and side-boundary gutter texture, close to gameplay but not a prop layer. |
 
 ## Weapon Placement Audit
 
@@ -91,7 +89,7 @@ Current rule of thumb:
 |---|---:|
 | Full stage skies and parallax strips | `1x` |
 | Stage preview thumbs | `2x` |
-| Character row strips | `3x` |
+| Packed character sheets | `3x` |
 | Portrait sheets and large portraits | `3x` |
 | Stage tiles, objective sprites, weapon sheets, locked-slot UI | `3x` |
 
@@ -109,7 +107,6 @@ Source folder: `~/Downloads/demoday`
 | 023 | `assets/stages/demoday/demo_day_afterparty/textures/platform.png` | `new_23.png` | watch | Better than `23_old.png`; use in-game, regenerate only if it reads too wall-like. |
 | 024 | `assets/stages/demoday/demo_day_afterparty/textures/platform_edge.png` | `24.png` | watch | Source aspect was not 16:1, but center-cropped into a usable thin edge strip. |
 | 025 | `assets/stages/demoday/demo_day_afterparty/textures/wall.png` | `25.png` | good | Wall tile. |
-| 026 | `assets/stages/demoday/demo_day_afterparty/textures/floor_detail.png` | `26.png` | good | Floor debris/decal strip. |
 
 ## Boardroom Fiduciary Basement
 
@@ -123,7 +120,6 @@ Source folder: `~/Downloads/demoday`
 | 014 | `assets/stages/boardroom/fiduciary_basement/textures/platform.png` | watch | Usable, but re-check after 012/013 are replaced. |
 | 015 | `assets/stages/boardroom/fiduciary_basement/textures/platform_edge.png` | watch | Usable, but re-check after 012/013 are replaced. |
 | 016 | `assets/stages/boardroom/fiduciary_basement/textures/wall.png` | good | Existing import is usable. |
-| 017 | `assets/stages/boardroom/fiduciary_basement/textures/floor_detail.png` | good | Existing import is usable. |
 
 ## Character Watchlist
 
@@ -131,6 +127,6 @@ Source folder: `~/Downloads/demoday`
 |---|---|---|
 | `assets/chars/sama/monastic_infra/sprite.png` | audit scale | Check against all three rendered stage packs; may need higher-detail late-16-bit/arcade regen or a runtime scale adjustment. |
 | `assets/chars/darrius/legal_department_midnight/sprite.png` | audit scale | Check against all three rendered stage packs; hair/glasses should remain readable after any scale/style pass. |
-| `assets/chars/demis/chalk_and_static/sprite.png` | regenerate | Promoted into the full playable prompt batch; generate row strips before enabling the body in roster selection. |
-| `assets/chars/mark/wellness_berserker/sprite.png` | regenerate | Promoted into the full playable prompt batch; generate row strips before enabling the body in roster selection. |
-| `assets/chars/darrius/legal_department_midnight/row-strips/rows-03-05.png` | regenerate later | Current strip can ship, but the latest prompt copy should produce cleaner fall/wall/dive containment. |
+| `assets/chars/demis/chalk_and_static/sprite.png` | regenerate | Promoted into the full playable prompt batch; generate packed sheets before enabling the body in roster selection. |
+| `assets/chars/mark/wellness_berserker/sprite.png` | regenerate | Promoted into the full playable prompt batch; generate packed sheets before enabling the body in roster selection. |
+| `assets/chars/darrius/legal_department_midnight/packed/pack-01.png` | regenerate later | Current body can ship, but the latest prompt copy should produce cleaner wall/dive/swing containment. |

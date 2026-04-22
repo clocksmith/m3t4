@@ -21,7 +21,9 @@ import {
 // before they read as the same collision loop.
 // v19: fighter body hitbox grows modestly to 28x56 so gameplay scale and
 // unscaled 64x64 character sheets align without a hidden render multiplier.
-export const BEHAVIOR_VERSION = 19;
+// v20: platform routing weighs bounded tactical intent, so equally
+// reachable steps prefer goal progress without ignoring landing danger.
+export const BEHAVIOR_VERSION = 20;
 
 // ---------- Opp-model buffer sizing ----------
 //
@@ -327,6 +329,14 @@ function pointRangeGap(x: number, s: NavSurface): number {
   return 0;
 }
 
+function surfaceCenterX(s: NavSurface): number {
+  return (s.x1 + s.x2) * 0.5;
+}
+
+function surfaceTargetDistance(s: NavSurface, tx: number, ty: number): number {
+  return Math.hypot(pointRangeGap(tx, s), (s.y - ty) * 0.9);
+}
+
 function buildNavSurfaces(obs: Observation): NavSurface[] {
   const surfaces: NavSurface[] = [];
   let floorAdded = false;
@@ -406,7 +416,40 @@ function surfaceContestedCost(obs: Observation, s: NavSurface, params: Params): 
   return Math.max(0.15, 0.55 + discipline * 0.65 - greed * 0.35);
 }
 
-function navEdge(obs: Observation, params: Params, from: NavSurface, to: NavSurface): NavEdge | null {
+function surfaceIntentCost(
+  obs: Observation, params: Params, from: NavSurface, to: NavSurface,
+  tx: number, ty: number,
+): number {
+  const fromDist = surfaceTargetDistance(from, tx, ty);
+  const toDist = surfaceTargetDistance(to, tx, ty);
+  const progress = clamp((fromDist - toDist) / 260, -1, 1);
+  const shipRate = unit(params.shipRate, 0.5);
+  const discipline = unit(params.discipline);
+  const leverage = clamp(params.leverage ?? 0, -1, 1);
+  const goalUrgency = obs.goal.exists ? clamp((6 - obs.goal.timer) / 6, 0, 1) : 0;
+  const deliveryRoute = obs.self.hasToken && obs.goal.exists;
+
+  let cost = surfaceContestedCost(obs, to, params);
+  if (!deliveryRoute) return cost;
+
+  if (progress > 0 && cost <= 0.05) {
+    cost -= progress * (0.18 + shipRate * 0.12 + discipline * 0.08 + goalUrgency * 0.1);
+  } else {
+    cost += (-progress) * (0.08 + shipRate * 0.12 + discipline * 0.12);
+  }
+
+  const climb = from.y - to.y;
+  if (cost <= 0.05 && climb > 30 && leverage > 0) cost -= leverage * 0.1;
+  else if (cost <= 0.05 && climb < -30 && leverage < 0) cost -= (-leverage) * 0.08;
+  else if (Math.abs(climb) > 30) cost += Math.abs(leverage) * 0.05;
+
+  return clamp(cost, -0.35, 0.9);
+}
+
+function navEdge(
+  obs: Observation, params: Params, from: NavSurface, to: NavSurface,
+  targetX: number, targetY: number,
+): NavEdge | null {
   if (from.id === to.id) return null;
 
   const gap = rangeGap(from.x1, from.x2, to.x1, to.x2);
@@ -414,12 +457,12 @@ function navEdge(obs: Observation, params: Params, from: NavSurface, to: NavSurf
   const absRise = Math.abs(rise);
   const lift = unit(params.lift);
   const networking = unit(params.networking);
-  const contested = surfaceContestedCost(obs, to, params);
+  const intent = surfaceIntentCost(obs, params, from, to, targetX, targetY);
 
   if (absRise <= 34) {
     if (gap > 120 + networking * 80) return null;
     const move: NavMove = gap <= 24 ? "walk" : "jump";
-    const cost = 1 + gap / 120 + (move === "jump" ? 0.8 - lift * 0.25 : 0) + contested;
+    const cost = 1 + gap / 120 + (move === "jump" ? 0.8 - lift * 0.25 : 0) + intent;
     return { to: to.id, move, cost };
   }
 
@@ -427,7 +470,7 @@ function navEdge(obs: Observation, params: Params, from: NavSurface, to: NavSurf
     const maxRise = 220 + lift * 45;
     const maxGap = 145 + networking * 90 + lift * 80;
     if (rise > maxRise || gap > maxGap) return null;
-    const cost = 1.25 + rise / 130 + gap / 110 + (1 - lift) * 0.45 + contested;
+    const cost = 1.25 + rise / 130 + gap / 110 + (1 - lift) * 0.45 + intent;
     return { to: to.id, move: "jump", cost };
   }
 
@@ -435,13 +478,13 @@ function navEdge(obs: Observation, params: Params, from: NavSurface, to: NavSurf
   const maxDrift = 135 + networking * 90;
   if (gap > maxDrift) return null;
   const cunning = unit(params.cunning, 0.5);
-  const cost = 0.8 + drop / 240 + gap / 140 + (1 - cunning) * 0.15 + contested;
+  const cost = 0.8 + drop / 240 + gap / 140 + (1 - cunning) * 0.15 + intent;
   return { to: to.id, move: "drop", cost };
 }
 
 function nextSurfaceOnRoute(
   obs: Observation, params: Params, surfaces: NavSurface[],
-  start: NavSurface, target: NavSurface,
+  start: NavSurface, target: NavSurface, targetX: number, targetY: number,
 ): NavRouteStep | null {
   const dist = surfaces.map(() => Infinity);
   const prev = surfaces.map(() => -1);
@@ -463,7 +506,7 @@ function nextSurfaceOnRoute(
 
     const from = surfaces[at];
     for (const to of surfaces) {
-      const edge = navEdge(obs, params, from, to);
+      const edge = navEdge(obs, params, from, to, targetX, targetY);
       if (!edge) continue;
       const next = dist[at] + edge.cost;
       if (next < dist[edge.to]) {
@@ -495,7 +538,7 @@ function platformRouteStep(
   if (!start) return null;
   const target = targetSurface(tx, ty, surfaces);
   if (!target || target.id === start.id) return null;
-  return nextSurfaceOnRoute(obs, params, surfaces, start, target);
+  return nextSurfaceOnRoute(obs, params, surfaces, start, target, tx, ty);
 }
 
 function driveTowardRouteStep(obs: Observation, tx: number, step: NavRouteStep): Action {

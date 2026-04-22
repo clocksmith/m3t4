@@ -58,20 +58,20 @@ The current playable art prompt set ships all four character bodies:
 **Character A (Sama)**, **Character B (Darrius)**, **Character C
 (Demis)**, and **Character D (Mark)**, plus **all three stages**:
 Datacenter, Boardroom, and Demo Day. The default prompt batch includes
-all character row strips, portrait sheets, large portraits, launch
+all packed character sheets, portrait sheets, large portraits, launch
 weapon sheets, and epic/legendary weapon sheets.
 
 ### Batches
 
 | batch | command | count |
 |---|---|---:|
-| Playable, copy/paste (Chars A-D, all 3 stages) | `node tools/build-prompts.mjs` | **61 files** |
-| Characters A-D, 4-row strip copy/paste | `node tools/build-prompts.mjs --only characters` | 16 files |
-| Playable, GPT-sized copy/paste | `node tools/build-prompts.mjs --format gpt` | **61 files** |
-| Playable, Midjourney copy/paste | `node tools/build-prompts.mjs --format mj` | **61 files** |
+| Playable, copy/paste (Chars A-D, all 3 stages) | `node tools/build-prompts.mjs` | **55 files** |
+| Characters A-D, packed 8x2 copy/paste | `node tools/build-prompts.mjs --only characters` | 12 files |
+| Playable, GPT-sized copy/paste | `node tools/build-prompts.mjs --format gpt` | **55 files** |
+| Playable, Midjourney copy/paste | `node tools/build-prompts.mjs --format mj` | **55 files** |
 | Missing assets, one paste-ready `.txt` per asset | `node tools/build-prompts.mjs --missing-only` | varies |
-| Playable, Gemini JSONL | `node tools/build-prompts.mjs --format gemini-jsonl` | **61** |
-| Playable, GPT image JSONL | `node tools/build-prompts.mjs --format gpt-jsonl` | **61** |
+| Playable, Gemini JSONL | `node tools/build-prompts.mjs --format gemini-jsonl` | **55** |
+| Playable, GPT image JSONL | `node tools/build-prompts.mjs --format gpt-jsonl` | **55** |
 
 ### Common commands
 
@@ -91,9 +91,9 @@ node tools/build-prompts.mjs --only characters --format chat
 # INDEX.md in the generated directory maps filenames back to asset paths.
 node tools/build-prompts.mjs --missing-only
 
-# Character sheets are generated as 4 strips per character:
-# generate 1152x576 raw strips, then post-process 3x down to 384x192
-# final strips, then compose 4 strips into 384x768.
+# Character sheets are generated as 3 packed sheets per character:
+# generate 1536x384 raw packs, then post-process 3x down to 512x128
+# packed sheets, then compose 3 packs into the 384x768 runtime sheet.
 # Paste the whole .txt file into the image tool.
 
 # Midjourney /imagine lines; also writes a timestamped .txt by default.
@@ -128,7 +128,7 @@ Use `tools/postprocess-generation.mjs` after saving the raw PNG under
 visual theme when possible.
 
 ```bash
-node tools/postprocess-generation.mjs generations/raw/assets/chars/sama/monastic_infra/row-strips/rows-00-02.png
+node tools/postprocess-generation.mjs generations/raw/assets/chars/sama/monastic_infra/packed/pack-00.png
 ```
 
 The post-processor:
@@ -137,11 +137,19 @@ The post-processor:
 2. Center-crops only enough to match the target aspect ratio.
 3. Nearest-neighbor downsizes to the theme target size.
 4. Keys the near-`#FF00FF` background to alpha with RGB-distance tolerance 24.
-5. Clears cells beyond each animation row's declared frame count.
+5. Clears unused packed-sheet cells such as the intentional bottom-right blank.
 6. Clears inferred sprite-grid separator lines unless `--keep-grid-lines` is passed.
 7. Writes the promoted asset under `client/<asset-path>`.
 
-After four character strips are promoted, assemble the final runtime
+Character prompts now use three packed 8x2 sheets per character:
+
+- Raw generation size: `1536x384`.
+- Promoted packed-sheet size: `512x128`.
+- Cells 1-15 are populated left-to-right, top-to-bottom.
+- Cell 16, the bottom-right cell, is intentionally blank pure `#FF00FF`.
+- The final pack includes four populated overflow cells so each prompt stays visually full; local assembly ignores those cells.
+
+After the three packed character sheets are promoted, assemble the final runtime
 sprite sheet:
 
 ```bash

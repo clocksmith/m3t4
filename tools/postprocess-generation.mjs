@@ -78,11 +78,11 @@ if (normalizedTransparentPixels) process.stdout.write(`normalized transparent ma
 
 function printUsage() {
   process.stdout.write(`Usage:
-  node tools/postprocess-generation.mjs <raw-png> [--target 384x192] [--out path] [--key #FF00FF] [--tolerance 24] [--edge-connected-key] [--despill-key] [--despill-passes 2] [--scrub-key] [--keep-grid-lines] [--grid-line-radius 1]
+  node tools/postprocess-generation.mjs <raw-png> [--target 512x128] [--out path] [--key #FF00FF] [--tolerance 24] [--edge-connected-key] [--despill-key] [--despill-passes 2] [--scrub-key] [--keep-grid-lines] [--grid-line-radius 1]
 
 Examples:
-  node tools/postprocess-generation.mjs generations/raw/assets/chars/sama/monastic_infra/row-strips/rows-00-02.png
-  node tools/postprocess-generation.mjs generations/raw/assets/chars/sama/monastic_infra/row-strips/rows-00-02.png --target 384x192
+  node tools/postprocess-generation.mjs generations/raw/assets/chars/sama/monastic_infra/packed/pack-00.png
+  node tools/postprocess-generation.mjs generations/raw/assets/chars/sama/monastic_infra/packed/pack-00.png --target 512x128
 `);
 }
 
@@ -106,7 +106,7 @@ function parseInteger(value, label) {
 function parseTarget(value) {
   if (!value) return null;
   const match = /^(\d+)x(\d+)$/i.exec(value.trim());
-  if (!match) fail("--target must be WIDTHxHEIGHT, e.g. 384x192");
+  if (!match) fail("--target must be WIDTHxHEIGHT, e.g. 512x128");
   return { width: Number(match[1]), height: Number(match[2]) };
 }
 
@@ -123,6 +123,17 @@ function parseHexColor(value) {
 
 function inferTarget(inputPathAbs) {
   const assetPath = assetPathFromInput(inputPathAbs);
+  const packedSheet = /\/packed\/pack-(\d+)\.png$/u.exec(assetPath);
+  if (packedSheet) {
+    const doc = readTheme();
+    const shared = doc.prompts?.characterSheets?._sharedRules;
+    if (!shared) fail("missing prompts.characterSheets._sharedRules in visual theme");
+    return {
+      width: (shared.promptCols ?? shared.cols) * shared.cellW,
+      height: (shared.promptRows ?? 2) * shared.cellH,
+    };
+  }
+
   const rowStrip = /\/row-strips\/rows-(\d+)-(\d+)\.png$/u.exec(assetPath);
   if (rowStrip) {
     const doc = readTheme();
@@ -143,6 +154,26 @@ function inferTarget(inputPathAbs) {
 
 function inferGrid(inputPathAbs) {
   const assetPath = assetPathFromInput(inputPathAbs);
+  const packedSheet = /\/packed\/pack-(\d+)\.png$/u.exec(assetPath);
+  if (packedSheet) {
+    const doc = readTheme();
+    const shared = doc.prompts?.characterSheets?._sharedRules;
+    if (!shared) return null;
+    const cols = shared.promptCols ?? shared.cols;
+    const rows = shared.promptRows ?? 2;
+    const populated = shared.promptPopulatedCells ?? cols * rows - 1;
+    return {
+      cols,
+      rows,
+      cellW: shared.cellW,
+      cellH: shared.cellH,
+      frames: Array.from({ length: rows }, (_, row) => {
+        const remaining = populated - row * cols;
+        return Math.max(0, Math.min(cols, remaining));
+      }),
+    };
+  }
+
   const rowStrip = /\/row-strips\/rows-(\d+)-(\d+)\.png$/u.exec(assetPath);
   if (!rowStrip) return null;
   const doc = readTheme();

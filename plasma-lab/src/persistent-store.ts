@@ -43,6 +43,10 @@ export class PersistentComputeLabStore extends ComputeLabStore {
   async refresh(): Promise<void> {
     await this.flush();
     this.loadSnapshot(await this.persistence.load());
+    const validations = this.reconcilePendingValidations();
+    if (validations.length) {
+      await this.persistReconciledValidations(validations);
+    }
   }
 
   setAcceptAssignments(value: boolean, durationMs?: number): void {
@@ -337,5 +341,29 @@ export class PersistentComputeLabStore extends ComputeLabStore {
       .catch((e) => {
         console.error("[plasma-lab] persistence save failed:", e instanceof Error ? e.message : String(e));
       });
+  }
+
+  private async persistReconciledValidations(validations: ValidationRecord[]): Promise<void> {
+    const snapshot = this.exportSnapshot();
+    const taskIds = new Set(validations.map((validation) => validation.taskId));
+    const receiptIds = new Set(validations.flatMap((validation) => validation.comparedReceiptIds));
+    const workerIds = new Set(snapshot.receipts
+      .filter((receipt) => receiptIds.has(receipt.receiptId))
+      .map((receipt) => receipt.workerId));
+    const patch: Partial<ComputeLabSnapshot> = {
+      tasks: snapshot.tasks.filter((task) => taskIds.has(task.taskId)),
+      receipts: snapshot.receipts.filter((receipt) => receiptIds.has(receipt.receiptId)),
+      validations,
+      reputation: snapshot.reputation.filter((rep) => workerIds.has(rep.workerId)),
+    };
+    this.saveChain = this.saveChain
+      .catch(() => undefined)
+      .then(() => this.persistence.savePatch
+        ? this.persistence.savePatch(patch, snapshot)
+        : this.persistence.save(snapshot))
+      .catch((e) => {
+        console.error("[plasma-lab] persistence save failed:", e instanceof Error ? e.message : String(e));
+      });
+    await this.flush();
   }
 }

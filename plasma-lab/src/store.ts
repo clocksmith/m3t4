@@ -1443,6 +1443,21 @@ export class ComputeLabStore {
     return this.shouldQuarantineWorker(workerId);
   }
 
+  reconcilePendingValidations(): ValidationRecord[] {
+    const out: ValidationRecord[] = [];
+    for (const task of this.tasks.values()) {
+      if (task.status !== "running") continue;
+      for (const chunk of task.chunks) {
+        if (chunk.status !== "pending") continue;
+        const validation = task.validationPolicy.validationMode === "measurement"
+          ? this.evaluateMeasurementChunk(task, chunk)
+          : this.evaluateChunk(task, chunk);
+        if (validation) out.push(validation);
+      }
+    }
+    return out;
+  }
+
   deviceClassProfiles(): ClassProfile[] {
     return classProfiles(this.workerProfiles(), this.now(), (profile) => profile.deviceClass || "unknown");
   }

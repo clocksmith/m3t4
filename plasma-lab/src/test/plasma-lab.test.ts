@@ -773,7 +773,9 @@ test("persistent refresh reconciles quorum after concurrent receipt writes", asy
   const task = observer.getTask(a1.task.taskId)!;
   assert.equal(task.chunks[0].status, "accepted");
   const dashboard = observer.dashboard() as any;
-  const validation = dashboard.validationList.find((entry: any) => entry.taskId === task.taskId);
+  const validations = dashboard.validationList.filter((entry: any) => entry.taskId === task.taskId);
+  assert.equal(validations.length, 1);
+  const validation = validations[0];
   assert.equal(validation.status, "accepted");
   assert.equal(observer.getReceipt(r1.receipt.receiptId)?.decision, "accepted");
   assert.equal(observer.getReceipt(r2.receipt.receiptId)?.decision, "accepted");

@@ -628,6 +628,34 @@ POST /compute/admin/tasks/device-witness-derived-buffer
 POST /compute/admin/tasks/device-witness-webrtc
 ```
 
+Controlled production smoke, 2026-04-22:
+
+```text
+origin: https://plasma-lab-789525635095.us-central1.run.app
+mode: assignments opened only during each controlled run, then disabled
+
+N=1 derived-buffer smoke:
+  task: task-9d8d5ba7f3a33414
+  receipt: rcpt-c11a95d05f8d0509
+  validation: val-095c5877ee462d85
+  result: accepted
+
+N=2 derived-buffer smoke:
+  task: task-f570268bdcffb781
+  receipts: rcpt-f8f30bb6a3fabbe0, rcpt-0d11561a858afc58
+  validation: val-0e5d46229ed820e9
+  result: both receipts accepted, chunk accepted, task complete
+```
+
+Observation: every derived evidence field was present in the accepted
+production receipts. `sourceFrameHash`, `bufferRegionHash`,
+`producerKernelHash`, `outputHash`, and `derivedOutputHash` all matched the
+issued assignment and computed output. The Lean-stated invariant
+`outputHash = derivedOutputHash` held byte-for-byte in the real receipts, and
+Cloud Run emitted the structured `plasma-lab.derived-receipt` bitmask with all
+derived fields marked `matches`. `COMPUTE_ACCEPT_ASSIGNMENTS` was false after
+each smoke.
+
 `prime-search.v0` is plumbing only. Timebox it. It proves:
 
 ```text

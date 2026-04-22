@@ -55,8 +55,8 @@ function defaultParams(overrides: Partial<Params> = {}): Params {
 
 // --- Tests ---
 
-test("BEHAVIOR_VERSION is 19", () => {
-  assert.equal(BEHAVIOR_VERSION, 19);
+test("BEHAVIOR_VERSION is 20", () => {
+  assert.equal(BEHAVIOR_VERSION, 20);
 });
 
 test("createBrainState initializes neutral with empty buffers", () => {
@@ -319,6 +319,37 @@ test("objective navigation routes through reachable platform steps", () => {
   const action = runParamBrain(obs, defaultParams({ lift: 0, networking: 0 }), state);
   assert.equal(action.up, true, "carrier starts with the reachable lower platform, not an impossible top route");
   assert.equal(action.right, true, "carrier drives toward the first route step");
+});
+
+test("platform intent prefers an equally reachable step that progresses toward the goal", () => {
+  const obs = baseObs({
+    tick: 200,
+    self: { ...baseObs().self, hasToken: true, x: 500, y: 614, onGround: true },
+    opp: { ...baseObs().opp, x: 1040, y: 614 },
+    token: { exists: true, x: 500, y: 562, carrier: 0, dwellT: 0 },
+    goal: { exists: true, x: 900, y: 360, label: "COMPUTE", timer: 8 },
+    platforms: [
+      { x: 56, y: 640, w: 1168, h: 80, solid: true },
+      { x: 320, y: 524, w: 200, h: 14, solid: false },
+      { x: 620, y: 524, w: 200, h: 14, solid: false },
+      { x: 760, y: 414, w: 220, h: 14, solid: false },
+    ],
+    dx: 540, absDx: 540, dy: 0,
+  });
+  const state = createBrainState(0);
+  state.mode = "objective";
+  state.substate = "deliver";
+  state.modeEnterTick = 190;
+  state.deliveryPlan = {
+    tactic: "kill-first",
+    startedAt: 190,
+    expiresAt: 230,
+    score: 1,
+  };
+
+  const action = runParamBrain(obs, defaultParams({ lift: 0, shipRate: 1, discipline: 1 }), state);
+  assert.equal(action.right, true, "carrier should pick the forward platform, not the first equal-cost platform");
+  assert.notEqual(action.left, true, "carrier should not drift back toward the lower-progress platform");
 });
 
 test("parry is silent at zero and counter-swings only in foil windows", () => {

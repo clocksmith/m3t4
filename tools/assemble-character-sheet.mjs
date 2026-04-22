@@ -1,32 +1,36 @@
 #!/usr/bin/env node
-// Assemble four promoted character row strips into the final 384x768
+// Assemble three promoted packed character sheets into the final 384x768
 // sprite sheet expected by the visual manifest.
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
 
 const args = process.argv.slice(2);
 let crcTable = null;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const themePath = path.resolve(__dirname, "../theming/visual-theme.v1.json");
 if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
   printUsage();
   process.exit(args.length === 0 ? 1 : 0);
 }
 
-const stripNames = [
-  "rows-00-02.png",
-  "rows-03-05.png",
-  "rows-06-08.png",
-  "rows-09-11.png",
-];
+const shared = readSharedRules();
+const promptCols = shared.promptCols ?? shared.cols;
+const promptRows = shared.promptRows ?? 2;
+const promptPopulatedCells = shared.promptPopulatedCells ?? promptCols * promptRows - 1;
+const runtimeFrames = flattenAnimationFrames(shared);
+const promptCount = shared.promptCount ?? Math.ceil(runtimeFrames.length / promptPopulatedCells);
+const packNames = Array.from({ length: promptCount }, (_, i) => `pack-${String(i).padStart(2, "0")}.png`);
 
 for (const input of args) {
   const dir = path.resolve(input);
-  const stripDir = path.basename(dir) === "row-strips" ? dir : path.join(dir, "row-strips");
-  const outPath = path.basename(dir) === "row-strips"
+  const packDir = path.basename(dir) === "packed" ? dir : path.join(dir, "packed");
+  const outPath = path.basename(dir) === "packed"
     ? path.join(path.dirname(dir), "sprite.png")
     : path.join(dir, "sprite.png");
-  assemble(stripDir, outPath);
+  assemble(packDir, outPath);
 }
 
 function printUsage() {
@@ -34,38 +38,76 @@ function printUsage() {
   node tools/assemble-character-sheet.mjs <promoted-character-dir> [...]
 
 Examples:
-  node tools/assemble-character-sheet.mjs client/assets/assets/chars/sama/monastic_infra
-  node tools/assemble-character-sheet.mjs client/assets/assets/chars/sama/monastic_infra client/assets/assets/chars/darrius/legal_department_midnight
+  node tools/assemble-character-sheet.mjs client/assets/chars/sama/monastic_infra
+  node tools/assemble-character-sheet.mjs client/assets/chars/sama/monastic_infra client/assets/chars/darrius/legal_department_midnight
 `);
 }
 
-function assemble(stripDir, outPath) {
-  const strips = stripNames.map((name) => {
-    const file = path.join(stripDir, name);
-    if (!fs.existsSync(file)) fail(`missing strip ${file}`);
+function assemble(packDir, outPath) {
+  const packs = packNames.map((name) => {
+    const file = path.join(packDir, name);
+    if (!fs.existsSync(file)) fail(`missing packed sheet ${file}`);
     return { file, image: decodePng(fs.readFileSync(file)) };
   });
 
-  const width = strips[0].image.width;
-  const stripHeight = strips[0].image.height;
-  for (const { file, image } of strips) {
-    if (image.width !== width || image.height !== stripHeight) {
-      fail(`strip size mismatch in ${file}; expected ${width}x${stripHeight}, got ${image.width}x${image.height}`);
+  const expectedPackW = promptCols * shared.cellW;
+  const expectedPackH = promptRows * shared.cellH;
+  for (const { file, image } of packs) {
+    if (image.width !== expectedPackW || image.height !== expectedPackH) {
+      fail(`packed sheet size mismatch in ${file}; expected ${expectedPackW}x${expectedPackH}, got ${image.width}x${image.height}`);
     }
   }
 
-  const height = stripHeight * strips.length;
+  const width = shared.outW;
+  const height = shared.outH;
   const data = new Uint8Array(width * height * 4);
-  for (let i = 0; i < strips.length; i += 1) {
-    const src = strips[i].image.data;
-    const dstOffset = width * stripHeight * 4 * i;
-    data.set(src, dstOffset);
+  for (let i = 0; i < runtimeFrames.length; i += 1) {
+    const frame = runtimeFrames[i];
+    const packIndex = Math.floor(i / promptPopulatedCells);
+    const cellIndex = i % promptPopulatedCells;
+    const pack = packs[packIndex]?.image;
+    if (!pack) fail(`missing packed sheet for runtime frame ${i}`);
+    copyCell({
+      src: pack,
+      dst: { width, height, data },
+      srcX: (cellIndex % promptCols) * shared.cellW,
+      srcY: Math.floor(cellIndex / promptCols) * shared.cellH,
+      dstX: frame.destCol * shared.cellW,
+      dstY: frame.destRow * shared.cellH,
+      cellW: shared.cellW,
+      cellH: shared.cellH,
+    });
   }
   normalizeTransparentMatte(data);
 
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, encodePng(width, height, data));
   process.stdout.write(`assembled ${path.relative(process.cwd(), outPath)} (${width}x${height})\n`);
+}
+
+function readSharedRules() {
+  const doc = JSON.parse(fs.readFileSync(themePath, "utf8"));
+  const rules = doc.prompts?.characterSheets?._sharedRules;
+  if (!rules) fail("missing prompts.characterSheets._sharedRules in visual theme");
+  return rules;
+}
+
+function flattenAnimationFrames(rules) {
+  const frames = [];
+  for (const row of rules.animationRows) {
+    for (let frame = 0; frame < row.frames; frame += 1) {
+      frames.push({ destRow: row.row, destCol: frame });
+    }
+  }
+  return frames;
+}
+
+function copyCell({ src, dst, srcX, srcY, dstX, dstY, cellW, cellH }) {
+  for (let y = 0; y < cellH; y += 1) {
+    const srcOffset = ((srcY + y) * src.width + srcX) * 4;
+    const dstOffset = ((dstY + y) * dst.width + dstX) * 4;
+    dst.data.set(src.data.subarray(srcOffset, srcOffset + cellW * 4), dstOffset);
+  }
 }
 
 function fail(message) {

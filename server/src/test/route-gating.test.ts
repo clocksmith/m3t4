@@ -119,6 +119,12 @@ function registerCore(routes: RouteList, store: MemoryStableStore): void {
       communityVerify: false,
       proofLab: false,
       zk: false,
+      distributedCompute: false,
+      computeSlackWorker: false,
+      computeWebRtcArtifacts: false,
+      computeTaskAdmin: false,
+      computeReceiptDashboard: false,
+      computeLiveBadges: false,
     },
     config: {
       activePoolMs: 1,
@@ -167,6 +173,8 @@ test("centralized route graph hides P2P routes by default", async (t) => {
   const status = await req(srv.port, "GET", "/api/status");
   assert.equal(status.status, 200);
   assert.equal(status.body.features.p2pDuel, false);
+  assert.equal(status.body.features.computeSlackWorker, false);
+  assert.equal(status.body.features.computeWebRtcArtifacts, false);
   assert.equal(status.body.matchmaker.rankedMode, "normal");
   assert.equal(status.body.matchmaker.activeStableCount, 0);
   assert.equal(status.body.matchmaker.effectiveCycleMs, 1500);

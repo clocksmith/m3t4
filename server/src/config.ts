@@ -85,6 +85,7 @@ export const CONFIG = {
     // pipeline exists whether or not any task is defined.
     distributedCompute: envFlag("FEATURE_DISTRIBUTED_COMPUTE", false),
     computeSlackWorker: envFlag("FEATURE_COMPUTE_SLACK_WORKER", false),
+    computeWebRtcArtifacts: envFlag("FEATURE_COMPUTE_WEBRTC_ARTIFACTS", false),
     computeTaskAdmin: envFlag("FEATURE_COMPUTE_TASK_ADMIN", false),
     computeReceiptDashboard: envFlag("FEATURE_COMPUTE_RECEIPT_DASHBOARD", false),
     computeLiveBadges: envFlag("FEATURE_COMPUTE_LIVE_BADGES", false),

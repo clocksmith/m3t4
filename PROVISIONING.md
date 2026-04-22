@@ -256,6 +256,13 @@ connectivity observations. When `FEATURE_COMPUTE_WEBRTC_DATA=true`, paired
 staff browsers also open `plasma-control`, `plasma-data`, and
 `plasma-receipts`, send a tiny deterministic `prime-search.v0` witness chunk
 over the data channel, and store only bucketed data-channel outcome fields.
+The deployed game client does not route useful public-artifact assignments over
+WebRTC unless arena-server also exposes
+`FEATURE_COMPUTE_WEBRTC_ARTIFACTS=true` in `/api/status` or staff sets
+`window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS__=true` in devtools for a controlled
+window. That flag is client-side only: plasma-lab still controls signaling/data
+with `FEATURE_COMPUTE_WEBRTC_SIGNALING` and `FEATURE_COMPUTE_WEBRTC_DATA`, and
+`COMPUTE_ACCEPT_ASSIGNMENTS=false` still stops new assignments.
 This does not enable ranked authority, private config access, or public
 assignment intake. TURN remains off unless
 `FEATURE_COMPUTE_WEBRTC_TURN=true` plus `COMPUTE_TURN_URLS`,
@@ -298,7 +305,7 @@ The deployed game should only point at the lab after that sidecar is healthy:
 gcloud run services update arena-server \
   --project "$PROJECT_ID" \
   --region us-central1 \
-  --update-env-vars "COMPUTE_LAB_ORIGIN=https://<plasma-lab-cloud-run-url>,FEATURE_COMPUTE_SLACK_WORKER=false,FEATURE_COMPUTE_LIVE_BADGES=false,COMPUTE_STUN_URLS=stun:stun.l.google.com:19302"
+  --update-env-vars "COMPUTE_LAB_ORIGIN=https://<plasma-lab-cloud-run-url>,FEATURE_COMPUTE_SLACK_WORKER=false,FEATURE_COMPUTE_WEBRTC_ARTIFACTS=false,FEATURE_COMPUTE_LIVE_BADGES=false,COMPUTE_STUN_URLS=stun:stun.l.google.com:19302"
 ```
 
 `COMPUTE_STUN_URLS` is optional. Leaving it empty still measures HTTP RTT and
@@ -422,6 +429,11 @@ npm -w plasma-lab run smoke
 PLASMA_LAB_SMOKE_ORIGIN=https://<plasma-lab-cloud-run-url> \
 PLASMA_LAB_SMOKE_ADMIN_TOKEN=<admin-token> \
 npm -w plasma-lab run smoke
+
+PLASMA_LAB_SMOKE_ORIGIN=https://<plasma-lab-cloud-run-url> \
+PLASMA_LAB_SMOKE_ADMIN_TOKEN=<admin-token> \
+M3T4_SMOKE_GAME_ORIGIN=https://m3t4.ai \
+npm -w plasma-lab run smoke:webrtc-client-artifact
 ```
 
 The local smoke starts its own in-memory lab. The remote smoke requires

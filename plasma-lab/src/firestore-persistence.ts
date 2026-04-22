@@ -74,7 +74,7 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
       validations,
       reputation,
       webrtcSessions: webrtcSessions.filter((session) => session.status !== "closed" && session.expiresAt > now),
-      webrtcPairs: webrtcPairs.filter((pair) => pair.status !== "closed" && pair.expiresAt > now),
+      webrtcPairs: webrtcPairs.filter((pair) => retainLoadWebRtcPair(pair, now)),
       capabilityObservations,
       connectivityObservations,
     };
@@ -174,6 +174,10 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
     }
     await commit();
   }
+}
+
+export function retainLoadWebRtcPair(pair: WebRtcPairRecord, now = Date.now()): boolean {
+  return pair.expiresAt > now;
 }
 
 function mergeExisting<T>(

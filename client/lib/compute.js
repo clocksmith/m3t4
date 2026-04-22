@@ -1369,6 +1369,14 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
       ["plasma-data", "plasma-receipts"].every((label) => channels.get(label)?.readyState === "open") ? true : null
     ), timeoutMs);
     if (!open) throw new Error("data channel timeout");
+    const peerAssignment = await pairPost("/peer-subassignments", {
+      workerId: client.workerId,
+      workerSessionId: client.workerSessionId,
+      workerSessionToken: client.workerSessionToken,
+      assignmentId: work.assignment.assignmentId,
+      assignmentToken: work.assignment.assignmentToken,
+      requestId,
+    });
     const request = JSON.stringify({
       protocol: "plasma-data.v0",
       type: "artifact-work",
@@ -1379,6 +1387,11 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
       assignmentId: work.assignment.assignmentId,
       taskId: work.task.taskId,
       chunk: work.chunk,
+      peerAssignment: {
+        peerAssignmentId: peerAssignment.peerAssignmentId,
+        peerAssignmentToken: peerAssignment.peerAssignmentToken,
+        expiresAt: peerAssignment.expiresAt,
+      },
     });
     let nextSendAt = 0;
     const sendRequest = () => {
@@ -1413,6 +1426,7 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
         transfer: "plasma-data",
         role,
         pairId,
+        peerAssignmentId: remoteResult.peerSubreceipt.peerAssignmentId,
         peerWorkerId: remoteResult.peerSubreceipt.workerId,
         peerWorkerSessionId: remoteResult.peerSubreceipt.workerSessionId,
         peerReceiptHash: remoteResult.peerSubreceipt.peerReceiptHash?.value,
@@ -1450,8 +1464,10 @@ async function handleArtifactWorkMessage(raw, channels, client, pairId, timeoutM
     const chunk = safeArtifactChunk(msg.chunk);
     const result = await executeWorkerChunk(chunk, msg.requestId, Math.min(3500, timeoutMs));
     const outputHash = { algorithm: "sha256", value: result.outputHash };
+    const peerAssignment = msg.peerAssignment && typeof msg.peerAssignment === "object" ? msg.peerAssignment : null;
     const peerSubreceipt = await client.signPeerSubreceipt({
       protocol: "plasma-peer-result.v1",
+      peerAssignmentId: typeof peerAssignment?.peerAssignmentId === "string" ? peerAssignment.peerAssignmentId : undefined,
       pairId: String(msg.pairId || pairId || ""),
       requestId: msg.requestId,
       requesterWorkerId: String(msg.requesterWorkerId || ""),
@@ -1470,11 +1486,15 @@ async function handleArtifactWorkMessage(raw, channels, client, pairId, timeoutM
       computeMs: Math.round(result.computeMs),
       clientVersion: CLIENT_VERSION,
     });
+    if (peerAssignment?.peerAssignmentId && peerAssignment?.peerAssignmentToken) {
+      await submitPeerSubassignmentReceipt(client, peerAssignment, peerSubreceipt);
+    }
     const ack = {
       protocol: "plasma-receipts.v0",
       type: "artifact-result",
       requestId: msg.requestId,
       ok: true,
+      peerAssignmentId: peerSubreceipt.peerAssignmentId,
       kernelId: result.kernelId,
       outputHash: result.outputHash,
       computeMs: Math.round(result.computeMs),
@@ -1494,6 +1514,29 @@ async function handleArtifactWorkMessage(raw, channels, client, pairId, timeoutM
     try { receiptChannel?.send(JSON.stringify(ack)); } catch {}
     return ack;
   }
+}
+
+async function submitPeerSubassignmentReceipt(client, peerAssignment, peerSubreceipt) {
+  const res = await fetch(computeLabOrigin() + `/compute/webrtc/peer-subassignments/${encodeURIComponent(peerAssignment.peerAssignmentId)}/receipt`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      workerId: client.workerId,
+      workerSessionId: client.workerSessionId,
+      workerSessionToken: client.workerSessionToken,
+      peerAssignmentToken: peerAssignment.peerAssignmentToken,
+      peerSubreceipt,
+    }),
+  });
+  if (!res.ok) {
+    const raw = await res.text().catch(() => "");
+    throw new Error(`peer subassignment receipt failed: ${res.status}${raw ? ` ${raw}` : ""}`);
+  }
+  const body = await res.json();
+  if (body?.ok !== true) {
+    throw new Error(`peer subassignment rejected: ${body?.peerSubassignment?.reason || "unknown"}`);
+  }
+  return body.peerSubassignment;
 }
 
 function safeArtifactChunk(chunk) {
@@ -2015,6 +2058,7 @@ function peerSubreceiptHashPayload(subreceipt) {
   return {
     peerReceiptVersion: 1,
     protocol: subreceipt.protocol,
+    peerAssignmentId: subreceipt.peerAssignmentId,
     pairId: subreceipt.pairId,
     requestId: subreceipt.requestId,
     requesterWorkerId: subreceipt.requesterWorkerId,

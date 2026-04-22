@@ -232,6 +232,12 @@ const resolved = classified.filter((r) => r.stall === "resolved");
 
 const stallCounts: Record<string, number> = {};
 for (const r of classified) stallCounts[r.stall] = (stallCounts[r.stall] ?? 0) + 1;
+const deliveryCancelTotals = records.reduce((sum, r) =>
+  sum + r.telemetry[0].deliveryCancels + r.telemetry[1].deliveryCancels, 0);
+const deliveryFeintCancelTotals = records.reduce((sum, r) =>
+  sum + r.telemetry[0].deliveryFeintCancels + r.telemetry[1].deliveryFeintCancels, 0);
+const deliveryKillFirstCancelTotals = records.reduce((sum, r) =>
+  sum + r.telemetry[0].deliveryKillFirstCancels + r.telemetry[1].deliveryKillFirstCancels, 0);
 
 // ---------------------------- per-family mode breakdown ----------------------------
 
@@ -278,6 +284,7 @@ function matchSummary(r: typeof classified[0]) {
     dives: [t0.dives, t1.dives],
     kills: [t0.kills, t1.kills],
     deliveries: [t0.deliveries, t1.deliveries],
+    deliveryCancels: [t0.deliveryCancels, t1.deliveryCancels],
     clashes: t0.clashes,   // clashes are symmetric — same value for both
     switches: [t0.modeSwitches, t1.modeSwitches],
   };
@@ -299,6 +306,9 @@ const report = {
     drawMatches: draws.length,
     resolvedMatches: resolved.length,
     stallCounts,
+    deliveryCancels: deliveryCancelTotals,
+    deliveryFeintCancels: deliveryFeintCancelTotals,
+    deliveryKillFirstCancels: deliveryKillFirstCancelTotals,
   },
   familyModeBreakdown: Object.fromEntries(
     Object.entries(familyModeTicks).map(([fam, modes]) => {
@@ -320,6 +330,7 @@ console.log(`Total matches: ${records.length}`);
 console.log(`Long (≥90% cap): ${longs.length}`);
 console.log(`Draws: ${draws.length}`);
 console.log(`Resolved: ${resolved.length}\n`);
+console.log(`Delivery cancels: ${deliveryCancelTotals} (feint ${deliveryFeintCancelTotals}, kill-first ${deliveryKillFirstCancelTotals})\n`);
 
 console.log(`## Stall classification\n`);
 console.log(`| kind | count | % |`);

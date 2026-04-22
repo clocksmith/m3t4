@@ -154,6 +154,9 @@ export interface FighterTelemetry {
     deaths: number;
     clashes: number;
     deliveries: number;
+    deliveryCancels: number;
+    deliveryFeintCancels: number;
+    deliveryKillFirstCancels: number;
     ticks: number;
     modeSwipes: Record<BrainMode, number>;
     modeDives: Record<BrainMode, number>;
@@ -171,6 +174,11 @@ export interface BrainState {
     recentSelfClashTicks: number[];
     lastKnownSelfClashTick: number;
     deliveryPlan: DeliveryPlan | null;
+    deliveryProgressGoalKey: string | null;
+    deliveryBestDxGoal: number;
+    deliveryProgressTick: number;
+    lastDeliveryCancelTick: number;
+    lastDeliveryCancelTactic: DeliveryTacticKind | null;
     escapeEntriesThisRound: number;
     escapeTicksThisRound: number;
     zoneTicksThisRound: number;

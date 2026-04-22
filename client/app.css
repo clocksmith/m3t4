@@ -2163,7 +2163,7 @@ input[type="range"]::-moz-range-thumb {
 .intro-fork {
   position: relative;
   z-index: 4;
-  width: min(920px, calc(100% - 32px));
+  width: min(888px, calc(100% - 32px));
   max-width: none;
   margin: 0 auto;
   padding: 38px clamp(20px, 4vw, 56px) 18px;
@@ -2294,11 +2294,11 @@ input[type="range"]::-moz-range-thumb {
 .intro-crawl {
   position: relative;
   z-index: 2;
-  width: min(920px, calc(100% - 32px));
+  width: min(888px, calc(100% - 32px));
   padding: 18px clamp(20px, 4vw, 56px) 76px;
   max-width: none;
   margin: 0 auto;
-  font-size: 22px;
+  font-size: 15px;
   line-height: 1.55;
   letter-spacing: 0.02em;
   flex: 1 1 auto;
@@ -2338,6 +2338,10 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .intro-paragraph {
+  color: #a9ff90;
+}
+
+.intro-boot {
   color: #a9ff90;
 }
 
@@ -2421,7 +2425,7 @@ input[type="range"]::-moz-range-thumb {
 
 @media (max-width: 640px) {
   .intro-fork {
-    width: min(920px, calc(100% - 20px));
+    width: min(888px, calc(100% - 20px));
     padding: 32px clamp(14px, 4vw, 22px) 14px;
   }
   .intro-fork h1 {
@@ -2437,9 +2441,9 @@ input[type="range"]::-moz-range-thumb {
     font-size: 17px;
   }
   .intro-crawl {
-    width: min(920px, calc(100% - 20px));
+    width: min(888px, calc(100% - 20px));
     padding: 24px clamp(14px, 4vw, 22px) 76px;
-    font-size: 17px;
+    font-size: 12px;
     line-height: 1.55;
   }
   .intro-tagline { font-size: 20px; }

@@ -4,7 +4,7 @@ import type { PlasmaLabConfig } from "./config.js";
 import { header, html, json, readJson } from "./http.js";
 import { canonicalJson } from "./plasma/hash.js";
 import type { ContentHash, DerivedExecutionEvidence, ExecutionMode, GovernorMode, TransportKind, ValidationPolicy, WorkerCapability, WorkerRefusalReason } from "./plasma/types.js";
-import { ComputeLabStore, type ComputeChunk, type ExecutionReceipt, type ValidationRecord, type WebRtcPairRecord, type WebRtcSessionRecord } from "./store.js";
+import { ComputeLabStore, type ComputeChunk, type ExecutionReceipt, type PeerSubassignment, type PeerSubreceipt, type ValidationRecord, type WebRtcPairRecord, type WebRtcSessionRecord } from "./store.js";
 import { COMPUTE_USE_CASES } from "./use-cases.js";
 
 export interface RouteDeps {
@@ -64,7 +64,7 @@ export async function handleComputeLabRequest(
     }
     const { worker, session, acceptedKernels } = deps.store.registerWorker({
       label: body.label,
-      capability: body.capability,
+      capability: sanitizePublicWorkerCapability(body.capability, adminAllowed(req, deps.config)),
       signingPublicKey: body.signingPublicKey,
     });
     await flushStore(deps.store);
@@ -108,7 +108,9 @@ export async function handleComputeLabRequest(
       return true;
     }
     try {
-      const worker = deps.store.updateCapability(authFrom(body, req, { capability: body.capability }));
+      const worker = deps.store.updateCapability(authFrom(body, req, {
+        capability: sanitizePublicWorkerCapability(body.capability, adminAllowed(req, deps.config)),
+      }));
       await flushStore(deps.store);
       json(res, 200, { ok: true, acceptedKernels: worker.capability.kernels });
     } catch (e) {
@@ -322,7 +324,7 @@ export async function handleComputeLabRequest(
   if (req.method === "GET" && url.pathname.startsWith("/compute/receipts/") && url.pathname.endsWith("/verify")) {
     const receiptId = url.pathname.slice("/compute/receipts/".length, -"/verify".length);
     const verification = deps.store.verifyReceipt(receiptId);
-    if (!verification) json(res, 404, { error: "receipt not found" });
+    if (!verification || verification.decision !== "accepted") json(res, 404, { error: "accepted receipt not found" });
     else json(res, 200, verification);
     return true;
   }
@@ -373,6 +375,12 @@ async function handleWebRtc(req: IncomingMessage, res: ServerResponse, url: URL,
         candidate?: unknown;
         candidates?: unknown[];
         peerId?: string;
+        workerId?: string;
+        workerSessionId?: string;
+        workerSessionToken?: string;
+        assignmentId?: string;
+        assignmentToken?: string;
+        requestId?: string;
       }>(req);
     const token = body?.pairToken ?? header(req, "x-webrtc-pair-token");
     try {
@@ -411,6 +419,18 @@ async function handleWebRtc(req: IncomingMessage, res: ServerResponse, url: URL,
         json(res, 200, publicWebRtcPair(pair, deps.config));
         return true;
       }
+      if (req.method === "POST" && action === "peer-subassignments") {
+        const subassignment = deps.store.issuePeerSubassignment(authFrom(body, req, {
+          assignmentId: body?.assignmentId ?? "",
+          assignmentToken: body?.assignmentToken ?? "",
+          pairId,
+          pairToken: token,
+          requestId: body?.requestId ?? "",
+        }));
+        await flushStore(deps.store);
+        json(res, 200, publicPeerSubassignment(subassignment, true));
+        return true;
+      }
       if (req.method === "POST" && action === "close") {
         const pair = deps.store.closeWebRtcPair({ pairId, token });
         await flushStore(deps.store);
@@ -418,6 +438,32 @@ async function handleWebRtc(req: IncomingMessage, res: ServerResponse, url: URL,
         return true;
       }
       json(res, 404, { error: "WebRTC pair route not found" });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
+
+  const peerSubassignmentPrefix = "/compute/webrtc/peer-subassignments/";
+  if (url.pathname.startsWith(peerSubassignmentPrefix)) {
+    const [peerAssignmentId, action] = url.pathname.slice(peerSubassignmentPrefix.length).split("/");
+    const body = await readJson<WorkerAuthBody & {
+      peerAssignmentToken?: string;
+      peerSubreceipt?: PeerSubreceipt;
+    }>(req);
+    try {
+      if (req.method === "POST" && action === "receipt") {
+        if (!body?.peerSubreceipt) throw new Error("peerSubreceipt required");
+        const subassignment = deps.store.submitPeerSubassignmentReceipt(authFrom(body, req, {
+          peerAssignmentId,
+          peerAssignmentToken: body.peerAssignmentToken ?? "",
+          peerSubreceipt: body.peerSubreceipt,
+        }));
+        await flushStore(deps.store);
+        json(res, 200, { ok: subassignment.status === "accepted", peerSubassignment: publicPeerSubassignment(subassignment) });
+        return true;
+      }
+      json(res, 404, { error: "WebRTC peer subassignment route not found" });
     } catch (e) {
       json(res, 400, { error: message(e) });
     }
@@ -659,6 +705,8 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       artifactJson?: string;
       minExecutions?: number;
       minAgreeing?: number;
+      requiredTransport?: TransportKind;
+      requiredPeerSubreceipt?: boolean;
     }>(req);
     const artifact = body?.artifact;
     const matchId = body?.matchId ?? artifact?.matchId ?? "";
@@ -673,6 +721,8 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         artifactJson,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
       });
       await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
@@ -689,6 +739,8 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       allowConstantsMismatch?: boolean;
       minExecutions?: number;
       minAgreeing?: number;
+      requiredTransport?: TransportKind;
+      requiredPeerSubreceipt?: boolean;
     }>(req);
     const replayArtifactJson = body?.replayArtifactJson
       ?? (body?.replayArtifact ? canonicalJson(body.replayArtifact) : "");
@@ -699,6 +751,8 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         allowConstantsMismatch: body?.allowConstantsMismatch,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
       });
       await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
@@ -718,6 +772,8 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       maxTicks?: number;
       minExecutions?: number;
       minAgreeing?: number;
+      requiredTransport?: TransportKind;
+      requiredPeerSubreceipt?: boolean;
     }>(req);
     try {
       const task = deps.store.seedSeedSweepTask({
@@ -730,6 +786,8 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         maxTicks: body?.maxTicks,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
       });
       await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
@@ -830,8 +888,15 @@ function publicWebRtcSession(session: WebRtcSessionRecord, config: PlasmaLabConf
 function publicComputeChunk(chunk: ComputeChunk): Omit<ComputeChunk, "expectedOutputHash"> {
   const { expectedOutputHash: _expectedOutputHash, ...publicChunk } = chunk;
   if (chunk.kind === "m3t4.public_artifact_verify.v0") {
-    const { artifactHash: _artifactHash, ...withoutArtifactHash } = publicChunk;
-    return withoutArtifactHash;
+    const { artifactHash: _artifactHash, params, ...withoutArtifactHash } = publicChunk;
+    const { artifactHash, ...publicParams } = params;
+    return {
+      ...withoutArtifactHash,
+      params: {
+        ...publicParams,
+        ...(typeof artifactHash === "string" ? { artifactId: artifactHash } : {}),
+      },
+    };
   }
   return publicChunk;
 }
@@ -839,6 +904,30 @@ function publicComputeChunk(chunk: ComputeChunk): Omit<ComputeChunk, "expectedOu
 function publicValidationPolicy(policy: ValidationPolicy): Omit<ValidationPolicy, "expectedOutputHash"> {
   const { expectedOutputHash: _expectedOutputHash, ...publicPolicy } = policy;
   return publicPolicy;
+}
+
+function transportPolicy(value: unknown): TransportKind | undefined {
+  if (value === undefined) return undefined;
+  if (value === "http" || value === "webrtc" || value === "local") return value;
+  throw new Error("requiredTransport must be http, webrtc, or local");
+}
+
+function sanitizePublicWorkerCapability(capability: WorkerCapability, trustedReference: boolean): WorkerCapability {
+  const runtimeSurfaces = capability.runtimeSurfaces.filter((surface) =>
+    trustedReference || surface !== "cpu-reference"
+  );
+  return {
+    ...capability,
+    runtimeSurfaces: Array.from(new Set(runtimeSurfaces)),
+  };
+}
+
+function publicPeerSubassignment(subassignment: PeerSubassignment, includeToken = false) {
+  const { peerAssignmentToken, ...publicSubassignment } = subassignment;
+  return {
+    ...publicSubassignment,
+    peerAssignmentToken: includeToken ? peerAssignmentToken : undefined,
+  };
 }
 
 function publicWebRtcPair(pair: WebRtcPairRecord, config: PlasmaLabConfig) {

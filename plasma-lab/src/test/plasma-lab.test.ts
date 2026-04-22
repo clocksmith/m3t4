@@ -32,6 +32,7 @@ const baseConfig: PlasmaLabConfig = {
   webrtcTurnEnabled: false,
   stunUrls: [],
   turnUrls: [],
+  adminToken: "test",
   assignmentTimeoutMs: 60_000,
   workerSessionTtlMs: 60_000,
   webrtcSessionTtlMs: 60_000,
@@ -218,10 +219,56 @@ test("public artifact assignments hide server-held artifact output hashes", asyn
   assert.equal(nextBody.chunk.expectedOutputHash, undefined);
   assert.equal(nextBody.task.validationPolicy.expectedOutputHash, undefined);
   assert.equal(nextBody.chunk.artifactHash, undefined);
+  assert.equal(nextBody.chunk.params.artifactHash, undefined);
+  assert.equal(nextBody.chunk.params.artifactId, "artifact-hidden-output");
   await accept(srv.port, worker, nextBody.assignment.assignmentId, nextBody.assignment.assignmentToken);
 
   const submitted = await receipt(srv.port, worker, nextBody);
   assert.equal(submitted.receipt.decision, "accepted");
+});
+
+test("public worker registration strips self-reported cpu-reference", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const srv = await boot(store, baseConfig);
+  t.after(() => srv.close());
+
+  const worker = await req(srv.port, "POST", "/compute/workers/register", {
+    capability: {
+      ...capability,
+      runtimeSurfaces: ["browser-js", "cpu-reference"],
+    },
+  });
+  const snapshotWorker = store.exportSnapshot().workers.find((entry) => entry.workerId === worker.body.workerId);
+  assert.deepEqual(snapshotWorker?.capability.runtimeSurfaces, ["browser-js"]);
+  const profile = store.workerProfiles().find((entry) => entry.workerId === worker.body.workerId);
+  assert.equal(profile?.allowedWorkloadTier, "observe-only");
+});
+
+test("public receipt verifier only exposes accepted receipts", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const task = store.seedPrimeTask({ start: 100, endExclusive: 140, chunkSize: 40, minExecutions: 2, minAgreeing: 2 });
+  const srv = await boot(store, baseConfig);
+  t.after(() => srv.close());
+
+  const worker = await register(srv.port);
+  const nextBody = await next(srv.port, worker);
+  await accept(srv.port, worker, nextBody.assignment.assignmentId, nextBody.assignment.assignmentToken);
+  const submitted = await req(srv.port, "POST", "/compute/receipts", {
+    ...worker,
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...referencePrimeReceiptFields(nextBody.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 1,
+  });
+  assert.equal(submitted.body.receipt.decision, "pending");
+
+  const verify = await req(srv.port, "GET", `/compute/receipts/${submitted.body.receipt.receiptId}/verify`);
+  assert.equal(verify.status, 404);
+  assert.equal(verify.body.error, "accepted receipt not found");
 });
 
 test("duplicate receipts from one assignment do not satisfy quorum", () => {
@@ -957,6 +1004,157 @@ test("WebRTC data receipts reject missing peer subreceipts", () => {
   });
   assert.equal(rejected.receipt.decision, "malformed");
   assert.equal(rejected.receipt.reason, "peer subreceipt required");
+});
+
+test("WebRTC proof tasks require accepted server-issued peer subassignments", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const requesterSigning = signingKeyPair();
+  const peerSigning = signingKeyPair();
+  const task = store.seedSeedSweepTask({
+    stageId: "boardroom",
+    brainA: "unicorn",
+    brainB: "disruptor",
+    seedStart: 30,
+    seedEndExclusive: 34,
+    seedChunkSize: 4,
+    minExecutions: 1,
+    minAgreeing: 1,
+    requiredTransport: "webrtc",
+    requiredPeerSubreceipt: true,
+  });
+  const requester = store.registerWorker({ capability, signingPublicKey: requesterSigning.publicJwk });
+  const peer = store.registerWorker({ capability, signingPublicKey: peerSigning.publicJwk });
+  store.joinWebRtcPair(auth(requester));
+  const pair = store.joinWebRtcPair(auth(peer)).pair;
+  const nextBody = store.assignNext(auth(requester))!;
+  store.acceptAssignment({
+    ...auth(requester),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const fields = referenceReceiptFields(nextBody.chunk);
+  const baseReceipt = {
+    ...auth(requester),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...fields,
+    executionMode: "cpu" as const,
+    transport: "webrtc" as const,
+    computeMs: 12,
+    clientVersion: "webrtc-peer-test",
+  };
+  const informalSubreceipt = signedPeerSubreceipt({
+    pairId: pair.pairId,
+    requestId: "peer-required-1",
+    requester,
+    peer,
+    assignmentId: nextBody.assignment.assignmentId,
+    taskId: task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    kernelId: fields.kernelId,
+    kernelHash: fields.kernelHash,
+    inputHash: fields.inputHash,
+    artifactHash: fields.artifactHash,
+    outputHash: fields.outputHash,
+    executionMode: "cpu",
+    computeMs: 8,
+    clientVersion: "peer-test",
+  }, peerSigning.privateKey);
+  const missingSubassignment = store.submitReceipt({
+    ...baseReceipt,
+    adapterInfo: { peerSubreceipt: informalSubreceipt },
+    ...signedReceiptFields({ ...baseReceipt, adapterInfo: { peerSubreceipt: informalSubreceipt } }, requesterSigning.privateKey),
+  });
+  assert.equal(missingSubassignment.receipt.decision, "malformed");
+  assert.equal(missingSubassignment.receipt.reason, "peer subassignment required");
+
+  const peerSubassignment = store.issuePeerSubassignment({
+    ...auth(requester),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    pairId: pair.pairId,
+    pairToken: pair.token,
+    requestId: "peer-required-2",
+  });
+  const peerSubreceipt = signedPeerSubreceipt({
+    peerAssignmentId: peerSubassignment.peerAssignmentId,
+    pairId: pair.pairId,
+    requestId: peerSubassignment.requestId,
+    requester,
+    peer,
+    assignmentId: nextBody.assignment.assignmentId,
+    taskId: task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    kernelId: fields.kernelId,
+    kernelHash: fields.kernelHash,
+    inputHash: fields.inputHash,
+    artifactHash: fields.artifactHash,
+    outputHash: fields.outputHash,
+    executionMode: "cpu",
+    computeMs: 8,
+    clientVersion: "peer-test",
+  }, peerSigning.privateKey);
+  const peerReceipt = store.submitPeerSubassignmentReceipt({
+    ...auth(peer),
+    peerAssignmentId: peerSubassignment.peerAssignmentId,
+    peerAssignmentToken: peerSubassignment.peerAssignmentToken,
+    peerSubreceipt,
+  });
+  assert.equal(peerReceipt.status, "accepted");
+
+  const acceptedFields = {
+    ...baseReceipt,
+    adapterInfo: { peerSubreceipt },
+  };
+  const accepted = store.submitReceipt({
+    ...acceptedFields,
+    ...signedReceiptFields(acceptedFields, requesterSigning.privateKey),
+  });
+  assert.equal(accepted.receipt.decision, "accepted");
+  assert.equal(accepted.validation?.status, "accepted");
+});
+
+test("WebRTC proof tasks reject HTTP receipts even with correct output", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const signing = signingKeyPair();
+  const task = store.seedSeedSweepTask({
+    stageId: "boardroom",
+    brainA: "unicorn",
+    brainB: "disruptor",
+    seedStart: 40,
+    seedEndExclusive: 44,
+    seedChunkSize: 4,
+    minExecutions: 1,
+    minAgreeing: 1,
+    requiredTransport: "webrtc",
+    requiredPeerSubreceipt: true,
+  });
+  const worker = store.registerWorker({ capability, signingPublicKey: signing.publicJwk });
+  const nextBody = store.assignNext(auth(worker))!;
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const receiptFields = {
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...referenceReceiptFields(nextBody.chunk),
+    executionMode: "cpu" as const,
+    transport: "http" as const,
+    computeMs: 12,
+  };
+  const rejected = store.submitReceipt({
+    ...receiptFields,
+    ...signedReceiptFields(receiptFields, signing.privateKey),
+  });
+  assert.equal(rejected.receipt.decision, "malformed");
+  assert.equal(rejected.receipt.reason, "required transport mismatch");
 });
 
 test("closed unexpired WebRTC pairs remain loadable as receipt evidence", () => {
@@ -2237,6 +2435,7 @@ function browserStableJson(value: unknown): string {
 }
 
 function signedPeerSubreceipt(input: {
+  peerAssignmentId?: string;
   pairId: string;
   requestId: string;
   requester: ReturnType<ComputeLabStore["registerWorker"]>;
@@ -2256,6 +2455,7 @@ function signedPeerSubreceipt(input: {
   const payload = {
     peerReceiptVersion: 1,
     protocol: "plasma-peer-result.v1",
+    peerAssignmentId: input.peerAssignmentId,
     pairId: input.pairId,
     requestId: input.requestId,
     requesterWorkerId: input.requester.worker.workerId,
@@ -2277,6 +2477,7 @@ function signedPeerSubreceipt(input: {
   const peerReceiptHash = hashCanonical(payload);
   return {
     protocol: payload.protocol,
+    peerAssignmentId: payload.peerAssignmentId,
     pairId: payload.pairId,
     requestId: payload.requestId,
     requesterWorkerId: payload.requesterWorkerId,
@@ -2356,7 +2557,13 @@ async function req(port: number, method: string, path: string, body?: unknown, h
 }
 
 async function register(port: number, workerCapability: WorkerCapability = capability) {
-  const resp = await req(port, "POST", "/compute/workers/register", { capability: workerCapability });
+  const resp = await req(
+    port,
+    "POST",
+    "/compute/workers/register",
+    { label: "plasma-lab-reference:test", capability: workerCapability },
+    { "x-plasma-admin-token": "test" },
+  );
   assert.equal(resp.status, 200);
   return resp.body as {
     workerId: string;

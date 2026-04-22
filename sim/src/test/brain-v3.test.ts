@@ -55,8 +55,8 @@ function defaultParams(overrides: Partial<Params> = {}): Params {
 
 // --- Tests ---
 
-test("BEHAVIOR_VERSION is 20", () => {
-  assert.equal(BEHAVIOR_VERSION, 20);
+test("BEHAVIOR_VERSION is 21", () => {
+  assert.equal(BEHAVIOR_VERSION, 21);
 });
 
 test("createBrainState initializes neutral with empty buffers", () => {
@@ -67,6 +67,9 @@ test("createBrainState initializes neutral with empty buffers", () => {
   assert.deepEqual(s.recentOppSwipeTicks, []);
   assert.deepEqual(s.recentOppDiveTicks, []);
   assert.deepEqual(s.recentSelfClashTicks, []);
+  assert.equal(s.deliveryProgressGoalKey, null);
+  assert.equal(s.lastDeliveryCancelTick, -9999);
+  assert.equal(s.lastDeliveryCancelTactic, null);
 });
 
 test("resetBrainStateForRound zeroes mode but preserves opp buffers", () => {
@@ -76,6 +79,11 @@ test("resetBrainStateForRound zeroes mode but preserves opp buffers", () => {
   s.recentOppSwipeTicks.push(10, 20, 30);
   s.recentOppDiveTicks.push(40);
   s.recentSelfClashTicks.push(55);
+  s.deliveryProgressGoalKey = "g1:900:500";
+  s.deliveryBestDxGoal = 140;
+  s.deliveryProgressTick = 450;
+  s.lastDeliveryCancelTick = 460;
+  s.lastDeliveryCancelTactic = "feint";
 
   resetBrainStateForRound(s, 500);
   assert.equal(s.mode, "neutral");
@@ -85,6 +93,11 @@ test("resetBrainStateForRound zeroes mode but preserves opp buffers", () => {
   assert.deepEqual(s.recentOppSwipeTicks, [10, 20, 30]);
   assert.deepEqual(s.recentOppDiveTicks, [40]);
   assert.deepEqual(s.recentSelfClashTicks, [55]);
+  assert.equal(s.deliveryProgressGoalKey, null);
+  assert.equal(s.deliveryBestDxGoal, Infinity);
+  assert.equal(s.deliveryProgressTick, 0);
+  assert.equal(s.lastDeliveryCancelTick, -9999);
+  assert.equal(s.lastDeliveryCancelTactic, null);
 });
 
 test("opp-model buffer decays entries older than 240 ticks", () => {
@@ -490,6 +503,35 @@ test("delivery planner persists tactic within horizon (no per-tick thrashing)", 
   runParamBrain(obs2, params, state);
   assert.equal(state.deliveryPlan!.tactic, firstTactic, "tactic held within horizon");
   assert.equal(state.deliveryPlan!.expiresAt, firstExpiresAt, "expiry held within horizon");
+});
+
+test("stalled direct delivery cancels across plan refresh instead of repeating blocked route", () => {
+  const state = createBrainState(0);
+  state.mode = "objective";
+  state.modeEnterTick = 260;
+  state.deliveryPlan = {
+    tactic: "direct",
+    startedAt: 200,
+    expiresAt: 280,
+    score: 1,
+  };
+  state.deliveryProgressGoalKey = "g1:900:500";
+  state.deliveryBestDxGoal = 300;
+  state.deliveryProgressTick = 200;
+  const obs = baseObs({
+    tick: 300,
+    self: { ...baseObs().self, hasToken: true, x: 600, y: 500, onGround: true },
+    opp: { ...baseObs().opp, x: 780, y: 500 },
+    token: { exists: true, x: 600, y: 448, carrier: 0, dwellT: 0 },
+    goal: { exists: true, x: 900, y: 500, label: "g1", timer: 8 },
+    dx: 180, absDx: 180, dy: 0,
+  });
+
+  const action = runParamBrain(obs, defaultParams({ cunning: 0.95, greed: 0.1, discipline: 0, shipRate: 0.5 }), state);
+  assert.equal(state.deliveryPlan!.tactic, "feint", "stalled direct plan should switch to a bait route");
+  assert.equal(state.deliveryPlan!.startedAt, 300, "cancel can trigger after the short direct plan replans");
+  assert.equal(action.left, true, "feint steps away from the goal to break the repeated blocked route");
+  assert.notEqual(action.right, true);
 });
 
 test("delivery planner can hold feint through its back-step window", () => {

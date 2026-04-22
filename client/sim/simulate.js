@@ -731,7 +731,7 @@ function unpackAction(byte) {
 // fighters; increments mode/substate tick counters + mode-switch counter
 // + zone/objective/escape entry counters when mode changes transition.
 // Pure read — no behavior change.
-function tallyBrainTurn(telemetry, brainStates, prevMode) {
+function tallyBrainTurn(telemetry, brainStates, prevMode, tick) {
     for (let i = 0; i < 2; i++) {
         const st = brainStates[i];
         const t = telemetry[i];
@@ -749,6 +749,13 @@ function tallyBrainTurn(telemetry, brainStates, prevMode) {
             t.substateTicks.intercept++;
         else if (sub === "pickup")
             t.substateTicks.pickup++;
+        if (st.lastDeliveryCancelTick === tick) {
+            t.deliveryCancels++;
+            if (st.lastDeliveryCancelTactic === "feint")
+                t.deliveryFeintCancels++;
+            else if (st.lastDeliveryCancelTactic === "kill-first")
+                t.deliveryKillFirstCancels++;
+        }
         const prev = prevMode[i];
         if (prev !== null && prev !== st.mode) {
             t.modeSwitches++;
@@ -857,7 +864,7 @@ export function simulate(opts) {
         const actA = runParamBrain(obsA, paramsA, w.brainStates[0]);
         const actB = runParamBrain(obsB, paramsB, w.brainStates[1]);
         if (telemetry)
-            tallyBrainTurn(telemetry, w.brainStates, prevMode);
+            tallyBrainTurn(telemetry, w.brainStates, prevMode, w.tick);
         const pa = packAction(actA);
         const pb = packAction(actB);
         log.push(pa, pb);

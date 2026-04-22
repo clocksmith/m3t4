@@ -329,10 +329,6 @@ function pointRangeGap(x: number, s: NavSurface): number {
   return 0;
 }
 
-function surfaceCenterX(s: NavSurface): number {
-  return (s.x1 + s.x2) * 0.5;
-}
-
 function surfaceTargetDistance(s: NavSurface, tx: number, ty: number): number {
   return Math.hypot(pointRangeGap(tx, s), (s.y - ty) * 0.9);
 }

@@ -43,10 +43,12 @@ export interface TraceFighterFrame {
     stun: number;
     swipeT: number;
     diveT: number;
+    lastClashTick: number;
     dead: boolean;
 }
 export interface TraceFrame {
     tick: number;
+    roundStartTick: number;
     p0: TraceFighterFrame;
     p1: TraceFighterFrame;
     token: {

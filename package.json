@@ -6,9 +6,11 @@
   "workspaces": ["sim", "server", "pareto", "plasma-lab"],
   "scripts": {
     "sync:content": "node tools/sync-client-content.mjs",
+    "sync:client-sim": "node tools/sync-client-sim.mjs",
     "check:content": "node tools/sync-client-content.mjs --check",
+    "check:client-sim": "node tools/sync-client-sim.mjs --check",
     "prebuild": "npm run sync:content",
-    "build": "npm -w sim run build && npm -w server run build && npm -w pareto run build && npm -w plasma-lab run build",
+    "build": "npm -w sim run build && npm run sync:client-sim && npm -w server run build && npm -w pareto run build && npm -w plasma-lab run build",
     "sim": "npm -w sim run cli --",
     "server": "npm -w server run start",
     "pareto": "npm -w pareto run sweep --",

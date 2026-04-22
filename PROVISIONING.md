@@ -88,6 +88,53 @@ Deploy:
 firebase deploy --only firestore:rules
 ```
 
+## Code-only deploy loop
+
+Use this path for ordinary code-only changes. It preserves the existing Cloud
+Run environment variables, secrets, scaling, and feature flags. Use the full
+Cloud Run commands in the next section whenever those settings need to change.
+
+```bash
+PROJECT_ID=m3ta-ai
+
+# Build compiles sim/server/pareto/plasma-lab and syncs sim/dist -> client/sim.
+npm run build
+
+# Test gate. Do not deploy if any command fails.
+npm -w sim test
+npm run test:client
+npm -w server test
+git diff --check
+
+# Static client.
+firebase deploy --only hosting
+
+# Shared server image.
+gcloud builds submit . --config server/cloudbuild.yaml --project "$PROJECT_ID"
+
+# Roll the same image to both services. These commands preserve existing env.
+gcloud run deploy arena-worker \
+  --project "$PROJECT_ID" \
+  --region us-central1 \
+  --image "gcr.io/$PROJECT_ID/arena-server" \
+  --quiet
+
+gcloud run deploy arena-server \
+  --project "$PROJECT_ID" \
+  --region us-central1 \
+  --image "gcr.io/$PROJECT_ID/arena-server" \
+  --quiet
+
+curl -fsS https://m3t4.ai/api/status
+```
+
+Skip conditions:
+
+- No changes under `client/`, `content/`, `sim/`, or `firebase.json`:
+  skip `firebase deploy --only hosting`.
+- No changes under `sim/`, `server/`, `pareto/`, `plasma-lab/`, or
+  `server/Dockerfile`: skip the Cloud Build and Cloud Run deploys.
+
 ## 5. Cloud Run (server)
 
 ```bash
@@ -268,8 +315,8 @@ gcloud run domain-mappings create \
   --domain api.m3t4.ai \
   --region us-central1
 
-# Custom domain for Firebase Hosting
-firebase hosting:channel:deploy live --only hosting
+# Production Firebase Hosting deploy
+firebase deploy --only hosting
 # Then Firebase Console → Hosting → Add custom domain → m3t4.ai
 ```
 
@@ -388,8 +435,18 @@ matches involving `unicorn`, `disruptor`, `shipper`, long matches, or draws.
 ## 10. Rollback
 
 ```bash
-# Cloud Run revisions are versioned — revert with:
-gcloud run services update-traffic arena-server --to-revisions REVISION=100
+# Cloud Run revisions are versioned — revert each service with:
+gcloud run revisions list --service arena-server --project m3ta-ai --region us-central1
+gcloud run services update-traffic arena-server \
+  --project m3ta-ai \
+  --region us-central1 \
+  --to-revisions REVISION=100
+
+gcloud run revisions list --service arena-worker --project m3ta-ai --region us-central1
+gcloud run services update-traffic arena-worker \
+  --project m3ta-ai \
+  --region us-central1 \
+  --to-revisions REVISION=100
 ```
 
 Firebase hosting rollback: Console → Hosting → Release history → Rollback.

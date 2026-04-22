@@ -899,7 +899,7 @@ async function signaledWebRtcProbe(client, timeoutMs) {
   const candidateTypes = { host: false, srflx: false, relay: false };
   const seenRemoteCandidates = new Set();
   const channels = new Map();
-  const served = { attempted: false, ok: false };
+  const served = { attempted: false, completed: false, ok: false };
   let pc = null;
   let iceGatherMs = null;
   let pumpTimer = null;
@@ -950,8 +950,9 @@ async function signaledWebRtcProbe(client, timeoutMs) {
     channels.set(ch.label || "unknown", ch);
     if (ch.label === "plasma-data") {
       ch.onmessage = (ev) => {
-        served.attempted = true;
         handlePeerWorkMessage(ev.data, channels, served).catch(() => {
+          served.attempted = true;
+          served.completed = true;
           served.ok = false;
         });
       };
@@ -1013,9 +1014,17 @@ async function signaledWebRtcProbe(client, timeoutMs) {
         dataWorkBucket = peerResult.ok ? "request-ok" : peerResult.status;
         dataReceiptBucket = peerResult.receiptBucket;
       } else if (dataEnabled) {
-        const didServe = await waitFor(() => (served.attempted ? true : null), Math.min(1500, timeoutMs));
-        dataWorkBucket = didServe ? (served.ok ? "served-ok" : "served-failed") : "served-none";
-        dataReceiptBucket = didServe ? (served.ok ? "sent" : "failed") : "none";
+        const didComplete = await waitFor(() => (served.completed ? true : null), Math.min(3500, timeoutMs));
+        dataWorkBucket = served.attempted
+          ? didComplete
+            ? (served.ok ? "served-ok" : "served-failed")
+            : "served-timeout"
+          : "served-none";
+        dataReceiptBucket = served.attempted
+          ? didComplete
+            ? (served.ok ? "sent" : "failed")
+            : "timeout"
+          : "none";
       } else {
         try { channels.get("plasma-control")?.send?.("witness"); } catch {}
         await delay(40);
@@ -1101,11 +1110,13 @@ async function runPeerWorkRequest(channels, timeoutMs) {
 async function handlePeerWorkMessage(raw, channels, served) {
   const msg = parseJsonMessage(raw);
   if (msg?.protocol !== "plasma-data.v0" || msg?.type !== "work" || typeof msg.requestId !== "string") return;
-  const receiptChannel = await waitFor(() => (
-    channels.get("plasma-receipts")?.readyState === "open" ? channels.get("plasma-receipts") : null
-  ), 1000);
-  if (!receiptChannel) return;
+  served.attempted = true;
+  let receiptChannel = null;
   try {
+    receiptChannel = await waitFor(() => (
+      channels.get("plasma-receipts")?.readyState === "open" ? channels.get("plasma-receipts") : null
+    ), 1000);
+    if (!receiptChannel) throw new Error("receipt channel unavailable");
     const chunk = safePeerChunk(msg.chunk);
     const result = await executeWorkerChunk(chunk, msg.requestId, 2500);
     served.ok = result.outputHash === PEER_WORK_EXPECTED_HASH;
@@ -1121,13 +1132,19 @@ async function handlePeerWorkMessage(raw, channels, served) {
     }));
   } catch (e) {
     served.ok = false;
-    receiptChannel.send(JSON.stringify({
-      protocol: "plasma-receipts.v0",
-      type: "work-result",
-      requestId: msg.requestId,
-      ok: false,
-      error: message(e),
-    }));
+    try {
+      receiptChannel?.send(JSON.stringify({
+        protocol: "plasma-receipts.v0",
+        type: "work-result",
+        requestId: msg.requestId,
+        ok: false,
+        error: message(e),
+      }));
+    } catch {
+      // The answerer still records completion below; the requester will time out.
+    }
+  } finally {
+    served.completed = true;
   }
 }
 

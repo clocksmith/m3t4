@@ -972,6 +972,7 @@ export function stepWorld(w, actA, actB) {
 export function worldToFrame(w) {
     return {
         tick: w.tick,
+        roundStartTick: w.roundStartTick,
         p0: fighterToFrame(w.fighters[0]),
         p1: fighterToFrame(w.fighters[1]),
         token: w.gold
@@ -996,6 +997,7 @@ function fighterToFrame(f) {
         stun: f.stun,
         swipeT: f.swipeT,
         diveT: f.diveT,
+        lastClashTick: f.lastClashTick,
         dead: f.dead,
     };
 }
@@ -1024,6 +1026,7 @@ export function simulateTrace(opts) {
     let hashAcc = 2166136261 >>> 0;
     const snap = () => ({
         tick: w.tick,
+        roundStartTick: w.roundStartTick,
         p0: fighterToFrame(w.fighters[0]),
         p1: fighterToFrame(w.fighters[1]),
         token: w.gold ? { exists: true, x: w.gold.x, y: w.gold.y, carrier: w.gold.carrier, dwellT: w.gold.dwellT } : { exists: false, x: 0, y: 0, carrier: -1, dwellT: 0 },

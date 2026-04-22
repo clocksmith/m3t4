@@ -91,16 +91,14 @@ export function mount(root, { setStatus }) {
       </div>
 
       ${aboutCardHtml(rules.about)}
+      ${aboutDetailHtml(rules.about)}
       ${computeWitnessHtml()}
 
-      <div class="rules-main-layout">
-        ${aboutDetailHtml(rules.about)}
-        <div class="rules-rules-column">
-          <div class="rules-section-label">Rules</div>
-          <section class="rules-grid">
-            ${sections.map(sectionHtml).join("")}
-          </section>
-        </div>
+      <div class="rules-rules-column">
+        <div class="rules-section-label">Rules</div>
+        <section class="rules-grid">
+          ${sections.map(sectionHtml).join("")}
+        </section>
       </div>
     </div>`;
 

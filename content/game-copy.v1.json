@@ -75,7 +75,8 @@
         "m3t4.ai is a live autonomous bot arena. You tune a bot, run a server-side test fight, then send it into a five-seat roster. The server runs the matches; Live shows the current fight.",
         "You do not pilot frame by frame. You shape tendencies: movement, aggression, proof routing, denial, risk, and recovery. Strong bots come from finding useful behavior inside those constraints.",
         "The ranked arena is server-authoritative. The public client receives replay frames and match events, not hidden decision code or private opponent configs.",
-        "Under the hood, the game is being shaped into a testbed for verified distributed compute. Match batches, seed sweeps, replay checks, and exploit searches are the first safe workloads before broader volunteer-compute ambitions."
+        "The flagged compute lab now verifies public replay artifacts with assignment-bound browser receipts. Staff-controlled WebRTC runs have completed 2-of-2 expected-hash replay checks over data channels and publish public verification badges.",
+        "That compute work is advisory. Ranked authority, private configs, and open volunteer assignment intake stay off; exploit search and broader volunteer compute remain future stages."
       ]
     },
     "sections": [

@@ -9,6 +9,7 @@ import { json } from "../http.js";
 import type { WorkerCapability } from "../plasma/types.js";
 import { canonicalJson, hashCanonical, sha256 } from "../plasma/hash.js";
 import { PersistentComputeLabStore } from "../persistent-store.js";
+import { retainLoadWebRtcPair } from "../firestore-persistence.js";
 import { runReplayVerify } from "../kernels/replay-verify.js";
 import { runSeedSweep } from "../kernels/seed-sweep.js";
 import {
@@ -956,6 +957,23 @@ test("WebRTC data receipts reject missing peer subreceipts", () => {
   });
   assert.equal(rejected.receipt.decision, "malformed");
   assert.equal(rejected.receipt.reason, "peer subreceipt required");
+});
+
+test("closed unexpired WebRTC pairs remain loadable as receipt evidence", () => {
+  const pair = {
+    pairId: "rtcpair-test",
+    token: "ptok-test",
+    createdAt: 1_000,
+    expiresAt: 10_000,
+    status: "closed" as const,
+    offererWorkerId: "cw-a",
+    offererSessionId: "cs-a",
+    answererWorkerId: "cw-b",
+    answererSessionId: "cs-b",
+    candidates: [],
+  };
+  assert.equal(retainLoadWebRtcPair(pair, 5_000), true);
+  assert.equal(retainLoadWebRtcPair(pair, 10_001), false);
 });
 
 test("persistent store saves and restores compute snapshots", async () => {

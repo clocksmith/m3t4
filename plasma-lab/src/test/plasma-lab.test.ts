@@ -468,6 +468,57 @@ test("persistent store honors bounded assignment intake windows", async () => {
   assert.ok(saved);
 });
 
+test("persistent HTTP routes refresh and flush across store instances", async (t) => {
+  let saved: Partial<ComputeLabSnapshot> = {};
+  const persistence = {
+    load: async () => clone(saved),
+    save: async (snapshot: ComputeLabSnapshot) => {
+      saved = clone(snapshot);
+    },
+  };
+  const storeA = await PersistentComputeLabStore.create({ acceptAssignments: false }, persistence);
+  const storeB = await PersistentComputeLabStore.create({ acceptAssignments: false }, persistence);
+  const srvA = await boot(storeA, { ...baseConfig, adminToken: "secret", acceptAssignments: false });
+  const srvB = await boot(storeB, { ...baseConfig, adminToken: "secret", acceptAssignments: false });
+  t.after(async () => {
+    await srvA.close();
+    await srvB.close();
+  });
+
+  const seeded = await req(
+    srvA.port,
+    "POST",
+    "/compute/admin/tasks/seed",
+    { kind: "prime-search.v0", start: 10, endExclusive: 20, chunkSize: 10, minExecutions: 1, minAgreeing: 1 },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(seeded.status, 200);
+
+  const taskFromB = await req(
+    srvB.port,
+    "GET",
+    `/compute/admin/tasks/${seeded.body.taskId}`,
+    undefined,
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(taskFromB.status, 200);
+  assert.equal(taskFromB.body.taskId, seeded.body.taskId);
+
+  const enabled = await req(
+    srvA.port,
+    "POST",
+    "/compute/admin/assignments",
+    { acceptAssignments: true, durationMs: 60_000 },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(enabled.status, 200);
+  assert.equal(enabled.body.acceptAssignments, true);
+
+  const worker = await register(srvB.port);
+  const assigned = await next(srvB.port, worker);
+  assert.equal(assigned.task.taskId, seeded.body.taskId);
+});
+
 test("dashboard aggregates bucketed capability map", () => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   store.registerWorker({ capability: webgpuCapability });
@@ -1446,6 +1497,10 @@ function publicReplayArtifactJson(matchId: string, options: { includePrivateConf
 function clock(): () => number {
   let now = 1_000_000;
   return () => now++;
+}
+
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 function auth(reg: ReturnType<ComputeLabStore["registerWorker"]>) {

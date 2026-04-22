@@ -66,6 +66,7 @@ export const COMPUTE_COLLECTIONS = {
   networkClasses: "compute_network_classes",
   publicStats: "compute_public_stats",
   replayBadges: "compute_replay_badges",
+  control: "compute_control",
 } as const;
 
 const KNOWN_KERNELS = [
@@ -355,6 +356,10 @@ export interface StoreOptions {
 }
 
 export interface ComputeLabSnapshot {
+  control: {
+    acceptAssignments: boolean;
+    assignmentIntakeClosesAt: number | null;
+  };
   workers: WorkerRecord[];
   sessions: WorkerSession[];
   tasks: ComputeTask[];
@@ -412,7 +417,12 @@ export class ComputeLabStore {
   }
 
   exportSnapshot(): ComputeLabSnapshot {
+    this.expireAssignmentIntake();
     return {
+      control: {
+        acceptAssignments: this.acceptAssignmentsFlag,
+        assignmentIntakeClosesAt: this.assignmentIntakeClosesAt,
+      },
       workers: Array.from(this.workers.values()),
       sessions: Array.from(this.sessions.values()),
       tasks: Array.from(this.tasks.values()),
@@ -439,6 +449,11 @@ export class ComputeLabStore {
     this.webrtcPairs.clear();
     this.capabilityObservations.clear();
     this.connectivityObservations.clear();
+    if (snapshot.control) {
+      this.acceptAssignmentsFlag = snapshot.control.acceptAssignments;
+      this.assignmentIntakeClosesAt = snapshot.control.assignmentIntakeClosesAt;
+      this.expireAssignmentIntake();
+    }
     for (const worker of snapshot.workers ?? []) this.workers.set(worker.workerId, worker);
     for (const session of snapshot.sessions ?? []) this.sessions.set(session.workerSessionId, session);
     for (const task of snapshot.tasks ?? []) this.tasks.set(task.taskId, task);

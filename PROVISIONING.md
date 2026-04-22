@@ -268,9 +268,13 @@ The deployed game client does not route useful public-artifact assignments over
 WebRTC unless arena-server also exposes
 `FEATURE_COMPUTE_WEBRTC_ARTIFACTS=true` in `/api/status` or staff sets
 `window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS__=true` in devtools for a controlled
-window. That flag is client-side only: plasma-lab still controls signaling/data
-with `FEATURE_COMPUTE_WEBRTC_SIGNALING` and `FEATURE_COMPUTE_WEBRTC_DATA`, and
-`COMPUTE_ACCEPT_ASSIGNMENTS=false` still stops new assignments.
+window. Staff smokes may also set
+`window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__=true` to fail closed instead
+of falling back to the normal HTTP worker path if a WebRTC artifact transfer
+does not complete. These flags are client-side only: plasma-lab still controls
+signaling/data with `FEATURE_COMPUTE_WEBRTC_SIGNALING` and
+`FEATURE_COMPUTE_WEBRTC_DATA`, and `COMPUTE_ACCEPT_ASSIGNMENTS=false` still
+stops new assignments.
 This does not enable ranked authority, private config access, or public
 assignment intake. TURN remains off unless
 `FEATURE_COMPUTE_WEBRTC_TURN=true` plus `COMPUTE_TURN_URLS`,

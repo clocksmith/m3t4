@@ -551,6 +551,13 @@ class ComputeClient {
       this.emit();
     } catch (e) {
       this.current = null;
+      if (artifactWebRtcStrict()) {
+        this.state = `webrtc artifact failed: ${message(e)}`;
+        this.totals.rejected++;
+        this.schedule(MODE_PROFILE[this.mode].cooldownMs);
+        this.emit();
+        return;
+      }
       this.state = `webrtc artifact fallback: ${message(e)}`;
       this.emit();
       this.runWorkerAssignment({ assignment, chunk, task });
@@ -665,6 +672,10 @@ function computeFlagEnabled() {
 
 function artifactWebRtcEnabled() {
   return window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS__ === true;
+}
+
+function artifactWebRtcStrict() {
+  return window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__ === true;
 }
 
 function persistedOptIn() {
@@ -1285,15 +1296,26 @@ async function runWebRtcArtifactTransfer(client, work, timeoutMs) {
       ["plasma-data", "plasma-receipts"].every((label) => channels.get(label)?.readyState === "open") ? true : null
     ), timeoutMs);
     if (!open) throw new Error("data channel timeout");
-    channels.get("plasma-data")?.send(JSON.stringify({
+    const request = JSON.stringify({
       protocol: "plasma-data.v0",
       type: "artifact-work",
       requestId,
       assignmentId: work.assignment.assignmentId,
       taskId: work.task.taskId,
       chunk: work.chunk,
-    }));
-    const gotResult = await waitFor(() => (remoteResult ? true : null), timeoutMs);
+    });
+    let nextSendAt = 0;
+    const sendRequest = () => {
+      if (channels.get("plasma-data")?.readyState !== "open") return;
+      channels.get("plasma-data")?.send(request);
+      nextSendAt = performance.now() + 500;
+    };
+    sendRequest();
+    const gotResult = await waitFor(() => {
+      if (remoteResult) return true;
+      if (performance.now() >= nextSendAt) sendRequest();
+      return null;
+    }, timeoutMs);
     if (!gotResult) throw new Error("artifact result timeout");
     if (!remoteResult.ok || typeof remoteResult.outputHash !== "string") {
       throw new Error(`artifact peer failed: ${remoteResult.error || "unknown"}`);

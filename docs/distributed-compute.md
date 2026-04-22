@@ -36,9 +36,10 @@ Current controlled-production status as of 2026-04-22:
 - assignment intake defaults to off and is opened only for bounded windows.
 - production validation requires ECDSA P-256 receipt signing.
 - workers do not receive server-held expected output hashes.
-- WebRTC data-channel work requires peer-signed subreceipts.
+- strict WebRTC proof tasks require `transport=webrtc`, accepted
+  server-issued peer subassignments, and peer-signed subreceipts.
 - two hosted browser clients have completed `m3t4.seed_sweep.v0` over
-  `plasma-data` with 2-of-2 accepted signed receipts.
+  `plasma-data` with 2-of-2 accepted signed strict receipts.
 
 The first demo kernel was `prime-search.v0`. It is intentionally boring: it
 proved assignment, execution, hashing, receipt submission, and quorum without

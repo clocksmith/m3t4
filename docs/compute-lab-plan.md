@@ -775,6 +775,15 @@ Strict WebRTC peer-subassignment seed-sweep production smoke:
   verifier: both receipt verifier endpoints returned ok=true, signatureRequired=true, signatureStatus=verified, and receiptHashMatches=true
   flags after run: acceptAssignments=false, WebRTC signaling/data=true, TURN=false, requireReceiptSignatures=true, pending chunks=0
 
+Strict WebRTC peer-subassignment seed-sweep 3-pass repeat:
+  command: PLASMA_LAB_SMOKE_REPEAT=3 npm -w plasma-lab run smoke:webrtc-seed-sweep
+  tasks: task-9aa0173fa6b2355e, task-72932f16cf77a670, task-966848e031fb05cb
+  validations: val-581ba26bb97ca327, val-cfc36e92b0965725, val-2557a10a33b4bb2e
+  receipts: 6 accepted transport=webrtc receipts
+  result: strict peer-subassignment path passed 3/3 in the hosted Chromium environment
+  relay: no relay observed in this environment
+  flags after run: acceptAssignments=false
+
 WebRTC hosted-client public-artifact 5-pass soak:
   origin: https://m3t4.ai
   tasks: task-e74c00a19ca998e5, task-bd5bfed3ddfe4af6, task-1acc1efc996c42be, task-6df61c81c99f98c8, task-42105b57df533f0d

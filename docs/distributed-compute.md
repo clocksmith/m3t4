@@ -19,7 +19,8 @@ claim, put it in Ouroboros.
 
 ## Current Shape
 
-The repo already has a Plasma-lite scaffold behind `FEATURE_DISTRIBUTED_COMPUTE`:
+The repo has a Plasma-lite scaffold running through the isolated `plasma-lab`
+sidecar:
 
 - spectators opt in from the Live page
 - the browser registers a worker capability envelope
@@ -28,9 +29,22 @@ The repo already has a Plasma-lite scaffold behind `FEATURE_DISTRIBUTED_COMPUTE`
 - the worker submits an execution receipt
 - the coordinator verifies quorum and updates local reputation counters
 
-The first demo kernel is `prime-search.v0`. It is intentionally boring: it
-proves assignment, execution, hashing, receipt submission, and quorum without
-shipping any private brain logic to the browser.
+Current controlled-production status as of 2026-04-22:
+
+- `plasma-lab` is deployed separately from ranked game authority.
+- public m3t4 compute flags remain off; staff smokes opt in from devtools.
+- assignment intake defaults to off and is opened only for bounded windows.
+- production validation requires ECDSA P-256 receipt signing.
+- workers do not receive server-held expected output hashes.
+- WebRTC data-channel work requires peer-signed subreceipts.
+- two hosted browser clients have completed `m3t4.seed_sweep.v0` over
+  `plasma-data` with 2-of-2 accepted signed receipts.
+
+The first demo kernel was `prime-search.v0`. It is intentionally boring: it
+proved assignment, execution, hashing, receipt submission, and quorum without
+shipping any private brain logic to the browser. The useful m3t4 kernels now in
+the safe ladder are public-artifact verification, public replay verification,
+and public-preset seed sweeps.
 
 ## Borrowed Rules
 
@@ -95,6 +109,25 @@ rate-limit. The WebRTC path should reuse the same assignment and receipt shape:
 WebRTC is a transport optimization. The authority still comes from content
 hashes, assignment IDs, validation policy, and replayable receipts.
 
+Current WebRTC claim:
+
+- `plasma-control`, `plasma-data`, and `plasma-receipts` are exercised in
+  controlled staff smokes.
+- accepted WebRTC data-plane receipts are still ingested and validated through
+  the normal coordinator path.
+- each receipt must bind the worker assignment and include a peer-signed
+  subreceipt for the remote execution result.
+- no relay was observed in the latest controlled production smokes, but TURN/NAT
+  diversity is not yet a public-coverage claim.
+
+Remaining before public-open use:
+
+- peer subassignments as first-class server-issued validation units
+- public admission/rate-limit/Sybil controls
+- NAT-diverse TURN policy and metrics
+- retry, timeout, and stale-pair cleanup dashboards
+- public receipt inspector copy that avoids overstating host trust
+
 ## Product Framing
 
 Call this “contribute idle cycles” in the product. Users should understand:
@@ -112,3 +145,8 @@ Use “receipt-carrying volunteer compute” until the proof stack is real. A
 receipt says what assignment ran, what output hash came back, which validation
 policy accepted it, and how the peer was credited. It is not yet a claim that
 the contributor's host, browser, or GPU was fully trusted.
+
+The strongest current claim is: controlled opted-in browsers can exchange
+public deterministic work over WebRTC, return assignment-bound signed receipts
+with peer-signed subreceipts, and have those receipts accepted by the sidecar
+validator without affecting ranked authority.

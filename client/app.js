@@ -19,6 +19,7 @@ const FEATURES = {
   zk: false,
   distributedCompute: false,
   computeSlackWorker: false,
+  computeWebRtcArtifacts: false,
   computeReceiptDashboard: false,
   computeLiveBadges: false,
 };
@@ -112,6 +113,9 @@ async function loadFeatures() {
     }
     if (FEATURES.computeSlackWorker === true) {
       window.__M3T4_COMPUTE_SLACK_WORKER__ = true;
+    }
+    if (FEATURES.computeWebRtcArtifacts === true) {
+      window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS__ = true;
     }
   } catch {
     // Static/local client without a reachable API keeps optional surfaces hidden.

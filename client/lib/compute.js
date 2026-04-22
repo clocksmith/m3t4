@@ -13,6 +13,7 @@
 const OPT_IN_KEY = "m3t4.compute.optIn";
 const CLIENT_VERSION = "compute-slack-http-v0";
 const SESSION_TOKEN_HEADER = "x-worker-session-token";
+const PUBLIC_ARTIFACT_KERNEL = "m3t4.public_artifact_verify.v0";
 
 const MODE_PROFILE = {
   quiet: { pollMs: 5000, cooldownMs: 2000, maxRenderMs: 10 },
@@ -93,6 +94,7 @@ class ComputeClient {
       frameP95Ms: p95(this.frameSamples),
       origin: computeLabOrigin(),
       optIn: persistedOptIn(),
+      webrtcArtifacts: artifactWebRtcEnabled(),
     };
   }
 
@@ -392,6 +394,14 @@ class ComputeClient {
       this.runWebRtcAssignment({ assignment, chunk, task });
       return;
     }
+    if (chunk.kind === PUBLIC_ARTIFACT_KERNEL && artifactWebRtcEnabled()) {
+      this.runWebRtcArtifactAssignment({ assignment, chunk, task });
+      return;
+    }
+    this.runWorkerAssignment({ assignment, chunk, task });
+  }
+
+  runWorkerAssignment({ assignment, chunk, task }) {
     this.current = {
       assignmentId: assignment.assignmentId,
       assignmentToken: assignment.assignmentToken,
@@ -474,6 +484,74 @@ class ComputeClient {
       this.current = null;
       this.schedule(MODE_PROFILE[this.mode].cooldownMs);
       this.emit();
+    }
+  }
+
+  async runWebRtcArtifactAssignment({ assignment, chunk, task }) {
+    this.current = {
+      assignmentId: assignment.assignmentId,
+      assignmentToken: assignment.assignmentToken,
+      chunkId: chunk.chunkId,
+      taskId: task.taskId,
+      kind: chunk.kind,
+      startedAt: performance.now(),
+    };
+    this.health.assignmentsStarted++;
+    this.state = `running ${chunk.kind} over webrtc`;
+    this.emit();
+    try {
+      const status = await computeLabStatus();
+      if (!status?.webrtcSignalingEnabled || !status?.webrtcDataEnabled) {
+        throw new Error("webrtc artifact transport disabled");
+      }
+      const transfer = await runWebRtcArtifactTransfer(this, { assignment, chunk, task }, 6500);
+      const receipt = {
+        workerId: this.workerId,
+        workerSessionId: this.workerSessionId,
+        workerSessionToken: this.workerSessionToken,
+        assignmentId: assignment.assignmentId,
+        assignmentToken: assignment.assignmentToken,
+        taskId: task.taskId,
+        chunkId: chunk.chunkId,
+        kernelId: chunk.kernelId,
+        kernelHash: chunk.kernelHash,
+        inputHash: chunk.inputHash,
+        artifactHash: chunk.artifactHash,
+        outputHash: { algorithm: "sha256", value: transfer.outputHash },
+        determinismClass: "bit-exact",
+        validationMode: "expected-hash",
+        executionMode: transfer.executionMode || "cpu",
+        transport: "webrtc",
+        governorMode: this.mode,
+        deviceClass: this.capability?.deviceClass || deviceClass(),
+        adapterInfo: {
+          ...(this.capability?.adapterInfo || adapterInfoBucket()),
+          ...transfer.transcript,
+        },
+        computeMs: transfer.computeMs,
+        clientVersion: CLIENT_VERSION,
+      };
+      const res = await fetch(computeLabOrigin() + "/compute/receipts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(receipt),
+      });
+      if (!res.ok) throw new Error(`receipt failed: ${res.status}`);
+      const body = await res.json();
+      this.health.receiptsSubmitted++;
+      const decision = body.receipt?.decision ?? "pending";
+      if (decision === "accepted") this.totals.accepted++;
+      else if (decision === "pending") this.totals.pending++;
+      else this.totals.rejected++;
+      this.state = `receipt: ${decision}`;
+      this.current = null;
+      this.schedule(MODE_PROFILE[this.mode].cooldownMs);
+      this.emit();
+    } catch (e) {
+      this.current = null;
+      this.state = `webrtc artifact fallback: ${message(e)}`;
+      this.emit();
+      this.runWorkerAssignment({ assignment, chunk, task });
     }
   }
 
@@ -581,6 +659,10 @@ function computeLabOrigin() {
 
 function computeFlagEnabled() {
   return window.__M3T4_COMPUTE_SLACK_WORKER__ === true;
+}
+
+function artifactWebRtcEnabled() {
+  return window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS__ === true;
 }
 
 function persistedOptIn() {
@@ -1067,6 +1149,238 @@ async function signaledWebRtcProbe(client, timeoutMs) {
     try { pc?.close?.(); } catch {}
     if (pairId && pairToken) pairPost("/close", {}).catch(() => {});
   }
+}
+
+async function runWebRtcArtifactTransfer(client, work, timeoutMs) {
+  if (typeof RTCPeerConnection === "undefined") throw new Error("RTCPeerConnection unavailable");
+  const join = await fetch(computeLabOrigin() + "/compute/webrtc/pairs/join", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      workerId: client.workerId,
+      workerSessionId: client.workerSessionId,
+      workerSessionToken: client.workerSessionToken,
+    }),
+  });
+  if (!join.ok) throw new Error(`pair join failed: ${join.status}`);
+  const joined = await join.json();
+  if (joined.dataEnabled !== true) throw new Error("webrtc data disabled");
+  const pairId = joined.pairId;
+  const pairToken = joined.pairToken;
+  const role = joined.role;
+  const peerId = client.workerId;
+  const candidateTypes = { host: false, srflx: false, relay: false };
+  const seenRemoteCandidates = new Set();
+  const channels = new Map();
+  const requestId = `artifact-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  let pc = null;
+  let pumpTimer = null;
+  let remoteResult = null;
+  let servedResult = null;
+  const t0 = performance.now();
+
+  const pairFetch = async (path = "") => {
+    const res = await fetch(computeLabOrigin() + `/compute/webrtc/pairs/${pairId}${path}`, {
+      headers: { "x-webrtc-pair-token": pairToken },
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`pair fetch ${res.status}`);
+    return res.json();
+  };
+  const pairPost = async (path, body) => {
+    const res = await fetch(computeLabOrigin() + `/compute/webrtc/pairs/${pairId}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-webrtc-pair-token": pairToken },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`pair post ${path} ${res.status}`);
+    return res.json();
+  };
+  const markCandidate = (candidate) => {
+    const raw = String(candidate?.candidate || "");
+    if (raw.includes(" typ host")) candidateTypes.host = true;
+    if (raw.includes(" typ srflx")) candidateTypes.srflx = true;
+    if (raw.includes(" typ relay")) candidateTypes.relay = true;
+  };
+  const addRemoteCandidates = async () => {
+    const latest = await pairFetch();
+    for (const candidate of latest.candidates || []) {
+      if (!candidate || candidate.peerId === peerId || seenRemoteCandidates.has(candidate.candidateId)) continue;
+      try {
+        await pc?.addIceCandidate(candidate.payload);
+        seenRemoteCandidates.add(candidate.candidateId);
+      } catch {
+        // Candidate may arrive before the remote description.
+      }
+    }
+    return latest;
+  };
+  const attachChannel = (ch) => {
+    channels.set(ch.label || "unknown", ch);
+    if (ch.label === "plasma-data") {
+      ch.onmessage = (ev) => {
+        handleArtifactWorkMessage(ev.data, channels, timeoutMs).then((ack) => {
+          if (ack) servedResult = ack;
+        }).catch((e) => {
+          servedResult = { ok: false, error: message(e) };
+        });
+      };
+    }
+    if (ch.label === "plasma-receipts") {
+      ch.onmessage = (ev) => {
+        const msg = parseJsonMessage(ev.data);
+        if (
+          msg?.protocol === "plasma-receipts.v0" &&
+          msg?.type === "artifact-result" &&
+          msg?.requestId === requestId
+        ) {
+          remoteResult = msg;
+        }
+      };
+    }
+  };
+
+  try {
+    pc = new RTCPeerConnection({ iceServers: configuredIceServers() });
+    pc.onicecandidate = (ev) => {
+      if (!ev.candidate) return;
+      markCandidate(ev.candidate);
+      pairPost("/candidates", {
+        peerId,
+        candidates: [typeof ev.candidate.toJSON === "function" ? ev.candidate.toJSON() : ev.candidate],
+      }).catch(() => {});
+    };
+    if (role === "offerer") {
+      for (const label of ["plasma-control", "plasma-data", "plasma-receipts"]) {
+        attachChannel(pc.createDataChannel(label, { ordered: true }));
+      }
+    } else {
+      pc.ondatachannel = (ev) => attachChannel(ev.channel);
+    }
+    pumpTimer = setInterval(() => { addRemoteCandidates().catch(() => {}); }, 250);
+
+    if (role === "offerer") {
+      await pc.setLocalDescription(await pc.createOffer());
+      await pairPost("/offer", { offer: pc.localDescription });
+      const answered = await waitFor(async () => {
+        const latest = await addRemoteCandidates();
+        return latest.answer ? latest : null;
+      }, timeoutMs);
+      if (!answered?.answer) throw new Error("answer timeout");
+      await pc.setRemoteDescription(answered.answer);
+    } else {
+      const offered = await waitFor(async () => {
+        const latest = await addRemoteCandidates();
+        return latest.offer ? latest : null;
+      }, timeoutMs);
+      if (!offered?.offer) throw new Error("offer timeout");
+      await pc.setRemoteDescription(offered.offer);
+      await pc.setLocalDescription(await pc.createAnswer());
+      await pairPost("/answer", { answer: pc.localDescription });
+    }
+
+    const open = await waitFor(() => (
+      ["plasma-data", "plasma-receipts"].every((label) => channels.get(label)?.readyState === "open") ? true : null
+    ), timeoutMs);
+    if (!open) throw new Error("data channel timeout");
+    channels.get("plasma-data")?.send(JSON.stringify({
+      protocol: "plasma-data.v0",
+      type: "artifact-work",
+      requestId,
+      assignmentId: work.assignment.assignmentId,
+      taskId: work.task.taskId,
+      chunk: work.chunk,
+    }));
+    const gotResult = await waitFor(() => (remoteResult ? true : null), timeoutMs);
+    if (!gotResult) throw new Error("artifact result timeout");
+    if (!remoteResult.ok || typeof remoteResult.outputHash !== "string") {
+      throw new Error(`artifact peer failed: ${remoteResult.error || "unknown"}`);
+    }
+    if (work.chunk.expectedOutputHash?.value && remoteResult.outputHash !== work.chunk.expectedOutputHash.value) {
+      throw new Error("artifact peer output mismatch");
+    }
+    return {
+      outputHash: remoteResult.outputHash,
+      computeMs: Number(remoteResult.computeMs) || 0,
+      executionMode: remoteResult.executionMode || "cpu",
+      transcript: {
+        status: "ok",
+        transfer: "plasma-data",
+        role,
+        dataChannelBucket: "open",
+        dataWorkBucket: "artifact-request-ok",
+        dataReceiptBucket: "ok",
+        servedArtifactBucket: servedResult?.ok ? "served-ok" : servedResult ? "served-failed" : "none",
+        webrtcOpenMsBucket: bucketMs(performance.now() - t0),
+        iceHostBucket: yesNo(candidateTypes.host),
+        iceSrflxBucket: yesNo(candidateTypes.srflx),
+        iceRelayBucket: yesNo(candidateTypes.relay),
+      },
+    };
+  } finally {
+    if (pumpTimer) clearInterval(pumpTimer);
+    for (const ch of channels.values()) {
+      try { ch.close?.(); } catch {}
+    }
+    try { pc?.close?.(); } catch {}
+    if (pairId && pairToken) pairPost("/close", {}).catch(() => {});
+  }
+}
+
+async function handleArtifactWorkMessage(raw, channels, timeoutMs) {
+  const msg = parseJsonMessage(raw);
+  if (msg?.protocol !== "plasma-data.v0" || msg?.type !== "artifact-work" || typeof msg.requestId !== "string") {
+    return null;
+  }
+  let receiptChannel = null;
+  try {
+    receiptChannel = await waitFor(() => (
+      channels.get("plasma-receipts")?.readyState === "open" ? channels.get("plasma-receipts") : null
+    ), 1000);
+    if (!receiptChannel) throw new Error("receipt channel unavailable");
+    const chunk = safeArtifactChunk(msg.chunk);
+    const result = await executeWorkerChunk(chunk, msg.requestId, Math.min(3500, timeoutMs));
+    const ack = {
+      protocol: "plasma-receipts.v0",
+      type: "artifact-result",
+      requestId: msg.requestId,
+      ok: true,
+      kernelId: result.kernelId,
+      outputHash: result.outputHash,
+      computeMs: Math.round(result.computeMs),
+      executionMode: result.executionMode || "cpu",
+    };
+    receiptChannel.send(JSON.stringify(ack));
+    return ack;
+  } catch (e) {
+    const ack = {
+      protocol: "plasma-receipts.v0",
+      type: "artifact-result",
+      requestId: msg.requestId,
+      ok: false,
+      error: message(e),
+    };
+    try { receiptChannel?.send(JSON.stringify(ack)); } catch {}
+    return ack;
+  }
+}
+
+function safeArtifactChunk(chunk) {
+  if (!chunk || chunk.kind !== PUBLIC_ARTIFACT_KERNEL) throw new Error("unsupported artifact chunk");
+  if (typeof chunk.params?.artifactJson !== "string" || chunk.params.artifactJson.length === 0) {
+    throw new Error("artifactJson required");
+  }
+  if (chunk.params.artifactJson.length > 1024 * 1024) throw new Error("artifactJson too large");
+  return {
+    chunkId: String(chunk.chunkId || "artifact-chunk"),
+    kind: PUBLIC_ARTIFACT_KERNEL,
+    params: { ...chunk.params, artifactJson: chunk.params.artifactJson },
+    kernelId: chunk.kernelId,
+    kernelHash: chunk.kernelHash,
+    inputHash: chunk.inputHash,
+    artifactHash: chunk.artifactHash,
+    expectedOutputHash: chunk.expectedOutputHash,
+  };
 }
 
 const PEER_WORK_PARAMS = Object.freeze({ start: 1009, endExclusive: 1033 });

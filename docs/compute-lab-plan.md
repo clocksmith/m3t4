@@ -645,6 +645,22 @@ N=2 derived-buffer smoke:
   receipts: rcpt-f8f30bb6a3fabbe0, rcpt-0d11561a858afc58
   validation: val-0e5d46229ed820e9
   result: both receipts accepted, chunk accepted, task complete
+
+N=2 derived-buffer browser smoke, repeatable script:
+  command: npm -w plasma-lab run smoke:derived-browser
+  env: PLASMA_LAB_SMOKE_ORIGIN, PLASMA_LAB_SMOKE_ADMIN_TOKEN, M3T4_SMOKE_GAME_ORIGIN
+  note: Playwright must be resolvable by Node; use NODE_PATH for an external install
+  task: task-76df66f0e5483f0d
+  receipts: rcpt-c547fae55473527f, rcpt-d0f5c06ef84b7b91
+  validation: val-25cda3dd504ca07a
+  result: both receipts accepted, chunk accepted, task complete
+
+N=2 public-artifact production smoke:
+  command: node plasma-lab/dist/smoke.js
+  task: task-a9a79a1bc9aac3c0
+  receipts: rcpt-c631ea84e617cb75, rcpt-16a5c0c4a878ef51
+  validation: val-b20a621d75a23e83
+  result: both receipts accepted, chunk accepted, task complete
 ```
 
 Observation: every derived evidence field was present in the accepted
@@ -976,6 +992,53 @@ Rollout order:
 13. replay verification tasks only
 14. public opt-in compute panel
 15. public volunteer-verified replay badge
+```
+
+## Closed Alpha Staff Window
+
+Use the runtime assignment toggle as the primary control. Keep the deploy-time
+flags enabled only for the surfaces being measured, but keep assignment intake
+closed until a staff window starts.
+
+```bash
+export PLASMA_LAB_ORIGIN="https://plasma-lab-789525635095.us-central1.run.app"
+export PLASMA_LAB_ADMIN_TOKEN="$(gcloud secrets versions access latest --secret=plasma-lab-admin-token --project=m3ta-ai)"
+
+# Open the staff window.
+curl -fsS -X POST "$PLASMA_LAB_ORIGIN/compute/admin/assignments" \
+  -H "content-type: application/json" \
+  -H "x-plasma-admin-token: $PLASMA_LAB_ADMIN_TOKEN" \
+  --data '{"acceptAssignments":true}'
+
+# Close the staff window.
+curl -fsS -X POST "$PLASMA_LAB_ORIGIN/compute/admin/assignments" \
+  -H "content-type: application/json" \
+  -H "x-plasma-admin-token: $PLASMA_LAB_ADMIN_TOKEN" \
+  --data '{"acceptAssignments":false}'
+```
+
+Cap the first closed-alpha window to:
+
+```text
+duration: 10 minutes open assignment intake
+participants: 2-3 staff browsers, all opted in manually
+seeded backlog: one task at a time
+quorum: 2-of-2 for public-artifact and derived-buffer tasks
+transport: HTTP receipts first; WebRTC data only in a named staff pairing test
+stop condition: accepted chunks expected, zero rejected/disagreement chunks
+dashboard guard: disable intake if running assignments exceed 4
+frame guard: disable intake if staff browsers report repeated render-struggling pauses
+```
+
+Rollback note:
+
+```text
+primary rollback: POST /compute/admin/assignments {"acceptAssignments":false}
+task rollback: POST /compute/admin/tasks/:taskId/cancel for the active seeded task
+client rollback: staff runs window.m3t4Compute.stop(); hidden opt-in remains off by default
+transport rollback: set FEATURE_COMPUTE_WEBRTC_DATA=false or FEATURE_COMPUTE_WEBRTC_SIGNALING=false
+service rollback: set COMPUTE_ACCEPT_ASSIGNMENTS=false on deploy or scale plasma-lab to zero
+hosting rollback: Firebase Hosting release rollback if a client config flag is wrong
 ```
 
 Rollback options:

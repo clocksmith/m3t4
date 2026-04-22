@@ -27,9 +27,8 @@ Current production status as of 2026-04-22:
 - `COMPUTE_REQUIRE_RECEIPT_SIGNATURES=true` is active for production
   validation work.
 - controlled two-browser WebRTC seed-sweep smokes have passed with
-  peer-signed subreceipts and public receipt verifier success.
-- the current code can require WebRTC at task-policy level and link parent
-  receipts to accepted server-issued peer subassignments.
+  task-required WebRTC, accepted server-issued peer subassignments,
+  peer-signed subreceipts, and public receipt verifier success.
 
 Do not describe the current implementation as fused-kernel, zero-copy,
 shared-buffer, or "every game frame is a science frame." The browser worker
@@ -761,6 +760,21 @@ Hardened WebRTC seed-sweep production smoke:
   verifier: both receipt verifier endpoints returned ok=true and signatureVerified=true
   flags after run: acceptAssignments=false, WebRTC signaling/data=true, TURN=false, requireReceiptSignatures=true, pending chunks=0
 
+Strict WebRTC peer-subassignment seed-sweep production smoke:
+  deployed revision: plasma-lab-00025-cnv
+  client commit: 829c704
+  command: npm -w plasma-lab run smoke:webrtc-seed-sweep
+  task: task-79d3836617a45ad8
+  witness task: task-342c9bdae8d2a320
+  witness validation: val-0ddf4c7473a5c0ee
+  receipts: rcpt-f4ec0e21acf4b297, rcpt-04f12572ef37bad4
+  peer subassignments: psub-8b58c65e8b9f3836, psub-dcfb5062b01cf42a
+  validation: val-951969f278ba8707
+  output hash: bda3a0265687d12576981409428bf10ea11cc9b2c3a6621905ea18924a571b4a
+  result: 2 hosted browsers, required transport=webrtc, accepted server-issued peer subassignments, peer-signed subreceipts, both receipts accepted, chunk accepted, task complete
+  verifier: both receipt verifier endpoints returned ok=true, signatureRequired=true, signatureStatus=verified, and receiptHashMatches=true
+  flags after run: acceptAssignments=false, WebRTC signaling/data=true, TURN=false, requireReceiptSignatures=true, pending chunks=0
+
 WebRTC hosted-client public-artifact 5-pass soak:
   origin: https://m3t4.ai
   tasks: task-e74c00a19ca998e5, task-bd5bfed3ddfe4af6, task-1acc1efc996c42be, task-6df61c81c99f98c8, task-42105b57df533f0d
@@ -902,7 +916,7 @@ outputs: canonical summary JSON hash with winner/score/round/tick/logHash rows
 limits: max 512 seeds per task, max 64 seeds per chunk
 route: POST /compute/admin/tasks/seed-sweep
 browser: advertised by opted-in hidden spectator workers and executable as CPU browser JS over HTTP or WebRTC data channels
-production proof: two hosted browser clients completed a 2-of-2 WebRTC plasma-data seed sweep with server-held expected output, verified top-level signatures, and verified peer-signed subreceipts. Current code additionally supports strict WebRTC proof tasks that require accepted server-issued peer subassignments.
+production proof: two hosted browser clients completed a 2-of-2 strict WebRTC plasma-data seed sweep with server-held expected output, required transport=webrtc, verified top-level signatures, accepted server-issued peer subassignments, and verified peer-signed subreceipts.
 ```
 
 This targets use cases 2 and 8 from the ladder: seed sweeps and balance

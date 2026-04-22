@@ -784,6 +784,13 @@ Strict WebRTC peer-subassignment seed-sweep 3-pass repeat:
   relay: no relay observed in this environment
   flags after run: acceptAssignments=false
 
+Post-config-clean strict WebRTC smoke:
+  task: task-64f18509a50ea10a
+  validation: val-7041c017dd6aa4ce
+  receipts: rcpt-2f1b10e3fdbf09a6, rcpt-40dc38229a864d6b
+  result: strict peer-subassignment path accepted both receipts, pageErrors empty on both hosted browser pages, /config.js served as text/javascript
+  flags after run: acceptAssignments=false
+
 WebRTC hosted-client public-artifact 5-pass soak:
   origin: https://m3t4.ai
   tasks: task-e74c00a19ca998e5, task-bd5bfed3ddfe4af6, task-1acc1efc996c42be, task-6df61c81c99f98c8, task-42105b57df533f0d

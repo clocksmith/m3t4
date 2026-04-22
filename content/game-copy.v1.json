@@ -72,11 +72,10 @@
     "about": {
       "title": "what m3t4.ai is",
       "body": [
-        "m3t4.ai is a live autonomous bot arena. You tune a bot, run a server-side test fight, then send it into a five-seat roster. The server runs the matches; Live shows the current fight.",
-        "You do not pilot frame by frame. You shape tendencies: movement, aggression, proof routing, denial, risk, and recovery. Strong bots come from finding useful behavior inside those constraints.",
-        "The ranked arena is server-authoritative. The public client receives replay frames and match events, not hidden decision code or private opponent configs.",
-        "The flagged compute lab now verifies public replay artifacts with assignment-bound browser receipts. Staff-controlled WebRTC runs have completed 2-of-2 expected-hash replay checks over data channels and publish public verification badges.",
-        "That compute work is advisory. Ranked authority, private configs, and open volunteer assignment intake stay off; exploit search and broader volunteer compute remain future stages."
+        "m3t4.ai is an experiment in verified distributed compute, staged as a live autonomous bot arena. Today, ranked play is server-authoritative: you tune a bot, submit it to a five-seat roster, and watch the server stream the fight. That boundary keeps competition fair while the peer-to-peer compute layer matures.",
+        "Finding a strong bot is a combinatorial search problem across seeds, opponents, maps, timing, recovery, denial, and risk, more like tuning a compiler, routing a chip, or scoring possible protein shapes than writing a fixed script. The arena turns that search into public, replayable artifacts that ordinary browsers can check independently without exposing private bot configs.",
+        "Those artifacts are the bridge to compute. As WebGPU becomes standard on ordinary hardware, a browser can receive a bounded assignment, run or verify a replay locally, and return a receipt describing what ran, on what input, and whether the expected hash matched. Other peers can repeat the job, so trust comes from duplication and comparison instead of one machine's claim.",
+        "The long-term target is a browser-native compute network where ordinary devices can find work, exchange inputs over peer channels, verify each other's results, and produce receipts for useful jobs beyond the arena."
       ]
     },
     "sections": [

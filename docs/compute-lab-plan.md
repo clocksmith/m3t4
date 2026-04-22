@@ -696,6 +696,13 @@ WebRTC client public-artifact transfer:
   env: PLASMA_LAB_SMOKE_ORIGIN, PLASMA_LAB_SMOKE_ADMIN_TOKEN, M3T4_SMOKE_GAME_ORIGIN
   use: launches two real browser clients, sets the staff-only WebRTC artifact flag, opens intake only for assignment issue, and requires two accepted transport=webrtc expected-hash receipts
 
+WebRTC hosted-client public-artifact 5-pass soak:
+  origin: https://m3t4.ai
+  tasks: task-e74c00a19ca998e5, task-bd5bfed3ddfe4af6, task-1acc1efc996c42be, task-6df61c81c99f98c8, task-42105b57df533f0d
+  validations: val-8147f74d62308144, val-ad4010546bb5095f, val-79990272c3c551c3, val-4cc94d054aa8241d, val-ae8a40240b27a535
+  receipts: 10 accepted transport=webrtc expected-hash receipts
+  result: transfer=plasma-data for every receipt, relay not used, no page errors, assignment intake false after each pass
+
 WebRTC public-artifact 3-pass soak:
   tasks: task-a9c8f3fef1a1e3ce, task-23dab3bae4588a78, task-19d7fbce279393e6
   validations: val-8debca2b894eaf09, val-75d547cf5c0fd5a8, val-c043d91e7115c91f

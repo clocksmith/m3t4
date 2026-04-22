@@ -937,6 +937,7 @@ td,th{border-bottom:1px solid #252b3a;padding:7px;text-align:left;vertical-align
 <h2>current capability map</h2><div id="capabilityMap"></div>
 <h2>observed capability map</h2><div id="capabilityObservationMap"></div>
 <h2>connectivity map</h2><div id="connectivityMap"></div>
+<h2>receipt transport summary</h2><div id="receiptTransportSummary"></div>
 <h2>tasks</h2><div id="tasks"></div>
 <h2>recent receipts</h2><div id="receipts"></div>
 <h2>raw</h2><pre id="raw"></pre>
@@ -1032,8 +1033,9 @@ function render(data, useCases) {
   document.getElementById("capabilityMap").innerHTML = table(["dimension","bucket","count"], flattenMap(data.capabilityMap || {}));
   document.getElementById("capabilityObservationMap").innerHTML = table(["dimension","bucket","count"], flattenMap(data.capabilityObservationMap || {}));
   document.getElementById("connectivityMap").innerHTML = table(["dimension","bucket","count"], flattenMap(data.connectivityMap || {}));
+  document.getElementById("receiptTransportSummary").innerHTML = table(["taskKind","validationMode","transport","transfer","dataChannelBucket","dataReceiptBucket","decision","count"], data.receiptTransportSummary || []);
   document.getElementById("tasks").innerHTML = table(["taskId","kind","status","chunks","accepted","rejected"], data.taskList || []);
-  document.getElementById("receipts").innerHTML = table(["receivedAt","workerId","taskId","chunkId","decision","computeMs"], data.receiptList || []);
+  document.getElementById("receipts").innerHTML = table(["receivedAt","workerId","taskId","chunkId","decision","transport","validationMode","computeMs"], data.receiptList || []);
   document.getElementById("raw").textContent = JSON.stringify(data, null, 2);
 }
 function flattenMap(map) {

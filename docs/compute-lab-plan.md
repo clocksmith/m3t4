@@ -661,6 +661,15 @@ N=2 public-artifact production smoke:
   receipts: rcpt-c631ea84e617cb75, rcpt-16a5c0c4a878ef51
   validation: val-b20a621d75a23e83
   result: both receipts accepted, chunk accepted, task complete
+
+Closed-alpha staff rehearsal:
+  surface: deployed m3t4.ai browser client, staff-only console flag
+  public feature flag: computeSlackWorker=false
+  command shape: set __M3T4_COMPUTE_SLACK_WORKER__, import /lib/compute.js, start("quiet")
+  task: task-98abd2ef657671b4
+  receipts: rcpt-27714195291fbf4d, rcpt-3fae735327518878
+  validation: val-d670fb7552262789
+  result: 2 browsers, 7.1s window, both receipts accepted, chunk accepted, task complete
 ```
 
 Observation: every derived evidence field was present in the accepted
@@ -1028,6 +1037,17 @@ transport: HTTP receipts first; WebRTC data only in a named staff pairing test
 stop condition: accepted chunks expected, zero rejected/disagreement chunks
 dashboard guard: disable intake if running assignments exceed 4
 frame guard: disable intake if staff browsers report repeated render-struggling pauses
+```
+
+For the pre-panel staff rehearsal, keep `computeSlackWorker=false` in
+`/api/status` and opt in from staff devtools only:
+
+```js
+window.__M3T4_COMPUTE_LAB_ORIGIN__ = "https://plasma-lab-789525635095.us-central1.run.app";
+window.__M3T4_COMPUTE_SLACK_WORKER__ = true;
+const { getComputeClient } = await import("/lib/compute.js");
+getComputeClient();
+await window.m3t4Compute.start("quiet");
 ```
 
 Rollback note:

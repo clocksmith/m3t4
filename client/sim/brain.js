@@ -4,12 +4,12 @@ import { GOAL_DWELL_RADIUS, GOAL_DWELL_S, KILL_RESPAWN_S, GRAVITY, RESPAWN_INVUL
 // commitment window. Replaces v2's per-tick reactive ladder. Params
 // bias mode transitions and tactical details within each mode; they no
 // longer drive behavior directly via a flat if/else.
-// v15: objective navigation gets a tiny platform graph, and clash-loop
+// v16: objective navigation gets a tiny platform graph, and clash-loop
 // symmetry breaking treats near-dominant anti-loop traits as equivalent.
-// Bots still see the same platform rectangles, but vertical routing now
-// chooses the next surface on a route instead of greedily picking one
-// platform above.
-export const BEHAVIOR_VERSION = 16;
+// v17: physics integration order is seed-flipped by the simulator, so
+// fighter 0 no longer always receives first integration order. Brain
+// anti-mirror policy remains id-asymmetric to preserve counter-cycles.
+export const BEHAVIOR_VERSION = 17;
 // ---------- Opp-model buffer sizing ----------
 //
 // Bounded ring: max 16 entries per stream, hard decay at 240 ticks (2 s).
@@ -632,7 +632,7 @@ function decideMode(obs, params, state, sig) {
     }
 }
 // ---------- Mode behavior functions ----------
-function runNeutralMode(obs, params, sig) {
+function runNeutralMode(obs, params, state, sig) {
     const chase = unit(params.chase);
     const chaseWindow = chase > 0.05 && sig.ticksSinceKill >= 0 && sig.ticksSinceKill < 180;
     if (chaseWindow && !obs.self.hasToken && !obs.opp.hasToken && !obs.token.exists) {
@@ -687,11 +687,11 @@ function runNeutralMode(obs, params, sig) {
         action: takeFreeSwing,
     };
 }
-// v5.1 symmetry breaker: when the top trait is close to the second
-// (within 0.1), fighter id 0 picks #1 and fighter id 1 picks #2. This
-// prevents mirror matches from mutually resolving to the same response
-// (e.g. two aerials both picking "escape" forever). Deterministic:
-// state.id is fixed per match, so replay integrity is preserved.
+// v5.1 symmetry breaker: when the top trait is close to the second,
+// fighter id 0 picks #1 and fighter id 1 picks #2. This prevents mirror
+// matches from mutually resolving to the same response (e.g. two aerials
+// both picking "escape" forever). Keeping this fixed by id preserves
+// roster counter-cycles; ranked side assignment is already randomized.
 function dominantAntiLoopTrait(params, state) {
     const entries = [
         ["greed", params.greed ?? 0.5],
@@ -732,8 +732,8 @@ function runOffenseMode(obs, params, state, sig) {
     // fighter 1. Identical-config mirror matches otherwise produce
     // perfectly synchronized swipes that always mutually parry. The
     // 7-tick offset is inside the swipe active window (14.4 ticks) so
-    // fighter 0 can land before fighter 1 starts. Deterministic — state.id
-    // is fixed per match.
+    // fighter 0 can land before fighter 1 starts. Deterministic — ranked
+    // side assignment and physics integration order are separately balanced.
     const asymOffset = state.id === 0 ? 0 : 7;
     const ticksSinceOwnAttack = obs.tick - obs.self.lastAttackStartTick;
     const swipeReady = obs.self.swipeCD <= 0 && obs.self.stun <= 0 &&
@@ -1174,7 +1174,7 @@ function runObjectiveMode(obs, params, state, sig) {
     }
     // Fallback — shouldn't reach here because objective-active triggered
     // the mode entry.
-    return runNeutralMode(obs, params, sig);
+    return runNeutralMode(obs, params, state, sig);
 }
 function runEscapeMode(obs, params, sig) {
     // Priority ladder. NEVER swipe.
@@ -1235,7 +1235,7 @@ export function runParamBrain(obs, params, state) {
     else if (state.mode === "zone")
         state.zoneTicksThisRound++;
     switch (state.mode) {
-        case "neutral": return runNeutralMode(obs, params, sig);
+        case "neutral": return runNeutralMode(obs, params, state, sig);
         case "offense": return runOffenseMode(obs, params, state, sig);
         case "zone": return runZoneMode(obs, params, sig);
         case "objective": return runObjectiveMode(obs, params, state, sig);

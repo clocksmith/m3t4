@@ -198,6 +198,7 @@ export interface World {
   freeze: number;
   rng: Rng;
   noiseSeed: number;
+  tickOrderFlip: boolean;
   brainStates: [BrainState, BrainState];
   // Optional per-fighter telemetry. When present, simulate() tallies mode
   // usage + action counts into these objects. Opt-in via SimulateOptions

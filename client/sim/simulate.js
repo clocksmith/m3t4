@@ -73,6 +73,19 @@ function mix32(x) {
 function noiseSeedFromMatchSeed(seed) {
     return mix32((seed >>> 0) ^ 0xa511e9b3);
 }
+function tickOrderFlipFromSeed(seed) {
+    return (mix32((seed >>> 0) ^ 0x71c0ffee) & 1) === 1;
+}
+function tickFighters(w, actA, actB) {
+    if (w.tickOrderFlip) {
+        tickFighter(w.fighters[1], w.fighters[0], actB, w);
+        tickFighter(w.fighters[0], w.fighters[1], actA, w);
+    }
+    else {
+        tickFighter(w.fighters[0], w.fighters[1], actA, w);
+        tickFighter(w.fighters[1], w.fighters[0], actB, w);
+    }
+}
 function noiseUnit(seed, tick, fighterId, paramIndex) {
     let x = seed >>> 0;
     x ^= Math.imul(tick + 1, 0x9e3779b9) >>> 0;
@@ -765,6 +778,7 @@ export function simulate(opts) {
     const rng = makeRng(opts.seed);
     const openingSpawnFlip = rng() < 0.5;
     const noiseSeed = noiseSeedFromMatchSeed(opts.seed);
+    const tickOrderFlip = tickOrderFlipFromSeed(opts.seed);
     const telemetry = opts.telemetry
         ? [emptyFighterTelemetry(), emptyFighterTelemetry()]
         : undefined;
@@ -785,6 +799,7 @@ export function simulate(opts) {
         freeze: 0,
         rng,
         noiseSeed,
+        tickOrderFlip,
         brainStates: [createBrainState(0), createBrainState(1)],
         telemetry,
     };
@@ -851,8 +866,7 @@ export function simulate(opts) {
         hashAcc = Math.imul(hashAcc, 16777619) >>> 0;
         hashAcc ^= pb;
         hashAcc = Math.imul(hashAcc, 16777619) >>> 0;
-        tickFighter(w.fighters[0], w.fighters[1], actA, w);
-        tickFighter(w.fighters[1], w.fighters[0], actB, w);
+        tickFighters(w, actA, actB);
         resolveCombat(w);
         updateGold(w);
         updateRoundTimer(w);
@@ -890,6 +904,7 @@ export function createStepperWorld(opts) {
     const chars = opts.chars ?? DEFAULT_CHARS;
     const rng = makeRng(opts.seed);
     const openingSpawnFlip = rng() < 0.5;
+    const tickOrderFlip = tickOrderFlipFromSeed(opts.seed);
     return {
         tick: 0,
         stage: opts.stage,
@@ -907,6 +922,7 @@ export function createStepperWorld(opts) {
         freeze: 0,
         rng,
         noiseSeed: noiseSeedFromMatchSeed(opts.seed),
+        tickOrderFlip,
         brainStates: [createBrainState(0), createBrainState(1)],
     };
 }
@@ -960,8 +976,7 @@ export function stepWorld(w, actA, actB) {
         w.tick++;
         return { matchWinner: w.matchWinner, tick: w.tick };
     }
-    tickFighter(w.fighters[0], w.fighters[1], actA, w);
-    tickFighter(w.fighters[1], w.fighters[0], actB, w);
+    tickFighters(w, actA, actB);
     resolveCombat(w);
     updateGold(w);
     updateRoundTimer(w);
@@ -1009,6 +1024,7 @@ export function simulateTrace(opts) {
     const rng = makeRng(opts.seed);
     const openingSpawnFlip = rng() < 0.5;
     const noiseSeed = noiseSeedFromMatchSeed(opts.seed);
+    const tickOrderFlip = tickOrderFlipFromSeed(opts.seed);
     const w = {
         tick: 0,
         stage,
@@ -1016,7 +1032,7 @@ export function simulateTrace(opts) {
         gold: null, goal: null, lastGoalIdx: -1, roundStartTick: 0,
         roundPause: 0, roundWinner: -1, matchWinner: -1,
         openingSpawnFlip,
-        killCounts: [0, 0], roundKillCounts: [0, 0], freeze: 0, rng, noiseSeed,
+        killCounts: [0, 0], roundKillCounts: [0, 0], freeze: 0, rng, noiseSeed, tickOrderFlip,
         brainStates: [createBrainState(0), createBrainState(1)],
     };
     const brainA = compileBrain(opts.brainA);
@@ -1085,8 +1101,7 @@ export function simulateTrace(opts) {
         hashAcc = Math.imul(hashAcc, 16777619) >>> 0;
         hashAcc ^= pb;
         hashAcc = Math.imul(hashAcc, 16777619) >>> 0;
-        tickFighter(w.fighters[0], w.fighters[1], actA, w);
-        tickFighter(w.fighters[1], w.fighters[0], actB, w);
+        tickFighters(w, actA, actB);
         resolveCombat(w);
         updateGold(w);
         updateRoundTimer(w);

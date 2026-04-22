@@ -127,6 +127,7 @@ export interface World {
     freeze: number;
     rng: Rng;
     noiseSeed: number;
+    tickOrderFlip: boolean;
     brainStates: [BrainState, BrainState];
     telemetry?: [FighterTelemetry, FighterTelemetry];
 }

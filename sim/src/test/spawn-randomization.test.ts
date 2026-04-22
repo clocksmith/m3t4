@@ -21,3 +21,15 @@ test("opening spawn side is seeded and round reset flips sides", () => {
   assert.equal(w.fighters[0].x, p0StartedLeft ? stage.spawnR.x : stage.spawnL.x);
   assert.equal(w.fighters[1].x, p0StartedLeft ? stage.spawnL.x : stage.spawnR.x);
 });
+
+test("physics tick order is seeded and deterministic", () => {
+  const stage = STAGES.datacenter;
+  const first = createStepperWorld({ stage, seed: 1 }).tickOrderFlip;
+  const second = createStepperWorld({ stage, seed: 1 }).tickOrderFlip;
+  const samples = new Set(Array.from({ length: 16 }, (_, i) =>
+    createStepperWorld({ stage, seed: 1 + i }).tickOrderFlip,
+  ));
+
+  assert.equal(first, second);
+  assert.deepEqual(samples, new Set([false, true]));
+});

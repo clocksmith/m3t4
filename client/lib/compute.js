@@ -1259,6 +1259,7 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
   const seenRemoteCandidates = new Set();
   const channels = new Map();
   const requestId = `artifact-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const servedRequestIds = new Set();
   let pc = null;
   let pumpTimer = null;
   let remoteResult = null;
@@ -1305,7 +1306,7 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
     channels.set(ch.label || "unknown", ch);
     if (ch.label === "plasma-data") {
       ch.onmessage = (ev) => {
-        handleArtifactWorkMessage(ev.data, channels, client, pairId, timeoutMs).then((ack) => {
+        handleArtifactWorkMessage(ev.data, channels, client, pairId, timeoutMs, servedRequestIds).then((ack) => {
           if (ack) servedResult = ack;
         }).catch((e) => {
           servedResult = { ok: false, error: message(e) };
@@ -1320,7 +1321,7 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
           msg?.type === "artifact-result" &&
           msg?.requestId === requestId
         ) {
-          remoteResult = msg;
+          if (!remoteResult || remoteResult.ok !== true) remoteResult = msg;
         }
       };
     }
@@ -1450,11 +1451,13 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
   }
 }
 
-async function handleArtifactWorkMessage(raw, channels, client, pairId, timeoutMs) {
+async function handleArtifactWorkMessage(raw, channels, client, pairId, timeoutMs, servedRequestIds = new Set()) {
   const msg = parseJsonMessage(raw);
   if (msg?.protocol !== "plasma-data.v0" || msg?.type !== "artifact-work" || typeof msg.requestId !== "string") {
     return null;
   }
+  if (servedRequestIds.has(msg.requestId)) return null;
+  servedRequestIds.add(msg.requestId);
   let receiptChannel = null;
   try {
     receiptChannel = await waitFor(() => (

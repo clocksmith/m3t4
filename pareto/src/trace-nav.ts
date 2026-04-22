@@ -398,6 +398,7 @@ for (const aName of names) {
         const routeDetourOverlappedLift = [false, false];
         const chaseUntil = [-1, -1];
         const chaseStartDist = [0, 0];
+        const chaseLiveBaseline = [false, false];
 
         while (w.matchWinner === -1 && w.tick < MAX_TICKS) {
           let acts: [Action, Action] = [{}, {}];
@@ -505,9 +506,13 @@ for (const aName of names) {
                 if (w.tick - f.lastClashTick < 90 && act.action) add(ms, "postClashCounterTicks");
               }
 
-              if (chaseUntil[id] > w.tick) {
-                add(ms, "chaseWindowTicks");
+              if (chaseUntil[id] > w.tick && !w.fighters[1 - id].dead) {
                 const distNow = distanceToOpp(w, id);
+                if (!chaseLiveBaseline[id]) {
+                  chaseStartDist[id] = distNow;
+                  chaseLiveBaseline[id] = true;
+                }
+                add(ms, "chaseWindowTicks");
                 const toward = distNow < chaseStartDist[id] - 8;
                 const away = distNow > chaseStartDist[id] + 40;
                 if (toward) add(ms, "chaseTowardTicks");
@@ -524,6 +529,7 @@ for (const aName of names) {
               add(matchStats[id], "kills", w.killCounts[id] - beforeKills[id]);
               chaseUntil[id] = w.tick + CHASE_WINDOW_TICKS;
               chaseStartDist[id] = distanceToOpp(w, id);
+              chaseLiveBaseline[id] = false;
             }
           }
         }

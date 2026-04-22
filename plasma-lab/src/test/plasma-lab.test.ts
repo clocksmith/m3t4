@@ -162,6 +162,65 @@ test("receipt submission rejects assignment token mismatches", () => {
   assert.equal(store.workerStatus(worker.worker.workerId)?.reputation.rejected, 1);
 });
 
+test("duplicate receipts from one assignment do not satisfy quorum", () => {
+  const now = clock();
+  const store = new ComputeLabStore({ now, acceptAssignments: true });
+  const task = store.seedPrimeTask({ start: 100, endExclusive: 140, chunkSize: 40 });
+  const w1 = store.registerWorker({ capability });
+  const w2 = store.registerWorker({ capability });
+  const a1 = store.assignNext(auth(w1))!;
+  const a2 = store.assignNext(auth(w2))!;
+  store.acceptAssignment({ ...auth(w1), assignmentId: a1.assignment.assignmentId, assignmentToken: a1.assignment.assignmentToken });
+  store.acceptAssignment({ ...auth(w2), assignmentId: a2.assignment.assignmentId, assignmentToken: a2.assignment.assignmentToken });
+
+  const first = store.submitReceipt({
+    ...auth(w1),
+    assignmentId: a1.assignment.assignmentId,
+    assignmentToken: a1.assignment.assignmentToken,
+    taskId: a1.task.taskId,
+    chunkId: a1.chunk.chunkId,
+    ...referencePrimeReceiptFields(a1.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 3,
+  });
+  assert.equal(first.receipt.decision, "pending");
+
+  const duplicate = store.submitReceipt({
+    ...auth(w1),
+    assignmentId: a1.assignment.assignmentId,
+    assignmentToken: a1.assignment.assignmentToken,
+    taskId: a1.task.taskId,
+    chunkId: a1.chunk.chunkId,
+    ...referencePrimeReceiptFields(a1.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 4,
+  });
+  assert.equal(duplicate.receipt.decision, "duplicate-receipt");
+  assert.equal(duplicate.validation, undefined);
+  assert.equal(store.getTask(task.taskId)?.status, "running");
+
+  const second = store.submitReceipt({
+    ...auth(w2),
+    assignmentId: a2.assignment.assignmentId,
+    assignmentToken: a2.assignment.assignmentToken,
+    taskId: a2.task.taskId,
+    chunkId: a2.chunk.chunkId,
+    ...referencePrimeReceiptFields(a2.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 5,
+  });
+  assert.equal(second.receipt.decision, "accepted");
+  assert.equal(second.validation?.status, "accepted");
+  assert.deepEqual(second.validation?.acceptedReceiptIds.sort(), [
+    first.receipt.receiptId,
+    second.receipt.receiptId,
+  ].sort());
+  assert.equal(second.validation?.comparedReceiptIds.includes(duplicate.receipt.receiptId), false);
+});
+
 test("signed receipts verify against the registered worker session key", () => {
   const now = clock();
   const store = new ComputeLabStore({ now, acceptAssignments: true });

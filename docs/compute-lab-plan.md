@@ -521,6 +521,7 @@ quorum-missing
 disagreement
 malformed
 assignment-mismatch
+duplicate-receipt
 input-mismatch
 output-mismatch
 kernel-mismatch

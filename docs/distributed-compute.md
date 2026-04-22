@@ -81,10 +81,10 @@ Recommended workload ladder:
 | 9 | `science.conformer_search_mini.v0` | Many short stochastic trajectories | replicated seeds plus energy sanity checks | Realistic but validation is harder |
 | 10 | `plasma.tensor_tile.v0` | Direct WebGPU/tensor contract fit | tolerance-bounded tensor comparison | Strong substrate proof, less visible to m3t4 users |
 
-The first useful m3t4 adapter should be `m3t4.replay_verify.v1`, not a hidden
-brain match batch. Browser peers can inspect any code and inputs they execute.
-`m3t4.match_batch.v0` is safe only when the policy kernel is public, the bots
-are intentionally non-secret, or a later attested/proof-carrying runtime exists.
+The first useful m3t4 class is public replay/artifact verification: public
+artifact hashes, public replay action logs, and public preset seed sweeps.
+Match batches remain unsafe unless every policy kernel, bot, and input is
+public, or a later attested/proof-carrying runtime exists.
 
 Not safe for browser peers:
 
@@ -115,14 +115,17 @@ Current WebRTC claim:
   controlled staff smokes.
 - accepted WebRTC data-plane receipts are still ingested and validated through
   the normal coordinator path.
-- each receipt must bind the worker assignment and include a peer-signed
-  subreceipt for the remote execution result.
+- strict WebRTC proof tasks can require `requiredTransport: "webrtc"` and
+  `requiredPeerSubreceipt: true`, so a proof task cannot silently fall back to
+  HTTP and still count as WebRTC evidence.
+- each strict WebRTC parent receipt must link to an accepted server-issued peer
+  subassignment from the remote worker, with a signed subreceipt bound to pair,
+  parent assignment, chunk, input hash, and output hash.
 - no relay was observed in the latest controlled production smokes, but TURN/NAT
   diversity is not yet a public-coverage claim.
 
 Remaining before public-open use:
 
-- peer subassignments as first-class server-issued validation units
 - public admission/rate-limit/Sybil controls
 - NAT-diverse TURN policy and metrics
 - retry, timeout, and stale-pair cleanup dashboards
@@ -147,6 +150,7 @@ policy accepted it, and how the peer was credited. It is not yet a claim that
 the contributor's host, browser, or GPU was fully trusted.
 
 The strongest current claim is: controlled opted-in browsers can exchange
-public deterministic work over WebRTC, return assignment-bound signed receipts
-with peer-signed subreceipts, and have those receipts accepted by the sidecar
+public deterministic work over WebRTC, receive server-issued peer
+subassignments, return assignment-bound signed receipts with linked
+peer-signed subreceipts, and have those receipts accepted by the sidecar
 validator without affecting ranked authority.

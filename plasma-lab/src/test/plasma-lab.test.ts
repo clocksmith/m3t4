@@ -1006,6 +1006,139 @@ test("WebRTC data receipts reject missing peer subreceipts", () => {
   assert.equal(rejected.receipt.reason, "peer subreceipt required");
 });
 
+test("WebRTC data receipts reject expired pair evidence", () => {
+  let nowMs = 1_000;
+  const store = new ComputeLabStore({
+    acceptAssignments: true,
+    now: () => nowMs,
+    webrtcSessionTtlMs: 500,
+  });
+  const requesterSigning = signingKeyPair();
+  const peerSigning = signingKeyPair();
+  const task = store.seedSeedSweepTask({
+    stageId: "boardroom",
+    brainA: "unicorn",
+    brainB: "disruptor",
+    seedStart: 24,
+    seedEndExclusive: 28,
+    seedChunkSize: 4,
+    minExecutions: 1,
+    minAgreeing: 1,
+  });
+  const requester = store.registerWorker({ capability, signingPublicKey: requesterSigning.publicJwk });
+  const peer = store.registerWorker({ capability, signingPublicKey: peerSigning.publicJwk });
+  store.joinWebRtcPair(auth(requester));
+  const pair = store.joinWebRtcPair(auth(peer)).pair;
+  const nextBody = store.assignNext(auth(requester))!;
+  store.acceptAssignment({
+    ...auth(requester),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  nowMs = pair.expiresAt + 1;
+  const fields = referenceReceiptFields(nextBody.chunk);
+  const receiptFields = {
+    ...auth(requester),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...fields,
+    executionMode: "cpu" as const,
+    transport: "webrtc" as const,
+    computeMs: 12,
+    adapterInfo: {
+      peerSubreceipt: signedPeerSubreceipt({
+        pairId: pair.pairId,
+        requestId: "peer-expired-1",
+        requester,
+        peer,
+        assignmentId: nextBody.assignment.assignmentId,
+        taskId: task.taskId,
+        chunkId: nextBody.chunk.chunkId,
+        kernelId: fields.kernelId,
+        kernelHash: fields.kernelHash,
+        inputHash: fields.inputHash,
+        artifactHash: fields.artifactHash,
+        outputHash: fields.outputHash,
+        executionMode: "cpu",
+        computeMs: 8,
+      }, peerSigning.privateKey),
+    },
+  };
+  const rejected = store.submitReceipt({
+    ...receiptFields,
+    ...signedReceiptFields(receiptFields, requesterSigning.privateKey),
+  });
+  assert.equal(rejected.receipt.decision, "malformed");
+  assert.equal(rejected.receipt.reason, "peer subreceipt pair expired");
+});
+
+test("WebRTC proof tasks reject informal peer subreceipts", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const requesterSigning = signingKeyPair();
+  const peerSigning = signingKeyPair();
+  const task = store.seedSeedSweepTask({
+    stageId: "boardroom",
+    brainA: "unicorn",
+    brainB: "disruptor",
+    seedStart: 30,
+    seedEndExclusive: 34,
+    seedChunkSize: 4,
+    minExecutions: 1,
+    minAgreeing: 1,
+    requiredTransport: "webrtc",
+    requiredPeerSubreceipt: true,
+  });
+  const requester = store.registerWorker({ capability, signingPublicKey: requesterSigning.publicJwk });
+  const peer = store.registerWorker({ capability, signingPublicKey: peerSigning.publicJwk });
+  store.joinWebRtcPair(auth(requester));
+  const pair = store.joinWebRtcPair(auth(peer)).pair;
+  const nextBody = store.assignNext(auth(requester))!;
+  store.acceptAssignment({
+    ...auth(requester),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const fields = referenceReceiptFields(nextBody.chunk);
+  const baseReceipt = {
+    ...auth(requester),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...fields,
+    executionMode: "cpu" as const,
+    transport: "webrtc" as const,
+    computeMs: 12,
+    clientVersion: "webrtc-peer-test",
+  };
+  const peerSubreceipt = signedPeerSubreceipt({
+    pairId: pair.pairId,
+    requestId: "peer-required-1",
+    requester,
+    peer,
+    assignmentId: nextBody.assignment.assignmentId,
+    taskId: task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    kernelId: fields.kernelId,
+    kernelHash: fields.kernelHash,
+    inputHash: fields.inputHash,
+    artifactHash: fields.artifactHash,
+    outputHash: fields.outputHash,
+    executionMode: "cpu",
+    computeMs: 8,
+    clientVersion: "peer-test",
+  }, peerSigning.privateKey);
+  const rejected = store.submitReceipt({
+    ...baseReceipt,
+    adapterInfo: { peerSubreceipt },
+    ...signedReceiptFields({ ...baseReceipt, adapterInfo: { peerSubreceipt } }, requesterSigning.privateKey),
+  });
+  assert.equal(rejected.receipt.decision, "malformed");
+  assert.equal(rejected.receipt.reason, "peer subassignment required");
+});
+
 test("WebRTC proof tasks require accepted server-issued peer subassignments", () => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const requesterSigning = signingKeyPair();
@@ -1045,30 +1178,6 @@ test("WebRTC proof tasks require accepted server-issued peer subassignments", ()
     computeMs: 12,
     clientVersion: "webrtc-peer-test",
   };
-  const informalSubreceipt = signedPeerSubreceipt({
-    pairId: pair.pairId,
-    requestId: "peer-required-1",
-    requester,
-    peer,
-    assignmentId: nextBody.assignment.assignmentId,
-    taskId: task.taskId,
-    chunkId: nextBody.chunk.chunkId,
-    kernelId: fields.kernelId,
-    kernelHash: fields.kernelHash,
-    inputHash: fields.inputHash,
-    artifactHash: fields.artifactHash,
-    outputHash: fields.outputHash,
-    executionMode: "cpu",
-    computeMs: 8,
-    clientVersion: "peer-test",
-  }, peerSigning.privateKey);
-  const missingSubassignment = store.submitReceipt({
-    ...baseReceipt,
-    adapterInfo: { peerSubreceipt: informalSubreceipt },
-    ...signedReceiptFields({ ...baseReceipt, adapterInfo: { peerSubreceipt: informalSubreceipt } }, requesterSigning.privateKey),
-  });
-  assert.equal(missingSubassignment.receipt.decision, "malformed");
-  assert.equal(missingSubassignment.receipt.reason, "peer subassignment required");
 
   const peerSubassignment = store.issuePeerSubassignment({
     ...auth(requester),
@@ -1751,7 +1860,7 @@ test("HTTP admin can seed public artifact verification from exported artifact", 
   assert.equal(seeded.status, 200);
   assert.equal(seeded.body.chunks, 1);
 
-  const worker = await register(srv.port);
+  const worker = await register(srv.port, capability, "secret");
   const n = await next(srv.port, worker);
   assert.equal(n.task.kind, "m3t4.public_artifact_verify.v0");
 });
@@ -1772,7 +1881,7 @@ test("HTTP admin can seed public replay verification artifacts", async (t) => {
   assert.equal(seeded.status, 200);
   assert.equal(seeded.body.chunks, 1);
 
-  const worker = await register(srv.port);
+  const worker = await register(srv.port, capability, "secret");
   const n = await next(srv.port, worker);
   assert.equal(n.task.kind, "m3t4.replay_verify.v1");
 });
@@ -1799,7 +1908,7 @@ test("HTTP admin can seed public preset seed sweeps", async (t) => {
   assert.equal(seeded.status, 200);
   assert.equal(seeded.body.chunks, 2);
 
-  const worker = await register(srv.port);
+  const worker = await register(srv.port, capability, "secret");
   const n = await next(srv.port, worker);
   assert.equal(n.task.kind, "m3t4.seed_sweep.v0");
 });
@@ -2367,6 +2476,7 @@ function mergeSnapshotPatch(
   mergeById(next, patch, "reputation", "workerId");
   mergeById(next, patch, "webrtcSessions", "sessionId");
   mergeById(next, patch, "webrtcPairs", "pairId");
+  mergeById(next, patch, "peerSubassignments", "peerAssignmentId");
   mergeById(next, patch, "capabilityObservations", "observationId");
   mergeById(next, patch, "connectivityObservations", "observationId");
   return next;
@@ -2454,7 +2564,7 @@ function signedPeerSubreceipt(input: {
 }, privateKey: KeyObject) {
   const payload = {
     peerReceiptVersion: 1,
-    protocol: "plasma-peer-result.v1",
+    protocol: "plasma-peer-result.v1" as const,
     peerAssignmentId: input.peerAssignmentId,
     pairId: input.pairId,
     requestId: input.requestId,
@@ -2556,13 +2666,13 @@ async function req(port: number, method: string, path: string, body?: unknown, h
   });
 }
 
-async function register(port: number, workerCapability: WorkerCapability = capability) {
+async function register(port: number, workerCapability: WorkerCapability = capability, adminToken = "test") {
   const resp = await req(
     port,
     "POST",
     "/compute/workers/register",
     { label: "plasma-lab-reference:test", capability: workerCapability },
-    { "x-plasma-admin-token": "test" },
+    { "x-plasma-admin-token": adminToken },
   );
   assert.equal(resp.status, 200);
   return resp.body as {

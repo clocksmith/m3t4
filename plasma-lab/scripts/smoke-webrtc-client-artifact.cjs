@@ -196,6 +196,8 @@ async function seedPublicArtifactTask(config, pass) {
     },
     minExecutions: 2,
     minAgreeing: 2,
+    requiredTransport: "webrtc",
+    requiredPeerSubreceipt: true,
   });
 }
 
@@ -205,6 +207,8 @@ async function seedReplayVerifyTask(config, pass) {
     replayArtifactJson,
     minExecutions: 2,
     minAgreeing: 2,
+    requiredTransport: "webrtc",
+    requiredPeerSubreceipt: true,
   });
 }
 
@@ -219,6 +223,8 @@ async function seedSeedSweepTask(config, pass) {
     maxTicks: 180,
     minExecutions: 2,
     minAgreeing: 2,
+    requiredTransport: "webrtc",
+    requiredPeerSubreceipt: true,
   });
 }
 
@@ -350,6 +356,12 @@ function assertWebRtcArtifactReceipts(receipts, chunk) {
     }
     if (transcript.dataReceiptBucket !== "ok") {
       throw new Error(`${receipt.receiptId} data receipt bucket was ${transcript.dataReceiptBucket}`);
+    }
+    if (!transcript.peerAssignmentId) {
+      throw new Error(`${receipt.receiptId} missing peer assignment id`);
+    }
+    if (transcript.peerSubreceipt?.peerAssignmentId !== transcript.peerAssignmentId) {
+      throw new Error(`${receipt.receiptId} peer subreceipt did not bind peer assignment`);
     }
   }
 }

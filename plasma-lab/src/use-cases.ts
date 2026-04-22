@@ -28,7 +28,7 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
     authority: "advisory",
     inputBoundary: "public replay artifact payload only",
     validation: "2-of-2 assignment-bound receipts against server-held expected hashes",
-    notes: "Integrity scaffold for exported public artifacts and WebRTC data-plane transport tests. Assignment payloads do not expose expected outputs or the server-held artifact hash; WebRTC data receipts require peer-signed subreceipts.",
+    notes: "Integrity scaffold for exported public artifacts and WebRTC data-plane transport tests. Assignment payloads do not expose expected outputs or the server-held artifact hash; strict WebRTC proof tasks require server-issued peer subassignments and peer-signed subreceipts.",
   },
   {
     id: "seed-sweeps",
@@ -86,7 +86,7 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
     status: "experimental",
     authority: "advisory",
     inputBoundary: "short-lived opaque signaling payloads and bucketed connectivity receipts",
-    validation: "same assignment and receipt contract as HTTP plus peer-signed data-channel subreceipts",
+    validation: "same assignment and receipt contract as HTTP plus task-required WebRTC transport, server-issued peer subassignments, and peer-signed data-channel subreceipts",
     notes: "Pairing/signaling and data-channel witness execution are separately flagged; public assignment intake remains independently gated.",
   },
   {

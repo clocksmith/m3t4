@@ -28,6 +28,8 @@ Current production status as of 2026-04-22:
   validation work.
 - controlled two-browser WebRTC seed-sweep smokes have passed with
   peer-signed subreceipts and public receipt verifier success.
+- the current code can require WebRTC at task-policy level and link parent
+  receipts to accepted server-issued peer subassignments.
 
 Do not describe the current implementation as fused-kernel, zero-copy,
 shared-buffer, or "every game frame is a science frame." The browser worker
@@ -512,7 +514,9 @@ receiptHash
 signature
 signaturePublicKeyHash
 signatureStatus: unsigned | verified | missing | invalid | key-unavailable
+signatureRequired: boolean in public verifier responses
 peerSubreceipt: required for WebRTC data-plane work
+peerAssignmentId: required on strict WebRTC peer subreceipts
 ```
 
 Production validation-eligible workers must register a receipt signing public
@@ -741,7 +745,7 @@ WebRTC client public-artifact transfer:
   repeat: set PLASMA_LAB_SMOKE_REPEAT=5 or pass --repeat=5 for a hosted soak
   replay verify: set PLASMA_LAB_SMOKE_KERNEL=replay-verify or pass --kernel=replay-verify
   seed sweep: set PLASMA_LAB_SMOKE_KERNEL=seed-sweep or pass --kernel=seed-sweep
-  use: launches two real browser clients, first accepts Device Witness render receipts to promote them out of observe-only, sets the staff-only WebRTC artifact flag, opens intake only during the controlled window, and requires two accepted transport=webrtc receipts with peer-signed subreceipts
+  use: launches two real browser clients, first accepts Device Witness render receipts to promote them out of observe-only, sets the staff-only WebRTC artifact flag, opens intake only during the controlled window, and requires two accepted transport=webrtc receipts with linked peer subassignments and peer-signed subreceipts
 
 Hardened WebRTC seed-sweep production smoke:
   deployed revision: plasma-lab-00024-5th
@@ -802,7 +806,7 @@ credit accepted receipts
 record timeout/disagreement separately
 ```
 
-The first useful m3t4 workload should be split into two claims:
+The first useful m3t4 workload should be split into three safe claims:
 
 ```text
 m3t4.public_artifact_verify.v0
@@ -898,7 +902,7 @@ outputs: canonical summary JSON hash with winner/score/round/tick/logHash rows
 limits: max 512 seeds per task, max 64 seeds per chunk
 route: POST /compute/admin/tasks/seed-sweep
 browser: advertised by opted-in hidden spectator workers and executable as CPU browser JS over HTTP or WebRTC data channels
-production proof: two hosted browser clients completed a 2-of-2 WebRTC plasma-data seed sweep with server-held expected output, verified top-level signatures, and verified peer-signed subreceipts
+production proof: two hosted browser clients completed a 2-of-2 WebRTC plasma-data seed sweep with server-held expected output, verified top-level signatures, and verified peer-signed subreceipts. Current code additionally supports strict WebRTC proof tasks that require accepted server-issued peer subassignments.
 ```
 
 This targets use cases 2 and 8 from the ladder: seed sweeps and balance
@@ -1188,14 +1192,14 @@ curl -fsS -X POST "$PLASMA_LAB_ORIGIN/compute/admin/assignments" \
   --data '{"acceptAssignments":false}'
 ```
 
-Cap the first closed-alpha window to:
+For staff/friends M0b soak windows, cap intake to:
 
 ```text
 duration: 10 minutes open assignment intake
 participants: 2-3 staff browsers, all opted in manually
 seeded backlog: one task at a time
-quorum: 2-of-2 assignment-bound server-held expected-hash checks for public-artifact and derived-buffer tasks
-transport: HTTP receipts first; WebRTC data only in a named staff pairing test
+quorum: 2-of-2 assignment-bound server-held expected-hash checks for public artifact/replay/seed-sweep tasks
+transport: strict WebRTC proof tasks require requiredTransport=webrtc, requiredPeerSubreceipt=true, and accepted peer subassignments; HTTP remains a fallback only for non-proof tasks
 stop condition: accepted chunks expected, zero rejected/disagreement chunks
 dashboard guard: disable intake if running assignments exceed 4
 frame guard: disable intake if staff browsers report repeated render-struggling pauses
@@ -1207,8 +1211,10 @@ frame guard: disable intake if staff browsers report repeated render-struggling 
 `m3t4.seed_sweep.v0` over `plasma-data`; it does not open assignment intake,
 create tasks, or bypass receipt validation. The client still requires
 plasma-lab `FEATURE_COMPUTE_WEBRTC_SIGNALING=true` and
-`FEATURE_COMPUTE_WEBRTC_DATA=true` from `/compute/status`, then falls back to the
-normal HTTP worker path if pairing fails.
+`FEATURE_COMPUTE_WEBRTC_DATA=true` from `/compute/status`. Non-proof tasks can
+fall back to the normal HTTP worker path if pairing fails; strict proof tasks
+must be seeded with `requiredTransport="webrtc"` and
+`requiredPeerSubreceipt=true` so fallback receipts are rejected.
 `window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__=true` is a staff smoke flag
 only: it disables that HTTP fallback so a controlled WebRTC transfer failure
 cannot be mistaken for a successful WebRTC receipt.

@@ -19,7 +19,9 @@ import {
 // anti-mirror policy remains id-asymmetric to preserve counter-cycles.
 // v18: repeated-clash mixups trigger sooner, so fights leave foil-locks
 // before they read as the same collision loop.
-export const BEHAVIOR_VERSION = 18;
+// v19: fighter body hitbox grows modestly to 28x56 so gameplay scale and
+// unscaled 64x64 character sheets align without a hidden render multiplier.
+export const BEHAVIOR_VERSION = 19;
 
 // ---------- Opp-model buffer sizing ----------
 //

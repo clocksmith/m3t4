@@ -248,9 +248,6 @@ function pointRangeGap(x, s) {
         return x - s.x2;
     return 0;
 }
-function surfaceCenterX(s) {
-    return (s.x1 + s.x2) * 0.5;
-}
 function surfaceTargetDistance(s, tx, ty) {
     return Math.hypot(pointRangeGap(tx, s), (s.y - ty) * 0.9);
 }

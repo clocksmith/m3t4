@@ -209,6 +209,7 @@ FEATURE_COMPUTE_WEBRTC_SIGNALING=false
 FEATURE_COMPUTE_WEBRTC_DATA=false
 FEATURE_COMPUTE_RECEIPT_DASHBOARD=false
 FEATURE_COMPUTE_LIVE_BADGES=false
+FEATURE_COMPUTE_AUTO_SEED_REPLAY_TASKS=false
 ```
 
 Operational kill switch:
@@ -457,6 +458,12 @@ inputHash
 outputHash
 ```
 
+Browser workers may also register a session-scoped ECDSA P-256 public key.
+When present, every receipt for that session must include a canonical
+`receiptHash` and a signature over that hash. Assignment and session tokens are
+validation secrets only; they must never be stored in durable receipt records or
+included in public receipt verification output.
+
 ## Receipt Shape
 
 Every receipt binds to an assignment, not just a chunk.
@@ -485,7 +492,10 @@ adapterInfo
 computeMs
 receivedAt
 clientVersion
+receiptHash
 signature
+signaturePublicKeyHash
+signatureStatus: unsigned | verified | missing | invalid | key-unavailable
 ```
 
 Durable public-ish receipt logs should avoid raw fingerprinting data. Store
@@ -519,6 +529,17 @@ internal-error
 ```
 
 Timeout is not the same as a wrong answer.
+
+Public receipt verification:
+
+```text
+GET /compute/receipts/:receiptId/verify
+```
+
+The verifier recomputes the canonical receipt hash from persisted receipt
+fields, checks it against the stored hash, and verifies the session signature
+when the worker registered a signing key. This proves receipt integrity and
+session binding; it does not prove the browser, OS, or GPU was honest.
 
 ## Determinism
 
@@ -772,6 +793,20 @@ rejects replay artifacts containing private player configs
 browser workers re-simulate action logs from public initial state and public action bytes only
 accepted receipts still require the normal expected-hash quorum
 ```
+
+Arena-server can seed replay verification work automatically after archiving a
+ranked replay when `FEATURE_COMPUTE_AUTO_SEED_REPLAY_TASKS=true`,
+`COMPUTE_LAB_ORIGIN` is set, and `PLASMA_LAB_ADMIN_TOKEN` is present. The hook
+posts both:
+
+```text
+POST /compute/admin/tasks/public-artifact
+POST /compute/admin/tasks/replay-verify
+```
+
+The replay-verify request uses a redacted copy of the replay artifact with
+private player configs removed. The hook is asynchronous and advisory; ranked
+archive and Elo updates must not depend on compute-lab task creation.
 
 `m3t4.public_artifact_verify.v0` inputs:
 

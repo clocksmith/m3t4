@@ -16,6 +16,7 @@ import type { StableStore, Stable, Slot } from "./stable.js";
 import { updatePair } from "./elo.js";
 import { shouldLogWatchlist, summarizeWatchlistMatch, watchlistTagsForSlot, type WatchlistTag } from "./watchlist.js";
 import { isHumanStable, matchmakerPressure, type MatchmakerPressure } from "./matchmaker-pressure.js";
+import { seedReplayComputeTasks } from "./compute/auto-seed.js";
 
 export interface Client {
   ws: WebSocket;
@@ -346,6 +347,17 @@ export class Firehose {
       console.log("[watchlist]", JSON.stringify({ matchId, ...watchlist }));
     }
     await this.store.archiveReplay(replay);
+    void seedReplayComputeTasks({
+      enabled: CONFIG.features.computeAutoSeedReplayTasks,
+      computeLabOrigin: CONFIG.computeLabOrigin,
+      adminToken: CONFIG.computeLabAdminToken,
+    }, replay).then((results) => {
+      if (results.some((result) => !result.ok)) {
+        console.warn("[compute-auto-seed]", JSON.stringify({ matchId, results }));
+      }
+    }).catch((e) => {
+      console.warn("[compute-auto-seed]", JSON.stringify({ matchId, error: e instanceof Error ? e.message : String(e) }));
+    });
     await this.store.updateAfterMatch({
       aUserId: sideA.stable.userId, aSlotId: sideA.slot.slotId, aEloBefore: sideA.slot.elo, aEloAfter: newA,
       bUserId: sideB.stable.userId, bSlotId: sideB.slot.slotId, bEloBefore: sideB.slot.elo, bEloAfter: newB,

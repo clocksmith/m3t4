@@ -1,4 +1,9 @@
 import {
+  createPublicKey,
+  verify as verifySignature,
+  type JsonWebKey,
+} from "node:crypto";
+import {
   DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_HASH,
   DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID,
   DEVICE_WITNESS_RENDER_KERNEL_HASH,
@@ -92,6 +97,8 @@ export interface WorkerSession {
   workerSessionId: string;
   workerId: string;
   token: string;
+  signingPublicKey?: JsonWebKey;
+  signingPublicKeyHash?: ContentHash;
   createdAt: number;
   expiresAt: number;
   lastSeenAt: number;
@@ -250,9 +257,25 @@ export interface ExecutionReceipt {
   computeMs: number;
   receivedAt: number;
   clientVersion?: string;
+  receiptHash?: ContentHash;
   signature?: string;
+  signaturePublicKeyHash?: ContentHash;
+  signatureStatus?: "unsigned" | "verified" | "missing" | "invalid" | "key-unavailable";
   decision: ReceiptDecision;
   reason?: string;
+}
+
+export interface ReceiptVerification {
+  receiptId: string;
+  ok: boolean;
+  decision: ReceiptDecision;
+  receiptHash: ContentHash;
+  storedReceiptHash?: ContentHash;
+  receiptHashMatches: boolean;
+  signatureStatus: ExecutionReceipt["signatureStatus"];
+  signatureVerified: boolean;
+  signaturePublicKeyHash?: ContentHash;
+  receipt: Omit<ExecutionReceipt, "signature">;
 }
 
 export interface ValidationRecord {
@@ -467,7 +490,7 @@ export class ComputeLabStore {
     for (const obs of snapshot.connectivityObservations ?? []) this.connectivityObservations.set(obs.observationId, obs);
   }
 
-  registerWorker(input: { label?: string; capability: WorkerCapability }): {
+  registerWorker(input: { label?: string; capability: WorkerCapability; signingPublicKey?: JsonWebKey }): {
     worker: WorkerRecord;
     session: WorkerSession;
     acceptedKernels: string[];
@@ -483,7 +506,7 @@ export class ComputeLabStore {
       lastSeenAt: now,
     };
     this.workers.set(workerId, worker);
-    const session = this.createSession(workerId);
+    const session = this.createSession(workerId, input.signingPublicKey);
     this.recordCapabilityObservation(worker, session, "register");
     this.reputation.set(workerId, {
       workerId,
@@ -1013,6 +1036,10 @@ export class ComputeLabStore {
     const worker = this.requireWorker(input.workerId);
     worker.lastSeenAt = this.now();
     session.lastSeenAt = worker.lastSeenAt;
+    if (this.shouldQuarantineWorker(worker.workerId).quarantined) return null;
+    if (this.activeAssignmentsForWorker(worker.workerId) >= Math.max(1, worker.capability.maxConcurrentChunks || 1)) {
+      return null;
+    }
     for (const task of this.tasks.values()) {
       if (task.status !== "running") continue;
       if (!worker.capability.kernels.includes(task.kind)) continue;
@@ -1069,7 +1096,12 @@ export class ComputeLabStore {
     workerSessionToken: string;
     assignmentToken: string;
   }): { receipt: ExecutionReceipt; validation?: ValidationRecord } {
-    this.requireSession(input.workerId, input.workerSessionId, input.workerSessionToken);
+    const session = this.requireSession(input.workerId, input.workerSessionId, input.workerSessionToken);
+    const prepared = this.prepareReceipt(input, session);
+    if (prepared.reason) {
+      return this.rejectDetachedReceipt(prepared.receipt, "malformed", prepared.reason);
+    }
+    input = prepared.receipt;
     const assignment = this.assignments.get(input.assignmentId);
     if (!assignment || assignment.assignmentToken !== input.assignmentToken) {
       return this.rejectDetachedReceipt(input, "assignment-mismatch", "assignment token mismatch");
@@ -1128,6 +1160,39 @@ export class ComputeLabStore {
 
   getReceipt(receiptId: string): ExecutionReceipt | null {
     return this.receipts.get(receiptId) ?? null;
+  }
+
+  verifyReceipt(receiptId: string): ReceiptVerification | null {
+    const receipt = this.receipts.get(receiptId);
+    if (!receipt) return null;
+    const receiptHash = computeReceiptHash(receipt);
+    const session = this.sessions.get(receipt.workerSessionId);
+    const signatureVerified = !!(
+      receipt.signature &&
+      session?.signingPublicKey &&
+      verifyReceiptSignature(receiptHash, receipt.signature, session.signingPublicKey)
+    );
+    const signatureStatus = session?.signingPublicKey
+      ? (signatureVerified ? "verified" : receipt.signature ? "invalid" : "missing")
+      : receipt.signature
+        ? "key-unavailable"
+        : "unsigned";
+    const { signature: _signature, ...redactedReceipt } = receipt;
+    return {
+      receiptId: receipt.receiptId,
+      ok: hashesEqual(receipt.receiptHash, receiptHash) && (
+        signatureStatus === "verified" ||
+        signatureStatus === "unsigned"
+      ),
+      decision: receipt.decision,
+      receiptHash,
+      storedReceiptHash: receipt.receiptHash,
+      receiptHashMatches: hashesEqual(receipt.receiptHash, receiptHash),
+      signatureStatus,
+      signatureVerified,
+      signaturePublicKeyHash: session?.signingPublicKeyHash ?? receipt.signaturePublicKeyHash,
+      receipt: redactedReceipt,
+    };
   }
 
   cancelTask(taskId: string): ComputeTask {
@@ -1202,6 +1267,13 @@ export class ComputeLabStore {
   }): { pair: WebRtcPairRecord; role: "offerer" | "answerer" } {
     this.requireSession(input.workerId, input.workerSessionId, input.workerSessionToken);
     this.expireWebRtcPairs();
+    const existing = this.activeWebRtcPairForWorker(input.workerId);
+    if (existing) {
+      return {
+        pair: existing,
+        role: existing.offererWorkerId === input.workerId ? "offerer" : "answerer",
+      };
+    }
     const waiting = Array.from(this.webrtcPairs.values())
       .filter((pair) =>
         pair.status === "waiting" &&
@@ -1367,6 +1439,10 @@ export class ComputeLabStore {
     });
   }
 
+  workerTrustState(workerId: string): { quarantined: boolean; reason?: string } {
+    return this.shouldQuarantineWorker(workerId);
+  }
+
   deviceClassProfiles(): ClassProfile[] {
     return classProfiles(this.workerProfiles(), this.now(), (profile) => profile.deviceClass || "unknown");
   }
@@ -1470,6 +1546,7 @@ export class ComputeLabStore {
         deviceClass: worker.capability.deviceClass,
         adapterInfo: worker.capability.adapterInfo,
         capabilityHash: worker.capability.capabilityHash,
+        trust: this.shouldQuarantineWorker(worker.workerId),
       })),
       taskList: Array.from(this.tasks.values()).map((task) => ({
         taskId: task.taskId,
@@ -1527,12 +1604,15 @@ export class ComputeLabStore {
     trimMapByTime(this.connectivityObservations, 5000, (obs) => obs.observedAt);
   }
 
-  private createSession(workerId: string): WorkerSession {
+  private createSession(workerId: string, signingPublicKey?: JsonWebKey): WorkerSession {
     const now = this.now();
+    const key = normalizeSigningPublicKey(signingPublicKey);
     const session: WorkerSession = {
       workerSessionId: randomId("cs"),
       workerId,
       token: randomToken("stok"),
+      signingPublicKey: key,
+      signingPublicKeyHash: key ? hashCanonical(key) : undefined,
       createdAt: now,
       expiresAt: now + this.workerSessionTtlMs,
       lastSeenAt: now,
@@ -1574,6 +1654,39 @@ export class ComputeLabStore {
     return assignment;
   }
 
+  private activeAssignmentsForWorker(workerId: string): number {
+    this.expireAssignments();
+    return Array.from(this.assignments.values()).filter((assignment) =>
+      assignment.workerId === workerId &&
+      assignment.expiresAt > this.now() &&
+      (assignment.status === "offered" || assignment.status === "accepted")
+    ).length;
+  }
+
+  private shouldQuarantineWorker(workerId: string): { quarantined: boolean; reason?: string } {
+    const rep = this.reputation.get(workerId);
+    if (!rep) return { quarantined: false };
+    const hardBad = rep.rejected + rep.disagreements;
+    const totalDecided = rep.accepted + rep.rejected + rep.disagreements;
+    if (hardBad >= 3 && rep.accepted === 0) {
+      return { quarantined: true, reason: "repeated bad receipts with no accepted work" };
+    }
+    if (totalDecided >= 6 && hardBad / totalDecided >= 0.5) {
+      return { quarantined: true, reason: "bad receipt rate exceeded scheduler threshold" };
+    }
+    return { quarantined: false };
+  }
+
+  private activeWebRtcPairForWorker(workerId: string): WebRtcPairRecord | null {
+    return Array.from(this.webrtcPairs.values())
+      .filter((pair) =>
+        pair.status !== "closed" &&
+        pair.expiresAt > this.now() &&
+        (pair.offererWorkerId === workerId || pair.answererWorkerId === workerId)
+      )
+      .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
+  }
+
   private rejectDetachedReceipt(
     input: Omit<ExecutionReceipt, "receiptId" | "receivedAt" | "decision" | "reason">,
     decision: ReceiptDecision,
@@ -1590,13 +1703,50 @@ export class ComputeLabStore {
     decision: ReceiptDecision,
     reason?: string,
   ): ExecutionReceipt {
+    const safeInput = stripReceiptAuthSecrets(input);
+    const receiptHash = computeReceiptHash(safeInput);
     return {
-      ...input,
+      ...safeInput,
+      receiptHash,
       receiptId: randomId("rcpt"),
       receivedAt: this.now(),
       decision,
       reason,
     };
+  }
+
+  private prepareReceipt(
+    input: Omit<ExecutionReceipt, "receiptId" | "receivedAt" | "decision" | "reason"> & {
+      workerSessionToken: string;
+      assignmentToken: string;
+    },
+    session: WorkerSession,
+  ): {
+    receipt: typeof input;
+    reason?: string;
+  } {
+    const receiptHash = computeReceiptHash(input);
+    const signaturePublicKeyHash = session.signingPublicKeyHash;
+    const signatureStatus = receiptSignatureStatus(receiptHash, input.signature, session.signingPublicKey);
+    const receipt = {
+      ...input,
+      receiptHash,
+      signaturePublicKeyHash,
+      signatureStatus,
+    };
+    if (input.receiptHash && !hashesEqual(input.receiptHash, receiptHash)) {
+      return { receipt, reason: "receipt hash mismatch" };
+    }
+    if (session.signingPublicKey && signatureStatus === "missing") {
+      return { receipt, reason: "receipt signature required" };
+    }
+    if (session.signingPublicKey && signatureStatus === "invalid") {
+      return { receipt, reason: "receipt signature invalid" };
+    }
+    if (!session.signingPublicKey && input.signature) {
+      return { receipt, reason: "receipt signing public key unavailable" };
+    }
+    return { receipt };
   }
 
   private evaluateChunk(task: ComputeTask, chunk: ComputeChunk): ValidationRecord | undefined {
@@ -1799,6 +1949,105 @@ function stringParam(value: unknown): string {
 
 function hashesEqual(a: ContentHash | undefined, b: ContentHash | undefined): boolean {
   return !!a && !!b && a.algorithm === b.algorithm && a.value.toLowerCase() === b.value.toLowerCase();
+}
+
+function stripReceiptAuthSecrets<T>(input: T): Omit<T, "workerSessionToken" | "assignmentToken"> {
+  const {
+    workerSessionToken: _workerSessionToken,
+    assignmentToken: _assignmentToken,
+    ...safe
+  } = input as T & { workerSessionToken?: string; assignmentToken?: string };
+  return safe;
+}
+
+export function receiptHashPayload(
+  input: Pick<ExecutionReceipt,
+    | "workerId"
+    | "workerSessionId"
+    | "assignmentId"
+    | "taskId"
+    | "chunkId"
+    | "kernelId"
+    | "kernelHash"
+    | "inputHash"
+    | "artifactHash"
+    | "outputHash"
+    | "determinismClass"
+    | "validationMode"
+    | "executionMode"
+    | "transport"
+    | "governorMode"
+    | "deviceClass"
+    | "adapterInfo"
+    | "derived"
+    | "computeMs"
+    | "clientVersion"
+  >,
+): Record<string, unknown> {
+  return {
+    receiptVersion: 1,
+    workerId: input.workerId,
+    workerSessionId: input.workerSessionId,
+    assignmentId: input.assignmentId,
+    taskId: input.taskId,
+    chunkId: input.chunkId,
+    kernelId: input.kernelId,
+    kernelHash: input.kernelHash,
+    inputHash: input.inputHash,
+    artifactHash: input.artifactHash,
+    outputHash: input.outputHash,
+    determinismClass: input.determinismClass,
+    validationMode: input.validationMode,
+    executionMode: input.executionMode,
+    transport: input.transport,
+    governorMode: input.governorMode,
+    deviceClass: input.deviceClass,
+    adapterInfo: input.adapterInfo,
+    derived: input.derived,
+    computeMs: input.computeMs,
+    clientVersion: input.clientVersion,
+  };
+}
+
+export function computeReceiptHash(
+  input: Parameters<typeof receiptHashPayload>[0],
+): ContentHash {
+  return hashCanonical(receiptHashPayload(input));
+}
+
+function normalizeSigningPublicKey(input: JsonWebKey | undefined): JsonWebKey | undefined {
+  if (!input || input.kty !== "EC" || input.crv !== "P-256") return undefined;
+  if (typeof input.x !== "string" || typeof input.y !== "string") return undefined;
+  return {
+    kty: "EC",
+    crv: "P-256",
+    x: input.x,
+    y: input.y,
+  };
+}
+
+function receiptSignatureStatus(
+  receiptHash: ContentHash,
+  signature: string | undefined,
+  publicKey: JsonWebKey | undefined,
+): ExecutionReceipt["signatureStatus"] {
+  if (!publicKey) return signature ? "key-unavailable" : "unsigned";
+  if (!signature) return "missing";
+  return verifyReceiptSignature(receiptHash, signature, publicKey) ? "verified" : "invalid";
+}
+
+function verifyReceiptSignature(receiptHash: ContentHash, signature: string, publicKey: JsonWebKey): boolean {
+  try {
+    const key = createPublicKey({ key: publicKey, format: "jwk" });
+    return verifySignature(
+      "sha256",
+      Buffer.from(receiptHash.value, "utf8"),
+      { key, dsaEncoding: "ieee-p1363" },
+      Buffer.from(signature, "base64url"),
+    );
+  } catch {
+    return false;
+  }
 }
 
 function measurementReceiptHash(chunk: ComputeChunk, adapterInfo: Record<string, unknown> | undefined): ContentHash | null {

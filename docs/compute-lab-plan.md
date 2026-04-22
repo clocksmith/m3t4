@@ -959,6 +959,27 @@ The browser refreshes capability reports periodically through
 validation truth. The dashboard aggregates current worker capability under
 `capabilityMap` and historical observations under `capabilityObservationMap`.
 
+Scheduler admission is tiered:
+
+```text
+observe-only
+  can receive Device Witness and measurement tasks that establish evidence
+
+cpu-light
+  can receive public replay/artifact verification and seed-sweep chunks
+
+webgpu-light
+  can receive cpu-light work and future small WebGPU chunks
+```
+
+`cpu-reference` workers enter at `cpu-light`. Browser workers start at
+`observe-only` until bucketed fixture evidence, accepted receipts, or WebGPU
+correctness evidence promotes them. The scheduler also scores candidates with
+trust score, recent failure rate, WebRTC direct-success rate, TURN need,
+kernel timing, live concurrency, and quarantine state. These controls are
+assignment hints only; receipts still require assignment binding, canonical
+hashes, signatures when a session key exists, and normal quorum validation.
+
 Connectivity witness reports are submitted through `POST /compute/connectivity`
 after opt-in. The browser records only buckets: HTTP RTT, Network Information
 API class, local WebRTC datachannel open latency, ICE gather timing, candidate

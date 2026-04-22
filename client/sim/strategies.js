@@ -80,13 +80,15 @@ export const STRATEGIES = {
             parry: 0.69, chase: 0, discipline: 0, hallucination: 0,
         },
     },
-    // v17 de-clone source=roster-v15-selected:g12-s39 spent=360
+    // v21 role repair: keeps the high-lift carrier at spend=360 while
+    // moving part of pacing into cunning so the installed roster can
+    // express delivery bait/cancel behavior without a global brain rule.
     operator: {
         id: "operator",
         attributes: {
             burnRate: 0, moat: 0, shipRate: 0.59, foresight: 0,
             pivotSpeed: 0, leverage: 0.04, networking: 0, spite: -0.18,
-            greed: 0, pacing: 0.77, cunning: 0, lift: 0.54,
+            greed: 0, pacing: 0.45, cunning: 0.32, lift: 0.54,
             parry: 0, chase: 0, discipline: 0.77, hallucination: 0,
         },
     },

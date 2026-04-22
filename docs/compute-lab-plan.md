@@ -661,6 +661,47 @@ N=2 public-artifact production smoke:
   receipts: rcpt-c631ea84e617cb75, rcpt-16a5c0c4a878ef51
   validation: val-b20a621d75a23e83
   result: both receipts accepted, chunk accepted, task complete
+
+Closed-alpha staff rehearsal:
+  surface: deployed m3t4.ai browser client, staff-only console flag
+  public feature flag: computeSlackWorker=false
+  command shape: set __M3T4_COMPUTE_SLACK_WORKER__, import /lib/compute.js, start("quiet")
+  task: task-98abd2ef657671b4
+  receipts: rcpt-27714195291fbf4d, rcpt-3fae735327518878
+  validation: val-d670fb7552262789
+  result: 2 browsers, 7.1s window, both receipts accepted, chunk accepted, task complete
+
+Closed-alpha WebRTC staff window:
+  command: npm -w plasma-lab run smoke:webrtc-browser
+  env: PLASMA_LAB_SMOKE_ORIGIN, PLASMA_LAB_SMOKE_ADMIN_TOKEN, M3T4_SMOKE_GAME_ORIGIN
+  task: task-88ba001cb5b528e9
+  receipts: rcpt-6f2d05d708b2f3b7, rcpt-68fbcba0733869c7
+  validation: val-a53c730737178ec9
+  result: 2 browsers, 10.3s window, WebRTC data channel open, measurement receipts accepted
+  data work: request-ok on offerer, served-ok on answerer, relay not used
+
+WebRTC public-artifact transfer:
+  command: npm -w plasma-lab run smoke:webrtc-artifact
+  env: PLASMA_LAB_SMOKE_ORIGIN, PLASMA_LAB_SMOKE_ADMIN_TOKEN, M3T4_SMOKE_GAME_ORIGIN
+  task: task-d1aabea87a32448a
+  receipts: rcpt-ae00c482ed47a6b4, rcpt-d7707d8a14222e3d
+  validation: val-ed5af97b3757f671
+  result: public-artifact chunks moved over plasma-data, receipt acks over plasma-receipts
+  authority: normal HTTP receipt ingestion accepted both transport=webrtc expected-hash receipts
+  safety: assignment intake closed before the P2P transfer began and remained closed afterward
+
+WebRTC public-artifact 3-pass soak:
+  tasks: task-a9c8f3fef1a1e3ce, task-23dab3bae4588a78, task-19d7fbce279393e6
+  validations: val-8debca2b894eaf09, val-75d547cf5c0fd5a8, val-c043d91e7115c91f
+  receipts: 6 accepted transport=webrtc receipts
+  result: no relay, no rejected chunks, no timeouts, assignment intake false after each pass
+
+WebRTC public-artifact additional 5-pass soak:
+  tasks: task-7ac1064b78104db0, task-93bee98cb15335f4, task-afdbf6efa8d2dc8b, task-ffcd36028986aaca, task-bb2f217cd4e36a9d
+  validations: val-c939d1e8bc50b237, val-c4ec2779cd86994b, val-52461bfa835a395e, val-3741a016fd4eb26e, val-6fac9eba305f37d8
+  receipts: 10 accepted transport=webrtc receipts
+  aggregate: 9 public-artifact WebRTC tasks accepted including the first transfer
+  result: no relay, no rejected chunks, no timeouts, assignment intake false after each pass
 ```
 
 Observation: every derived evidence field was present in the accepted
@@ -1028,6 +1069,17 @@ transport: HTTP receipts first; WebRTC data only in a named staff pairing test
 stop condition: accepted chunks expected, zero rejected/disagreement chunks
 dashboard guard: disable intake if running assignments exceed 4
 frame guard: disable intake if staff browsers report repeated render-struggling pauses
+```
+
+For the pre-panel staff rehearsal, keep `computeSlackWorker=false` in
+`/api/status` and opt in from staff devtools only:
+
+```js
+window.__M3T4_COMPUTE_LAB_ORIGIN__ = "https://plasma-lab-789525635095.us-central1.run.app";
+window.__M3T4_COMPUTE_SLACK_WORKER__ = true;
+const { getComputeClient } = await import("/lib/compute.js");
+getComputeClient();
+await window.m3t4Compute.start("quiet");
 ```
 
 Rollback note:

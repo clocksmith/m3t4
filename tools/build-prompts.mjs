@@ -2,20 +2,20 @@
 // Expand theming/visual-theme.v1.json into one prompt-per-asset,
 // ready to paste into an image generator (Gemini / GPT image / Midjourney).
 //
-// Launch batch (default): 25 prompts. Emits three-row character sprite
-// strips plus the other launch assets. Skips anything marked
-// "status": "deferred" in the SSOT — boardroom/demoday stage layers +
-// textures, and the epic/legendary weapon sheets.
+// Playable batch (default): 43 prompts. Emits three-row character sprite
+// strips plus all current playable stage/objective/UI assets. Skips
+// anything marked "status": "deferred" in the SSOT — locked characters
+// and epic/legendary weapon sheets.
 //
 // Usage:
-//   node tools/build-prompts.mjs                       # launch batch, one Gemini .txt per asset
+//   node tools/build-prompts.mjs                       # playable batch, one Gemini .txt per asset
 //   node tools/build-prompts.mjs --only stages         # single bucket
 //   node tools/build-prompts.mjs --only characters     # (stages | characters |
 //   node tools/build-prompts.mjs --only portraits      #  portraits | weapons |
 //   node tools/build-prompts.mjs --only weapons        #  objectives | ui)
 //   node tools/build-prompts.mjs --only objectives
 //   node tools/build-prompts.mjs --only ui             # locked-slot placeholder
-//   node tools/build-prompts.mjs --include-deferred    # launch + deferred
+//   node tools/build-prompts.mjs --include-deferred    # playable + deferred
 //   node tools/build-prompts.mjs --format gemini       # one Gemini copy/paste .txt per asset
 //   node tools/build-prompts.mjs --format gpt          # one GPT image copy/paste .txt per asset
 //   node tools/build-prompts.mjs --format chat         # alias for Gemini copy/paste files
@@ -29,13 +29,14 @@
 //   node tools/build-prompts.mjs --missing-only        # only assets missing from client/
 //   node tools/build-prompts.mjs --stdout              # print copy/paste formats instead
 //
-// Launch → 25 prompts. With --include-deferred → 61 (adds 16 boardroom/demoday
-// stage assets + 4 epic/legendary weapon sheets).
+// Playable → 43 prompts. With --include-deferred → 61 (adds locked
+// character assets + epic/legendary weapon sheets).
 //
 // Each emitted record has:
 //   out          — asset path the renderer expects
 //   genW/genH    — resolution to generate at
 //   outW/outH    — final pixel size after nearest-neighbor downscale
+//   sourceScale  — exact source multiplier, always 1, 2, or 3
 //   seed         — deterministic seed
 //   prompt       — full prompt (base + styleSuffix)
 //   negative     — negative prompt
@@ -62,9 +63,9 @@ const outputDir = arg("--output-dir") ?? path.resolve(__dirname, "../theming/gen
 const forceSplitFiles = args.includes("--split-files") || args.includes("--one-file-per-prompt");
 const combinedFile = args.includes("--combined-file");
 const missingOnly = args.includes("--missing-only");
-// Deferred assets (non-playable stages, epic+legendary weapons) are
-// hidden from the launch batch. Pass --include-deferred to emit them
-// (e.g. when unlocking Boardroom/Demoday or higher weapon rarities).
+// Deferred assets (locked characters, epic+legendary weapons) are hidden
+// from the playable batch. Pass --include-deferred to emit them when
+// unlocking those character or weapon tiers.
 const includeDeferred = args.includes("--include-deferred");
 
 const records = [];
@@ -328,14 +329,37 @@ function stripTrailingPeriod(value) {
 }
 
 function promptRecord({ out, finalOut, outW, outH, genW, genH, seed, basePrompt, grid, assembly, deferred }) {
+  const sourceScale = validateSourceScale({ out, outW, outH, genW, genH, grid });
   return {
-    out, finalOut, outW, outH, genW, genH, seed,
+    out, finalOut, outW, outH, genW, genH, sourceScale, seed,
     prompt: `${basePrompt}\n\nSTYLE: ${STYLE}`,
     negative: NEG,
     grid,
     assembly,
     deferred: deferred ?? false,
   };
+}
+
+function validateSourceScale({ out, outW, outH, genW, genH, grid }) {
+  const sx = genW / outW;
+  const sy = genH / outH;
+  const ok = sx === sy && Number.isInteger(sx) && sx >= 1 && sx <= 3;
+  if (!ok) {
+    throw new Error(
+      `invalid source scale for ${out}: gen ${genW}x${genH} must be exactly 1x, 2x, or 3x final ${outW}x${outH}`
+    );
+  }
+  if (grid) {
+    const cellSx = grid.genCellW / grid.cellW;
+    const cellSy = grid.genCellH / grid.cellH;
+    const cellOk = cellSx === sx && cellSy === sx && Number.isInteger(cellSx);
+    if (!cellOk) {
+      throw new Error(
+        `invalid grid source scale for ${out}: cells ${grid.genCellW}x${grid.genCellH} must match ${sx}x final cells ${grid.cellW}x${grid.cellH}`
+      );
+    }
+  }
+  return sx;
 }
 
 function renderRecords(format, sourceRecords) {
@@ -556,6 +580,7 @@ function assetContract(provider, r) {
     "Asset contract:",
     `- Raw generator canvas target: ${r.genW}x${r.genH}, aspect ${aspect}.`,
     `- Final asset after local post-process: ${r.outW}x${r.outH}.`,
+    `- Source scale: ${r.sourceScale}x final asset size. Source must stay an exact 1x, 2x, or 3x multiple of the final output; do not use fractional or larger downscale ratios.`,
     `- If the generator outputs a larger proportional image, preserve the same ${aspect} aspect ratio and the same internal layout proportions.`,
     `- Local post-process will center-crop only generator-added outer border or slight aspect drift, nearest-neighbor resize to ${r.outW}x${r.outH}, then key the near-${doc.artDirection.bgKeyColor} background to transparent alpha with RGB-distance tolerance 24.`,
     "- Compose the image so it remains clean and correctly aligned after that exact post-process.",

@@ -373,6 +373,28 @@ test("persistent store saves and restores compute snapshots", async () => {
   assert.equal(restored.summary().workers, 1);
 });
 
+test("persistent store honors bounded assignment intake windows", async () => {
+  let now = 1_000;
+  let saved: Partial<ComputeLabSnapshot> = {};
+  const persistence = {
+    load: async () => saved,
+    save: async (snapshot: ComputeLabSnapshot) => {
+      saved = snapshot;
+    },
+  };
+  const store = await PersistentComputeLabStore.create({ now: () => now, acceptAssignments: false }, persistence);
+
+  store.setAcceptAssignments(true, 1000);
+  assert.equal(store.summary().acceptAssignments, true);
+  assert.equal(store.summary().assignmentIntakeClosesAt, 2_000);
+
+  now = 2_001;
+  assert.equal(store.summary().acceptAssignments, false);
+  assert.equal(store.summary().assignmentIntakeClosesAt, null);
+  await store.flush();
+  assert.ok(saved);
+});
+
 test("dashboard aggregates bucketed capability map", () => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   store.registerWorker({ capability: webgpuCapability });

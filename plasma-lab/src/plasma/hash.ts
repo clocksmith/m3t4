@@ -37,11 +37,10 @@ function normalize(value: unknown): unknown {
     const out: Record<string, unknown> = {};
     for (const [key, inner] of Object.entries(value as Record<string, unknown>)
       .filter(([, inner]) => inner !== undefined)
-      .sort(([a], [b]) => a.localeCompare(b))) {
+      .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) {
       out[key] = normalize(inner);
     }
     return out;
   }
   throw new Error(`canonical JSON does not support ${typeof value}`);
 }
-

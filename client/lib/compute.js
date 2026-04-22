@@ -274,6 +274,7 @@ class ComputeClient {
       const body = await res.json();
       if (body.idle) {
         this.state = body.reason ?? "no-work";
+        this.maybeReportConnectivity();
         this.schedule(MODE_PROFILE[this.mode].pollMs);
         this.emit();
         return;
@@ -299,7 +300,6 @@ class ComputeClient {
       }),
     });
     await this.maybeUpdateCapability();
-    this.maybeReportConnectivity();
   }
 
   async maybeUpdateCapability() {

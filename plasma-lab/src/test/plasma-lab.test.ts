@@ -677,6 +677,67 @@ test("persistent HTTP routes refresh and flush across store instances", async (t
   assert.equal(assigned.task.taskId, seeded.body.taskId);
 });
 
+test("persistent refresh reconciles quorum after concurrent receipt writes", async () => {
+  let saved: Partial<ComputeLabSnapshot> = {};
+  const persistence = {
+    load: async () => clone(saved),
+    save: async (snapshot: ComputeLabSnapshot) => {
+      saved = clone(snapshot);
+    },
+    savePatch: async (patch: Partial<ComputeLabSnapshot>) => {
+      saved = mergeSnapshotPatch(saved, patch);
+    },
+  };
+  const setup = await PersistentComputeLabStore.create({ acceptAssignments: true }, persistence);
+  setup.seedPrimeTask({ start: 10, endExclusive: 20, chunkSize: 10, minExecutions: 2, minAgreeing: 2 });
+  const w1 = setup.registerWorker({ capability });
+  const w2 = setup.registerWorker({ capability });
+  const a1 = setup.assignNext(auth(w1))!;
+  const a2 = setup.assignNext(auth(w2))!;
+  setup.acceptAssignment({ ...auth(w1), assignmentId: a1.assignment.assignmentId, assignmentToken: a1.assignment.assignmentToken });
+  setup.acceptAssignment({ ...auth(w2), assignmentId: a2.assignment.assignmentId, assignmentToken: a2.assignment.assignmentToken });
+  await setup.flush();
+
+  const instanceA = await PersistentComputeLabStore.create({ acceptAssignments: true }, persistence);
+  const instanceB = await PersistentComputeLabStore.create({ acceptAssignments: true }, persistence);
+  const r1 = instanceA.submitReceipt({
+    ...auth(w1),
+    assignmentId: a1.assignment.assignmentId,
+    assignmentToken: a1.assignment.assignmentToken,
+    taskId: a1.task.taskId,
+    chunkId: a1.chunk.chunkId,
+    ...referenceReceiptFields(a1.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 10,
+  });
+  const r2 = instanceB.submitReceipt({
+    ...auth(w2),
+    assignmentId: a2.assignment.assignmentId,
+    assignmentToken: a2.assignment.assignmentToken,
+    taskId: a2.task.taskId,
+    chunkId: a2.chunk.chunkId,
+    ...referenceReceiptFields(a2.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 11,
+  });
+  assert.equal(r1.receipt.decision, "pending");
+  assert.equal(r2.receipt.decision, "pending");
+  await instanceA.flush();
+  await instanceB.flush();
+
+  const observer = await PersistentComputeLabStore.create({ acceptAssignments: true }, persistence);
+  await observer.refresh();
+  const task = observer.getTask(a1.task.taskId)!;
+  assert.equal(task.chunks[0].status, "accepted");
+  const dashboard = observer.dashboard() as any;
+  const validation = dashboard.validationList.find((entry: any) => entry.taskId === task.taskId);
+  assert.equal(validation.status, "accepted");
+  assert.equal(observer.getReceipt(r1.receipt.receiptId)?.decision, "accepted");
+  assert.equal(observer.getReceipt(r2.receipt.receiptId)?.decision, "accepted");
+});
+
 test("dashboard aggregates bucketed capability map", () => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   store.registerWorker({ capability: webgpuCapability });
@@ -1673,6 +1734,38 @@ function clock(): () => number {
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function mergeSnapshotPatch(
+  saved: Partial<ComputeLabSnapshot>,
+  patch: Partial<ComputeLabSnapshot>,
+): Partial<ComputeLabSnapshot> {
+  const next = clone(saved);
+  if (patch.control) next.control = clone(patch.control);
+  mergeById(next, patch, "tasks", "taskId");
+  mergeById(next, patch, "workers", "workerId");
+  mergeById(next, patch, "sessions", "workerSessionId");
+  mergeById(next, patch, "assignments", "assignmentId");
+  mergeById(next, patch, "receipts", "receiptId");
+  mergeById(next, patch, "validations", "validationId");
+  mergeById(next, patch, "reputation", "workerId");
+  mergeById(next, patch, "webrtcSessions", "sessionId");
+  mergeById(next, patch, "webrtcPairs", "pairId");
+  mergeById(next, patch, "capabilityObservations", "observationId");
+  mergeById(next, patch, "connectivityObservations", "observationId");
+  return next;
+}
+
+function mergeById(
+  target: Record<string, any>,
+  patch: Record<string, any>,
+  collection: string,
+  idKey: string,
+): void {
+  if (!Array.isArray(patch[collection])) return;
+  const byId = new Map((target[collection] ?? []).map((entry: any) => [entry[idKey], entry]));
+  for (const entry of patch[collection]) byId.set(entry[idKey], clone(entry));
+  target[collection] = Array.from(byId.values());
 }
 
 function auth(reg: ReturnType<ComputeLabStore["registerWorker"]>) {

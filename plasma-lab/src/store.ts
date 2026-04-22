@@ -328,6 +328,7 @@ export interface PublicComputeStats {
 
 export interface ReplayVerificationBadge {
   matchId: string;
+  workload: string;
   status: "verified" | "pending" | "failed";
   agreedReceipts: number;
   requiredReceipts: number;
@@ -335,6 +336,11 @@ export interface ReplayVerificationBadge {
   artifactSha256?: string;
   rulesHash?: string;
   stageHash?: string;
+  actionLogHash?: string;
+  actionLogSha256?: string;
+  outputHash?: string;
+  transports?: string[];
+  transfers?: string[];
   verifiedAt?: number;
   taskId: string;
   chunkId: string;
@@ -1379,24 +1385,36 @@ export class ComputeLabStore {
     }
     const out: ReplayVerificationBadge[] = [];
     for (const task of this.tasks.values()) {
-      if (task.kind !== PUBLIC_ARTIFACT_VERIFY_KERNEL_ID) continue;
+      if (task.kind !== PUBLIC_ARTIFACT_VERIFY_KERNEL_ID && task.kind !== REPLAY_VERIFY_KERNEL_ID) continue;
       for (const chunk of task.chunks) {
-        const matchId = String(chunk.params.matchId ?? "");
+        const parsed = task.kind === REPLAY_VERIFY_KERNEL_ID
+          ? replayVerifyArtifactSummary(chunk.params.replayArtifactJson)
+          : publicArtifactSummary(chunk.params.artifactJson);
+        const matchId = String(chunk.params.matchId ?? parsed.matchId ?? "");
         if (!matchId) continue;
         const accepted = (validationsByChunk.get(chunk.chunkId) ?? [])
           .filter((validation) => validation.status === "accepted")
           .sort((a, b) => b.recordedAt - a.recordedAt)[0];
         const receipts = this.receiptsFor(chunk.chunkId);
-        const parsed = publicArtifactSummary(chunk.params.artifactJson);
+        const acceptedReceiptIds = new Set(accepted?.acceptedReceiptIds ?? []);
+        const acceptedReceipts = receipts.filter((receipt) =>
+          receipt.decision === "accepted" || acceptedReceiptIds.has(receipt.receiptId)
+        );
         out.push({
           matchId,
+          workload: task.kind,
           status: accepted ? "verified" : chunk.status === "disagreement" || chunk.status === "rejected" ? "failed" : "pending",
           agreedReceipts: accepted?.acceptedReceiptIds.length ?? receipts.filter((receipt) => receipt.decision === "accepted").length,
           requiredReceipts: task.validationPolicy.minAgreeing,
-          artifactHash: String(chunk.params.artifactHash ?? parsed.artifactHash ?? ""),
+          artifactHash: String(chunk.params.artifactHash ?? parsed.artifactHash ?? chunk.artifactHash?.value ?? ""),
           artifactSha256: chunk.artifactHash?.value,
           rulesHash: parsed.rulesHash,
           stageHash: parsed.stageHash,
+          actionLogHash: parsed.actionLogHash,
+          actionLogSha256: parsed.actionLogSha256,
+          outputHash: chunk.expectedOutputHash?.value,
+          transports: uniqueStrings(acceptedReceipts.map((receipt) => receipt.transport)),
+          transfers: uniqueStrings(acceptedReceipts.map((receipt) => receipt.adapterInfo?.transfer)),
           verifiedAt: accepted?.recordedAt,
           taskId: task.taskId,
           chunkId: chunk.chunkId,
@@ -2075,12 +2093,21 @@ function summarizePublicStats(input: {
   };
 }
 
-function publicArtifactSummary(raw: unknown): { artifactHash?: string; rulesHash?: string; stageHash?: string } {
+function publicArtifactSummary(raw: unknown): {
+  matchId?: string;
+  artifactHash?: string;
+  rulesHash?: string;
+  stageHash?: string;
+  actionLogHash?: string;
+  actionLogSha256?: string;
+} {
   if (typeof raw !== "string" || !raw) return {};
   try {
     const artifact = JSON.parse(raw) as {
+      matchId?: string;
       artifactHash?: string;
       payload?: {
+        matchId?: string;
         artifactHash?: string;
         tuple?: { simConstantsHash?: string };
         integrity?: { stageHash?: string };
@@ -2089,6 +2116,7 @@ function publicArtifactSummary(raw: unknown): { artifactHash?: string; rulesHash
       integrity?: { stageHash?: string };
     };
     return {
+      matchId: stringBucket(artifact.matchId ?? artifact.payload?.matchId),
       artifactHash: stringBucket(artifact.artifactHash ?? artifact.payload?.artifactHash),
       rulesHash: stringBucket(artifact.payload?.tuple?.simConstantsHash ?? artifact.tuple?.simConstantsHash),
       stageHash: stringBucket(artifact.payload?.integrity?.stageHash ?? artifact.integrity?.stageHash),
@@ -2096,6 +2124,40 @@ function publicArtifactSummary(raw: unknown): { artifactHash?: string; rulesHash
   } catch {
     return {};
   }
+}
+
+function replayVerifyArtifactSummary(raw: unknown): {
+  matchId?: string;
+  artifactHash?: string;
+  rulesHash?: string;
+  stageHash?: string;
+  actionLogHash?: string;
+  actionLogSha256?: string;
+} {
+  if (typeof raw !== "string" || !raw) return {};
+  try {
+    const artifact = JSON.parse(raw) as {
+      match?: { matchId?: string };
+      actions?: { hash?: string; sha256?: string };
+      integrity?: { stageHash?: string };
+      sim?: { constantsHash?: string };
+      trust?: { simConstantsHash?: string };
+    };
+    return {
+      matchId: stringBucket(artifact.match?.matchId),
+      artifactHash: stringBucket(artifact.actions?.hash),
+      rulesHash: stringBucket(artifact.trust?.simConstantsHash ?? artifact.sim?.constantsHash),
+      stageHash: stringBucket(artifact.integrity?.stageHash),
+      actionLogHash: stringBucket(artifact.actions?.hash),
+      actionLogSha256: stringBucket(artifact.actions?.sha256),
+    };
+  } catch {
+    return {};
+  }
+}
+
+function uniqueStrings(values: unknown[]): string[] {
+  return Array.from(new Set(values.map(stringBucket).filter((value): value is string => !!value))).sort();
 }
 
 function allowedWorkloadTier(input: {

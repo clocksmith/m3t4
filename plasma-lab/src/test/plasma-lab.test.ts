@@ -243,6 +243,17 @@ test("replay verify receipts accept public action-log replay artifacts", () => {
   });
   assert.equal(second.receipt.decision, "accepted");
   assert.equal(second.validation?.status, "accepted");
+
+  const badge = store.replayBadge("rv-store");
+  const replayArtifact = JSON.parse(replayArtifactJson);
+  assert.equal(badge?.status, "verified");
+  assert.equal(badge?.workload, "m3t4.replay_verify.v1");
+  assert.equal(badge?.agreedReceipts, 2);
+  assert.equal(badge?.rulesHash, replayArtifact.trust.simConstantsHash);
+  assert.equal(badge?.stageHash, replayArtifact.integrity.stageHash);
+  assert.equal(badge?.actionLogHash, replayArtifact.actions.hash);
+  assert.equal(badge?.outputHash, task.validationPolicy.expectedOutputHash?.value);
+  assert.deepEqual(badge?.transports, ["http"]);
 });
 
 test("replay verify rejects private player configs before assignment", () => {

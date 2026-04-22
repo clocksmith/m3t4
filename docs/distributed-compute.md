@@ -56,7 +56,7 @@ Recommended workload ladder:
 
 | Rank | Workload | Why It Fits | Validation | Product Fit |
 |---:|---|---|---|---|
-| 1 | `m3t4.replay_verify.v0` | Uses public action logs or frame/checkpoint hashes; no brain required | bit-exact replay/action hash | Spectators help verify public receipts and tournament artifacts |
+| 1 | `m3t4.replay_verify.v1` | Uses public action logs or frame/checkpoint hashes; no brain required | bit-exact replay/action hash | Spectators help verify public receipts and tournament artifacts |
 | 2 | `m3t4.match_batch.v0` | Embarrassingly parallel match sweeps, but only safe for public bots or non-secret kernels | bit-exact result hash | Meta-health, public build validation, tournament sweeps |
 | 3 | `m3t4.webgpu_benchmark.v0` | Measures real browser GPU capability before assigning harder work | deterministic fixtures plus tolerance checks | Hardware scouting for scheduler policy |
 | 4 | `m3t4.asset_tile.v0` | Visual, parallel, useful, low-risk | hash plus pixel tolerance | Sprite cleanup, alpha keying, palette quantization, parallax checks |
@@ -67,7 +67,7 @@ Recommended workload ladder:
 | 9 | `science.conformer_search_mini.v0` | Many short stochastic trajectories | replicated seeds plus energy sanity checks | Realistic but validation is harder |
 | 10 | `plasma.tensor_tile.v0` | Direct WebGPU/tensor contract fit | tolerance-bounded tensor comparison | Strong substrate proof, less visible to m3t4 users |
 
-The first useful m3t4 adapter should be `m3t4.replay_verify.v0`, not a hidden
+The first useful m3t4 adapter should be `m3t4.replay_verify.v1`, not a hidden
 brain match batch. Browser peers can inspect any code and inputs they execute.
 `m3t4.match_batch.v0` is safe only when the policy kernel is public, the bots
 are intentionally non-secret, or a later attested/proof-carrying runtime exists.

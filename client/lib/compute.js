@@ -14,6 +14,7 @@ const OPT_IN_KEY = "m3t4.compute.optIn";
 const CLIENT_VERSION = "compute-slack-http-v0";
 const SESSION_TOKEN_HEADER = "x-worker-session-token";
 const PUBLIC_ARTIFACT_KERNEL = "m3t4.public_artifact_verify.v0";
+const REPLAY_VERIFY_KERNEL = "m3t4.replay_verify.v1";
 
 const MODE_PROFILE = {
   quiet: { pollMs: 5000, cooldownMs: 2000, maxRenderMs: 10 },
@@ -396,7 +397,7 @@ class ComputeClient {
       this.runWebRtcAssignment({ assignment, chunk, task });
       return;
     }
-    if (chunk.kind === PUBLIC_ARTIFACT_KERNEL && artifactWebRtcEnabled()) {
+    if (webRtcDataKernel(chunk.kind) && artifactWebRtcEnabled()) {
       this.runWebRtcArtifactAssignment({ assignment, chunk, task });
       return;
     }
@@ -727,6 +728,7 @@ async function buildCapability(runtimeInfo = {}, opts = {}) {
   const runtimeSurfaces = ["browser-js"];
   if (webgpu.webgpu === "available") runtimeSurfaces.push("browser-webgpu");
   const kernels = ["m3t4.public_artifact_verify.v0", "prime-search.v0"];
+  kernels.push("m3t4.replay_verify.v1");
   if (deviceWitness.canvas2dFixture === "ok" || deviceWitness.canvas2dFixture === "mismatch") {
     kernels.push("device_witness.render_fixture.v0");
     kernels.push("device_witness.derived_buffer.v0");
@@ -1390,21 +1392,33 @@ async function handleArtifactWorkMessage(raw, channels, timeoutMs) {
 }
 
 function safeArtifactChunk(chunk) {
-  if (!chunk || chunk.kind !== PUBLIC_ARTIFACT_KERNEL) throw new Error("unsupported artifact chunk");
-  if (typeof chunk.params?.artifactJson !== "string" || chunk.params.artifactJson.length === 0) {
-    throw new Error("artifactJson required");
+  if (!chunk || !webRtcDataKernel(chunk.kind)) throw new Error("unsupported artifact chunk");
+  if (chunk.kind === PUBLIC_ARTIFACT_KERNEL) {
+    if (typeof chunk.params?.artifactJson !== "string" || chunk.params.artifactJson.length === 0) {
+      throw new Error("artifactJson required");
+    }
+    if (chunk.params.artifactJson.length > 1024 * 1024) throw new Error("artifactJson too large");
   }
-  if (chunk.params.artifactJson.length > 1024 * 1024) throw new Error("artifactJson too large");
+  if (chunk.kind === REPLAY_VERIFY_KERNEL) {
+    if (typeof chunk.params?.replayArtifactJson !== "string" || chunk.params.replayArtifactJson.length === 0) {
+      throw new Error("replayArtifactJson required");
+    }
+    if (chunk.params.replayArtifactJson.length > 1024 * 1024) throw new Error("replayArtifactJson too large");
+  }
   return {
     chunkId: String(chunk.chunkId || "artifact-chunk"),
-    kind: PUBLIC_ARTIFACT_KERNEL,
-    params: { ...chunk.params, artifactJson: chunk.params.artifactJson },
+    kind: chunk.kind,
+    params: { ...chunk.params },
     kernelId: chunk.kernelId,
     kernelHash: chunk.kernelHash,
     inputHash: chunk.inputHash,
     artifactHash: chunk.artifactHash,
     expectedOutputHash: chunk.expectedOutputHash,
   };
+}
+
+function webRtcDataKernel(kind) {
+  return kind === PUBLIC_ARTIFACT_KERNEL || kind === REPLAY_VERIFY_KERNEL;
 }
 
 const PEER_WORK_PARAMS = Object.freeze({ start: 1009, endExclusive: 1033 });

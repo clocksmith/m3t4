@@ -23,6 +23,11 @@ import {
   runPublicArtifactVerify,
 } from "./kernels/public-artifact-verify.js";
 import {
+  REPLAY_VERIFY_KERNEL_HASH,
+  REPLAY_VERIFY_KERNEL_ID,
+  runReplayVerify,
+} from "./kernels/replay-verify.js";
+import {
   SEED_SWEEP_KERNEL_HASH,
   SEED_SWEEP_KERNEL_ID,
   runSeedSweep,
@@ -71,6 +76,7 @@ const KNOWN_KERNELS = [
   DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID,
   PUBLIC_ARTIFACT_VERIFY_KERNEL_ID,
   SEED_SWEEP_KERNEL_ID,
+  REPLAY_VERIFY_KERNEL_ID,
 ];
 
 export interface WorkerRecord {
@@ -188,7 +194,7 @@ export interface ComputeChunk {
   taskId: string;
   ordinal: number;
   kind: TaskKind;
-  params: Record<string, number | string>;
+  params: Record<string, number | string | boolean>;
   kernelId: string;
   kernelHash: ContentHash;
   inputHash: ContentHash;
@@ -849,6 +855,61 @@ export class ComputeLabStore {
         minExecutions,
         minAgreeing,
         expectedOutputHash,
+      },
+      chunks: [chunk],
+    };
+    this.tasks.set(taskId, task);
+    return task;
+  }
+
+  seedReplayVerifyTask(input: {
+    replayArtifactJson: string;
+    artifactSha256?: string;
+    allowConstantsMismatch?: boolean;
+    minExecutions?: number;
+    minAgreeing?: number;
+  }): ComputeTask {
+    if (!input.replayArtifactJson) throw new Error("replayArtifactJson required");
+    const expectedOutput = runReplayVerify({
+      replayArtifactJson: input.replayArtifactJson,
+      allowConstantsMismatch: input.allowConstantsMismatch,
+    });
+    const artifactHash = hashCanonical(JSON.parse(input.replayArtifactJson));
+    if (input.artifactSha256 && artifactHash.value !== input.artifactSha256) {
+      throw new Error("artifactSha256 does not match replayArtifactJson");
+    }
+    const taskId = randomId("task");
+    const minExecutions = Math.max(1, input.minExecutions ?? 2);
+    const minAgreeing = Math.min(minExecutions, Math.max(1, input.minAgreeing ?? 2));
+    const params = {
+      matchId: expectedOutput.summary.matchId,
+      replayArtifactJson: input.replayArtifactJson,
+      ...(input.allowConstantsMismatch === undefined ? {} : { allowConstantsMismatch: input.allowConstantsMismatch }),
+    };
+    const chunk: ComputeChunk = {
+      chunkId: `${taskId}-chunk-0`,
+      taskId,
+      ordinal: 0,
+      kind: REPLAY_VERIFY_KERNEL_ID,
+      params,
+      kernelId: REPLAY_VERIFY_KERNEL_ID,
+      kernelHash: REPLAY_VERIFY_KERNEL_HASH,
+      inputHash: hashCanonical({ kind: REPLAY_VERIFY_KERNEL_ID, params }),
+      artifactHash,
+      expectedOutputHash: expectedOutput.outputHash,
+      status: "pending",
+    };
+    const task: ComputeTask = {
+      taskId,
+      kind: REPLAY_VERIFY_KERNEL_ID,
+      status: "running",
+      createdAt: this.now(),
+      validationPolicy: {
+        determinismClass: "bit-exact",
+        validationMode: "expected-hash",
+        minExecutions,
+        minAgreeing,
+        expectedOutputHash: expectedOutput.outputHash,
       },
       chunks: [chunk],
     };

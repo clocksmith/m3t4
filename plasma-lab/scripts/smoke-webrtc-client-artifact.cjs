@@ -10,7 +10,22 @@ const TASK_TIMEOUT_MS = 120_000;
 async function main() {
   const { chromium } = loadPlaywright();
   const config = readConfig();
+  const passes = [];
+  for (let index = 0; index < config.repeat; index++) {
+    passes.push(await runOnce(chromium, config, index + 1));
+  }
+  const result = config.repeat === 1 ? passes[0] : {
+    ok: true,
+    computeOrigin: config.computeOrigin,
+    gameOrigin: config.gameOrigin,
+    repeat: config.repeat,
+    passes,
+    aggregate: aggregatePasses(passes),
+  };
+  console.log(JSON.stringify(result, null, 2));
+}
 
+async function runOnce(chromium, config, pass) {
   const initialStatus = await getJson(config.computeOrigin, "/compute/status");
   if (initialStatus.acceptAssignments) {
     throw new Error("assignment intake is already enabled; refusing to run a controlled smoke");
@@ -19,7 +34,7 @@ async function main() {
     throw new Error("WebRTC signaling and data routes must both be enabled");
   }
 
-  const seeded = await seedPublicArtifactTask(config);
+  const seeded = await seedPublicArtifactTask(config, pass);
   if (seeded.chunks !== 1) throw new Error(`expected 1 chunk, got ${seeded.chunks}`);
 
   let browser;
@@ -36,7 +51,7 @@ async function main() {
       prepareStaffPage(page, config, index === 0 ? "A" : "B")
     ));
 
-    await setAssignments(config, true);
+    await setAssignments(config, true, config.assignmentWindowMs);
     const startedAt = Date.now();
     await Promise.all(pages.map((page) =>
       page.evaluate(() => window.__M3T4_COMPUTE_CLIENT__?.poll())
@@ -58,7 +73,7 @@ async function main() {
     assertWebRtcArtifactReceipts(receipts, accepted.task.chunks?.[0]);
     if (finalStatus.acceptAssignments) throw new Error("assignment intake remained enabled");
 
-    console.log(JSON.stringify({
+    return {
       ok: true,
       computeOrigin: config.computeOrigin,
       gameOrigin: config.gameOrigin,
@@ -99,7 +114,7 @@ async function main() {
         webrtcArtifacts: status.webrtcArtifacts,
       })),
       pageErrors,
-    }, null, 2));
+    };
   } finally {
     if (browser) await browser.close().catch(() => undefined);
     await setAssignments(config, false).catch((error) => {
@@ -129,11 +144,13 @@ function readConfig() {
     adminToken,
     gameOrigin: cleanOrigin(process.env.M3T4_SMOKE_GAME_ORIGIN || process.env.M3T4_ORIGIN || DEFAULT_GAME_ORIGIN),
     headless: process.env.PLASMA_LAB_SMOKE_HEADLESS !== "0",
+    repeat: integerOption("repeat", "PLASMA_LAB_SMOKE_REPEAT", 1, 1, 50),
+    assignmentWindowMs: integerOption("assignment-window-ms", "PLASMA_LAB_SMOKE_ASSIGNMENT_WINDOW_MS", TASK_TIMEOUT_MS, 1_000, 600_000),
   };
 }
 
-async function seedPublicArtifactTask(config) {
-  const matchId = `webrtc-client-artifact-${Date.now()}`;
+async function seedPublicArtifactTask(config, pass) {
+  const matchId = `webrtc-client-artifact-${Date.now()}-${pass}`;
   const payload = {
     matchId,
     tuple: {
@@ -224,8 +241,50 @@ function assertWebRtcArtifactReceipts(receipts, chunk) {
   }
 }
 
-async function setAssignments(config, acceptAssignments) {
-  return adminPost(config, "/compute/admin/assignments", { acceptAssignments });
+function aggregatePasses(passes) {
+  const receipts = passes.flatMap((pass) => pass.receipts);
+  return {
+    tasks: passes.map((pass) => pass.taskId),
+    validations: passes.map((pass) => pass.validationId),
+    receipts: receipts.map((receipt) => receipt.receiptId),
+    transportSet: unique(receipts.map((receipt) => receipt.transport)),
+    validationModeSet: unique(receipts.map((receipt) => receipt.validationMode)),
+    transferSet: unique(receipts.map((receipt) => receipt.transcript?.transfer)),
+    relaySet: unique(receipts.map((receipt) => receipt.transcript?.iceRelayBucket ?? "unknown")),
+    pageErrors: passes.reduce((sum, pass) =>
+      sum + pass.pageErrors.reduce((count, errors) => count + errors.length, 0), 0),
+    acceptAssignments: passes.every((pass) => pass.acceptAssignments === false) ? false : "mixed",
+  };
+}
+
+function unique(values) {
+  return Array.from(new Set(values.filter((value) => value !== undefined))).sort();
+}
+
+function integerOption(argName, envName, fallback, min, max) {
+  const raw = argValue(argName) || process.env[envName] || "";
+  if (!raw) return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`${argName} must be an integer from ${min} to ${max}`);
+  }
+  return value;
+}
+
+function argValue(name) {
+  const flag = `--${name}`;
+  const prefix = `${flag}=`;
+  const exactIndex = process.argv.indexOf(flag);
+  if (exactIndex !== -1) return process.argv[exactIndex + 1] || "";
+  const inline = process.argv.find((arg) => arg.startsWith(prefix));
+  return inline ? inline.slice(prefix.length) : "";
+}
+
+async function setAssignments(config, acceptAssignments, durationMs) {
+  return adminPost(config, "/compute/admin/assignments", {
+    acceptAssignments,
+    ...(acceptAssignments && durationMs ? { durationMs } : {}),
+  });
 }
 
 async function adminGet(config, path) {

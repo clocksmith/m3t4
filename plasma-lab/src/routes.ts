@@ -18,6 +18,9 @@ interface WorkerAuthBody {
   workerSessionToken?: string;
 }
 
+const MIN_ASSIGNMENT_WINDOW_MS = 1_000;
+const MAX_ASSIGNMENT_WINDOW_MS = 600_000;
+
 export async function handleComputeLabRequest(
   req: IncomingMessage,
   res: ServerResponse,
@@ -459,12 +462,24 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     return true;
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/assignments") {
-    const body = await readJson<{ acceptAssignments?: boolean }>(req);
+    const body = await readJson<{ acceptAssignments?: boolean; durationMs?: number }>(req);
     if (typeof body?.acceptAssignments !== "boolean") {
       json(res, 400, { error: "acceptAssignments boolean required" });
       return true;
     }
-    deps.store.setAcceptAssignments(body.acceptAssignments);
+    let durationMs: number | undefined;
+    if (body.durationMs !== undefined) {
+      if (!Number.isInteger(body.durationMs)) {
+        json(res, 400, { error: "durationMs integer required" });
+        return true;
+      }
+      if (body.durationMs < MIN_ASSIGNMENT_WINDOW_MS || body.durationMs > MAX_ASSIGNMENT_WINDOW_MS) {
+        json(res, 400, { error: `durationMs must be ${MIN_ASSIGNMENT_WINDOW_MS}..${MAX_ASSIGNMENT_WINDOW_MS}` });
+        return true;
+      }
+      durationMs = body.durationMs;
+    }
+    deps.store.setAcceptAssignments(body.acceptAssignments, durationMs);
     json(res, 200, deps.store.summary());
     return true;
   }
@@ -883,6 +898,10 @@ td,th{border-bottom:1px solid #252b3a;padding:7px;text-align:left;vertical-align
       <button id="enableAssignments">enable</button>
       <button id="disableAssignments">disable</button>
     </div>
+    <div class="row">
+      <input id="assignmentWindowSeconds" value="30" aria-label="assignment window seconds">
+      <button id="enableAssignmentsTimed">enable timed</button>
+    </div>
   </div>
   <div class="card">
     <div>device witness receipts</div>
@@ -949,6 +968,11 @@ token.value = localStorage.getItem("plasmaAdminToken") || "";
 document.getElementById("refresh").onclick = refresh;
 document.getElementById("enableAssignments").onclick = () => adminPost("/compute/admin/assignments", { acceptAssignments: true });
 document.getElementById("disableAssignments").onclick = () => adminPost("/compute/admin/assignments", { acceptAssignments: false });
+document.getElementById("enableAssignmentsTimed").onclick = () => {
+  const seconds = asNum("assignmentWindowSeconds");
+  if (!Number.isFinite(seconds) || seconds <= 0) throwStatus("positive window seconds required");
+  return adminPost("/compute/admin/assignments", { acceptAssignments: true, durationMs: Math.round(seconds * 1000) });
+};
 document.getElementById("seedPrime").onclick = () => adminPost("/compute/admin/tasks/seed", {
   start: asNum("primeStart"),
   endExclusive: asNum("primeEnd"),
@@ -1021,7 +1045,7 @@ async function adminPost(path, body) {
   }
 }
 function render(data, useCases) {
-  document.getElementById("summary").innerHTML = ["workers","activeSessions","tasks","assignments","receipts","validations","capabilityObservations","connectivityObservations","webrtcSessions","webrtcPairs"]
+  document.getElementById("summary").innerHTML = ["acceptAssignments","assignmentIntakeClosesAt","workers","activeSessions","tasks","assignments","receipts","validations","capabilityObservations","connectivityObservations","webrtcSessions","webrtcPairs"]
     .map((k) => '<div class="card"><div>'+k+'</div><div class="n">'+(data[k] ?? 0)+'</div></div>').join("");
   document.getElementById("useCases").innerHTML = table(["id","status","workload","inputBoundary","validation"], useCases);
   document.getElementById("publicStats").innerHTML = table(["generatedAt","privacy","totalWorkers","activeWorkers","totalReceipts","acceptedReceiptPct","webgpuSupportedPct","webgpuCorrectnessPct","renderFixturePct","webrtcDirectSuccessPct","turnRequiredPct","medianKernelMs","p95KernelMs"], [data.publicStats || {}]);

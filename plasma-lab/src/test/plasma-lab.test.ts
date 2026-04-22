@@ -895,6 +895,49 @@ test("HTTP admin can toggle assignment acceptance without redeploying", async (t
   assert.equal(disabled.body.acceptAssignments, false);
 });
 
+test("assignment intake can be bounded by a runtime deadline", async () => {
+  let now = 1_000;
+  const store = new ComputeLabStore({ now: () => now, acceptAssignments: false });
+  store.seedPrimeTask({ start: 20, endExclusive: 50, chunkSize: 30 });
+  const worker = store.registerWorker({ capability });
+
+  store.setAcceptAssignments(true, 5000);
+  assert.equal(store.summary().acceptAssignments, true);
+  assert.equal(store.summary().assignmentIntakeClosesAt, 6_000);
+  assert.ok(store.assignNext(auth(worker)));
+
+  now = 6_001;
+  assert.equal(store.summary().acceptAssignments, false);
+  assert.equal(store.summary().assignmentIntakeClosesAt, null);
+  assert.equal(store.assignNext(auth(worker)), null);
+});
+
+test("HTTP admin can enable assignment intake for a bounded window", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: false });
+  const srv = await boot(store, { ...baseConfig, adminToken: "secret", acceptAssignments: false });
+  t.after(() => srv.close());
+
+  const enabled = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/assignments",
+    { acceptAssignments: true, durationMs: 1500 },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(enabled.status, 200);
+  assert.equal(enabled.body.acceptAssignments, true);
+  assert.equal(typeof enabled.body.assignmentIntakeClosesAt, "number");
+
+  const invalid = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/assignments",
+    { acceptAssignments: true, durationMs: 999 },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(invalid.status, 400);
+});
+
 test("HTTP derived receipts log structured evidence field status", async (t) => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   store.seedDeviceWitnessDerivedBufferTask({ seed: 13, count: 16, minExecutions: 1, minAgreeing: 1 });

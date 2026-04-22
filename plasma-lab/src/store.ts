@@ -373,6 +373,7 @@ export class ComputeLabStore {
   private readonly workerSessionTtlMs: number;
   private readonly webrtcSessionTtlMs: number;
   private acceptAssignmentsFlag: boolean;
+  private assignmentIntakeClosesAt: number | null = null;
 
   constructor(options: StoreOptions = {}) {
     this.now = options.now ?? Date.now;
@@ -382,8 +383,20 @@ export class ComputeLabStore {
     this.acceptAssignmentsFlag = options.acceptAssignments ?? false;
   }
 
-  setAcceptAssignments(value: boolean): void {
+  setAcceptAssignments(value: boolean, durationMs?: number): void {
     this.acceptAssignmentsFlag = value;
+    this.assignmentIntakeClosesAt = value && durationMs !== undefined ? this.now() + durationMs : null;
+  }
+
+  private expireAssignmentIntake(): void {
+    if (
+      this.acceptAssignmentsFlag &&
+      this.assignmentIntakeClosesAt !== null &&
+      this.now() >= this.assignmentIntakeClosesAt
+    ) {
+      this.acceptAssignmentsFlag = false;
+      this.assignmentIntakeClosesAt = null;
+    }
   }
 
   exportSnapshot(): ComputeLabSnapshot {
@@ -912,6 +925,7 @@ export class ComputeLabStore {
     workerSessionToken: string;
   }): { assignment: Assignment; chunk: ComputeChunk; task: ComputeTask } | null {
     this.expireAssignments();
+    this.expireAssignmentIntake();
     if (!this.acceptAssignmentsFlag) return null;
     const session = this.requireSession(input.workerId, input.workerSessionId, input.workerSessionToken);
     const worker = this.requireWorker(input.workerId);
@@ -1200,6 +1214,7 @@ export class ComputeLabStore {
 
   summary(): {
     acceptAssignments: boolean;
+    assignmentIntakeClosesAt: number | null;
     collections: typeof COMPUTE_COLLECTIONS;
     workers: number;
     activeSessions: number;
@@ -1213,6 +1228,7 @@ export class ComputeLabStore {
     webrtcSessions: number;
     webrtcPairs: number;
   } {
+    this.expireAssignmentIntake();
     const chunks = { pending: 0, accepted: 0, rejected: 0, timeout: 0 };
     for (const task of this.tasks.values()) {
       for (const chunk of task.chunks) {
@@ -1224,6 +1240,7 @@ export class ComputeLabStore {
     }
     return {
       acceptAssignments: this.acceptAssignmentsFlag,
+      assignmentIntakeClosesAt: this.assignmentIntakeClosesAt,
       collections: COMPUTE_COLLECTIONS,
       workers: this.workers.size,
       activeSessions: Array.from(this.sessions.values()).filter((session) => session.expiresAt > this.now()).length,

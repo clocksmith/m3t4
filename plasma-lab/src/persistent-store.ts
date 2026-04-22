@@ -38,8 +38,8 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     await this.saveChain;
   }
 
-  setAcceptAssignments(value: boolean): void {
-    super.setAcceptAssignments(value);
+  setAcceptAssignments(value: boolean, durationMs?: number): void {
+    super.setAcceptAssignments(value, durationMs);
     this.persist();
   }
 

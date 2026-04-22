@@ -695,6 +695,7 @@ WebRTC client public-artifact transfer:
   command: npm -w plasma-lab run smoke:webrtc-client-artifact
   env: PLASMA_LAB_SMOKE_ORIGIN, PLASMA_LAB_SMOKE_ADMIN_TOKEN, M3T4_SMOKE_GAME_ORIGIN
   repeat: set PLASMA_LAB_SMOKE_REPEAT=5 or pass --repeat=5 for a hosted soak
+  replay verify: set PLASMA_LAB_SMOKE_KERNEL=replay-verify or pass --kernel=replay-verify
   use: launches two real browser clients, sets the staff-only WebRTC artifact flag, opens intake only for assignment issue, and requires two accepted transport=webrtc expected-hash receipts
 
 WebRTC hosted-client public-artifact 5-pass soak:
@@ -753,6 +754,23 @@ m3t4.seed_sweep.v0
 
 m3t4.replay_verify.v1
   verifies public replay/action/checkpoint data reproduces expected result
+```
+
+`m3t4.replay_verify.v1` inputs:
+
+```text
+public ReplayArtifactV1 JSON
+action bytes embedded in the replay artifact
+expected result embedded in the artifact
+```
+
+Safety boundary:
+
+```text
+admin-seeded only while in closed alpha
+rejects replay artifacts containing private player configs
+browser workers re-simulate action logs from public initial state and public action bytes only
+accepted receipts still require the normal expected-hash quorum
 ```
 
 `m3t4.public_artifact_verify.v0` inputs:

@@ -6,6 +6,8 @@ const { createHash, randomUUID } = require("node:crypto");
 const DEFAULT_GAME_ORIGIN = "https://m3t4.ai";
 const REQUEST_TIMEOUT_MS = 15_000;
 const TASK_TIMEOUT_MS = 120_000;
+const PUBLIC_ARTIFACT_KERNEL = "m3t4.public_artifact_verify.v0";
+const REPLAY_VERIFY_KERNEL = "m3t4.replay_verify.v1";
 
 async function main() {
   const { chromium } = loadPlaywright();
@@ -34,7 +36,7 @@ async function runOnce(chromium, config, pass) {
     throw new Error("WebRTC signaling and data routes must both be enabled");
   }
 
-  const seeded = await seedPublicArtifactTask(config, pass);
+  const seeded = await seedTask(config, pass);
   if (seeded.chunks !== 1) throw new Error(`expected 1 chunk, got ${seeded.chunks}`);
 
   let browser;
@@ -77,6 +79,7 @@ async function runOnce(chromium, config, pass) {
       ok: true,
       computeOrigin: config.computeOrigin,
       gameOrigin: config.gameOrigin,
+      taskKind: accepted.task.kind,
       taskId: seeded.taskId,
       chunkId: accepted.task.chunks?.[0]?.chunkId,
       validationId: validation.validationId,
@@ -144,9 +147,15 @@ function readConfig() {
     adminToken,
     gameOrigin: cleanOrigin(process.env.M3T4_SMOKE_GAME_ORIGIN || process.env.M3T4_ORIGIN || DEFAULT_GAME_ORIGIN),
     headless: process.env.PLASMA_LAB_SMOKE_HEADLESS !== "0",
+    kernel: kernelOption(),
     repeat: integerOption("repeat", "PLASMA_LAB_SMOKE_REPEAT", 1, 1, 50),
     assignmentWindowMs: integerOption("assignment-window-ms", "PLASMA_LAB_SMOKE_ASSIGNMENT_WINDOW_MS", TASK_TIMEOUT_MS, 1_000, 600_000),
   };
+}
+
+async function seedTask(config, pass) {
+  if (config.kernel === "replay-verify") return seedReplayVerifyTask(config, pass);
+  return seedPublicArtifactTask(config, pass);
 }
 
 async function seedPublicArtifactTask(config, pass) {
@@ -170,6 +179,44 @@ async function seedPublicArtifactTask(config, pass) {
     minExecutions: 2,
     minAgreeing: 2,
   });
+}
+
+async function seedReplayVerifyTask(config, pass) {
+  const replayArtifactJson = await replayArtifactFixtureJson(`webrtc-replay-verify-${Date.now()}-${pass}`);
+  return adminPost(config, "/compute/admin/tasks/replay-verify", {
+    replayArtifactJson,
+    minExecutions: 2,
+    minAgreeing: 2,
+  });
+}
+
+async function replayArtifactFixtureJson(matchId) {
+  const sim = await import("@m3t4/sim");
+  const stage = sim.STAGES.boardroom;
+  const brainA = sim.STRATEGIES.unicorn;
+  const brainB = sim.STRATEGIES.disruptor;
+  const result = sim.simulate({
+    stage,
+    brainA,
+    brainB,
+    seed: 9876,
+    maxTicks: 180,
+  });
+  const artifact = sim.createReplayArtifactV1({
+    matchId,
+    mode: "test",
+    stage,
+    seed: 9876,
+    chars: sim.DEFAULT_CHARS,
+    players: [
+      { kind: "brain", tier: "system", label: "unicorn" },
+      { kind: "brain", tier: "system", label: "disruptor" },
+    ],
+    actionLog: result.frameLog,
+    result,
+    createdAt: "2026-04-22T00:00:00.000Z",
+  });
+  return sim.stableReplayJson(artifact);
 }
 
 async function prepareStaffPage(page, config, label) {
@@ -245,6 +292,7 @@ function assertWebRtcArtifactReceipts(receipts, chunk) {
 function aggregatePasses(passes) {
   const receipts = passes.flatMap((pass) => pass.receipts);
   return {
+    taskKinds: unique(passes.map((pass) => pass.taskKind)),
     tasks: passes.map((pass) => pass.taskId),
     validations: passes.map((pass) => pass.validationId),
     receipts: receipts.map((receipt) => receipt.receiptId),
@@ -256,6 +304,14 @@ function aggregatePasses(passes) {
       sum + pass.pageErrors.reduce((count, errors) => count + errors.length, 0), 0),
     acceptAssignments: passes.every((pass) => pass.acceptAssignments === false) ? false : "mixed",
   };
+}
+
+function kernelOption() {
+  const value = argValue("kernel") || process.env.PLASMA_LAB_SMOKE_KERNEL || "public-artifact";
+  if (value !== "public-artifact" && value !== "replay-verify") {
+    throw new Error("kernel must be public-artifact or replay-verify");
+  }
+  return value;
 }
 
 function unique(values) {

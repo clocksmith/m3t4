@@ -2055,9 +2055,9 @@ input[type="range"]::-moz-range-thumb {
 .rules-about-copy {
   display: grid;
   align-content: start;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
+  gap: 10px;
   margin: 0;
+  max-width: 980px;
 }
 
 .rules-about-copy p {

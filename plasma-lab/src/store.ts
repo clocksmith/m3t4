@@ -1835,8 +1835,14 @@ export class ComputeLabStore {
     accepted: ExecutionReceipt[],
     reason: string,
   ): ValidationRecord {
+    const existing = Array.from(this.validations.values()).find((validation) =>
+      validation.taskId === task.taskId &&
+      validation.chunkId === chunk.chunkId &&
+      validation.status === status
+    );
+    if (existing) return existing;
     const validation: ValidationRecord = {
-      validationId: randomId("val"),
+      validationId: validationIdFor(task.taskId, chunk.chunkId, status),
       taskId: task.taskId,
       chunkId: chunk.chunkId,
       status,
@@ -1991,6 +1997,10 @@ function stripReceiptAuthSecrets<T>(input: T): Omit<T, "workerSessionToken" | "a
     ...safe
   } = input as T & { workerSessionToken?: string; assignmentToken?: string };
   return safe;
+}
+
+function validationIdFor(taskId: string, chunkId: string, status: ReceiptDecision): string {
+  return `val-${hashCanonical({ kind: "compute-validation", taskId, chunkId, status }).value.slice(0, 16)}`;
 }
 
 export function receiptHashPayload(

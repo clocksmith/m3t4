@@ -60,7 +60,7 @@ async function runOnce(chromium, config, pass) {
     ));
     const accepted = await waitForAcceptedTask(config, seeded.taskId);
     const elapsedMs = Date.now() - startedAt;
-    const finalStatus = await setAssignments(config, false);
+    const finalStatus = await disableAssignments(config);
 
     const validation = accepted.validation;
     const receipts = await Promise.all(validation.acceptedReceiptIds.map((id) =>
@@ -73,7 +73,6 @@ async function runOnce(chromium, config, pass) {
     browser = null;
 
     assertWebRtcArtifactReceipts(receipts, accepted.task.chunks?.[0]);
-    if (finalStatus.acceptAssignments) throw new Error("assignment intake remained enabled");
 
     return {
       ok: true,
@@ -120,7 +119,7 @@ async function runOnce(chromium, config, pass) {
     };
   } finally {
     if (browser) await browser.close().catch(() => undefined);
-    await setAssignments(config, false).catch((error) => {
+    await disableAssignments(config).catch((error) => {
       console.error(`failed to disable assignment intake: ${message(error)}`);
     });
   }
@@ -342,6 +341,17 @@ async function setAssignments(config, acceptAssignments, durationMs) {
     acceptAssignments,
     ...(acceptAssignments && durationMs ? { durationMs } : {}),
   });
+}
+
+async function disableAssignments(config) {
+  let last = await setAssignments(config, false);
+  for (let i = 0; i < 8; i++) {
+    const status = await getJson(config.computeOrigin, "/compute/status");
+    last = status;
+    if (status.acceptAssignments === false) return status;
+    await delay(500);
+  }
+  throw new Error(`assignment intake remained enabled: ${JSON.stringify(last)}`);
 }
 
 async function adminGet(config, path) {

@@ -229,6 +229,11 @@ function witnessInput(seed, index) {
   return (Math.imul(seed >>> 0, 747796405) + Math.imul(index >>> 0, 2891336453) + 1013904223) >>> 0;
 }
 
+function witnessTransform(x, index) {
+  const y = (x ^ ((x >>> 16) + Math.imul(index >>> 0, 2246822519))) >>> 0;
+  return (Math.imul(y, 1664525) + 1013904223) >>> 0;
+}
+
 function withTimeout(promise, ms) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("timeout")), ms);

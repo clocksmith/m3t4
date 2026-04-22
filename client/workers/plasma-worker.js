@@ -1,4 +1,4 @@
-import { replayArtifactToResultV1, simulate, stableReplayJson, STAGES, STRATEGIES } from "../sim/index.js";
+import { BEHAVIOR_VERSION, REPLAY_CONSTANTS_HASH, replayArtifactToResultV1, simulate, stableReplayJson, STAGES, STRATEGIES } from "../sim/index.js";
 
 // Plasma compute worker. Runs deterministic kernels off the main
 // thread so the spectator render loop stays smooth.
@@ -175,6 +175,12 @@ function runSeedSweep(params) {
   const seedStart = asInt(params.seedStart);
   const seedEndExclusive = asInt(params.seedEndExclusive);
   const maxTicks = params.maxTicks === undefined ? undefined : asInt(params.maxTicks);
+  if (params.simConstantsHash !== undefined && params.simConstantsHash !== REPLAY_CONSTANTS_HASH) {
+    throw new Error("simConstantsHash mismatch");
+  }
+  if (params.behaviorVersion !== undefined && asInt(params.behaviorVersion) !== BEHAVIOR_VERSION) {
+    throw new Error("behaviorVersion mismatch");
+  }
   if (!STAGES[stageId]) throw new Error(`unknown public stage: ${stageId}`);
   if (!STRATEGIES[brainAName]) throw new Error(`unknown public brainA preset: ${brainAName}`);
   if (!STRATEGIES[brainBName]) throw new Error(`unknown public brainB preset: ${brainBName}`);

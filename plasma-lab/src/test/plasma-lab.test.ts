@@ -34,6 +34,7 @@ const baseConfig: PlasmaLabConfig = {
   assignmentTimeoutMs: 60_000,
   workerSessionTtlMs: 60_000,
   webrtcSessionTtlMs: 60_000,
+  requireReceiptSignatures: false,
 };
 
 const capability: WorkerCapability = {
@@ -162,6 +163,50 @@ test("receipt submission rejects assignment token mismatches", () => {
   assert.equal(store.workerStatus(worker.worker.workerId)?.reputation.rejected, 1);
 });
 
+test("assignment issue hides expected output hashes from workers over HTTP", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  store.seedPrimeTask({ start: 100, endExclusive: 140, chunkSize: 40, minExecutions: 1, minAgreeing: 1 });
+  const srv = await boot(store, baseConfig);
+  t.after(() => srv.close());
+
+  const worker = await register(srv.port);
+  const nextBody = await next(srv.port, worker);
+  assert.equal(nextBody.chunk.expectedOutputHash, undefined);
+  assert.equal(nextBody.task.validationPolicy.expectedOutputHash, undefined);
+  await accept(srv.port, worker, nextBody.assignment.assignmentId, nextBody.assignment.assignmentToken);
+
+  const submitted = await receipt(srv.port, worker, nextBody);
+  assert.equal(submitted.receipt.decision, "accepted");
+});
+
+test("public artifact assignments hide server-held artifact output hashes", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const artifactJson = canonicalJson({
+    matchId: "artifact-hidden-output",
+    tuple: { matchId: "artifact-hidden-output", expectedLogHash: "abc123" },
+  });
+  store.seedPublicArtifactVerifyTask({
+    matchId: "artifact-hidden-output",
+    artifactHash: "artifact-hidden-output",
+    artifactSha256: sha256(artifactJson).value,
+    artifactJson,
+    minExecutions: 1,
+    minAgreeing: 1,
+  });
+  const srv = await boot(store, baseConfig);
+  t.after(() => srv.close());
+
+  const worker = await register(srv.port);
+  const nextBody = await next(srv.port, worker);
+  assert.equal(nextBody.chunk.expectedOutputHash, undefined);
+  assert.equal(nextBody.task.validationPolicy.expectedOutputHash, undefined);
+  assert.equal(nextBody.chunk.artifactHash, undefined);
+  await accept(srv.port, worker, nextBody.assignment.assignmentId, nextBody.assignment.assignmentToken);
+
+  const submitted = await receipt(srv.port, worker, nextBody);
+  assert.equal(submitted.receipt.decision, "accepted");
+});
+
 test("duplicate receipts from one assignment do not satisfy quorum", () => {
   const now = clock();
   const store = new ComputeLabStore({ now, acceptAssignments: true });
@@ -185,6 +230,20 @@ test("duplicate receipts from one assignment do not satisfy quorum", () => {
     computeMs: 3,
   });
   assert.equal(first.receipt.decision, "pending");
+
+  const idempotent = store.submitReceipt({
+    ...auth(w1),
+    assignmentId: a1.assignment.assignmentId,
+    assignmentToken: a1.assignment.assignmentToken,
+    taskId: a1.task.taskId,
+    chunkId: a1.chunk.chunkId,
+    ...referencePrimeReceiptFields(a1.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 3,
+  });
+  assert.equal(idempotent.receipt.receiptId, first.receipt.receiptId);
+  assert.equal(idempotent.validation, undefined);
 
   const duplicate = store.submitReceipt({
     ...auth(w1),
@@ -219,6 +278,23 @@ test("duplicate receipts from one assignment do not satisfy quorum", () => {
     second.receipt.receiptId,
   ].sort());
   assert.equal(second.validation?.comparedReceiptIds.includes(duplicate.receipt.receiptId), false);
+});
+
+test("validation-eligible production stores require signing keys before assignment", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true, requireReceiptSignatures: true });
+  store.seedPrimeTask({ start: 10, endExclusive: 20, chunkSize: 10 });
+  const unsigned = store.registerWorker({ capability });
+  assert.equal(store.assignNext(auth(unsigned)), null);
+});
+
+test("HTTP worker registration requires signing keys when configured", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true, requireReceiptSignatures: true });
+  const srv = await boot(store, { ...baseConfig, requireReceiptSignatures: true });
+  t.after(() => srv.close());
+
+  const unsigned = await req(srv.port, "POST", "/compute/workers/register", { capability });
+  assert.equal(unsigned.status, 400);
+  assert.equal(unsigned.body.error, "signingPublicKey required");
 });
 
 test("signed receipts verify against the registered worker session key", () => {
@@ -399,11 +475,36 @@ test("scheduler gates public artifact work behind witnessed cpu-light profiles",
   assert.equal(store.assignNext(auth(unwitnessed)), null);
 
   const trusted = store.registerWorker({ capability: webgpuCapability });
+  assert.equal(store.workerProfiles().find((profile) => profile.workerId === trusted.worker.workerId)?.allowedWorkloadTier, "observe-only");
+  assert.equal(store.assignNext(auth(trusted)), null);
+
+  const witnessTask = store.seedDeviceWitnessRenderTask({ minExecutions: 1, minAgreeing: 1 });
+  const witness = store.assignNext(auth(trusted))!;
+  assert.equal(witness.task.taskId, witnessTask.taskId);
+  store.acceptAssignment({
+    ...auth(trusted),
+    assignmentId: witness.assignment.assignmentId,
+    assignmentToken: witness.assignment.assignmentToken,
+  });
+  const witnessReceipt = store.submitReceipt({
+    ...auth(trusted),
+    assignmentId: witness.assignment.assignmentId,
+    assignmentToken: witness.assignment.assignmentToken,
+    taskId: witness.task.taskId,
+    chunkId: witness.chunk.chunkId,
+    ...referenceReceiptFields(witness.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 4,
+  });
+  assert.equal(witnessReceipt.receipt.decision, "accepted");
+
   const next = store.assignNext(auth(trusted));
   assert.equal(next?.task.taskId, task.taskId);
   assert.equal(next?.task.kind, "m3t4.public_artifact_verify.v0");
   const profile = store.workerProfiles().find((candidate) => candidate.workerId === trusted.worker.workerId);
-  assert.equal(profile?.allowedWorkloadTier, "webgpu-light");
+  assert.equal(profile?.allowedWorkloadTier, "cpu-light");
+  assert.equal(profile?.renderWitnessReceipts, 1);
   assert.ok((profile?.trustScore ?? 0) > 0.5);
 });
 
@@ -536,8 +637,12 @@ test("dashboard separates WebRTC public artifact receipts from measurement recei
     artifactSha256: sha256(artifactJson).value,
     artifactJson,
   });
-  const w1 = store.registerWorker({ capability });
-  const w2 = store.registerWorker({ capability });
+  const s1 = signingKeyPair();
+  const s2 = signingKeyPair();
+  const w1 = store.registerWorker({ capability, signingPublicKey: s1.publicJwk });
+  const w2 = store.registerWorker({ capability, signingPublicKey: s2.publicJwk });
+  store.joinWebRtcPair(auth(w1));
+  const pair = store.joinWebRtcPair(auth(w2)).pair;
   const a1 = store.assignNext(auth(w1))!;
   const a2 = store.assignNext(auth(w2))!;
   store.acceptAssignment({ ...auth(w1), assignmentId: a1.assignment.assignmentId, assignmentToken: a1.assignment.assignmentToken });
@@ -547,29 +652,77 @@ test("dashboard separates WebRTC public artifact receipts from measurement recei
     dataChannelBucket: "open",
     dataReceiptBucket: "ok",
   };
-  store.submitReceipt({
+  const fields1 = referenceReceiptFields(a1.chunk);
+  const receipt1 = {
     ...auth(w1),
     assignmentId: a1.assignment.assignmentId,
     assignmentToken: a1.assignment.assignmentToken,
     taskId: a1.task.taskId,
     chunkId: a1.chunk.chunkId,
-    ...referenceReceiptFields(a1.chunk),
-    executionMode: "cpu",
-    transport: "webrtc",
-    adapterInfo,
+    ...fields1,
+    executionMode: "cpu" as const,
+    transport: "webrtc" as const,
+    adapterInfo: {
+      ...adapterInfo,
+      peerSubreceipt: signedPeerSubreceipt({
+        pairId: pair.pairId,
+        requestId: "dashboard-1",
+        requester: w1,
+        peer: w2,
+        assignmentId: a1.assignment.assignmentId,
+        taskId: a1.task.taskId,
+        chunkId: a1.chunk.chunkId,
+        kernelId: fields1.kernelId,
+        kernelHash: fields1.kernelHash,
+        inputHash: fields1.inputHash,
+        artifactHash: fields1.artifactHash,
+        outputHash: fields1.outputHash,
+        executionMode: "cpu",
+        computeMs: 1,
+        clientVersion: "dashboard-test",
+      }, s2.privateKey),
+    },
     computeMs: 1,
-  });
+  };
   store.submitReceipt({
+    ...receipt1,
+    ...signedReceiptFields(receipt1, s1.privateKey),
+  });
+  const fields2 = referenceReceiptFields(a2.chunk);
+  const receipt2 = {
     ...auth(w2),
     assignmentId: a2.assignment.assignmentId,
     assignmentToken: a2.assignment.assignmentToken,
     taskId: a2.task.taskId,
     chunkId: a2.chunk.chunkId,
-    ...referenceReceiptFields(a2.chunk),
-    executionMode: "cpu",
-    transport: "webrtc",
-    adapterInfo,
+    ...fields2,
+    executionMode: "cpu" as const,
+    transport: "webrtc" as const,
+    adapterInfo: {
+      ...adapterInfo,
+      peerSubreceipt: signedPeerSubreceipt({
+        pairId: pair.pairId,
+        requestId: "dashboard-2",
+        requester: w2,
+        peer: w1,
+        assignmentId: a2.assignment.assignmentId,
+        taskId: a2.task.taskId,
+        chunkId: a2.chunk.chunkId,
+        kernelId: fields2.kernelId,
+        kernelHash: fields2.kernelHash,
+        inputHash: fields2.inputHash,
+        artifactHash: fields2.artifactHash,
+        outputHash: fields2.outputHash,
+        executionMode: "cpu",
+        computeMs: 1,
+        clientVersion: "dashboard-test",
+      }, s1.privateKey),
+    },
     computeMs: 1,
+  };
+  store.submitReceipt({
+    ...receipt2,
+    ...signedReceiptFields(receipt2, s2.privateKey),
   });
 
   const dashboard = store.dashboard() as any;
@@ -681,6 +834,112 @@ test("seed sweep receipts accept deterministic public preset batches", () => {
   });
   assert.equal(second.receipt.decision, "accepted");
   assert.equal(second.validation?.status, "accepted");
+});
+
+test("WebRTC data receipts require peer-signed subreceipts bound to the pair", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const requesterSigning = signingKeyPair();
+  const peerSigning = signingKeyPair();
+  const task = store.seedSeedSweepTask({
+    stageId: "boardroom",
+    brainA: "unicorn",
+    brainB: "disruptor",
+    seedStart: 10,
+    seedEndExclusive: 14,
+    seedChunkSize: 4,
+    minExecutions: 1,
+    minAgreeing: 1,
+  });
+  const requester = store.registerWorker({ capability, signingPublicKey: requesterSigning.publicJwk });
+  const peer = store.registerWorker({ capability, signingPublicKey: peerSigning.publicJwk });
+  store.joinWebRtcPair(auth(requester));
+  const pair = store.joinWebRtcPair(auth(peer)).pair;
+  const nextBody = store.assignNext(auth(requester))!;
+  store.acceptAssignment({
+    ...auth(requester),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const fields = referenceReceiptFields(nextBody.chunk);
+  const receiptFields = {
+    ...auth(requester),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...fields,
+    executionMode: "cpu" as const,
+    transport: "webrtc" as const,
+    computeMs: 12,
+    clientVersion: "webrtc-peer-test",
+    adapterInfo: {
+      peerSubreceipt: signedPeerSubreceipt({
+        pairId: pair.pairId,
+        requestId: "peer-test-1",
+        requester,
+        peer,
+        assignmentId: nextBody.assignment.assignmentId,
+        taskId: task.taskId,
+        chunkId: nextBody.chunk.chunkId,
+        kernelId: fields.kernelId,
+        kernelHash: fields.kernelHash,
+        inputHash: fields.inputHash,
+        artifactHash: fields.artifactHash,
+        outputHash: fields.outputHash,
+        executionMode: "cpu",
+        computeMs: 8,
+        clientVersion: "peer-test",
+      }, peerSigning.privateKey),
+    },
+  };
+
+  const accepted = store.submitReceipt({
+    ...receiptFields,
+    ...signedReceiptFields(receiptFields, requesterSigning.privateKey),
+  });
+  assert.equal(accepted.receipt.decision, "accepted");
+  assert.equal(accepted.validation?.status, "accepted");
+});
+
+test("WebRTC data receipts reject missing peer subreceipts", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const signing = signingKeyPair();
+  const task = store.seedSeedSweepTask({
+    stageId: "boardroom",
+    brainA: "unicorn",
+    brainB: "disruptor",
+    seedStart: 20,
+    seedEndExclusive: 24,
+    seedChunkSize: 4,
+    minExecutions: 1,
+    minAgreeing: 1,
+  });
+  const worker = store.registerWorker({ capability, signingPublicKey: signing.publicJwk });
+  const nextBody = store.assignNext(auth(worker))!;
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const receiptFields = {
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...referenceReceiptFields(nextBody.chunk),
+    executionMode: "cpu" as const,
+    transport: "webrtc" as const,
+    computeMs: 12,
+    clientVersion: "webrtc-peer-test",
+  };
+
+  const rejected = store.submitReceipt({
+    ...receiptFields,
+    ...signedReceiptFields(receiptFields, signing.privateKey),
+  });
+  assert.equal(rejected.receipt.decision, "malformed");
+  assert.equal(rejected.receipt.reason, "peer subreceipt required");
 });
 
 test("persistent store saves and restores compute snapshots", async () => {
@@ -871,13 +1130,34 @@ test("dashboard derives worker profiles, class profiles, and public-safe stats",
       turnNeedBucket: "unknown",
     },
   });
+  const witnessTask = store.seedDeviceWitnessWebGpuTask({ minExecutions: 1, minAgreeing: 1 });
+  const witness = store.assignNext(auth(worker))!;
+  assert.equal(witness.task.taskId, witnessTask.taskId);
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: witness.assignment.assignmentId,
+    assignmentToken: witness.assignment.assignmentToken,
+  });
+  const witnessReceipt = store.submitReceipt({
+    ...auth(worker),
+    assignmentId: witness.assignment.assignmentId,
+    assignmentToken: witness.assignment.assignmentToken,
+    taskId: witness.task.taskId,
+    chunkId: witness.chunk.chunkId,
+    ...referenceReceiptFields(witness.chunk),
+    executionMode: "webgpu",
+    transport: "http",
+    computeMs: 4,
+  });
+  assert.equal(witnessReceipt.receipt.decision, "accepted");
 
   const dashboard = store.dashboard() as any;
   assert.equal(dashboard.workerProfiles.length, 1);
   assert.equal(dashboard.workerProfiles[0].allowedWorkloadTier, "webgpu-light");
+  assert.equal(dashboard.workerProfiles[0].webgpuWitnessReceipts, 1);
   assert.equal(dashboard.workerProfiles[0].webrtcDirectSuccessRate, 1);
   assert.ok(dashboard.workerProfiles[0].trustScore > 0.5);
-  assert.equal(dashboard.workerProfiles[0].recentFailureRate, null);
+  assert.equal(dashboard.workerProfiles[0].recentFailureRate, 0);
   assert.equal(dashboard.deviceClassProfiles[0].classId, "desktop-high");
   assert.equal(dashboard.networkClassProfiles[0].classId, "4g");
   assert.equal(dashboard.publicStats.privacy, "full");
@@ -1906,6 +2186,74 @@ function signedReceiptFields(
       Buffer.from(receiptHash.value, "utf8"),
       { key: privateKey, dsaEncoding: "ieee-p1363" },
     ).toString("base64url"),
+  };
+}
+
+function signedPeerSubreceipt(input: {
+  pairId: string;
+  requestId: string;
+  requester: ReturnType<ComputeLabStore["registerWorker"]>;
+  peer: ReturnType<ComputeLabStore["registerWorker"]>;
+  assignmentId: string;
+  taskId: string;
+  chunkId: string;
+  kernelId: string;
+  kernelHash: ReturnType<typeof hashCanonical>;
+  inputHash: ReturnType<typeof hashCanonical>;
+  artifactHash?: ReturnType<typeof hashCanonical>;
+  outputHash: ReturnType<typeof hashCanonical>;
+  executionMode: "cpu" | "webgpu";
+  computeMs: number;
+  clientVersion?: string;
+}, privateKey: KeyObject) {
+  const payload = {
+    peerReceiptVersion: 1,
+    protocol: "plasma-peer-result.v1",
+    pairId: input.pairId,
+    requestId: input.requestId,
+    requesterWorkerId: input.requester.worker.workerId,
+    requesterSessionId: input.requester.session.workerSessionId,
+    workerId: input.peer.worker.workerId,
+    workerSessionId: input.peer.session.workerSessionId,
+    assignmentId: input.assignmentId,
+    taskId: input.taskId,
+    chunkId: input.chunkId,
+    kernelId: input.kernelId,
+    kernelHash: input.kernelHash,
+    inputHash: input.inputHash,
+    artifactHash: input.artifactHash,
+    outputHash: input.outputHash,
+    executionMode: input.executionMode,
+    computeMs: input.computeMs,
+    clientVersion: input.clientVersion,
+  };
+  const peerReceiptHash = hashCanonical(payload);
+  return {
+    protocol: payload.protocol,
+    pairId: payload.pairId,
+    requestId: payload.requestId,
+    requesterWorkerId: payload.requesterWorkerId,
+    requesterSessionId: payload.requesterSessionId,
+    workerId: payload.workerId,
+    workerSessionId: payload.workerSessionId,
+    assignmentId: payload.assignmentId,
+    taskId: payload.taskId,
+    chunkId: payload.chunkId,
+    kernelId: payload.kernelId,
+    kernelHash: payload.kernelHash,
+    inputHash: payload.inputHash,
+    artifactHash: payload.artifactHash,
+    outputHash: payload.outputHash,
+    executionMode: payload.executionMode,
+    computeMs: payload.computeMs,
+    clientVersion: payload.clientVersion,
+    peerReceiptHash,
+    signature: signData(
+      "sha256",
+      Buffer.from(peerReceiptHash.value, "utf8"),
+      { key: privateKey, dsaEncoding: "ieee-p1363" },
+    ).toString("base64url"),
+    signaturePublicKeyHash: input.peer.session.signingPublicKeyHash,
   };
 }
 

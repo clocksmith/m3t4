@@ -670,6 +670,15 @@ Closed-alpha staff rehearsal:
   receipts: rcpt-27714195291fbf4d, rcpt-3fae735327518878
   validation: val-d670fb7552262789
   result: 2 browsers, 7.1s window, both receipts accepted, chunk accepted, task complete
+
+Closed-alpha WebRTC staff window:
+  command: npm -w plasma-lab run smoke:webrtc-browser
+  env: PLASMA_LAB_SMOKE_ORIGIN, PLASMA_LAB_SMOKE_ADMIN_TOKEN, M3T4_SMOKE_GAME_ORIGIN
+  task: task-88ba001cb5b528e9
+  receipts: rcpt-6f2d05d708b2f3b7, rcpt-68fbcba0733869c7
+  validation: val-a53c730737178ec9
+  result: 2 browsers, 10.3s window, WebRTC data channel open, measurement receipts accepted
+  data work: request-ok on offerer, served-ok on answerer, relay not used
 ```
 
 Observation: every derived evidence field was present in the accepted

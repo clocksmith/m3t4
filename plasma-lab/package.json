@@ -8,6 +8,7 @@
     "test": "tsc && node --test dist/test/*.test.js",
     "smoke": "tsc && node dist/smoke.js",
     "smoke:derived-browser": "node scripts/smoke-derived-browser-n2.cjs",
+    "smoke:webrtc-browser": "node scripts/smoke-webrtc-browser-n2.cjs",
     "start": "tsc && node dist/index.js"
   },
   "dependencies": {

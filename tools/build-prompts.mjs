@@ -561,6 +561,7 @@ function providerRecord(provider, r) {
   const defaults = doc.artDirection.modelDefaults?.[provider] ?? {};
   const backgroundInstruction =
     `Use ${doc.artDirection.bgKeyColor} as the keyed background for sprites and isolated moving assets. ` +
+    `Every keyed background pixel should be the exact key color only; do not add near-key noise, checkerboard fills, stray key-colored squares, or off-color background pixels. ` +
     doc.artDirection.silhouetteRule;
   const postProcess = [
     doc.artDirection.downscale,
@@ -608,7 +609,7 @@ function copyPasteBlock(provider, r) {
     : [];
   const postProcess = [
     `POST-PROCESS AFTER GENERATION: nearest-neighbor downscale ${r.genW}x${r.genH} to ${r.outW}x${r.outH}.`,
-    "Then key the near-#FF00FF background to alpha with RGB-distance tolerance 24, crop only generator-added outer borders, and preserve exact grid cuts.",
+    `Then key the near-${doc.artDirection.bgKeyColor} background to alpha with RGB-distance tolerance 24, crop only generator-added outer borders, and preserve exact grid cuts.`,
   ];
   const assembly = r.assembly
     ? [`ASSEMBLY: ${JSON.stringify(r.assembly)}`]
@@ -649,6 +650,8 @@ function promptBody(provider, r) {
     "",
     "Technical requirements:",
     `- Use ${doc.artDirection.bgKeyColor} as the exact background color where the prompt requests an isolated sprite, portrait, weapon, objective, or transparent layer.`,
+    `- Background/key pixels must be exactly ${doc.artDirection.bgKeyColor}; do not create checkerboards, random squares, near-key colored noise, or off-color variants of the key color.`,
+    `- Do not use ${doc.artDirection.bgKeyColor} or near-${doc.artDirection.bgKeyColor} colors inside the actual artwork, shading, highlights, shadows, or dithering.`,
     `- ${doc.artDirection.silhouetteRule}`,
     "- Keep hard pixel edges, clean silhouettes, and exact grid alignment where a grid is specified.",
   ].join("\n");
@@ -663,6 +666,7 @@ function assetContract(provider, r) {
     `- Source scale: ${r.sourceScale}x final asset size. Source must stay an exact 1x, 2x, or 3x multiple of the final output; do not use fractional or larger downscale ratios.`,
     `- If the generator outputs a larger proportional image, preserve the same ${aspect} aspect ratio and the same internal layout proportions.`,
     `- Local post-process will center-crop only generator-added outer border or slight aspect drift, nearest-neighbor resize to ${r.outW}x${r.outH}, then key the near-${doc.artDirection.bgKeyColor} background to transparent alpha with RGB-distance tolerance 24.`,
+    `- The intended keyed background should still be exact ${doc.artDirection.bgKeyColor}; the tolerance exists only to clean generator edge drift, not to permit noisy or checkered backgrounds.`,
     "- Compose the image so it remains clean and correctly aligned after that exact post-process.",
   ];
   if (provider === "gpt") {

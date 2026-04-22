@@ -78,11 +78,11 @@ if (normalizedTransparentPixels) process.stdout.write(`normalized transparent ma
 
 function printUsage() {
   process.stdout.write(`Usage:
-  node tools/postprocess-generation.mjs <raw-png> [--target 512x128] [--out path] [--key #FF00FF] [--tolerance 24] [--edge-connected-key] [--despill-key] [--despill-passes 2] [--scrub-key] [--keep-grid-lines] [--grid-line-radius 1]
+  node tools/postprocess-generation.mjs <raw-png> [--target 256x256] [--out path] [--key #FF00FF] [--tolerance 24] [--edge-connected-key] [--despill-key] [--despill-passes 2] [--scrub-key] [--keep-grid-lines] [--grid-line-radius 1]
 
 Examples:
   node tools/postprocess-generation.mjs generations/raw/assets/chars/sama/monastic_infra/packed/pack-00.png
-  node tools/postprocess-generation.mjs generations/raw/assets/chars/sama/monastic_infra/packed/pack-00.png --target 512x128
+  node tools/postprocess-generation.mjs generations/raw/assets/chars/sama/monastic_infra/packed/pack-00.png --target 256x256
 `);
 }
 
@@ -106,7 +106,7 @@ function parseInteger(value, label) {
 function parseTarget(value) {
   if (!value) return null;
   const match = /^(\d+)x(\d+)$/i.exec(value.trim());
-  if (!match) fail("--target must be WIDTHxHEIGHT, e.g. 512x128");
+  if (!match) fail("--target must be WIDTHxHEIGHT, e.g. 256x256");
   return { width: Number(match[1]), height: Number(match[2]) };
 }
 

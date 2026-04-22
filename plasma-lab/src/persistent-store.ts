@@ -6,6 +6,8 @@ import {
   type ComputeLabSnapshot,
   type ComputeTask,
   type ExecutionReceipt,
+  type PeerSubassignment,
+  type PeerSubreceipt,
   type StoreOptions,
   type ValidationRecord,
   type WebRtcPairRecord,
@@ -13,7 +15,7 @@ import {
   type WorkerRecord,
   type WorkerSession,
 } from "./store.js";
-import type { GovernorMode, WorkerCapability, WorkerRefusalReason } from "./plasma/types.js";
+import type { GovernorMode, TransportKind, WorkerCapability, WorkerRefusalReason } from "./plasma/types.js";
 
 export interface ComputeLabPersistence {
   load(): Promise<Partial<ComputeLabSnapshot>>;
@@ -168,6 +170,8 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     artifactJson: string;
     minExecutions?: number;
     minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
   }): ComputeTask {
     const out = super.seedPublicArtifactVerifyTask(input);
     this.persist(() => ({ tasks: [out] }));
@@ -180,6 +184,8 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     allowConstantsMismatch?: boolean;
     minExecutions?: number;
     minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
   }): ComputeTask {
     const out = super.seedReplayVerifyTask(input);
     this.persist(() => ({ tasks: [out] }));
@@ -196,6 +202,8 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     maxTicks?: number;
     minExecutions?: number;
     minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
   }): ComputeTask {
     const out = super.seedSeedSweepTask(input);
     this.persist(() => ({ tasks: [out] }));
@@ -327,6 +335,37 @@ export class PersistentComputeLabStore extends ComputeLabStore {
   closeWebRtcPair(input: { pairId: string; token: string }): WebRtcPairRecord {
     const out = super.closeWebRtcPair(input);
     this.persist(() => ({ webrtcPairs: [out] }));
+    return out;
+  }
+
+  issuePeerSubassignment(input: {
+    workerId: string;
+    workerSessionId: string;
+    workerSessionToken: string;
+    assignmentId: string;
+    assignmentToken: string;
+    pairId: string;
+    pairToken: string;
+    requestId: string;
+  }): PeerSubassignment {
+    const out = super.issuePeerSubassignment(input);
+    this.persist(() => ({ peerSubassignments: [out] }));
+    return out;
+  }
+
+  submitPeerSubassignmentReceipt(input: {
+    workerId: string;
+    workerSessionId: string;
+    workerSessionToken: string;
+    peerAssignmentId: string;
+    peerAssignmentToken: string;
+    peerSubreceipt: PeerSubreceipt;
+  }): PeerSubassignment {
+    const out = super.submitPeerSubassignmentReceipt(input);
+    this.persist((snapshot) => ({
+      peerSubassignments: [out],
+      reputation: snapshot.reputation.filter((rep) => rep.workerId === input.workerId),
+    }));
     return out;
   }
 

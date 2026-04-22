@@ -65,6 +65,7 @@ export const COMPUTE_COLLECTIONS = {
   sessions: "compute_sessions",
   webrtcSessions: "compute_webrtc_sessions",
   webrtcPairs: "compute_webrtc_pairs",
+  peerSubassignments: "compute_peer_subassignments",
   capabilityObservations: "compute_capability_observations",
   connectivityObservations: "compute_connectivity_observations",
   workerProfiles: "compute_worker_profiles",
@@ -235,6 +236,33 @@ export interface Assignment {
   refusalReason?: WorkerRefusalReason;
 }
 
+export interface PeerSubassignment {
+  peerAssignmentId: string;
+  peerAssignmentToken: string;
+  parentAssignmentId: string;
+  pairId: string;
+  requestId: string;
+  requesterWorkerId: string;
+  requesterSessionId: string;
+  peerWorkerId: string;
+  peerSessionId: string;
+  taskId: string;
+  chunkId: string;
+  kernelId: string;
+  kernelHash: ContentHash;
+  inputHash: ContentHash;
+  artifactHash?: ContentHash;
+  createdAt: number;
+  expiresAt: number;
+  status: "issued" | "accepted" | "rejected" | "expired" | "cancelled";
+  outputHash?: ContentHash;
+  peerReceiptHash?: ContentHash;
+  receivedAt?: number;
+  computeMs?: number;
+  clientVersion?: string;
+  reason?: string;
+}
+
 export interface ExecutionReceipt {
   receiptId: string;
   workerId: string;
@@ -273,6 +301,7 @@ export interface ReceiptVerification {
   receiptHash: ContentHash;
   storedReceiptHash?: ContentHash;
   receiptHashMatches: boolean;
+  signatureRequired: boolean;
   signatureStatus: ExecutionReceipt["signatureStatus"];
   signatureVerified: boolean;
   signaturePublicKeyHash?: ContentHash;
@@ -398,6 +427,7 @@ export interface ComputeLabSnapshot {
   reputation: ReputationRecord[];
   webrtcSessions: WebRtcSessionRecord[];
   webrtcPairs: WebRtcPairRecord[];
+  peerSubassignments: PeerSubassignment[];
   capabilityObservations: CapabilityObservation[];
   connectivityObservations: ConnectivityObservation[];
 }
@@ -412,6 +442,7 @@ export class ComputeLabStore {
   private readonly reputation = new Map<string, ReputationRecord>();
   private readonly webrtcSessions = new Map<string, WebRtcSessionRecord>();
   private readonly webrtcPairs = new Map<string, WebRtcPairRecord>();
+  private readonly peerSubassignments = new Map<string, PeerSubassignment>();
   private readonly capabilityObservations = new Map<string, CapabilityObservation>();
   private readonly connectivityObservations = new Map<string, ConnectivityObservation>();
   private readonly now: () => number;
@@ -463,6 +494,7 @@ export class ComputeLabStore {
       reputation: Array.from(this.reputation.values()),
       webrtcSessions: Array.from(this.webrtcSessions.values()),
       webrtcPairs: Array.from(this.webrtcPairs.values()),
+      peerSubassignments: Array.from(this.peerSubassignments.values()),
       capabilityObservations: Array.from(this.capabilityObservations.values()),
       connectivityObservations: Array.from(this.connectivityObservations.values()),
     };
@@ -478,6 +510,7 @@ export class ComputeLabStore {
     this.reputation.clear();
     this.webrtcSessions.clear();
     this.webrtcPairs.clear();
+    this.peerSubassignments.clear();
     this.capabilityObservations.clear();
     this.connectivityObservations.clear();
     if (snapshot.control) {
@@ -494,6 +527,7 @@ export class ComputeLabStore {
     for (const rep of snapshot.reputation ?? []) this.reputation.set(rep.workerId, rep);
     for (const session of snapshot.webrtcSessions ?? []) this.webrtcSessions.set(session.sessionId, session);
     for (const pair of snapshot.webrtcPairs ?? []) this.webrtcPairs.set(pair.pairId, pair);
+    for (const subassignment of snapshot.peerSubassignments ?? []) this.peerSubassignments.set(subassignment.peerAssignmentId, subassignment);
     for (const obs of snapshot.capabilityObservations ?? []) this.capabilityObservations.set(obs.observationId, obs);
     for (const obs of snapshot.connectivityObservations ?? []) this.connectivityObservations.set(obs.observationId, obs);
   }
@@ -867,6 +901,8 @@ export class ComputeLabStore {
     artifactJson: string;
     minExecutions?: number;
     minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
   }): ComputeTask {
     if (!input.matchId) throw new Error("matchId required");
     if (!input.artifactHash) throw new Error("artifactHash required");
@@ -907,6 +943,8 @@ export class ComputeLabStore {
         minExecutions,
         minAgreeing,
         expectedOutputHash,
+        requiredTransport: input.requiredTransport,
+        requiredPeerSubreceipt: input.requiredPeerSubreceipt,
       },
       chunks: [chunk],
     };
@@ -920,6 +958,8 @@ export class ComputeLabStore {
     allowConstantsMismatch?: boolean;
     minExecutions?: number;
     minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
   }): ComputeTask {
     if (!input.replayArtifactJson) throw new Error("replayArtifactJson required");
     const expectedOutput = runReplayVerify({
@@ -962,6 +1002,8 @@ export class ComputeLabStore {
         minExecutions,
         minAgreeing,
         expectedOutputHash: expectedOutput.outputHash,
+        requiredTransport: input.requiredTransport,
+        requiredPeerSubreceipt: input.requiredPeerSubreceipt,
       },
       chunks: [chunk],
     };
@@ -979,6 +1021,8 @@ export class ComputeLabStore {
     maxTicks?: number;
     minExecutions?: number;
     minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
   }): ComputeTask {
     const seedStart = asInt(input.seedStart, "seedStart");
     const seedEndExclusive = asInt(input.seedEndExclusive, "seedEndExclusive");
@@ -1027,6 +1071,8 @@ export class ComputeLabStore {
         validationMode: "expected-hash",
         minExecutions,
         minAgreeing,
+        requiredTransport: input.requiredTransport,
+        requiredPeerSubreceipt: input.requiredPeerSubreceipt,
       },
       chunks,
     };
@@ -1157,7 +1203,16 @@ export class ComputeLabStore {
     }
     const task = this.requireTask(input.taskId);
     const chunk = this.requireChunk(input.chunkId);
-    const peerMismatch = this.peerReceiptMismatch(chunk, input);
+    const receivedAt = this.now();
+    const policyMismatch = receiptPolicyMismatch(task, input);
+    if (policyMismatch) {
+      const receipt = this.makeReceipt(input, "malformed", policyMismatch);
+      this.receipts.set(receipt.receiptId, receipt);
+      assignment.status = "receipted";
+      this.bumpReputation(input.workerId, "rejected");
+      return { receipt };
+    }
+    const peerMismatch = this.peerReceiptMismatch(task, chunk, assignment, input, receivedAt);
     if (peerMismatch) {
       const receipt = this.makeReceipt(input, "malformed", peerMismatch);
       this.receipts.set(receipt.receiptId, receipt);
@@ -1226,17 +1281,20 @@ export class ComputeLabStore {
       : receipt.signature
         ? "key-unavailable"
         : "unsigned";
+    const signatureRequired = this.requireReceiptSignatures || !!session?.signingPublicKey;
     const { signature: _signature, ...redactedReceipt } = receipt;
     return {
       receiptId: receipt.receiptId,
       ok: hashesEqual(receipt.receiptHash, receiptHash) && (
-        signatureStatus === "verified" ||
-        signatureStatus === "unsigned"
+        signatureRequired
+          ? signatureStatus === "verified"
+          : signatureStatus === "verified" || signatureStatus === "unsigned"
       ),
       decision: receipt.decision,
       receiptHash,
       storedReceiptHash: receipt.receiptHash,
       receiptHashMatches: hashesEqual(receipt.receiptHash, receiptHash),
+      signatureRequired,
       signatureStatus,
       signatureVerified,
       signaturePublicKeyHash: session?.signingPublicKeyHash ?? receipt.signaturePublicKeyHash,
@@ -1394,6 +1452,141 @@ export class ComputeLabStore {
     return pair;
   }
 
+  issuePeerSubassignment(input: {
+    workerId: string;
+    workerSessionId: string;
+    workerSessionToken: string;
+    assignmentId: string;
+    assignmentToken: string;
+    pairId: string;
+    pairToken: string;
+    requestId: string;
+  }): PeerSubassignment {
+    this.requireSession(input.workerId, input.workerSessionId, input.workerSessionToken);
+    const assignment = this.requireAssignment(input.assignmentId);
+    if (assignment.assignmentToken !== input.assignmentToken) throw new Error("assignment token mismatch");
+    if (
+      assignment.workerId !== input.workerId ||
+      assignment.workerSessionId !== input.workerSessionId ||
+      assignment.status !== "accepted"
+    ) {
+      throw new Error("accepted requester assignment required");
+    }
+    if (!isNonEmptyString(input.requestId)) throw new Error("requestId required");
+    const pair = this.requireWebRtcPair(input.pairId, input.pairToken);
+    if (pair.status !== "matched") throw new Error("matched WebRTC pair required");
+    const requesterRole = pairParticipantRole(pair, input.workerId, input.workerSessionId);
+    if (!requesterRole) throw new Error("requester not in WebRTC pair");
+    const peer = peerParticipantFor(pair, requesterRole);
+    if (!peer) throw new Error("peer not matched");
+    if (peer.workerId === input.workerId || peer.workerSessionId === input.workerSessionId) {
+      throw new Error("remote peer required");
+    }
+    const peerSession = this.sessions.get(peer.workerSessionId);
+    if (!peerSession || peerSession.workerId !== peer.workerId || !peerSession.signingPublicKey) {
+      throw new Error("peer signing key required");
+    }
+    const task = this.requireTask(assignment.taskId);
+    const chunk = this.requireChunk(assignment.chunkId);
+    if (!isWebRtcDataTask(chunk.kind)) throw new Error("peer subassignment requires WebRTC data task");
+
+    const existing = Array.from(this.peerSubassignments.values()).find((subassignment) =>
+      subassignment.parentAssignmentId === assignment.assignmentId &&
+      subassignment.pairId === pair.pairId &&
+      subassignment.requestId === input.requestId
+    );
+    if (existing) {
+      if (
+        existing.requesterWorkerId !== input.workerId ||
+        existing.requesterSessionId !== input.workerSessionId ||
+        existing.peerWorkerId !== peer.workerId ||
+        existing.peerSessionId !== peer.workerSessionId ||
+        existing.taskId !== task.taskId ||
+        existing.chunkId !== chunk.chunkId
+      ) {
+        throw new Error("peer subassignment request mismatch");
+      }
+      return existing;
+    }
+
+    const now = this.now();
+    const subassignment: PeerSubassignment = {
+      peerAssignmentId: randomId("psub"),
+      peerAssignmentToken: randomToken("pstok"),
+      parentAssignmentId: assignment.assignmentId,
+      pairId: pair.pairId,
+      requestId: input.requestId,
+      requesterWorkerId: input.workerId,
+      requesterSessionId: input.workerSessionId,
+      peerWorkerId: peer.workerId,
+      peerSessionId: peer.workerSessionId,
+      taskId: task.taskId,
+      chunkId: chunk.chunkId,
+      kernelId: chunk.kernelId,
+      kernelHash: chunk.kernelHash,
+      inputHash: chunk.inputHash,
+      artifactHash: chunk.artifactHash,
+      createdAt: now,
+      expiresAt: Math.min(pair.expiresAt, assignment.expiresAt, now + this.assignmentTimeoutMs),
+      status: "issued",
+    };
+    this.peerSubassignments.set(subassignment.peerAssignmentId, subassignment);
+    return subassignment;
+  }
+
+  submitPeerSubassignmentReceipt(input: {
+    workerId: string;
+    workerSessionId: string;
+    workerSessionToken: string;
+    peerAssignmentId: string;
+    peerAssignmentToken: string;
+    peerSubreceipt: PeerSubreceipt;
+  }): PeerSubassignment {
+    const session = this.requireSession(input.workerId, input.workerSessionId, input.workerSessionToken);
+    const subassignment = this.peerSubassignments.get(input.peerAssignmentId);
+    if (!subassignment || subassignment.peerAssignmentToken !== input.peerAssignmentToken) {
+      throw new Error("peer subassignment token mismatch");
+    }
+    if (subassignment.peerWorkerId !== input.workerId || subassignment.peerSessionId !== input.workerSessionId) {
+      throw new Error("peer subassignment worker mismatch");
+    }
+    if (!session.signingPublicKey) throw new Error("peer signing key required");
+    const now = this.now();
+    if (subassignment.expiresAt <= now) {
+      subassignment.status = "expired";
+      subassignment.receivedAt = now;
+      subassignment.reason = "peer subassignment expired";
+      this.bumpReputation(input.workerId, "timeout");
+      return subassignment;
+    }
+    const mismatch = this.peerSubassignmentReceiptMismatch(subassignment, input.peerSubreceipt, session);
+    const expectedHash = peerSubreceiptHash(input.peerSubreceipt);
+    if (subassignment.status !== "issued") {
+      if (
+        subassignment.status === "accepted" &&
+        subassignment.peerReceiptHash &&
+        hashesEqual(subassignment.peerReceiptHash, expectedHash)
+      ) {
+        return subassignment;
+      }
+      throw new Error("peer subassignment already receipted");
+    }
+    subassignment.receivedAt = now;
+    subassignment.computeMs = input.peerSubreceipt.computeMs;
+    subassignment.clientVersion = input.peerSubreceipt.clientVersion;
+    subassignment.outputHash = input.peerSubreceipt.outputHash;
+    subassignment.peerReceiptHash = input.peerSubreceipt.peerReceiptHash;
+    if (mismatch) {
+      subassignment.status = "rejected";
+      subassignment.reason = mismatch;
+      this.bumpReputation(input.workerId, "rejected");
+      return subassignment;
+    }
+    subassignment.status = "accepted";
+    this.bumpReputation(input.workerId, "accepted");
+    return subassignment;
+  }
+
   webRtcPairSummaries(): WebRtcPairSummary[] {
     this.expireWebRtcPairs();
     return Array.from(this.webrtcPairs.values())
@@ -1430,6 +1623,7 @@ export class ComputeLabStore {
     chunks: { pending: number; accepted: number; rejected: number; timeout: number };
     webrtcSessions: number;
     webrtcPairs: number;
+    peerSubassignments: number;
   } {
     this.expireAssignmentIntake();
     const chunks = { pending: 0, accepted: 0, rejected: 0, timeout: 0 };
@@ -1456,6 +1650,7 @@ export class ComputeLabStore {
       chunks,
       webrtcSessions: this.webrtcSessions.size,
       webrtcPairs: this.webrtcPairs.size,
+      peerSubassignments: this.peerSubassignments.size,
     };
   }
 
@@ -1980,8 +2175,17 @@ export class ComputeLabStore {
       receipt.decision !== "malformed";
   }
 
-  private peerReceiptMismatch(chunk: ComputeChunk, receipt: Omit<ExecutionReceipt, "receiptId" | "receivedAt" | "decision" | "reason">): string | null {
-    if (receipt.transport !== "webrtc" || !isWebRtcDataTask(chunk.kind)) return null;
+  private peerReceiptMismatch(
+    task: ComputeTask,
+    chunk: ComputeChunk,
+    assignment: Assignment,
+    receipt: Omit<ExecutionReceipt, "receiptId" | "receivedAt" | "decision" | "reason">,
+    receivedAt: number,
+  ): string | null {
+    const peerRequired = task.validationPolicy.requiredPeerSubreceipt === true ||
+      (receipt.transport === "webrtc" && isWebRtcDataTask(chunk.kind));
+    if (!peerRequired) return null;
+    if (!isWebRtcDataTask(chunk.kind)) return "peer subreceipt unsupported for task";
     const subreceipt = peerSubreceiptFromAdapterInfo(receipt.adapterInfo);
     if (!subreceipt) return "peer subreceipt required";
     if (subreceipt.requesterWorkerId !== receipt.workerId || subreceipt.requesterSessionId !== receipt.workerSessionId) {
@@ -2010,6 +2214,9 @@ export class ComputeLabStore {
     }
     const pair = this.webrtcPairs.get(subreceipt.pairId);
     if (!pair) return "peer subreceipt pair missing";
+    if (pair.status !== "matched" && pair.status !== "closed") return "peer subreceipt pair not matched";
+    if (pair.createdAt > receivedAt) return "peer subreceipt pair created after receipt";
+    if (pair.expiresAt < receivedAt) return "peer subreceipt pair expired";
     const pairHasRequester = (
       (pair.offererWorkerId === receipt.workerId && pair.offererSessionId === receipt.workerSessionId) ||
       (pair.answererWorkerId === receipt.workerId && pair.answererSessionId === receipt.workerSessionId)
@@ -2019,6 +2226,21 @@ export class ComputeLabStore {
       (pair.answererWorkerId === subreceipt.workerId && pair.answererSessionId === subreceipt.workerSessionId)
     );
     if (!pairHasRequester || !pairHasPeer) return "peer subreceipt pair participant mismatch";
+    if (task.validationPolicy.requiredPeerSubreceipt === true || subreceipt.peerAssignmentId) {
+      if (!subreceipt.peerAssignmentId) return "peer subassignment required";
+      const subassignment = this.peerSubassignments.get(subreceipt.peerAssignmentId);
+      if (!subassignment) return "peer subassignment missing";
+      const subassignmentMismatch = this.linkedPeerSubassignmentMismatch(
+        subassignment,
+        task,
+        chunk,
+        assignment,
+        receipt,
+        subreceipt,
+        receivedAt,
+      );
+      if (subassignmentMismatch) return subassignmentMismatch;
+    }
     const peerSession = this.sessions.get(subreceipt.workerSessionId);
     if (!peerSession || peerSession.workerId !== subreceipt.workerId || !peerSession.signingPublicKey) {
       return "peer subreceipt signing key unavailable";
@@ -2026,6 +2248,86 @@ export class ComputeLabStore {
     const expectedHash = peerSubreceiptHash(subreceipt);
     if (!hashesEqual(subreceipt.peerReceiptHash, expectedHash)) return "peer subreceipt hash mismatch";
     if (!verifyReceiptSignature(expectedHash, subreceipt.signature, peerSession.signingPublicKey)) {
+      return "peer subreceipt signature invalid";
+    }
+    return null;
+  }
+
+  private linkedPeerSubassignmentMismatch(
+    subassignment: PeerSubassignment,
+    task: ComputeTask,
+    chunk: ComputeChunk,
+    assignment: Assignment,
+    receipt: Omit<ExecutionReceipt, "receiptId" | "receivedAt" | "decision" | "reason">,
+    subreceipt: PeerSubreceipt,
+    receivedAt: number,
+  ): string | null {
+    if (subassignment.status !== "accepted") return "peer subassignment not accepted";
+    if (subassignment.expiresAt < receivedAt) return "peer subassignment expired";
+    if (
+      subassignment.parentAssignmentId !== assignment.assignmentId ||
+      subassignment.pairId !== subreceipt.pairId ||
+      subassignment.requestId !== subreceipt.requestId ||
+      subassignment.requesterWorkerId !== receipt.workerId ||
+      subassignment.requesterSessionId !== receipt.workerSessionId ||
+      subassignment.peerWorkerId !== subreceipt.workerId ||
+      subassignment.peerSessionId !== subreceipt.workerSessionId ||
+      subassignment.taskId !== task.taskId ||
+      subassignment.chunkId !== chunk.chunkId
+    ) {
+      return "peer subassignment binding mismatch";
+    }
+    if (
+      subassignment.kernelId !== receipt.kernelId ||
+      !hashesEqual(subassignment.kernelHash, receipt.kernelHash) ||
+      !hashesEqual(subassignment.inputHash, receipt.inputHash) ||
+      !hashesEqual(subassignment.outputHash, receipt.outputHash) ||
+      !hashesEqual(subassignment.peerReceiptHash, subreceipt.peerReceiptHash)
+    ) {
+      return "peer subassignment receipt mismatch";
+    }
+    if ((subassignment.artifactHash || receipt.artifactHash) && !hashesEqual(subassignment.artifactHash, receipt.artifactHash)) {
+      return "peer subassignment artifact mismatch";
+    }
+    return null;
+  }
+
+  private peerSubassignmentReceiptMismatch(
+    subassignment: PeerSubassignment,
+    subreceipt: PeerSubreceipt,
+    session: WorkerSession,
+  ): string | null {
+    const task = this.requireTask(subassignment.taskId);
+    const chunk = this.requireChunk(subassignment.chunkId);
+    if (
+      subreceipt.peerAssignmentId !== subassignment.peerAssignmentId ||
+      subreceipt.pairId !== subassignment.pairId ||
+      subreceipt.requestId !== subassignment.requestId ||
+      subreceipt.requesterWorkerId !== subassignment.requesterWorkerId ||
+      subreceipt.requesterSessionId !== subassignment.requesterSessionId ||
+      subreceipt.workerId !== subassignment.peerWorkerId ||
+      subreceipt.workerSessionId !== subassignment.peerSessionId ||
+      subreceipt.assignmentId !== subassignment.parentAssignmentId ||
+      subreceipt.taskId !== subassignment.taskId ||
+      subreceipt.chunkId !== subassignment.chunkId
+    ) {
+      return "peer subassignment binding mismatch";
+    }
+    if (
+      subreceipt.kernelId !== subassignment.kernelId ||
+      !hashesEqual(subreceipt.kernelHash, subassignment.kernelHash) ||
+      !hashesEqual(subreceipt.inputHash, subassignment.inputHash) ||
+      !hashesEqual(subreceipt.outputHash, chunk.expectedOutputHash)
+    ) {
+      return "peer subassignment compute mismatch";
+    }
+    if ((subreceipt.artifactHash || subassignment.artifactHash) && !hashesEqual(subreceipt.artifactHash, subassignment.artifactHash)) {
+      return "peer subassignment artifact mismatch";
+    }
+    if (!isWebRtcDataTask(task.kind)) return "peer subassignment task unsupported";
+    const expectedHash = peerSubreceiptHash(subreceipt);
+    if (!hashesEqual(subreceipt.peerReceiptHash, expectedHash)) return "peer subreceipt hash mismatch";
+    if (!verifyReceiptSignature(expectedHash, subreceipt.signature, session.signingPublicKey!)) {
       return "peer subreceipt signature invalid";
     }
     return null;
@@ -2047,8 +2349,9 @@ export class ComputeLabStore {
   }
 }
 
-interface PeerSubreceipt {
+export interface PeerSubreceipt {
   protocol: "plasma-peer-result.v1";
+  peerAssignmentId?: string;
   pairId: string;
   requestId: string;
   requesterWorkerId: string;
@@ -2077,6 +2380,7 @@ function peerSubreceiptFromAdapterInfo(adapterInfo: Record<string, unknown> | un
   const value = raw as Record<string, unknown>;
   const subreceipt = {
     protocol: value.protocol,
+    peerAssignmentId: value.peerAssignmentId,
     pairId: value.pairId,
     requestId: value.requestId,
     requesterWorkerId: value.requesterWorkerId,
@@ -2100,6 +2404,7 @@ function peerSubreceiptFromAdapterInfo(adapterInfo: Record<string, unknown> | un
   };
   if (
     subreceipt.protocol !== "plasma-peer-result.v1" ||
+    (subreceipt.peerAssignmentId !== undefined && !isNonEmptyString(subreceipt.peerAssignmentId)) ||
     !isNonEmptyString(subreceipt.pairId) ||
     !isNonEmptyString(subreceipt.requestId) ||
     !isNonEmptyString(subreceipt.requesterWorkerId) ||
@@ -2133,6 +2438,7 @@ function peerSubreceiptPayload(input: Omit<PeerSubreceipt, "peerReceiptHash" | "
   return {
     peerReceiptVersion: 1,
     protocol: input.protocol,
+    peerAssignmentId: input.peerAssignmentId,
     pairId: input.pairId,
     requestId: input.requestId,
     requesterWorkerId: input.requesterWorkerId,
@@ -2157,6 +2463,28 @@ function isWebRtcDataTask(kind: TaskKind): boolean {
   return kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID || kind === REPLAY_VERIFY_KERNEL_ID || kind === SEED_SWEEP_KERNEL_ID;
 }
 
+function pairParticipantRole(
+  pair: WebRtcPairRecord,
+  workerId: string,
+  workerSessionId: string,
+): "offerer" | "answerer" | null {
+  if (pair.offererWorkerId === workerId && pair.offererSessionId === workerSessionId) return "offerer";
+  if (pair.answererWorkerId === workerId && pair.answererSessionId === workerSessionId) return "answerer";
+  return null;
+}
+
+function peerParticipantFor(
+  pair: WebRtcPairRecord,
+  role: "offerer" | "answerer",
+): { workerId: string; workerSessionId: string } | null {
+  if (role === "offerer") {
+    return pair.answererWorkerId && pair.answererSessionId
+      ? { workerId: pair.answererWorkerId, workerSessionId: pair.answererSessionId }
+      : null;
+  }
+  return { workerId: pair.offererWorkerId, workerSessionId: pair.offererSessionId };
+}
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
@@ -2167,6 +2495,16 @@ function isContentHash(value: unknown): value is ContentHash {
     (value as ContentHash).algorithm === "sha256" &&
     typeof (value as ContentHash).value === "string" &&
     /^[a-f0-9]{64}$/.test((value as ContentHash).value);
+}
+
+function receiptPolicyMismatch(
+  task: ComputeTask,
+  receipt: Pick<ExecutionReceipt, "transport">,
+): string | null {
+  if (task.validationPolicy.requiredTransport && receipt.transport !== task.validationPolicy.requiredTransport) {
+    return "required transport mismatch";
+  }
+  return null;
 }
 
 function receiptMismatch(

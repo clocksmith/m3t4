@@ -66,7 +66,7 @@ weapon sheets, and epic/legendary weapon sheets.
 | batch | command | count |
 |---|---|---:|
 | Playable, copy/paste (Chars A-D, all 3 stages) | `node tools/build-prompts.mjs` | **55 files** |
-| Characters A-D, packed 8x2 copy/paste | `node tools/build-prompts.mjs --only characters` | 12 files |
+| Characters A-D, packed 4x4 copy/paste | `node tools/build-prompts.mjs --only characters` | 12 files |
 | Playable, GPT-sized copy/paste | `node tools/build-prompts.mjs --format gpt` | **55 files** |
 | Playable, Midjourney copy/paste | `node tools/build-prompts.mjs --format mj` | **55 files** |
 | Missing assets, one paste-ready `.txt` per asset | `node tools/build-prompts.mjs --missing-only` | varies |
@@ -92,7 +92,7 @@ node tools/build-prompts.mjs --only characters --format chat
 node tools/build-prompts.mjs --missing-only
 
 # Character sheets are generated as 3 packed sheets per character:
-# generate 1536x384 raw packs, then post-process 3x down to 512x128
+# generate 768x768 raw packs, then post-process 3x down to 256x256
 # packed sheets, then compose 3 packs into the 384x768 runtime sheet.
 # Paste the whole .txt file into the image tool.
 
@@ -141,10 +141,10 @@ The post-processor:
 6. Clears inferred sprite-grid separator lines unless `--keep-grid-lines` is passed.
 7. Writes the promoted asset under `client/<asset-path>`.
 
-Character prompts now use three packed 8x2 sheets per character:
+Character prompts now use three packed 4x4 sheets per character:
 
-- Raw generation size: `1536x384`.
-- Promoted packed-sheet size: `512x128`.
+- Raw generation size: `768x768`.
+- Promoted packed-sheet size: `256x256`.
 - Cells 1-15 are populated left-to-right, top-to-bottom.
 - Cell 16, the bottom-right cell, is intentionally blank pure `#FF00FF`.
 - The final pack includes four populated overflow cells so each prompt stays visually full; local assembly ignores those cells.

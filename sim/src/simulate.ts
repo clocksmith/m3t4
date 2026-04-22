@@ -833,8 +833,18 @@ export interface SimulateOptions {
 // Pure read — no behavior change.
 function tallyBrainTurn(
   telemetry: [FighterTelemetry, FighterTelemetry],
-  brainStates: readonly [{ mode: BrainMode; substate: string | null }, { mode: BrainMode; substate: string | null }],
+  brainStates: readonly [
+    {
+      mode: BrainMode; substate: string | null;
+      lastDeliveryCancelTick: number; lastDeliveryCancelTactic: string | null;
+    },
+    {
+      mode: BrainMode; substate: string | null;
+      lastDeliveryCancelTick: number; lastDeliveryCancelTactic: string | null;
+    },
+  ],
   prevMode: [BrainMode | null, BrainMode | null],
+  tick: number,
 ): void {
   for (let i = 0; i < 2; i++) {
     const st = brainStates[i];
@@ -849,6 +859,11 @@ function tallyBrainTurn(
     else if (sub === "deliver") t.substateTicks.deliver++;
     else if (sub === "intercept-block" || sub === "intercept-kill") t.substateTicks.intercept++;
     else if (sub === "pickup") t.substateTicks.pickup++;
+    if (st.lastDeliveryCancelTick === tick) {
+      t.deliveryCancels++;
+      if (st.lastDeliveryCancelTactic === "feint") t.deliveryFeintCancels++;
+      else if (st.lastDeliveryCancelTactic === "kill-first") t.deliveryKillFirstCancels++;
+    }
     const prev = prevMode[i];
     if (prev !== null && prev !== st.mode) {
       t.modeSwitches++;
@@ -955,7 +970,7 @@ export function simulate(opts: SimulateOptions): MatchResult {
     const actA = runParamBrain(obsA, paramsA, w.brainStates[0]);
     const actB = runParamBrain(obsB, paramsB, w.brainStates[1]);
 
-    if (telemetry) tallyBrainTurn(telemetry, w.brainStates, prevMode);
+    if (telemetry) tallyBrainTurn(telemetry, w.brainStates, prevMode, w.tick);
 
     const pa = packAction(actA);
     const pb = packAction(actB);

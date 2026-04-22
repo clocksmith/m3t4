@@ -46,6 +46,7 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
       reputation,
       webrtcSessions,
       webrtcPairs,
+      peerSubassignments,
       capabilityObservations,
       connectivityObservations,
       control,
@@ -59,6 +60,7 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
       this.readCollection<ComputeLabSnapshot["reputation"][number]>(COMPUTE_COLLECTIONS.reputation),
       this.readCollection<ComputeLabSnapshot["webrtcSessions"][number]>(COMPUTE_COLLECTIONS.webrtcSessions),
       this.readCollection<ComputeLabSnapshot["webrtcPairs"][number]>(COMPUTE_COLLECTIONS.webrtcPairs),
+      this.readCollection<ComputeLabSnapshot["peerSubassignments"][number]>(COMPUTE_COLLECTIONS.peerSubassignments),
       this.readCollection<ComputeLabSnapshot["capabilityObservations"][number]>(COMPUTE_COLLECTIONS.capabilityObservations),
       this.readCollection<ComputeLabSnapshot["connectivityObservations"][number]>(COMPUTE_COLLECTIONS.connectivityObservations),
       this.readCollection<ComputeLabSnapshot["control"]>(COMPUTE_COLLECTIONS.control),
@@ -75,6 +77,7 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
       reputation,
       webrtcSessions: webrtcSessions.filter((session) => session.status !== "closed" && session.expiresAt > now),
       webrtcPairs: webrtcPairs.filter((pair) => retainLoadWebRtcPair(pair, now)),
+      peerSubassignments: peerSubassignments.filter((subassignment) => subassignment.expiresAt > now || subassignment.status === "accepted"),
       capabilityObservations,
       connectivityObservations,
     };
@@ -126,6 +129,9 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
     }
     if (patch.webrtcPairs?.length) {
       writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.webrtcPairs, patch.webrtcPairs, (pair) => pair.pairId, mergeWebRtcPair));
+    }
+    if (patch.peerSubassignments?.length) {
+      writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.peerSubassignments, patch.peerSubassignments, (subassignment) => subassignment.peerAssignmentId));
     }
     if (patch.capabilityObservations?.length) {
       writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.capabilityObservations, patch.capabilityObservations, (obs) => obs.observationId));

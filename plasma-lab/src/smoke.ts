@@ -149,7 +149,10 @@ async function startLocalServer(): Promise<SmokeServer> {
 }
 
 async function register(origin: string): Promise<RegisteredWorker> {
-  return post<RegisteredWorker>(origin, "/compute/workers/register", { capability });
+  return post<RegisteredWorker>(origin, "/compute/workers/register", {
+    label: "plasma-lab-reference:smoke",
+    capability,
+  }, { "x-plasma-admin-token": ADMIN_TOKEN });
 }
 
 async function next(origin: string, worker: RegisteredWorker): Promise<NextAssignment> {

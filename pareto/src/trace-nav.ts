@@ -72,6 +72,9 @@ type SideStats = {
   clashes: number;
   kills: number;
   deliveries: number;
+  deliveryCancels: number;
+  deliveryFeintCancels: number;
+  deliveryKillFirstCancels: number;
   modeSwitches: number;
   escapeEntries: number;
   firstActionTicks: number[];
@@ -123,6 +126,9 @@ function emptyStats(): SideStats {
     clashes: 0,
     kills: 0,
     deliveries: 0,
+    deliveryCancels: 0,
+    deliveryFeintCancels: 0,
+    deliveryKillFirstCancels: 0,
     modeSwitches: 0,
     escapeEntries: 0,
     firstActionTicks: [],
@@ -233,6 +239,9 @@ function summarizeStats(s: SideStats): Record<string, number | null> {
     directJumpEpisodeMissRate: +div(s.directJumpMissedEpisodes, s.directJumpEpisodes).toFixed(3),
     directJumpDelayTicksAvg: +(s.directJumpDelayEpisodes ? s.directJumpDelayTicks / s.directJumpDelayEpisodes : 0).toFixed(1),
     deliveryTicksAfterDirectAvailableAvg: +(s.deliveryEpisodesAfterDirectAvailable ? s.deliveryTicksAfterDirectAvailable / s.deliveryEpisodesAfterDirectAvailable : 0).toFixed(1),
+    deliveryCancelsPerMatch: +div(s.deliveryCancels, s.matches).toFixed(3),
+    deliveryFeintCancelsPerMatch: +div(s.deliveryFeintCancels, s.matches).toFixed(3),
+    deliveryKillFirstCancelsPerMatch: +div(s.deliveryKillFirstCancels, s.matches).toFixed(3),
     directJumpEpisodesPerMatch: +div(s.directJumpEpisodes, s.matches).toFixed(2),
     horizontalRouteDetourRate: +div(s.horizontalRouteDetourTicks, s.horizontalRouteOpportunityTicks).toFixed(3),
     horizontalRouteDetoursPerMatch: +div(s.horizontalRouteDetourEpisodes, s.matches).toFixed(2),
@@ -429,6 +438,11 @@ for (const aName of names) {
                 db.switches++;
                 add(ms, "modeSwitches");
                 prevMode[id] = w.brainStates[id].mode;
+              }
+              if (w.brainStates[id].lastDeliveryCancelTick === w.tick) {
+                add(ms, "deliveryCancels");
+                if (w.brainStates[id].lastDeliveryCancelTactic === "feint") add(ms, "deliveryFeintCancels");
+                else if (w.brainStates[id].lastDeliveryCancelTactic === "kill-first") add(ms, "deliveryKillFirstCancels");
               }
 
               const carrying = !!(w.gold && w.gold.carrier === id && w.goal);

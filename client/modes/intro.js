@@ -1,20 +1,20 @@
 // Intro mode — auto-scrolling CRT crawl. Late-80s/early-90s terminal
 // aesthetic: amber-green phosphor, mono, scanlines, type-on reveal,
 // enter-on-click. Renders content/game-copy.v1.json in a fixed
-// sequence (approved in PR: tagline → prologue[0..4] → stinger).
+// sequence: terminal boot → play/self/play → lore paragraphs.
 
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
 
 const REVEAL_SPEED_MULTIPLIER = 1.5;
-const REVEAL_SLOWDOWN_MULTIPLIER = 1.2;
-const TICK_MS_FAST = Math.round((22 / REVEAL_SPEED_MULTIPLIER) * REVEAL_SLOWDOWN_MULTIPLIER); // headers, tagline, tail, stinger
-const TICK_MS_SLOW = Math.round((38 / REVEAL_SPEED_MULTIPLIER) * REVEAL_SLOWDOWN_MULTIPLIER); // prologue paragraphs
+const BOOT_SLOWDOWN_MULTIPLIER = 1.33;
+const TICK_MS_FAST = Math.round((22 / REVEAL_SPEED_MULTIPLIER) * BOOT_SLOWDOWN_MULTIPLIER); // terminal boot lines
+const TICK_MS_SLOW = Math.round(17 / REVEAL_SPEED_MULTIPLIER); // prologue paragraphs
 const CHARS_PER_TICK_FAST = 2;
 const CHARS_PER_TICK_SLOW = 1;
 const PAUSE_BETWEEN_BLOCKS_MS = Math.round(1300 / REVEAL_SPEED_MULTIPLIER);
 const PAUSE_AFTER_STINGER_MS = Math.round(1700 / REVEAL_SPEED_MULTIPLIER);
 const PAUSE_BETWEEN_STINGER_LINES_MS = Math.round(420 / REVEAL_SPEED_MULTIPLIER);
-const THINKING_PAUSE_MS = 2000;
+const THINKING_PAUSE_MS = 2400;
 const THINKING_DOT_MS = 240;
 const THINKING_STATES = ["Thinking.", "Thinking..", "Thinking..."];
 
@@ -44,13 +44,15 @@ function buildSequence() {
   const prologue = intro.prologue?.body ?? [];
   const tagline = String(intro.tagline ?? "").replace(/^Play SELF Play\.\s*/i, "");
   const blocks = [];
-  blocks.push({ kind: "header", text: "// M3T4 TERMINAL · SESSION OPEN" });
-  blocks.push({ kind: "header", text: `// Play SELF Play` });
-  if (tagline) blocks.push({ kind: "tagline", text: tagline });
+  blocks.push({ kind: "boot", text: "loading m3t4 terminal..." });
+  blocks.push({ kind: "boot", text: "play... self... play..." });
+  if (tagline) blocks.push({ kind: "paragraph", text: tagline });
   for (const para of prologue) {
     blocks.push({ kind: "paragraph", text: para });
   }
-  blocks.push({ kind: "stinger", lines: intro.stinger ?? [] });
+  for (const line of intro.stinger ?? []) {
+    blocks.push({ kind: "paragraph", text: line });
+  }
   blocks.push({ kind: "tail", text: "// END OF TRANSMISSION" });
   return blocks;
 }
@@ -63,8 +65,7 @@ export function mount(mountEl, { setStatus }) {
       <div class="intro-scanlines"></div>
       <div class="intro-vignette"></div>
       <section class="intro-fork" aria-label="start">
-        <div class="intro-fork-kicker">// START HERE</div>
-        <h1>Your inputs end at policy</h1>
+        <h1>there can only be none</h1>
         <div class="intro-fork-lines">
           <a class="intro-line-cta is-blue" href="#build" data-intro-nav>tune a bot</a>
           <a class="intro-line-cta is-red" href="#spectate" data-intro-nav>watch it fail</a>
@@ -72,7 +73,7 @@ export function mount(mountEl, { setStatus }) {
         </div>
       </section>
       <div class="intro-crawl" id="intro-crawl"></div>
-      <div class="intro-hint" id="intro-hint">[ terminal continues below ]</div>
+      <div class="intro-hint" id="intro-hint">[ receiving ]</div>
     </div>`;
 
   const crawlEl = root.querySelector("#intro-crawl");
@@ -118,7 +119,7 @@ export function mount(mountEl, { setStatus }) {
   }
 
   function shouldThinkBeforeNextParagraph(completedBlock) {
-    return completedBlock.kind === "paragraph" && sequence[idx]?.kind === "paragraph";
+    return (completedBlock.kind === "paragraph" || completedBlock.kind === "boot") && sequence[idx]?.kind === "paragraph";
   }
 
   function renderThinking(now) {

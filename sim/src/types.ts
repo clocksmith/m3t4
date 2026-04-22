@@ -239,6 +239,9 @@ export interface FighterTelemetry {
   deaths: number;
   clashes: number;
   deliveries: number; // goal-dwell completions credited
+  deliveryCancels: number; // direct delivery plans cancelled after blocked progress
+  deliveryFeintCancels: number;
+  deliveryKillFirstCancels: number;
   ticks: number;      // decision ticks for this fighter (excludes freeze/roundPause)
   // Per-mode action/collision counters — diagnostic for v4.1. Lets
   // trace-stalls answer "was OFFENSE mode actually attacking, or
@@ -266,6 +269,9 @@ export function emptyFighterTelemetry(): FighterTelemetry {
     deaths: 0,
     clashes: 0,
     deliveries: 0,
+    deliveryCancels: 0,
+    deliveryFeintCancels: 0,
+    deliveryKillFirstCancels: 0,
     ticks: 0,
     modeSwipes: emptyModeRecord(),
     modeDives: emptyModeRecord(),
@@ -298,6 +304,16 @@ export interface BrainState {
   // doesn't thrash tactics per-frame. Cleared on token loss, death, or
   // expiry. See planDeliveryTactic() for scoring. Replay-safe.
   deliveryPlan: DeliveryPlan | null;
+
+  // Persistent delivery progress memory. Unlike deliveryPlan, this
+  // survives short plan refreshes while the same carrier pursues the
+  // same goal, so objective mode can detect repeated blocked progress
+  // instead of forgetting every tactic horizon.
+  deliveryProgressGoalKey: string | null;
+  deliveryBestDxGoal: number;
+  deliveryProgressTick: number;
+  lastDeliveryCancelTick: number;
+  lastDeliveryCancelTactic: DeliveryTacticKind | null;
 
   // v5.1: count of ESCAPE entries since the last reset. Capped by
   // ESCAPE_LOOP_CAP; once hit, decideMode stops routing hard-danger to

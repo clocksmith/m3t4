@@ -15,7 +15,9 @@ import { GOAL_DWELL_RADIUS, GOAL_DWELL_S, KILL_RESPAWN_S, GRAVITY, RESPAWN_INVUL
 // unscaled 64x64 character sheets align without a hidden render multiplier.
 // v20: platform routing weighs bounded tactical intent, so equally
 // reachable steps prefer goal progress without ignoring landing danger.
-export const BEHAVIOR_VERSION = 20;
+// v21: direct delivery plans cancel into a feint or kill-first answer when
+// the carrier has stopped making goal progress behind a live blocker.
+export const BEHAVIOR_VERSION = 21;
 // ---------- Opp-model buffer sizing ----------
 //
 // Bounded ring: max 16 entries per stream, hard decay at 240 ticks (2 s).
@@ -78,6 +80,11 @@ function unit(v, fallback = 0) {
     const x = v ?? fallback;
     return x < 0 ? 0 : x > 1 ? 1 : x;
 }
+function resetDeliveryProgress(state) {
+    state.deliveryProgressGoalKey = null;
+    state.deliveryBestDxGoal = Infinity;
+    state.deliveryProgressTick = 0;
+}
 // ---------- State lifecycle ----------
 export function createBrainState(id) {
     return {
@@ -91,6 +98,11 @@ export function createBrainState(id) {
         recentSelfClashTicks: [],
         lastKnownSelfClashTick: -9999,
         deliveryPlan: null,
+        deliveryProgressGoalKey: null,
+        deliveryBestDxGoal: Infinity,
+        deliveryProgressTick: 0,
+        lastDeliveryCancelTick: -9999,
+        lastDeliveryCancelTactic: null,
         escapeEntriesThisRound: 0,
         escapeTicksThisRound: 0,
         zoneTicksThisRound: 0,
@@ -106,6 +118,9 @@ export function resetBrainStateForRound(state, tick) {
     state.substate = null;
     state.modeEnterTick = tick;
     state.deliveryPlan = null; // plan's timing estimates are stale across respawn
+    resetDeliveryProgress(state);
+    state.lastDeliveryCancelTick = -9999;
+    state.lastDeliveryCancelTactic = null;
     state.escapeEntriesThisRound = 0; // escape cap resets per round
     state.escapeTicksThisRound = 0; // max-duration cap resets per round
     state.zoneTicksThisRound = 0;
@@ -970,6 +985,8 @@ const DWELL_COMPLETION_TICKS = Math.ceil(GOAL_DWELL_S / STEP);
 const FEINT_DURATION_TICKS = 18;
 const FEINT_PLAN_HORIZON_TICKS = FEINT_DURATION_TICKS + PLAN_HORIZON_TICKS;
 const KILL_SETUP_TICKS = 20; // swipe commit + one recovery cycle
+const DELIVERY_PROGRESS_EPS = 14;
+const DELIVERY_STALL_BASE_TICKS = 72;
 function estimateTicksToGoal(obs) {
     const dx = obs.goal.x - obs.self.x;
     const dy = goalBodyY(obs) - obs.self.y;
@@ -1068,6 +1085,54 @@ function planDeliveryTactic(obs, params, sig) {
         score: bestScore,
     };
 }
+function deliveryStallTicks(params) {
+    return DELIVERY_STALL_BASE_TICKS +
+        Math.round(unit(params.discipline) * 72) +
+        Math.round(unit(params.shipRate, 0.5) * 36);
+}
+function deliveryGoalKey(obs) {
+    return `${obs.goal.label}:${Math.round(obs.goal.x)}:${Math.round(obs.goal.y)}`;
+}
+function updateDeliveryProgress(state, obs) {
+    const key = deliveryGoalKey(obs);
+    const absDxGoal = Math.abs(obs.goal.x - obs.self.x);
+    if (state.deliveryProgressGoalKey !== key) {
+        state.deliveryProgressGoalKey = key;
+        state.deliveryBestDxGoal = absDxGoal;
+        state.deliveryProgressTick = obs.tick;
+        return absDxGoal;
+    }
+    if (absDxGoal < state.deliveryBestDxGoal - DELIVERY_PROGRESS_EPS) {
+        state.deliveryBestDxGoal = absDxGoal;
+        state.deliveryProgressTick = obs.tick;
+    }
+    return absDxGoal;
+}
+function stalledDeliveryTactic(plan, obs, params, state, sig, oppInPath, goalTimerUrgent, absDxGoal) {
+    if (plan.tactic !== "direct")
+        return null;
+    if (!oppInPath || goalTimerUrgent || absDxGoal < 90)
+        return null;
+    if (obs.tick - state.deliveryProgressTick < deliveryStallTicks(params))
+        return null;
+    const cunning = unit(params.cunning, 0.5);
+    const greed = unit(params.greed, 0.5);
+    const discipline = unit(params.discipline);
+    if (sig.absDist < 260 && cunning > greed + 0.12 && discipline < 0.85)
+        return "feint";
+    if (sig.absDist < 210 && greed >= 0.45)
+        return "kill-first";
+    return null;
+}
+function replaceDeliveryPlan(obs, params, tactic, score) {
+    return {
+        tactic,
+        startedAt: obs.tick,
+        expiresAt: obs.tick + deliveryPlanHorizon(tactic, params),
+        feintUntil: tactic === "feint" ? obs.tick + FEINT_DURATION_TICKS : undefined,
+        score,
+    };
+}
 function runObjectiveMode(obs, params, state, sig) {
     // Token state drives the sub-behavior. state.substate is written here
     // so telemetry (v4.0-prep) can distinguish deliver vs intercept-block
@@ -1116,7 +1181,15 @@ function runObjectiveMode(obs, params, state, sig) {
         if (!state.deliveryPlan || state.deliveryPlan.expiresAt <= obs.tick) {
             state.deliveryPlan = planDeliveryTactic(obs, params, sig);
         }
-        const plan = state.deliveryPlan;
+        let plan = state.deliveryPlan;
+        const absDxGoal = updateDeliveryProgress(state, obs);
+        const fallbackTactic = stalledDeliveryTactic(plan, obs, params, state, sig, oppInPath, goalTimerUrgent, absDxGoal);
+        if (fallbackTactic) {
+            state.deliveryPlan = replaceDeliveryPlan(obs, params, fallbackTactic, plan.score);
+            state.lastDeliveryCancelTick = obs.tick;
+            state.lastDeliveryCancelTactic = fallbackTactic;
+            plan = state.deliveryPlan;
+        }
         // Feint tactic: back-step AWAY from goal for feintUntil ticks, then
         // fall through to direct. Feint relies on opp reading the retreat
         // and committing; when they commit and miss, we sprint past.
@@ -1161,6 +1234,7 @@ function runObjectiveMode(obs, params, state, sig) {
     // line; close → kill-for-reset.
     if (oppHasToken && obs.goal.exists) {
         state.deliveryPlan = null;
+        resetDeliveryProgress(state);
         const denyBias = Math.max(0, Math.min(1, (1 - (params.spite ?? 0)) / 2));
         const targetY = goalBodyY(obs);
         const oppToGoal = Math.hypot(obs.goal.x - obs.opp.x, targetY - obs.opp.y);
@@ -1193,6 +1267,7 @@ function runObjectiveMode(obs, params, state, sig) {
     // PICKUP: token on ground, neither holds. Race.
     if (obs.token.exists && obs.token.carrier === -1) {
         state.deliveryPlan = null;
+        resetDeliveryProgress(state);
         state.substate = "pickup";
         const tx = obs.token.x;
         const ty = obs.token.y;
@@ -1210,6 +1285,8 @@ function runObjectiveMode(obs, params, state, sig) {
     }
     // Fallback — shouldn't reach here because objective-active triggered
     // the mode entry.
+    state.deliveryPlan = null;
+    resetDeliveryProgress(state);
     return runNeutralMode(obs, params, state, sig);
 }
 function runEscapeMode(obs, params, sig) {

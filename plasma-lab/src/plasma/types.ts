@@ -49,6 +49,8 @@ export interface ValidationPolicy {
   minExecutions: number;
   minAgreeing: number;
   expectedOutputHash?: ContentHash;
+  requiredTransport?: TransportKind;
+  requiredPeerSubreceipt?: boolean;
 }
 
 export interface DerivedExecutionEvidence {

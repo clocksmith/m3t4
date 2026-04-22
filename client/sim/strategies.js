@@ -80,14 +80,14 @@ export const STRATEGIES = {
             parry: 0.69, chase: 0, discipline: 0, hallucination: 0,
         },
     },
-    // v13 stall-aware source=g8-m25 spent=347
+    // v17 de-clone source=roster-v15-selected:g12-s39 spent=360
     operator: {
         id: "operator",
         attributes: {
-            burnRate: 0.09, moat: 0, shipRate: 0.93, foresight: 0.155,
-            pivotSpeed: 0.06, leverage: -0.86, networking: 0.17, spite: 0.8,
-            greed: 0, pacing: 0, cunning: 0, lift: 0.05,
-            parry: 0.22, chase: 0.14, discipline: 0.22, hallucination: 0,
+            burnRate: 0, moat: 0, shipRate: 0.59, foresight: 0,
+            pivotSpeed: 0, leverage: 0.04, networking: 0, spite: -0.18,
+            greed: 0, pacing: 0.77, cunning: 0, lift: 0.54,
+            parry: 0, chase: 0, discipline: 0.77, hallucination: 0,
         },
     },
     // v13 stall-aware source=g2-m20 spent=318

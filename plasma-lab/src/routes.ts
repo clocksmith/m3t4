@@ -21,6 +21,11 @@ interface WorkerAuthBody {
 const MIN_ASSIGNMENT_WINDOW_MS = 1_000;
 const MAX_ASSIGNMENT_WINDOW_MS = 600_000;
 
+type RefreshableStore = ComputeLabStore & {
+  refresh?: () => Promise<void>;
+  flush?: () => Promise<void>;
+};
+
 export async function handleComputeLabRequest(
   req: IncomingMessage,
   res: ServerResponse,
@@ -42,6 +47,10 @@ export async function handleComputeLabRequest(
     return true;
   }
 
+  if (url.pathname.startsWith("/compute/")) {
+    await refreshStore(deps.store);
+  }
+
   if (req.method === "POST" && url.pathname === "/compute/workers/register") {
     const body = await readJson<{ label?: string; capability?: WorkerCapability }>(req);
     if (!body?.capability || !Array.isArray(body.capability.kernels)) {
@@ -52,6 +61,7 @@ export async function handleComputeLabRequest(
       label: body.label,
       capability: body.capability,
     });
+    await flushStore(deps.store);
     json(res, 200, {
       workerId: worker.workerId,
       workerSessionId: session.workerSessionId,
@@ -66,6 +76,7 @@ export async function handleComputeLabRequest(
     const body = await readJson<WorkerAuthBody & { governorMode?: GovernorMode }>(req);
     try {
       const session = deps.store.heartbeat(authFrom(body, req, { governorMode: body?.governorMode }));
+      await flushStore(deps.store);
       json(res, 200, { ok: true, workerSessionId: session.workerSessionId, expiresAt: session.expiresAt });
     } catch (e) {
       json(res, 400, { error: message(e) });
@@ -89,6 +100,7 @@ export async function handleComputeLabRequest(
     }
     try {
       const worker = deps.store.updateCapability(authFrom(body, req, { capability: body.capability }));
+      await flushStore(deps.store);
       json(res, 200, { ok: true, acceptedKernels: worker.capability.kernels });
     } catch (e) {
       json(res, 400, { error: message(e) });
@@ -150,6 +162,7 @@ export async function handleComputeLabRequest(
           notes: body?.notes,
         },
       }));
+      await flushStore(deps.store);
       json(res, 200, { ok: true, observationId: observation.observationId });
     } catch (e) {
       json(res, 400, { error: message(e) });
@@ -165,9 +178,11 @@ export async function handleComputeLabRequest(
         workerSessionToken: header(req, "x-worker-session-token"),
       });
       if (!next) {
+        await flushStore(deps.store);
         json(res, 200, { idle: true, reason: deps.store.summary().acceptAssignments ? "no-work" : "assignments-disabled" });
         return true;
       }
+      await flushStore(deps.store);
       json(res, 200, {
         assignment: next.assignment,
         chunk: next.chunk,
@@ -195,6 +210,7 @@ export async function handleComputeLabRequest(
         assignmentToken: body?.assignmentToken ?? "",
         refusalReason: body?.refusalReason,
       }));
+      await flushStore(deps.store);
       json(res, 200, { ok: assignment.status === "accepted", assignment });
     } catch (e) {
       json(res, 400, { error: message(e) });
@@ -250,6 +266,7 @@ export async function handleComputeLabRequest(
         signature: body.signature,
       }));
       logDerivedReceiptOutcome(deps, result);
+      await flushStore(deps.store);
       json(res, 200, result);
     } catch (e) {
       json(res, 400, { error: message(e) });
@@ -312,6 +329,7 @@ async function handleWebRtc(req: IncomingMessage, res: ServerResponse, url: URL,
     const body = await readJson<WorkerAuthBody>(req);
     try {
       const joined = deps.store.joinWebRtcPair(authFrom(body, req, {}));
+      await flushStore(deps.store);
       json(res, 200, {
         ...publicWebRtcPair(joined.pair, deps.config),
         role: joined.role,
@@ -344,12 +362,16 @@ async function handleWebRtc(req: IncomingMessage, res: ServerResponse, url: URL,
       }
       if (req.method === "POST" && action === "offer") {
         if (body?.offer === undefined) throw new Error("offer required");
-        json(res, 200, publicWebRtcPair(deps.store.setWebRtcPairOffer({ pairId, token, offer: body.offer }), deps.config));
+        const pair = deps.store.setWebRtcPairOffer({ pairId, token, offer: body.offer });
+        await flushStore(deps.store);
+        json(res, 200, publicWebRtcPair(pair, deps.config));
         return true;
       }
       if (req.method === "POST" && action === "answer") {
         if (body?.answer === undefined) throw new Error("answer required");
-        json(res, 200, publicWebRtcPair(deps.store.setWebRtcPairAnswer({ pairId, token, answer: body.answer }), deps.config));
+        const pair = deps.store.setWebRtcPairAnswer({ pairId, token, answer: body.answer });
+        await flushStore(deps.store);
+        json(res, 200, publicWebRtcPair(pair, deps.config));
         return true;
       }
       if (req.method === "POST" && action === "candidates") {
@@ -359,16 +381,20 @@ async function handleWebRtc(req: IncomingMessage, res: ServerResponse, url: URL,
             ? []
             : [body.candidate];
         if (candidates.length === 0) throw new Error("candidate or candidates required");
-        json(res, 200, publicWebRtcPair(deps.store.addWebRtcPairCandidates({
+        const pair = deps.store.addWebRtcPairCandidates({
           pairId,
           token,
           peerId: body?.peerId,
           candidates,
-        }), deps.config));
+        });
+        await flushStore(deps.store);
+        json(res, 200, publicWebRtcPair(pair, deps.config));
         return true;
       }
       if (req.method === "POST" && action === "close") {
-        json(res, 200, publicWebRtcPair(deps.store.closeWebRtcPair({ pairId, token }), deps.config));
+        const pair = deps.store.closeWebRtcPair({ pairId, token });
+        await flushStore(deps.store);
+        json(res, 200, publicWebRtcPair(pair, deps.config));
         return true;
       }
       json(res, 404, { error: "WebRTC pair route not found" });
@@ -380,6 +406,7 @@ async function handleWebRtc(req: IncomingMessage, res: ServerResponse, url: URL,
 
   if (req.method === "POST" && url.pathname === "/compute/webrtc/sessions") {
     const session = deps.store.createWebRtcSession();
+    await flushStore(deps.store);
     json(res, 200, {
       ...publicWebRtcSession(session, deps.config),
       sessionToken: session.token,
@@ -407,12 +434,16 @@ async function handleWebRtc(req: IncomingMessage, res: ServerResponse, url: URL,
   try {
     if (req.method === "POST" && action === "offer") {
       if (body?.offer === undefined) throw new Error("offer required");
-      json(res, 200, publicWebRtcSession(deps.store.setWebRtcOffer({ sessionId, token, offer: body.offer }), deps.config));
+      const session = deps.store.setWebRtcOffer({ sessionId, token, offer: body.offer });
+      await flushStore(deps.store);
+      json(res, 200, publicWebRtcSession(session, deps.config));
       return true;
     }
     if (req.method === "POST" && action === "answer") {
       if (body?.answer === undefined) throw new Error("answer required");
-      json(res, 200, publicWebRtcSession(deps.store.setWebRtcAnswer({ sessionId, token, answer: body.answer }), deps.config));
+      const session = deps.store.setWebRtcAnswer({ sessionId, token, answer: body.answer });
+      await flushStore(deps.store);
+      json(res, 200, publicWebRtcSession(session, deps.config));
       return true;
     }
     if (req.method === "POST" && action === "candidates") {
@@ -422,12 +453,14 @@ async function handleWebRtc(req: IncomingMessage, res: ServerResponse, url: URL,
           ? []
           : [body.candidate];
       if (candidates.length === 0) throw new Error("candidate or candidates required");
-      json(res, 200, publicWebRtcSession(deps.store.addWebRtcCandidates({
+      const session = deps.store.addWebRtcCandidates({
         sessionId,
         token,
         peerId: body?.peerId,
         candidates,
-      }), deps.config));
+      });
+      await flushStore(deps.store);
+      json(res, 200, publicWebRtcSession(session, deps.config));
       return true;
     }
     if (req.method === "GET" && action === "candidates") {
@@ -438,7 +471,9 @@ async function handleWebRtc(req: IncomingMessage, res: ServerResponse, url: URL,
       return true;
     }
     if (req.method === "POST" && action === "close") {
-      json(res, 200, publicWebRtcSession(deps.store.closeWebRtcSession({ sessionId, token }), deps.config));
+      const session = deps.store.closeWebRtcSession({ sessionId, token });
+      await flushStore(deps.store);
+      json(res, 200, publicWebRtcSession(session, deps.config));
       return true;
     }
     json(res, 404, { error: "WebRTC route not found" });
@@ -480,6 +515,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       durationMs = body.durationMs;
     }
     deps.store.setAcceptAssignments(body.acceptAssignments, durationMs);
+    await flushStore(deps.store);
     json(res, 200, deps.store.summary());
     return true;
   }
@@ -504,6 +540,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
       });
+      await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
     } catch (e) {
       json(res, 400, { error: message(e) });
@@ -524,6 +561,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
       });
+      await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
     } catch (e) {
       json(res, 400, { error: message(e) });
@@ -540,6 +578,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
       });
+      await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
     } catch (e) {
       json(res, 400, { error: message(e) });
@@ -560,6 +599,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
       });
+      await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
     } catch (e) {
       json(res, 400, { error: message(e) });
@@ -578,6 +618,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
       });
+      await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
     } catch (e) {
       json(res, 400, { error: message(e) });
@@ -613,6 +654,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
       });
+      await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
     } catch (e) {
       json(res, 400, { error: message(e) });
@@ -638,6 +680,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
       });
+      await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
     } catch (e) {
       json(res, 400, { error: message(e) });
@@ -668,6 +711,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
       });
+      await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
     } catch (e) {
       json(res, 400, { error: message(e) });
@@ -678,7 +722,9 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   if (req.method === "POST" && url.pathname.startsWith(cancelPrefix) && url.pathname.endsWith("/cancel")) {
     const taskId = url.pathname.slice(cancelPrefix.length, -"/cancel".length);
     try {
-      json(res, 200, deps.store.cancelTask(taskId));
+      const task = deps.store.cancelTask(taskId);
+      await flushStore(deps.store);
+      json(res, 200, task);
     } catch (e) {
       json(res, 404, { error: message(e) });
     }
@@ -732,6 +778,16 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
 function adminAllowed(req: IncomingMessage, config: PlasmaLabConfig): boolean {
   if (!config.adminToken) return false;
   return header(req, "x-plasma-admin-token") === config.adminToken;
+}
+
+async function refreshStore(store: ComputeLabStore): Promise<void> {
+  const refresh = (store as RefreshableStore).refresh;
+  if (typeof refresh === "function") await refresh.call(store);
+}
+
+async function flushStore(store: ComputeLabStore): Promise<void> {
+  const flush = (store as RefreshableStore).flush;
+  if (typeof flush === "function") await flush.call(store);
 }
 
 function publicWebRtcSession(session: WebRtcSessionRecord, config: PlasmaLabConfig) {

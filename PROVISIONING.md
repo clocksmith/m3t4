@@ -218,16 +218,17 @@ gcloud run deploy plasma-lab \
   --set-env-vars "^|^NODE_ENV=production|FEATURE_COMPUTE_LAB_ROUTES=true|FEATURE_COMPUTE_TASK_ADMIN=true|COMPUTE_ACCEPT_ASSIGNMENTS=false|PLASMA_LAB_STORE_BACKEND=firestore|FEATURE_COMPUTE_WEBRTC_SIGNALING=false|FEATURE_COMPUTE_WEBRTC_DATA=false|FEATURE_COMPUTE_WEBRTC_TURN=false|COMPUTE_STUN_URLS=stun:stun.l.google.com:19302" \
   --set-secrets "PLASMA_LAB_ADMIN_TOKEN=plasma-lab-admin-token:latest" \
   --min-instances 0 \
-  --max-instances 1 \
+  --max-instances 2 \
   --concurrency 80 \
   --timeout 300
 ```
 
-Keep `plasma-lab` at `--max-instances 1` during controlled staff alpha. The
-current Firestore persistence writes whole compute snapshots, so multiple
-serving instances can clobber each other's just-seeded tasks during rapid
-admin/worker smoke traffic. Raise this only after persistence moves to
-per-record transactional writes or a single coordinator.
+Keep `COMPUTE_ACCEPT_ASSIGNMENTS=false` unless a controlled staff run is
+actively open. Firestore-backed `plasma-lab` request handlers refresh before
+reading state and flush after mutations, so `--max-instances 2` is acceptable
+for alpha WebRTC smoke traffic. Do not raise scale further until receipt intake
+and WebRTC signaling have a transactional per-record write path or a single
+coordinator for conflicting mutations.
 
 For strict storage isolation, prefer a separate compute project/database and
 set:

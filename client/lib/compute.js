@@ -251,6 +251,7 @@ class ComputeClient {
 
   async poll() {
     if (!this.enabled) return;
+    if (this.current) return;
     if (!this.workerId) {
       await this.ensureWorkerRegistered();
       if (!this.workerId) return;
@@ -390,6 +391,7 @@ class ComputeClient {
   }
 
   runAssignment({ assignment, chunk, task }) {
+    this.schedule(null);
     if (chunk.kind === "device_witness.webrtc.v0") {
       this.runWebRtcAssignment({ assignment, chunk, task });
       return;

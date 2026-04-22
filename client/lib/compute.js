@@ -15,6 +15,7 @@ const CLIENT_VERSION = "compute-slack-http-v0";
 const SESSION_TOKEN_HEADER = "x-worker-session-token";
 const PUBLIC_ARTIFACT_KERNEL = "m3t4.public_artifact_verify.v0";
 const REPLAY_VERIFY_KERNEL = "m3t4.replay_verify.v1";
+const SEED_SWEEP_KERNEL = "m3t4.seed_sweep.v0";
 
 const MODE_PROFILE = {
   quiet: { pollMs: 5000, cooldownMs: 2000, maxRenderMs: 10 },
@@ -765,8 +766,7 @@ async function buildCapability(runtimeInfo = {}, opts = {}) {
   const deviceWitness = await workerDeviceWitnessBucket(opts.benchmark === true);
   const runtimeSurfaces = ["browser-js"];
   if (webgpu.webgpu === "available") runtimeSurfaces.push("browser-webgpu");
-  const kernels = ["m3t4.public_artifact_verify.v0", "prime-search.v0"];
-  kernels.push("m3t4.replay_verify.v1");
+  const kernels = [PUBLIC_ARTIFACT_KERNEL, "prime-search.v0", REPLAY_VERIFY_KERNEL, SEED_SWEEP_KERNEL];
   if (deviceWitness.canvas2dFixture === "ok" || deviceWitness.canvas2dFixture === "mismatch") {
     kernels.push("device_witness.render_fixture.v0");
     kernels.push("device_witness.derived_buffer.v0");
@@ -1460,6 +1460,28 @@ function safeArtifactChunk(chunk) {
     }
     if (chunk.params.replayArtifactJson.length > 1024 * 1024) throw new Error("replayArtifactJson too large");
   }
+  if (chunk.kind === SEED_SWEEP_KERNEL) {
+    const seedStart = Number(chunk.params?.seedStart);
+    const seedEndExclusive = Number(chunk.params?.seedEndExclusive);
+    const maxTicks = chunk.params?.maxTicks === undefined ? undefined : Number(chunk.params.maxTicks);
+    if (
+      !Number.isSafeInteger(seedStart) ||
+      !Number.isSafeInteger(seedEndExclusive) ||
+      seedStart < 0 ||
+      seedEndExclusive > 2 ** 31 - 1
+    ) {
+      throw new Error("seed sweep bounds required");
+    }
+    if (seedEndExclusive <= seedStart || seedEndExclusive - seedStart > 64) {
+      throw new Error("seed sweep chunk size invalid");
+    }
+    if (maxTicks !== undefined && (!Number.isSafeInteger(maxTicks) || maxTicks < 0 || maxTicks > 2 ** 31 - 1)) {
+      throw new Error("seed sweep maxTicks invalid");
+    }
+    if (typeof chunk.params?.stageId !== "string" || typeof chunk.params?.brainA !== "string" || typeof chunk.params?.brainB !== "string") {
+      throw new Error("seed sweep public preset params required");
+    }
+  }
   return {
     chunkId: String(chunk.chunkId || "artifact-chunk"),
     kind: chunk.kind,
@@ -1473,7 +1495,7 @@ function safeArtifactChunk(chunk) {
 }
 
 function webRtcDataKernel(kind) {
-  return kind === PUBLIC_ARTIFACT_KERNEL || kind === REPLAY_VERIFY_KERNEL;
+  return kind === PUBLIC_ARTIFACT_KERNEL || kind === REPLAY_VERIFY_KERNEL || kind === SEED_SWEEP_KERNEL;
 }
 
 const PEER_WORK_PARAMS = Object.freeze({ start: 1009, endExclusive: 1033 });

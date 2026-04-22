@@ -154,6 +154,7 @@ function readConfig() {
 
 async function seedTask(config, pass) {
   if (config.kernel === "replay-verify") return seedReplayVerifyTask(config, pass);
+  if (config.kernel === "seed-sweep") return seedSeedSweepTask(config, pass);
   return seedPublicArtifactTask(config, pass);
 }
 
@@ -184,6 +185,20 @@ async function seedReplayVerifyTask(config, pass) {
   const replayArtifactJson = await replayArtifactFixtureJson(`webrtc-replay-verify-${Date.now()}-${pass}`);
   return adminPost(config, "/compute/admin/tasks/replay-verify", {
     replayArtifactJson,
+    minExecutions: 2,
+    minAgreeing: 2,
+  });
+}
+
+async function seedSeedSweepTask(config, pass) {
+  return adminPost(config, "/compute/admin/tasks/seed-sweep", {
+    stageId: "boardroom",
+    brainA: "unicorn",
+    brainB: "disruptor",
+    seedStart: 100 + pass * 8,
+    seedEndExclusive: 108 + pass * 8,
+    seedChunkSize: 8,
+    maxTicks: 180,
     minExecutions: 2,
     minAgreeing: 2,
   });
@@ -307,8 +322,8 @@ function aggregatePasses(passes) {
 
 function kernelOption() {
   const value = argValue("kernel") || process.env.PLASMA_LAB_SMOKE_KERNEL || "public-artifact";
-  if (value !== "public-artifact" && value !== "replay-verify") {
-    throw new Error("kernel must be public-artifact or replay-verify");
+  if (value !== "public-artifact" && value !== "replay-verify" && value !== "seed-sweep") {
+    throw new Error("kernel must be public-artifact, replay-verify, or seed-sweep");
   }
   return value;
 }

@@ -1,4 +1,4 @@
-import { replayArtifactToResultV1, stableReplayJson } from "../sim/index.js";
+import { replayArtifactToResultV1, simulate, stableReplayJson, STAGES, STRATEGIES } from "../sim/index.js";
 
 // Plasma compute worker. Runs deterministic kernels off the main
 // thread so the spectator render loop stays smooth.
@@ -32,6 +32,7 @@ const KERNELS = {
     return new TextEncoder().encode(params.artifactJson);
   },
   "m3t4.replay_verify.v1": runReplayVerify,
+  "m3t4.seed_sweep.v0": runSeedSweep,
   "device_witness.webgpu.v0": runDeviceWitnessWebGpu,
   "device_witness.render_fixture.v0": () => canvas2dFixtureBytes(),
   "device_witness.derived_buffer.v0": runDeviceWitnessDerivedBuffer,
@@ -165,6 +166,58 @@ function runReplayVerify(params) {
     consumedDecisionTicks: decoded.consumedDecisionTicks,
     result: decoded.result,
   }));
+}
+
+function runSeedSweep(params) {
+  const stageId = String(params.stageId || "");
+  const brainAName = String(params.brainA || "");
+  const brainBName = String(params.brainB || "");
+  const seedStart = asInt(params.seedStart);
+  const seedEndExclusive = asInt(params.seedEndExclusive);
+  const maxTicks = params.maxTicks === undefined ? undefined : asInt(params.maxTicks);
+  if (!STAGES[stageId]) throw new Error(`unknown public stage: ${stageId}`);
+  if (!STRATEGIES[brainAName]) throw new Error(`unknown public brainA preset: ${brainAName}`);
+  if (!STRATEGIES[brainBName]) throw new Error(`unknown public brainB preset: ${brainBName}`);
+  if (seedEndExclusive <= seedStart) throw new Error("seedEndExclusive must be greater than seedStart");
+  if (seedEndExclusive - seedStart > 64) throw new Error("seed sweep chunks are capped at 64 seeds");
+  const results = [];
+  for (let seed = seedStart; seed < seedEndExclusive; seed++) {
+    const result = simulate({
+      stage: STAGES[stageId],
+      brainA: STRATEGIES[brainAName],
+      brainB: STRATEGIES[brainBName],
+      seed,
+      maxTicks,
+    });
+    results.push({
+      seed,
+      winner: result.winner,
+      finalScore: result.finalScore,
+      finalRounds: result.finalRounds,
+      ticks: result.ticks,
+      logHash: result.logHash,
+    });
+  }
+  const summary = {
+    kind: "m3t4.seed_sweep.v0",
+    stageId,
+    brainA: brainAName,
+    brainB: brainBName,
+    seedStart,
+    seedEndExclusive,
+    maxTicks,
+    aggregate: {
+      seeds: results.length,
+      winsA: results.filter((result) => result.winner === 0).length,
+      winsB: results.filter((result) => result.winner === 1).length,
+      draws: results.filter((result) => result.winner === -1).length,
+      avgTicks: results.length
+        ? Math.round(results.reduce((sum, result) => sum + result.ticks, 0) / results.length)
+        : 0,
+    },
+    results,
+  };
+  return new TextEncoder().encode(stableReplayJson(summary));
 }
 
 async function runDeviceWitnessWebGpu(params) {

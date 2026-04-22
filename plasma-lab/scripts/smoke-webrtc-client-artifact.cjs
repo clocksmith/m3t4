@@ -178,6 +178,7 @@ async function prepareStaffPage(page, config, label) {
     window.__M3T4_COMPUTE_LAB_ORIGIN__ = computeOrigin;
     window.__M3T4_COMPUTE_SLACK_WORKER__ = true;
     window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS__ = true;
+    window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__ = true;
     const mod = await import(`/lib/compute.js?staff-webrtc-client-artifact=${encodeURIComponent(label)}-${Date.now()}`);
     const client = mod.getComputeClient();
     window.__M3T4_COMPUTE_CLIENT__ = client;

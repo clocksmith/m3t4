@@ -524,9 +524,6 @@ function renderCosmeticsControls(cosmetics) {
   weaponList.innerHTML = weaponOptions.map((option) => {
     const selected = option.id === cosmetics.weapon;
     const label = weaponLabel(cosmetics.body, option.id);
-    const lockMarkup = option.locked
-      ? `<img class="weapon-lock-glyph" src="assets/ui/locked_slot.png" alt="" width="24" height="24">`
-      : `<span class="weapon-unlocked-dot" aria-hidden="true"></span>`;
     const meta = option.locked ? `unlocks at ${option.minElo} ELO` : "available";
     return `
       <button
@@ -537,7 +534,7 @@ function renderCosmeticsControls(cosmetics) {
         aria-selected="${selected ? "true" : "false"}"
         ${option.locked ? `aria-disabled="true" disabled` : ""}
       >
-        ${lockMarkup}
+        ${weaponOptionVisualHtml(cosmetics.body, option)}
         <span class="weapon-option-copy">
           <span class="weapon-option-name">${escapeHtml(label)}</span>
           <span class="weapon-option-meta">${escapeHtml(meta)}</span>
@@ -749,6 +746,7 @@ function weaponOptionsForSeat(body, slotIdx) {
       const minElo = Number(weapon.minElo ?? 0);
       return {
         id: weapon.id,
+        asset: weapon.asset ?? null,
         minElo,
         locked: unlockElo < minElo,
       };
@@ -772,6 +770,41 @@ function bodyLabel(body) {
 
 function weaponLabel(body, weapon) {
   return gameCopy.weapons?.[body]?.[weapon]?.name ?? weapon;
+}
+
+function weaponOptionVisualHtml(body, option) {
+  const spriteStyle = weaponSpriteStyle(body, option.asset);
+  const statusMarkup = option.locked
+    ? `<img class="weapon-lock-glyph" src="assets/ui/locked_slot.png" alt="" width="16" height="16">`
+    : `<span class="weapon-unlocked-dot" aria-hidden="true"></span>`;
+  return `
+    <span class="weapon-option-visual" aria-hidden="true">
+      <span class="weapon-option-sprite${spriteStyle ? "" : " is-missing"}${option.locked ? " is-locked" : ""}"${spriteStyle ? ` style="${spriteStyle}"` : ""}></span>
+      <span class="weapon-option-status">${statusMarkup}</span>
+    </span>`;
+}
+
+function weaponSpriteStyle(body, asset) {
+  if (!asset?.url) return "";
+  const cols = Math.max(1, Number(asset.cols ?? 1) || 1);
+  const cell = Math.max(0, Number(asset.cell ?? 0) || 0);
+  const rows = weaponSheetRows(body, asset, cols);
+  const col = cell % cols;
+  const row = Math.floor(cell / cols);
+  const x = cols > 1 ? (col / (cols - 1)) * 100 : 0;
+  const y = rows > 1 ? (row / (rows - 1)) * 100 : 0;
+  return [
+    `background-image:url('${escapeHtml(asset.url)}')`,
+    `background-size:${cols * 100}% ${rows * 100}%`,
+    `background-position:${x}% ${y}%`,
+  ].join(";");
+}
+
+function weaponSheetRows(body, asset, cols) {
+  const maxCell = weaponEntriesForBody(body)
+    .filter((weapon) => weapon.available && weapon.asset?.url === asset.url)
+    .reduce((max, weapon) => Math.max(max, Number(weapon.asset?.cell ?? 0) || 0), Number(asset.cell ?? 0) || 0);
+  return Math.max(1, Math.floor(maxCell / cols) + 1);
 }
 
 function bodyPortraitHtml(body, filled) {

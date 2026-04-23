@@ -127,6 +127,7 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     count?: number;
     minExecutions?: number;
     minAgreeing?: number;
+    targetWorkerIds?: string[];
   } = {}): ComputeTask {
     const out = super.seedDeviceWitnessWebGpuTask(input);
     this.persist(() => ({ tasks: [out] }));
@@ -136,6 +137,7 @@ export class PersistentComputeLabStore extends ComputeLabStore {
   seedDeviceWitnessRenderTask(input: {
     minExecutions?: number;
     minAgreeing?: number;
+    targetWorkerIds?: string[];
   } = {}): ComputeTask {
     const out = super.seedDeviceWitnessRenderTask(input);
     this.persist(() => ({ tasks: [out] }));
@@ -278,6 +280,7 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     minAgreeing?: number;
     requiredTransport?: TransportKind;
     requiredPeerSubreceipt?: boolean;
+    targetWorkerIds?: string[];
   }): ComputeTask {
     const out = super.seedLogitDivergenceTask(input);
     this.persist(() => ({ tasks: [out] }));

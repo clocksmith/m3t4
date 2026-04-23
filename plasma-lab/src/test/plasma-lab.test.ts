@@ -3482,6 +3482,30 @@ test("HTTP worker flow issues assignment-bound receipts", async (t) => {
   assert.equal(adminReceipt.body.receiptId, r2.receipt.receiptId);
 });
 
+test("targeted witness tasks only assign to the requested smoke workers", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const w1 = store.registerWorker({ capability: webgpuCapability });
+  const w2 = store.registerWorker({ capability: webgpuCapability });
+  const stray = store.registerWorker({ capability: webgpuCapability });
+  const task = store.seedDeviceWitnessWebGpuTask({
+    seed: 7,
+    count: 16,
+    minExecutions: 2,
+    minAgreeing: 2,
+    targetWorkerIds: [w1.worker.workerId, w2.worker.workerId],
+  });
+
+  const a1 = store.assignNext(auth(w1));
+  const a2 = store.assignNext(auth(w2));
+  const a3 = store.assignNext(auth(stray));
+
+  assert.ok(a1);
+  assert.ok(a2);
+  assert.equal(a1.task.taskId, task.taskId);
+  assert.equal(a2.task.taskId, task.taskId);
+  assert.equal(a3, null);
+});
+
 function publicReplayArtifactJson(matchId: string, options: { includePrivateConfig?: boolean } = {}): string {
   const stage = STAGES.boardroom;
   const brainA = STRATEGIES.unicorn;

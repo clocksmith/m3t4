@@ -11,7 +11,6 @@ import {
   SIM_HZ,
 } from "../lib/public-sim.js";
 import { H, W, setupCanvasSurface } from "./surface.js";
-import rosterCatalog from "../content/roster-catalog.v1.json" with { type: "json" };
 
 export { H, W };
 
@@ -84,21 +83,39 @@ const CHARACTER_SPRITES = [
 
 const BODY_KITS = Object.fromEntries(CHARACTER_SPRITES);
 const DEFAULT_BODIES = ["sama", "darrius"];
-const DEFAULT_WEAPONS = Object.fromEntries(
-  rosterCatalog.bodies.map((body) => [
-    body,
-    (rosterCatalog.weapons[body] ?? []).find((weapon) => weapon.available)?.id,
-  ]),
-);
+const DEFAULT_WEAPONS = {
+  sama: "worldcoin_orb_flail",
+  darrius: "rolled_constitution_bat",
+  demis: "nobel_medal_flail",
+  mark: "sunscreen_bottle_club",
+};
 
-const WEAPON_SHEETS = Object.fromEntries(
-  rosterCatalog.bodies.map((body) => [
-    body,
-    Object.fromEntries((rosterCatalog.weapons[body] ?? [])
-      .filter((weapon) => weapon.available && weapon.asset)
-      .map((weapon) => [weapon.id, weapon.asset])),
-  ]),
-);
+const WEAPON_SHEETS = {
+  sama: {
+    worldcoin_orb_flail: { url: "assets/weapons/sama/sheet.png", frameW: 48, frameH: 48, cell: 0, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/sama/launch.png", fallbackCell: 0 },
+    backpack_maul: { url: "assets/weapons/sama/sheet.png", frameW: 48, frameH: 48, cell: 1, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/sama/launch.png", fallbackCell: 1 },
+    gpu_server_blade: { url: "assets/weapons/sama/sheet.png", frameW: 48, frameH: 48, cell: 2, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/sama/epic_legendary.png", fallbackCell: 0 },
+    heat_sink_greatsword: { url: "assets/weapons/sama/sheet.png", frameW: 48, frameH: 48, cell: 3, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/sama/epic_legendary.png", fallbackCell: 1 },
+  },
+  darrius: {
+    rolled_constitution_bat: { url: "assets/weapons/darrius/sheet.png", frameW: 48, frameH: 48, cell: 0, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/darrius/launch.png", fallbackCell: 0 },
+    alignment_baton: { url: "assets/weapons/darrius/sheet.png", frameW: 48, frameH: 48, cell: 1, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/darrius/launch.png", fallbackCell: 1 },
+    red_team_pike: { url: "assets/weapons/darrius/sheet.png", frameW: 48, frameH: 48, cell: 2, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/darrius/epic_legendary.png", fallbackCell: 0 },
+    guardrail_greatsword: { url: "assets/weapons/darrius/sheet.png", frameW: 48, frameH: 48, cell: 3, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/darrius/epic_legendary.png", fallbackCell: 1 },
+  },
+  demis: {
+    nobel_medal_flail: { url: "assets/weapons/demis/sheet.png", frameW: 48, frameH: 48, cell: 0, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/demis/launch.png", fallbackCell: 0 },
+    folded_chess_axe: { url: "assets/weapons/demis/sheet.png", frameW: 48, frameH: 48, cell: 1, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/demis/launch.png", fallbackCell: 1 },
+    go_board_maul: { url: "assets/weapons/demis/sheet.png", frameW: 48, frameH: 48, cell: 2, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/demis/epic_legendary.png", fallbackCell: 0 },
+    alphafold_blade: { url: "assets/weapons/demis/sheet.png", frameW: 48, frameH: 48, cell: 3, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/demis/epic_legendary.png", fallbackCell: 1 },
+  },
+  mark: {
+    sunscreen_bottle_club: { url: "assets/weapons/mark/sheet.png", frameW: 48, frameH: 48, cell: 0, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/mark/launch.png", fallbackCell: 0 },
+    controller_nunchucks: { url: "assets/weapons/mark/sheet.png", frameW: 48, frameH: 48, cell: 1, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/mark/launch.png", fallbackCell: 1 },
+    shareholder_sauce_club: { url: "assets/weapons/mark/sheet.png", frameW: 48, frameH: 48, cell: 2, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/mark/epic_legendary.png", fallbackCell: 0 },
+    quest_flail: { url: "assets/weapons/mark/sheet.png", frameW: 48, frameH: 48, cell: 3, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/mark/epic_legendary.png", fallbackCell: 1 },
+  },
+};
 
 const PORTRAIT_SHEETS = {
   sama: { url: "assets/chars/sama/monastic_infra/portraits/sheet.png", cellW: 96, cellH: 96 },

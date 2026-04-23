@@ -100,9 +100,9 @@ public, or a later attested/proof-carrying runtime exists.
 Near-term real workloads should be added in this order:
 
 1. `ml.embedding_tile.v0`: public embedding and rerank batches over published
-   corpora. This is the cleanest next step because browser WebGPU inference
-   stacks already support feature extraction and quantized execution, and the
-   outputs are compact enough for server-side reference checks on bounded tiles.
+   corpora. This is the cleanest next step because the local Doppler WebGPU
+   stack already supports embedding models and quantized execution, and the
+   outputs can be reduced to compact rerank tiles for replicated quorum.
 2. `ml.image_tile_infer.v0`: public image-tile classification, segmentation,
    background removal, or depth-style inference. This reuses the same browser
    ML path as embeddings while producing more obviously useful outputs for asset

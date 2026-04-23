@@ -14,6 +14,7 @@ export interface RankedRouteDeps {
     activePoolMs: number;
     authMode?: string;
     authProviders: readonly string[];
+    computeEmbedModelId?: string;
     cycleMs: number;
     computeLabOrigin?: string;
     computeStunUrls?: readonly string[];
@@ -33,6 +34,7 @@ export function registerRankedRoutes(routes: RouteList, deps: RankedRouteDeps): 
       json(res, 200, {
         ok: true,
         cycleMs: config.cycleMs,
+        computeEmbedModelId: config.computeEmbedModelId,
         computeLabOrigin: config.computeLabOrigin,
         computeStunUrls: config.computeStunUrls ?? [],
         maxSlots: config.maxSlots,

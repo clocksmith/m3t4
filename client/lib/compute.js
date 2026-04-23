@@ -16,6 +16,7 @@ const SESSION_TOKEN_HEADER = "x-worker-session-token";
 const PUBLIC_ARTIFACT_KERNEL = "m3t4.public_artifact_verify.v0";
 const REPLAY_VERIFY_KERNEL = "m3t4.replay_verify.v1";
 const SEED_SWEEP_KERNEL = "m3t4.seed_sweep.v0";
+const EMBEDDING_TILE_KERNEL = "ml.embedding_tile.v0";
 const TENSOR_TILE_KERNEL = "plasma.tensor_tile.v0";
 
 const MODE_PROFILE = {
@@ -488,6 +489,8 @@ class ComputeClient {
       chunkId: chunk.chunkId,
       taskId: task.taskId,
       kind: chunk.kind,
+      determinismClass: task.validationPolicy?.determinismClass || "bit-exact",
+      validationMode: task.validationPolicy?.validationMode || "expected-hash",
       startedAt: performance.now(),
     };
     this.health.assignmentsStarted++;
@@ -504,6 +507,8 @@ class ComputeClient {
       chunkId: chunk.chunkId,
       taskId: task.taskId,
       kind: chunk.kind,
+      determinismClass: task.validationPolicy?.determinismClass || "replicated-quorum",
+      validationMode: task.validationPolicy?.validationMode || "measurement",
       startedAt: performance.now(),
     };
     this.health.assignmentsStarted++;
@@ -568,6 +573,8 @@ class ComputeClient {
       chunkId: chunk.chunkId,
       taskId: task.taskId,
       kind: chunk.kind,
+      determinismClass: task.validationPolicy?.determinismClass || "bit-exact",
+      validationMode: task.validationPolicy?.validationMode || "expected-hash",
       startedAt: performance.now(),
     };
     this.health.assignmentsStarted++;
@@ -592,8 +599,8 @@ class ComputeClient {
         inputHash: chunk.inputHash,
         artifactHash: chunk.artifactHash,
         outputHash: { algorithm: "sha256", value: transfer.outputHash },
-        determinismClass: "bit-exact",
-        validationMode: "expected-hash",
+        determinismClass: task.validationPolicy?.determinismClass || "bit-exact",
+        validationMode: task.validationPolicy?.validationMode || "expected-hash",
         executionMode: transfer.executionMode || "cpu",
         transport: "webrtc",
         governorMode: this.mode,
@@ -669,8 +676,8 @@ class ComputeClient {
         artifactHash: msg.artifactHash,
         outputHash: { algorithm: "sha256", value: msg.outputHash },
         derived: msg.derived,
-        determinismClass: "bit-exact",
-        validationMode: "expected-hash",
+        determinismClass: current.determinismClass || "bit-exact",
+        validationMode: current.validationMode || "expected-hash",
         executionMode: msg.executionMode || "cpu",
         transport: "http",
         governorMode: this.mode,
@@ -739,6 +746,14 @@ function artifactWebRtcStrict() {
   return window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__ === true;
 }
 
+function embeddingTileEnabled() {
+  return window.__M3T4_COMPUTE_EMBED_TILE__ === true && embeddingTileModelId().length > 0;
+}
+
+function embeddingTileModelId() {
+  return String(window.__M3T4_COMPUTE_EMBED_MODEL__ || "").trim();
+}
+
 function persistedOptIn() {
   try {
     return localStorage.getItem(OPT_IN_KEY) === "1";
@@ -795,6 +810,7 @@ async function buildCapability(runtimeInfo = {}, opts = {}) {
   if (webgpu.webgpu === "available") {
     kernels.push("device_witness.webgpu.v0");
     kernels.push(TENSOR_TILE_KERNEL);
+    if (embeddingTileEnabled()) kernels.push(EMBEDDING_TILE_KERNEL);
   }
   if (typeof RTCPeerConnection !== "undefined") kernels.push("device_witness.webrtc.v0");
   const adapterInfo = {
@@ -1582,6 +1598,39 @@ function safeWebRtcDataChunk(chunk) {
       throw new Error("seed sweep public preset params required");
     }
   }
+  if (chunk.kind === EMBEDDING_TILE_KERNEL) {
+    const topK = Number(chunk.params?.topK);
+    if (!Number.isSafeInteger(topK) || topK < 1 || topK > 8) {
+      throw new Error("embedding tile topK invalid");
+    }
+    if (typeof chunk.params?.modelId !== "string" || chunk.params.modelId.length === 0) {
+      throw new Error("embedding tile modelId required");
+    }
+    if (
+      typeof chunk.params?.queryText !== "string" ||
+      chunk.params.queryText.length === 0 ||
+      chunk.params.queryText.length > 2048
+    ) {
+      throw new Error("embedding tile queryText invalid");
+    }
+    if (
+      typeof chunk.params?.documentsJson !== "string" ||
+      chunk.params.documentsJson.length === 0 ||
+      chunk.params.documentsJson.length > 16 * 1024
+    ) {
+      throw new Error("embedding tile documentsJson invalid");
+    }
+    let docs = null;
+    try { docs = JSON.parse(chunk.params.documentsJson); } catch {}
+    if (
+      !Array.isArray(docs) ||
+      docs.length < 1 ||
+      docs.length > 16 ||
+      docs.some((doc) => typeof doc !== "string" || doc.length === 0 || doc.length > 2048)
+    ) {
+      throw new Error("embedding tile documents invalid");
+    }
+  }
   if (chunk.kind === TENSOR_TILE_KERNEL) {
     const seed = Number(chunk.params?.seed);
     const rows = Number(chunk.params?.rows);
@@ -1616,7 +1665,7 @@ function safeWebRtcDataChunk(chunk) {
 }
 
 function webRtcDataKernel(kind) {
-  return kind === PUBLIC_ARTIFACT_KERNEL || kind === REPLAY_VERIFY_KERNEL || kind === SEED_SWEEP_KERNEL || kind === TENSOR_TILE_KERNEL;
+  return kind === PUBLIC_ARTIFACT_KERNEL || kind === REPLAY_VERIFY_KERNEL || kind === SEED_SWEEP_KERNEL || kind === EMBEDDING_TILE_KERNEL || kind === TENSOR_TILE_KERNEL;
 }
 
 const PEER_WORK_PARAMS = Object.freeze({ start: 1009, endExclusive: 1033 });

@@ -69,6 +69,12 @@ async function loadFeatures() {
     if (FEATURES.computeWebRtcArtifacts === true) {
       window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS__ = true;
     }
+    if (FEATURES.computeEmbedTile === true) {
+      window.__M3T4_COMPUTE_EMBED_TILE__ = true;
+    }
+    if (typeof s.computeEmbedModelId === "string" && s.computeEmbedModelId && !window.__M3T4_COMPUTE_EMBED_MODEL__) {
+      window.__M3T4_COMPUTE_EMBED_MODEL__ = s.computeEmbedModelId;
+    }
   } catch {
     // Static/local client without a reachable API keeps optional surfaces hidden.
   }

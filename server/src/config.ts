@@ -31,6 +31,7 @@ export const CONFIG = {
   computeLabOrigin: process.env.COMPUTE_LAB_ORIGIN ?? "",
   computeLabAdminToken: process.env.PLASMA_LAB_ADMIN_TOKEN,
   computeStunUrls: envList("COMPUTE_STUN_URLS", []),
+  computeEmbedModelId: process.env.COMPUTE_EMBED_MODEL_ID ?? "",
   computeAutoSeedSweep: {
     stageId: process.env.COMPUTE_AUTO_SEED_SWEEP_STAGE_ID ?? "",
     brainA: process.env.COMPUTE_AUTO_SEED_SWEEP_BRAIN_A ?? "unicorn",
@@ -102,6 +103,7 @@ export const CONFIG = {
     distributedCompute: envFlag("FEATURE_DISTRIBUTED_COMPUTE", false),
     computeSlackWorker: envFlag("FEATURE_COMPUTE_SLACK_WORKER", false),
     computeWebRtcArtifacts: envFlag("FEATURE_COMPUTE_WEBRTC_ARTIFACTS", false),
+    computeEmbedTile: envFlag("FEATURE_COMPUTE_EMBED_TILE", false),
     computeAutoSeedReplayTasks: envFlag("FEATURE_COMPUTE_AUTO_SEED_REPLAY_TASKS", false),
     computeAutoSeedSeedSweepTasks: envFlag("FEATURE_COMPUTE_AUTO_SEED_SEED_SWEEP_TASKS", false),
     computeAutoSeedTensorTileTasks: envFlag("FEATURE_COMPUTE_AUTO_SEED_TENSOR_TILE_TASKS", false),

@@ -720,6 +720,35 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     }
     return true;
   }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/embedding-tile") {
+    const body = await readJson<{
+      modelId?: string;
+      queryText?: string;
+      documents?: string[];
+      topK?: number;
+      minExecutions?: number;
+      minAgreeing?: number;
+      requiredTransport?: TransportKind;
+      requiredPeerSubreceipt?: boolean;
+    }>(req);
+    try {
+      const task = deps.store.seedEmbeddingTileTask({
+        modelId: body?.modelId,
+        queryText: String(body?.queryText ?? ""),
+        documents: Array.isArray(body?.documents) ? body.documents.map((entry) => String(entry ?? "")) : [],
+        topK: body?.topK,
+        minExecutions: body?.minExecutions,
+        minAgreeing: body?.minAgreeing,
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+      });
+      await flushStore(deps.store);
+      json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/public-artifact") {
     const body = await readJson<{
       artifact?: {
@@ -1162,6 +1191,16 @@ td,th{border-bottom:1px solid #252b3a;padding:7px;text-align:left;vertical-align
     <div class="row"><button id="seedTensorTile">seed tensor tile</button></div>
   </div>
   <div class="card">
+    <div>embedding tile</div>
+    <div class="muted">Doppler EmbeddingGemma rerank tile; replicated quorum on quantized top-k outputs</div>
+    <textarea id="embeddingQuery" placeholder="query text">browser webgpu embedding retrieval</textarea>
+    <textarea id="embeddingDocs" placeholder='JSON string array of documents'>["webgpu browser retrieval engine","protein contact map tile scoring","public replay verification receipts","quantized embedding rerank batch"]</textarea>
+    <div class="row">
+      <input id="embeddingTopK" value="3" aria-label="embedding top k">
+    </div>
+    <div class="row"><button id="seedEmbeddingTile">seed embedding tile</button></div>
+  </div>
+  <div class="card">
     <div>seed sweep</div>
     <div class="row">
       <input id="sweepStage" value="boardroom" aria-label="stage id">
@@ -1240,6 +1279,11 @@ document.getElementById("seedTensorTile").onclick = () => adminPost("/compute/ad
   rows: asNum("tensorRows"),
   cols: asNum("tensorCols"),
   depth: asNum("tensorDepth"),
+});
+document.getElementById("seedEmbeddingTile").onclick = () => adminPost("/compute/admin/tasks/embedding-tile", {
+  queryText: val("embeddingQuery"),
+  documents: JSON.parse(val("embeddingDocs") || "[]"),
+  topK: asNum("embeddingTopK"),
 });
 document.getElementById("seedSweep").onclick = () => adminPost("/compute/admin/tasks/seed-sweep", {
   stageId: val("sweepStage"),

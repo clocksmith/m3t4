@@ -11,6 +11,7 @@ import {
   SIM_HZ,
 } from "../lib/public-sim.js";
 import { H, W, setupCanvasSurface } from "./surface.js";
+import rosterCatalog from "../content/roster-catalog.v1.json" with { type: "json" };
 
 export { H, W };
 
@@ -83,39 +84,21 @@ const CHARACTER_SPRITES = [
 
 const BODY_KITS = Object.fromEntries(CHARACTER_SPRITES);
 const DEFAULT_BODIES = ["sama", "darrius"];
-const DEFAULT_WEAPONS = {
-  sama: "worldcoin_orb_flail",
-  darrius: "rolled_constitution_bat",
-  demis: "nobel_medal_flail",
-  mark: "sunscreen_bottle_club",
-};
+const DEFAULT_WEAPONS = Object.fromEntries(
+  rosterCatalog.bodies.map((body) => [
+    body,
+    (rosterCatalog.weapons[body] ?? []).find((weapon) => weapon.available)?.id,
+  ]),
+);
 
-const WEAPON_SHEETS = {
-  sama: {
-    worldcoin_orb_flail: { url: "assets/weapons/sama/launch.png", frameW: 48, frameH: 48, cell: 0, gripX: 6, gripY: 24, visualYOffset: 14 },
-    backpack_maul: { url: "assets/weapons/sama/launch.png", frameW: 48, frameH: 48, cell: 1, gripX: 6, gripY: 24, visualYOffset: 14 },
-    gpu_server_blade: { url: "assets/weapons/sama/epic_legendary.png", frameW: 48, frameH: 48, cell: 0, gripX: 6, gripY: 24, visualYOffset: 14 },
-    heat_sink_greatsword: { url: "assets/weapons/sama/epic_legendary.png", frameW: 48, frameH: 48, cell: 1, gripX: 6, gripY: 24, visualYOffset: 14 },
-  },
-  darrius: {
-    rolled_constitution_bat: { url: "assets/weapons/darrius/launch.png", frameW: 48, frameH: 48, cell: 0, gripX: 6, gripY: 24 },
-    alignment_baton: { url: "assets/weapons/darrius/launch.png", frameW: 48, frameH: 48, cell: 1, gripX: 6, gripY: 24 },
-    red_team_pike: { url: "assets/weapons/darrius/epic_legendary.png", frameW: 48, frameH: 48, cell: 0, gripX: 6, gripY: 24 },
-    guardrail_greatsword: { url: "assets/weapons/darrius/epic_legendary.png", frameW: 48, frameH: 48, cell: 1, gripX: 6, gripY: 24 },
-  },
-  demis: {
-    nobel_medal_flail: { url: "assets/weapons/demis/launch.png", frameW: 48, frameH: 48, cell: 0, gripX: 6, gripY: 24 },
-    folded_chess_axe: { url: "assets/weapons/demis/launch.png", frameW: 48, frameH: 48, cell: 1, gripX: 6, gripY: 24 },
-    go_board_maul: { url: "assets/weapons/demis/epic_legendary.png", frameW: 48, frameH: 48, cell: 0, gripX: 6, gripY: 24 },
-    alphafold_blade: { url: "assets/weapons/demis/epic_legendary.png", frameW: 48, frameH: 48, cell: 1, gripX: 6, gripY: 24 },
-  },
-  mark: {
-    sunscreen_bottle_club: { url: "assets/weapons/mark/launch.png", frameW: 48, frameH: 48, cell: 0, gripX: 6, gripY: 24 },
-    controller_nunchucks: { url: "assets/weapons/mark/launch.png", frameW: 48, frameH: 48, cell: 1, gripX: 6, gripY: 24 },
-    shareholder_sauce_club: { url: "assets/weapons/mark/epic_legendary.png", frameW: 48, frameH: 48, cell: 0, gripX: 6, gripY: 24 },
-    quest_flail: { url: "assets/weapons/mark/epic_legendary.png", frameW: 48, frameH: 48, cell: 1, gripX: 6, gripY: 24 },
-  },
-};
+const WEAPON_SHEETS = Object.fromEntries(
+  rosterCatalog.bodies.map((body) => [
+    body,
+    Object.fromEntries((rosterCatalog.weapons[body] ?? [])
+      .filter((weapon) => weapon.available && weapon.asset)
+      .map((weapon) => [weapon.id, weapon.asset])),
+  ]),
+);
 
 const PORTRAIT_SHEETS = {
   sama: { url: "assets/chars/sama/monastic_infra/portraits/sheet.png", cellW: 96, cellH: 96 },
@@ -796,12 +779,7 @@ function drawWeaponSprite(ctx, side, bx, by, tx, ty, active) {
   if (!img) return false;
 
   const kit = state.kit;
-  const visualYOffset = kit.visualYOffset ?? 0;
-  const vbx = bx;
-  const vby = by + visualYOffset;
-  const vtx = tx;
-  const vty = ty + visualYOffset;
-  const angle = Math.atan2(vty - vby, vtx - vbx);
+  const angle = Math.atan2(ty - by, tx - bx);
   const scale = active ? 1.12 : 0.96;
   const dw = kit.frameW * scale;
   const dh = kit.frameH * scale;
@@ -812,18 +790,21 @@ function drawWeaponSprite(ctx, side, bx, by, tx, ty, active) {
     ctx.save();
     ctx.strokeStyle = cssColor("--arena-weapon-glow", "white");
     ctx.lineWidth = 12;
-    ctx.beginPath(); ctx.moveTo(vbx, vby); ctx.lineTo(vtx, vty); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(tx, ty); ctx.stroke();
     ctx.restore();
   }
 
   ctx.save();
   ctx.imageSmoothingEnabled = false;
-  ctx.translate(vbx, vby);
+  ctx.translate(bx, by);
   ctx.rotate(angle);
   ctx.globalAlpha = active ? 1 : 0.78;
+  const cols = kit.cols ?? 2;
+  const sx = (kit.cell % cols) * kit.frameW;
+  const sy = Math.floor(kit.cell / cols) * kit.frameH;
   ctx.drawImage(
     img,
-    kit.cell * kit.frameW, 0, kit.frameW, kit.frameH,
+    sx, sy, kit.frameW, kit.frameH,
     -gripX * scale, -gripY * scale,
     dw, dh
   );
@@ -834,26 +815,38 @@ function drawWeaponSprite(ctx, side, bx, by, tx, ty, active) {
 function weaponImageState(body, weapon, side) {
   const selectedKit = WEAPON_SHEETS[body]?.[weapon];
   if (selectedKit) {
-    const key = `${body}:${weapon}`;
-    let state = weaponState.get(key);
-    if (!state) {
-      state = { ...imageState(selectedKit.url), kit: selectedKit };
-      weaponState.set(key, state);
-    }
-    if (!state.failed) return state;
+    const state = weaponImageStateForKit(`${body}:${weapon}`, selectedKit);
+    if (state) return state;
+    const fallbackState = weaponImageStateForKit(`${body}:${weapon}:fallback`, fallbackWeaponKit(selectedKit));
+    if (fallbackState) return fallbackState;
   }
 
   const fallbackBody = DEFAULT_BODIES[side] ?? DEFAULT_BODIES[0];
   const fallbackWeapon = DEFAULT_WEAPONS[fallbackBody];
   const fallbackKit = WEAPON_SHEETS[fallbackBody]?.[fallbackWeapon];
   if (!fallbackKit) return null;
-  const fallbackKey = `${fallbackBody}:${fallbackWeapon}`;
-  let fallback = weaponState.get(fallbackKey);
-  if (!fallback) {
-    fallback = { ...imageState(fallbackKit.url), kit: fallbackKit };
-    weaponState.set(fallbackKey, fallback);
+  return weaponImageStateForKit(`${fallbackBody}:${fallbackWeapon}`, fallbackKit)
+    ?? weaponImageStateForKit(`${fallbackBody}:${fallbackWeapon}:fallback`, fallbackWeaponKit(fallbackKit));
+}
+
+function weaponImageStateForKit(key, kit) {
+  if (!kit) return null;
+  let state = weaponState.get(key);
+  if (!state) {
+    state = { ...imageState(kit.url), kit };
+    weaponState.set(key, state);
   }
-  return fallback;
+  return state.failed ? null : state;
+}
+
+function fallbackWeaponKit(kit) {
+  if (!kit?.fallbackUrl) return null;
+  return {
+    ...kit,
+    url: kit.fallbackUrl,
+    cell: kit.fallbackCell ?? kit.cell,
+    cols: kit.fallbackCols ?? kit.cols,
+  };
 }
 
 function weaponAnchorDebugEnabled() {
@@ -997,8 +990,7 @@ function portraitImageState(body, side) {
 }
 
 function portraitIndex(side, fighter, frame) {
-  if (frame.rounds?.[side] >= 2) return 3; // victory
   if (fighter.dead) return 2;              // ko
   if ((fighter.stun ?? 0) > 0) return 1;   // hurt
-  return 0;                                // neutral
+  return 0;                                // neutral; cell 3 is full-body art
 }

@@ -145,11 +145,11 @@
       "monastic_infra": {
         "spriteSheet": "assets/chars/sama/monastic_infra/sprite.png",
         "portraits": {
-          "neutral": "assets/chars/sama/monastic_infra/portraits/neutral.png",
-          "hurt": "assets/chars/sama/monastic_infra/portraits/hurt.png",
-          "ko": "assets/chars/sama/monastic_infra/portraits/ko.png",
-          "victory": "assets/chars/sama/monastic_infra/portraits/victory.png",
-          "large": "assets/chars/sama/monastic_infra/portraits/large.png"
+          "sheet": "assets/chars/sama/monastic_infra/portraits/sheet.png",
+          "neutralCell": 0,
+          "hurtCell": 1,
+          "koCell": 2,
+          "fullBodyCell": 3
         }
       }
     },
@@ -157,11 +157,11 @@
       "legal_department_midnight": {
         "spriteSheet": "assets/chars/darrius/legal_department_midnight/sprite.png",
         "portraits": {
-          "neutral": "assets/chars/darrius/legal_department_midnight/portraits/neutral.png",
-          "hurt": "assets/chars/darrius/legal_department_midnight/portraits/hurt.png",
-          "ko": "assets/chars/darrius/legal_department_midnight/portraits/ko.png",
-          "victory": "assets/chars/darrius/legal_department_midnight/portraits/victory.png",
-          "large": "assets/chars/darrius/legal_department_midnight/portraits/large.png"
+          "sheet": "assets/chars/darrius/legal_department_midnight/portraits/sheet.png",
+          "neutralCell": 0,
+          "hurtCell": 1,
+          "koCell": 2,
+          "fullBodyCell": 3
         }
       }
     },
@@ -169,11 +169,11 @@
       "chalk_and_static": {
         "spriteSheet": "assets/chars/demis/chalk_and_static/sprite.png",
         "portraits": {
-          "neutral": "assets/chars/demis/chalk_and_static/portraits/neutral.png",
-          "hurt": "assets/chars/demis/chalk_and_static/portraits/hurt.png",
-          "ko": "assets/chars/demis/chalk_and_static/portraits/ko.png",
-          "victory": "assets/chars/demis/chalk_and_static/portraits/victory.png",
-          "large": "assets/chars/demis/chalk_and_static/portraits/large.png"
+          "sheet": "assets/chars/demis/chalk_and_static/portraits/sheet.png",
+          "neutralCell": 0,
+          "hurtCell": 1,
+          "koCell": 2,
+          "fullBodyCell": 3
         }
       }
     },
@@ -181,11 +181,11 @@
       "wellness_berserker": {
         "spriteSheet": "assets/chars/mark/wellness_berserker/sprite.png",
         "portraits": {
-          "neutral": "assets/chars/mark/wellness_berserker/portraits/neutral.png",
-          "hurt": "assets/chars/mark/wellness_berserker/portraits/hurt.png",
-          "ko": "assets/chars/mark/wellness_berserker/portraits/ko.png",
-          "victory": "assets/chars/mark/wellness_berserker/portraits/victory.png",
-          "large": "assets/chars/mark/wellness_berserker/portraits/large.png"
+          "sheet": "assets/chars/mark/wellness_berserker/portraits/sheet.png",
+          "neutralCell": 0,
+          "hurtCell": 1,
+          "koCell": 2,
+          "fullBodyCell": 3
         }
       }
     }
@@ -195,7 +195,8 @@
       "worldcoin_orb_flail": {
         "class": "flail",
         "silhouette": "orb on thick braided cable",
-        "sprite": "assets/weapons/sama/common/worldcoin_orb_flail.png",
+        "sprite": "assets/weapons/sama/sheet.png",
+        "spriteCell": 0,
         "hitVFX": "hit-orb-thud",
         "trail": {
           "color": "#ede9fe",
@@ -206,7 +207,8 @@
       "backpack_maul": {
         "class": "maul",
         "silhouette": "rectangular backpack swung by twin straps",
-        "sprite": "assets/weapons/sama/rare/backpack_maul.png",
+        "sprite": "assets/weapons/sama/sheet.png",
+        "spriteCell": 1,
         "hitVFX": "hit-launch-protocol",
         "trail": {
           "color": "#22d3ee",
@@ -217,7 +219,8 @@
       "gpu_server_blade": {
         "class": "blade",
         "silhouette": "long hot server blade with fins",
-        "sprite": "assets/weapons/sama/epic/gpu_server_blade.png",
+        "sprite": "assets/weapons/sama/sheet.png",
+        "spriteCell": 2,
         "hitVFX": "hit-overheat",
         "trail": {
           "color": "#a78bfa",
@@ -228,7 +231,8 @@
       "heat_sink_greatsword": {
         "class": "greatsword",
         "silhouette": "oversized finned slab with glowing core",
-        "sprite": "assets/weapons/sama/legendary/heat_sink_greatsword.png",
+        "sprite": "assets/weapons/sama/sheet.png",
+        "spriteCell": 3,
         "hitVFX": "hit-failover",
         "trail": {
           "color": "#f472b6",
@@ -241,7 +245,8 @@
       "rolled_constitution_bat": {
         "class": "bat",
         "silhouette": "thick glowing scroll bound with iron rings",
-        "sprite": "assets/weapons/darrius/common/rolled_constitution_bat.png",
+        "sprite": "assets/weapons/darrius/sheet.png",
+        "spriteCell": 0,
         "hitVFX": "hit-redline",
         "trail": {
           "color": "#ede9fe",
@@ -252,7 +257,8 @@
       "alignment_baton": {
         "class": "club",
         "silhouette": "short steel baton with warning stripe cap",
-        "sprite": "assets/weapons/darrius/rare/alignment_baton.png",
+        "sprite": "assets/weapons/darrius/sheet.png",
+        "spriteCell": 1,
         "hitVFX": "hit-policy-mark",
         "trail": {
           "color": "#22d3ee",
@@ -263,7 +269,8 @@
       "red_team_pike": {
         "class": "pike",
         "silhouette": "long pole with forked testing spearhead",
-        "sprite": "assets/weapons/darrius/epic/red_team_pike.png",
+        "sprite": "assets/weapons/darrius/sheet.png",
+        "spriteCell": 2,
         "hitVFX": "hit-mitigation",
         "trail": {
           "color": "#a78bfa",
@@ -274,7 +281,8 @@
       "guardrail_greatsword": {
         "class": "greatsword",
         "silhouette": "bent highway rail with bolted grip",
-        "sprite": "assets/weapons/darrius/legendary/guardrail_greatsword.png",
+        "sprite": "assets/weapons/darrius/sheet.png",
+        "spriteCell": 3,
         "hitVFX": "hit-compliance-seal",
         "trail": {
           "color": "#f472b6",
@@ -287,7 +295,8 @@
       "nobel_medal_flail": {
         "class": "flail",
         "silhouette": "heavy medal on academic lanyard",
-        "sprite": "assets/weapons/demis/common/nobel_medal_flail.png",
+        "sprite": "assets/weapons/demis/sheet.png",
+        "spriteCell": 0,
         "hitVFX": "hit-rejection-note",
         "trail": {
           "color": "#ede9fe",
@@ -298,7 +307,8 @@
       "folded_chess_axe": {
         "class": "axe",
         "silhouette": "hinged board head on straight haft",
-        "sprite": "assets/weapons/demis/rare/folded_chess_axe.png",
+        "sprite": "assets/weapons/demis/sheet.png",
+        "spriteCell": 1,
         "hitVFX": "hit-fold",
         "trail": {
           "color": "#22d3ee",
@@ -309,7 +319,8 @@
       "go_board_maul": {
         "class": "maul",
         "silhouette": "square board slab with inset stone studs",
-        "sprite": "assets/weapons/demis/epic/go_board_maul.png",
+        "sprite": "assets/weapons/demis/sheet.png",
+        "spriteCell": 2,
         "hitVFX": "hit-counterexample",
         "trail": {
           "color": "#a78bfa",
@@ -320,7 +331,8 @@
       "alphafold_blade": {
         "class": "blade",
         "silhouette": "rigid spiraling protein sword",
-        "sprite": "assets/weapons/demis/legendary/alphafold_blade.png",
+        "sprite": "assets/weapons/demis/sheet.png",
+        "spriteCell": 3,
         "hitVFX": "hit-qed",
         "trail": {
           "color": "#f472b6",
@@ -333,7 +345,8 @@
       "sunscreen_bottle_club": {
         "class": "club",
         "silhouette": "oversized lotion bottle with thick cap",
-        "sprite": "assets/weapons/mark/common/sunscreen_bottle_club.png",
+        "sprite": "assets/weapons/mark/sheet.png",
+        "spriteCell": 0,
         "hitVFX": "hit-wellness",
         "trail": {
           "color": "#ede9fe",
@@ -344,7 +357,8 @@
       "controller_nunchucks": {
         "class": "nunchucks",
         "silhouette": "paired controllers linked by charging cable",
-        "sprite": "assets/weapons/mark/rare/controller_nunchucks.png",
+        "sprite": "assets/weapons/mark/sheet.png",
+        "spriteCell": 1,
         "hitVFX": "hit-input-lag",
         "trail": {
           "color": "#22d3ee",
@@ -355,7 +369,8 @@
       "shareholder_sauce_club": {
         "class": "club",
         "silhouette": "thick crystallized bottle used as a cudgel",
-        "sprite": "assets/weapons/mark/epic/shareholder_sauce_club.png",
+        "sprite": "assets/weapons/mark/sheet.png",
+        "spriteCell": 2,
         "hitVFX": "hit-guidance-cut",
         "trail": {
           "color": "#a78bfa",
@@ -366,7 +381,8 @@
       "quest_flail": {
         "class": "flail",
         "silhouette": "headset swung from elite strap",
-        "sprite": "assets/weapons/mark/legendary/quest_flail.png",
+        "sprite": "assets/weapons/mark/sheet.png",
+        "spriteCell": 3,
         "hitVFX": "hit-social-graph",
         "trail": {
           "color": "#f472b6",
@@ -911,58 +927,29 @@
           "neutral",
           "hurt",
           "ko",
-          "victory"
+          "full_body"
         ],
-        "layoutDirective": "Strict 2x2 grid of head-and-shoulders busts of the SAME character, same haircut, same garment, same framing, same lighting; ONLY expression changes per cell. 10px magenta #FF00FF gutter between cells. Entire sheet isolated on pure magenta #FF00FF. Top-left cell = neutral, top-right = hurt, bottom-left = ko, bottom-right = victory. Readable at 96px per cell."
+        "layoutDirective": "Strict 2x2 grid of the SAME character, same haircut, same outfit family, same lighting, no gutters. Entire sheet isolated on pure magenta #FF00FF. Top-left cell = neutral head-and-shoulders portrait. Top-right cell = hurt head-and-shoulders portrait. Bottom-left cell = ko head-and-shoulders portrait. Bottom-right cell = full-body character-select portrait, head-to-toe visible inside the 96x96 final cell with clear magenta padding above head and below feet. Readable at 96px per cell."
       },
       "sama": {
         "seed": 170110,
         "out": "assets/chars/sama/monastic_infra/portraits/sheet.png",
-        "base": "Character A the Capacity Mystic, 2x2 portrait sheet: Character A likeness \u2014 adult male in his late 30s to early 40s, lean build, very pale cool fair skin with a faint pink undertone and slight natural texture, mature but not old. Tall rounded-rectangle / long oval head shape: face reads clearly longer than wide, high broad forehead, wider upper face and temples, softly full cheeks, straight moderately wide jaw, rounded-square chin; not a round head, not a narrow V-shaped face, not a hard superhero jaw. Medium-short-to-medium very dark brown hair subtly flecked with gray; cool espresso dark brown, nearly black in shadow, not light brown; slightly messy and tousled, a little longer than a cropped cut, with soft puffy volume on top, loose forward side-swept waves, and small uneven side tufts around the temples; high forehead and mature receding temples still visible. Not buzzed, not flat, not tightly cropped, not a neat helmet, not long past the ears, not curly, not chestnut, no blond or caramel highlights. Light blue to blue-green medium-sized eyes at standard spacing, mild under-eye definition, light-brown medium-density eyebrows, straight medium-width nose, medium lips, clean-shaven or faint stubble. Critical face geometry: soft pale founder face, long upper head, broad forehead, modest natural asymmetry, jaw proportional but not macho, chin rounded-square and not pointed. Plain grey or navy crewneck sweater or high-collared quarter-zip, teal #6ee7b7 accent. Top-left (neutral): severe calm, direct alert stare, ceremonial-cold founder staring through the lens. Top-right (hurt): tense jaw, restrained rage, rounded-square chin set forward. Bottom-left (ko): glassy posture, upright but defeated, still-resilient aura. Bottom-right (victory): soft smug terrifying certainty, the faintest satisfied half-smile. Same face, same hair, same outfit, same lighting across all four cells."
+        "base": "Character A the Capacity Mystic, 2x2 portrait/full-body sheet: Character A likeness \u2014 adult male in his late 30s to early 40s, lean build, very pale cool fair skin with a faint pink undertone and slight natural texture, mature but not old. Tall rounded-rectangle / long oval head shape: face reads clearly longer than wide, high broad forehead, wider upper face and temples, softly full cheeks, straight moderately wide jaw, rounded-square chin; not a round head, not a narrow V-shaped face, not a hard superhero jaw. Medium-short-to-medium very dark brown hair subtly flecked with gray; cool espresso dark brown, nearly black in shadow, not light brown; slightly messy and tousled, a little longer than a cropped cut, with soft puffy volume on top, loose forward side-swept waves, and small uneven side tufts around the temples; high forehead and mature receding temples still visible. Plain grey or navy crewneck sweater or high-collared quarter-zip, teal #6ee7b7 accent. Top-left (neutral): severe calm, direct alert stare. Top-right (hurt): tense jaw, restrained rage. Bottom-left (ko): glassy upright defeat, still-resilient aura. Bottom-right (full_body): head-to-toe ceremonial saint-like stance, monastic-tech founder bearing, quiet founder-priest intensity, dark denim, understated sneakers, tiny stage shadow only."
       },
       "darrius": {
         "seed": 170210,
         "out": "assets/chars/darrius/legal_department_midnight/portraits/sheet.png",
-        "base": "Character B the Policy Undertaker, 2x2 portrait sheet: Character B likeness \u2014 compact medium build, light skin, oblong rectangular face with soft contours, tall broad forehead framed by a thick unruly dark-brown curly mop, dark brown eyes behind thin rectangular glasses, slightly furrowed expressive brow, straight proportional nose, thin serious mouth, soft U-shaped jaw, modest chin, clean-shaven. Dark navy sweater-hoodie over a plain shirt, amber #fb923c accent. Top-left (neutral): formal menace, contemplative academic intensity turned enforcer. Top-right (hurt): defensive bruised posture, curls disordered, shielding a leather ledger against chest. Bottom-left (ko): half-collapsed leaning on an unseen desk, intimidating even in defeat. Bottom-right (victory): cold compliance triumph, stamping a document just out of frame. Same face, same hair, same glasses, same outfit, same lighting across all four cells."
+        "base": "Character B the Policy Undertaker, 2x2 portrait/full-body sheet: Character B likeness \u2014 compact medium build, light skin, oblong rectangular face with soft contours, tall broad forehead framed by a thick unruly dark-brown curly mop, dark brown eyes behind thin rectangular glasses, slightly furrowed expressive brow, straight proportional nose, thin serious mouth, soft U-shaped jaw, modest chin, clean-shaven. Dark navy sweater-hoodie over a plain shirt, amber #fb923c accent. Top-left (neutral): formal menace, contemplative academic intensity turned enforcer. Top-right (hurt): defensive bruised posture, curls disordered. Bottom-left (ko): half-collapsed, intimidating even in defeat. Bottom-right (full_body): head-to-toe safety-researcher-turned-enforcer stance, standard jacket, casual trousers, cerebral and slightly disheveled, tiny stage shadow only."
       },
       "demis": {
         "seed": 170310,
         "out": "assets/chars/demis/chalk_and_static/portraits/sheet.png",
-        "base": "Character C the Quiet Solver, 2x2 portrait sheet: Character C likeness \u2014 medium build, warm olive complexion, heart-to-diamond face, broad forehead tapering through defined cheekbones to a sharp pointed chin, dark brown focused eyes, thick slightly arched eyebrows, straight slightly prominent nose, thin lips, clean-shaven. Short dark naturally wavy hair, neat side part, salt-and-pepper temples. Crisp pale collared shirt, no tie, under a well-fitted dark blazer, cool blue #60a5fa accent. Top-left (neutral): polished thinker, slightly abstracted gaze. Top-right (hurt): precision-focused pain, wincing at a miscalculation. Bottom-left (ko): elegant collapse, geometric and clean pose. Bottom-right (victory): restrained warm crinkle-eyed smile, absolute proof achieved. Same face, same hair, same outfit, same lighting across all four cells."
+        "base": "Character C the Quiet Solver, 2x2 portrait/full-body sheet: Character C likeness \u2014 medium build, warm olive complexion, heart-to-diamond face, broad forehead tapering through defined cheekbones to a sharp pointed chin, dark brown focused eyes, thick slightly arched eyebrows, straight slightly prominent nose, thin lips, clean-shaven. Short dark naturally wavy hair, neat side part, salt-and-pepper temples. Crisp pale collared shirt, no tie, under a well-fitted dark blazer, cool blue #60a5fa accent. Top-left (neutral): polished thinker, slightly abstracted gaze. Top-right (hurt): precision-focused pain. Bottom-left (ko): elegant collapse, geometric and clean pose. Bottom-right (full_body): head-to-toe polished academic-corporate stance, theorem-warrior bearing, smart casual trousers, tiny stage shadow only."
       },
       "mark": {
         "seed": 170410,
         "out": "assets/chars/mark/wellness_berserker/portraits/sheet.png",
-        "base": "Character D the Sunlit Operator, 2x2 portrait sheet: Character D likeness \u2014 light skin, sharper square-leaning face, broad high forehead, pronounced cheekbones, chiseled jawline, straight proportional nose, pale blue to green-hazel eyes with fixed analytical stare, light stubble. Longer wavy light-brown hair with volume and curl, textured forward, not the old cropped cut. Matte black tactical athleisure under an oversized designer tee or jacket, chunky gold or silver chain visible, white sunscreen war-paint smears on cheekbones. Purple #c084fc accent. Top-left (neutral): intense calm, shark-like unblinking. Top-right (hurt): jaw-forward anger, feral. Bottom-left (ko): dramatic but funny-serious, reaching out for a headset. Bottom-right (victory): predatory confidence, totally oblivious to the irony. Same face, same hair, same outfit, same lighting across all four cells."
-      }
-    },
-    "portraitsLarge": {
-      "_sharedRules": {
-        "outW": 256,
-        "outH": 384,
-        "genW": 768,
-        "genH": 1152,
-        "layoutDirective": "Single head-to-toe full-body character-select portrait, 2:3 aspect. Entire character must be visible from top of hair to soles of shoes: no cropped head, no cropped shoulders, no cropped knees, no cropped feet. Center the standing figure with clear pure magenta padding around the full silhouette, especially above the head and below the shoes. Figure should occupy most of the height without touching canvas edges. Silhouette isolated on pure magenta #FF00FF, with only a small stage shadow under the feet."
-      },
-      "sama": {
-        "seed": 170114,
-        "out": "assets/chars/sama/monastic_infra/portraits/large.png",
-        "base": "Character A full-body character-select portrait: Character A likeness \u2014 adult male in his late 30s to early 40s, lean frame, very pale cool fair skin with a faint pink undertone and slight natural texture, mature but not old. Tall rounded-rectangle / long oval head shape: face reads clearly longer than wide, high broad forehead, wider upper face and temples, softly full cheeks, straight moderately wide jaw, rounded-square chin; not a round head, not a narrow V-shaped face, not a hard superhero jaw. Medium-short-to-medium very dark brown hair subtly flecked with gray; cool espresso dark brown, nearly black in shadow, not light brown; slightly messy and tousled, a little longer than a cropped cut, with soft puffy volume on top, loose forward side-swept waves, and small uneven side tufts around the temples; high forehead and mature receding temples still visible. Not buzzed, not flat, not tightly cropped, not a neat helmet, not long past the ears, not curly, not chestnut, no blond or caramel highlights. Light blue to blue-green medium-sized eyes at standard spacing, mild under-eye definition, light-brown medium-density eyebrows, straight medium-width nose, medium lips, clean-shaven or faint stubble. Critical face geometry: soft pale founder face, long upper head, broad forehead, modest natural asymmetry, jaw proportional but not macho, chin rounded-square and not pointed. Plain grey crewneck sweater or high-collared quarter-zip, optionally layered with a lightweight tailored blazer, dark denim, understated sneakers. Ceremonial saint-like stance, monastic-tech founder bearing, quiet founder-priest intensity, teal #6ee7b7 accent. Fixed foreground with stage shadow behind."
-      },
-      "darrius": {
-        "seed": 170214,
-        "out": "assets/chars/darrius/legal_department_midnight/portraits/large.png",
-        "base": "Character B full-body character-select portrait: Character B likeness \u2014 compact medium build, light skin, oblong rectangular face with soft contours, tall broad forehead, thick unruly dark-brown curly hair forming a frizzy academic halo, dark brown eyes behind thin rectangular glasses, slightly furrowed brow, straight proportional nose, thin mouth, soft U-shaped jaw, clean-shaven. Dark navy sweater-hoodie over a plain collared shirt, standard jacket, casual trousers. Cerebral and slightly disheveled, contemplative stance gone predatory, safety-researcher-turned-enforcer bearing, amber #fb923c accent. Fixed foreground with stage shadow behind."
-      },
-      "demis": {
-        "seed": 170314,
-        "out": "assets/chars/demis/chalk_and_static/portraits/large.png",
-        "base": "Character C full-body character-select portrait: Character C likeness \u2014 medium build, warm olive light-to-medium complexion, heart-to-diamond face, wide forehead, defined cheekbones, fine tapered jaw, pointed chin, dark brown focused eyes, thick slightly arched eyebrows, straight slightly prominent nose, thin lips, clean-shaven. Short dark wavy hair neatly parted with salt-and-pepper temples. Crisp pale collared shirt with no tie under a well-fitted dark blazer, smart casual trousers. Polished academic-corporate stance, theorem-warrior bearing, cool blue #60a5fa accent. Fixed foreground with stage shadow behind."
-      },
-      "mark": {
-        "seed": 170414,
-        "out": "assets/chars/mark/wellness_berserker/portraits/large.png",
-        "base": "Character D full-body character-select portrait: Character D likeness \u2014 slender athletic martial-arts build, light skin, sharper square-leaning face, broad high forehead, pronounced cheekbones, chiseled jawline, pale blue to green-hazel eyes with fixed analytical gaze, straight proportional nose, light stubble. Longer wavy light-brown hair with volume and curl, textured forward, modern post-glow-up styling. Matte black tactical athleisure under an oversized designer tee or jacket, chunky gold or silver chain, white sunscreen war-paint smears on cheekbones. Aggressive low combat stance, platform-crush bearing, modern streetwear-meets-MMA, purple #c084fc accent. Fixed foreground with stage shadow behind."
+        "base": "Character D the Sunlit Operator, 2x2 portrait/full-body sheet: Character D likeness \u2014 light skin, sharper square-leaning face, broad high forehead, pronounced cheekbones, chiseled jawline, straight proportional nose, pale blue to green-hazel eyes with fixed analytical stare, light stubble. Longer wavy light-brown hair with volume and curl, textured forward, matte black tactical athleisure under an oversized designer tee or jacket, chunky chain, white sunscreen war-paint smears, purple #c084fc accent. Top-left (neutral): intense calm, shark-like unblinking. Top-right (hurt): jaw-forward anger, feral. Bottom-left (ko): dramatic but funny-serious. Bottom-right (full_body): head-to-toe aggressive low combat stance, modern streetwear-meets-MMA, platform-crush bearing, tiny stage shadow only."
       }
     },
     "objectives": {
@@ -987,82 +974,45 @@
         "base": "Demand Node target receiver: lit floor ring with vertical uplink post, corporate shrine receiver, ready to accept proof, readable at 96px, isolated on pure magenta #FF00FF"
       }
     },
-    "weaponSheetsLaunch": {
+    "weaponSheets": {
       "_sharedRules": {
         "outW": 96,
-        "outH": 48,
+        "outH": 96,
         "genW": 288,
-        "genH": 144,
+        "genH": 288,
         "cols": 2,
-        "rows": 1,
+        "rows": 2,
         "cellW": 48,
         "cellH": 48,
         "genCellW": 144,
         "genCellH": 144,
         "cellOrder": [
           "common",
-          "rare"
-        ],
-        "layoutDirective": "Strict 1x2 horizontal grid, 144x144 cell, no gutter. Entire sheet isolated on pure magenta #FF00FF. Left cell = common rarity weapon. Right cell = rare rarity weapon. Same lighting and scale across both cells. Striking mass must be at the FAR END of each weapon silhouette \u2014 the 52px rigid hitbox rule. Weapon holder/handle NOT drawn (character sheet owns the hand). Readable at 48px per cell after 3x nearest-neighbor downscale."
-      },
-      "sama": {
-        "seed": 170501,
-        "out": "assets/weapons/sama/launch.png",
-        "base": "Character A launch weapon sheet, 1x2 strip. Left cell (common, Worldcoin Orb Flail): heavy metal orb on a taut braided cable, clean flail silhouette, mass at the orb end, ceremonial but brutal. Right cell (rare, Backpack Maul): rectangular tech backpack converted into a blunt maul, reinforced corners, twin straps pulled taut, mass at the pack end."
-      },
-      "darrius": {
-        "seed": 170505,
-        "out": "assets/weapons/darrius/launch.png",
-        "base": "Character B launch weapon sheet, 1x2 strip. Left cell (common, Rolled Constitution Bat): thick parchment scroll bound in iron rings and used as a bat, rigid heavy cylinder, mass at the document end. Right cell (rare, Alignment Baton): short steel enforcement baton with warning stripe cap, compact club silhouette, severe and bureaucratic."
-      },
-      "demis": {
-        "seed": 170509,
-        "out": "assets/weapons/demis/launch.png",
-        "base": "Character C launch weapon sheet, 1x2 strip. Left cell (common, Nobel Medal Flail): heavy medal on a taut academic lanyard, precise rigid flail silhouette, mass at the medal end. Right cell (rare, Folded Chess Axe): hinged chessboard folded into a dense axe head on a straight haft, geometric and absurdly precise."
-      },
-      "mark": {
-        "seed": 170513,
-        "out": "assets/weapons/mark/launch.png",
-        "base": "Character D launch weapon sheet, 1x2 strip. Left cell (common, Sunscreen Bottle Club): oversized sunscreen bottle reinforced as a club, thick cap as striking mass, blunt and readable. Right cell (rare, Controller Nunchucks): paired game controllers linked by a taut charging cable, clean paired-weight silhouette, mass at the controllers."
-      }
-    },
-    "weaponSheetsAdvanced": {
-      "_sharedRules": {
-        "outW": 96,
-        "outH": 48,
-        "genW": 288,
-        "genH": 144,
-        "cols": 2,
-        "rows": 1,
-        "cellW": 48,
-        "cellH": 48,
-        "genCellW": 144,
-        "genCellH": 144,
-        "cellOrder": [
+          "rare",
           "epic",
           "legendary"
         ],
-        "layoutDirective": "Strict 1x2 horizontal grid, same rules as launch sheets. Left cell = epic rarity. Right cell = legendary rarity. Same lighting and scale across both cells. Striking mass must be at the FAR END of each weapon silhouette; weapon holder/handle NOT drawn."
+        "layoutDirective": "Strict 2x2 weapon grid, 144x144 raw cell, no gutter. Entire sheet isolated on pure magenta #FF00FF. Top-left cell = common rarity. Top-right cell = rare rarity. Bottom-left cell = epic rarity. Bottom-right cell = legendary rarity. Same lighting and scale across all four cells. Striking mass must be at the FAR END of each weapon silhouette \u2014 the 52px rigid hitbox rule. Weapon holder/handle NOT drawn (character sheet owns the hand). Readable at 48px per cell after 3x nearest-neighbor downscale."
       },
       "sama": {
-        "seed": 170503,
-        "out": "assets/weapons/sama/epic_legendary.png",
-        "base": "Character A epic/legendary weapon sheet, 1x2 strip. Left cell (epic, GPU Server Blade): long hot server blade with cooling fins, glowing fault LEDs, rigid sword silhouette, mass at the finned blade end. Right cell (legendary, Heat-Sink Greatsword): oversized finned heat sink slab forged into a greatsword, glowing thermal core, brutal rectangular silhouette."
+        "seed": 170501,
+        "out": "assets/weapons/sama/sheet.png",
+        "base": "Character A complete weapon sheet, 2x2 grid. Top-left (common, Worldcoin Orb Flail): heavy metal orb on a taut braided cable, clean flail silhouette, mass at the orb end, ceremonial but brutal. Top-right (rare, Backpack Maul): rectangular tech backpack converted into a blunt maul, reinforced corners, twin straps pulled taut, mass at the pack end. Bottom-left (epic, GPU Server Blade): long hot server blade with cooling fins, glowing fault LEDs, rigid sword silhouette, mass at the finned blade end. Bottom-right (legendary, Heat-Sink Greatsword): oversized finned heat sink slab forged into a greatsword, glowing thermal core, brutal rectangular silhouette."
       },
       "darrius": {
-        "seed": 170507,
-        "out": "assets/weapons/darrius/epic_legendary.png",
-        "base": "Character B epic/legendary weapon sheet, 1x2 strip. Left cell (epic, Red-Team Pike): long polearm with forked testing spearhead and red warning tags, clean pike silhouette, mass at the forked tip. Right cell (legendary, Guardrail Greatsword): bent highway guardrail with bolted grip, massive protective slab weapon, bureaucratic safety made violent."
+        "seed": 170505,
+        "out": "assets/weapons/darrius/sheet.png",
+        "base": "Character B complete weapon sheet, 2x2 grid. Top-left (common, Rolled Constitution Bat): thick parchment scroll bound in iron rings and used as a bat, rigid heavy cylinder, mass at the document end. Top-right (rare, Alignment Baton): short steel enforcement baton with warning stripe cap, compact club silhouette, severe and bureaucratic. Bottom-left (epic, Red-Team Pike): long polearm with forked testing spearhead and red warning tags, clean pike silhouette, mass at the forked tip. Bottom-right (legendary, Guardrail Greatsword): bent highway guardrail with bolted grip, massive protective slab weapon, bureaucratic safety made violent."
       },
       "demis": {
-        "seed": 170511,
-        "out": "assets/weapons/demis/epic_legendary.png",
-        "base": "Character C epic/legendary weapon sheet, 1x2 strip. Left cell (epic, Go Board Maul): square board slab with inset stone studs mounted as a maul, sober academic brutality, mass at the board end. Right cell (legendary, AlphaFold Blade): rigid spiraling protein structure sharpened into a blade, elegant scientific silhouette, not soft, clearly a sword."
+        "seed": 170509,
+        "out": "assets/weapons/demis/sheet.png",
+        "base": "Character C complete weapon sheet, 2x2 grid. Top-left (common, Nobel Medal Flail): heavy medal on a taut academic lanyard, precise rigid flail silhouette, mass at the medal end. Top-right (rare, Folded Chess Axe): hinged chessboard folded into a dense axe head on a straight haft, geometric and absurdly precise. Bottom-left (epic, Go Board Maul): square board slab with inset stone studs mounted as a maul, sober academic brutality, mass at the board end. Bottom-right (legendary, AlphaFold Blade): rigid spiraling protein structure sharpened into a blade, elegant scientific silhouette, not soft, clearly a sword."
       },
       "mark": {
-        "seed": 170515,
-        "out": "assets/weapons/mark/epic_legendary.png",
-        "base": "Character D epic/legendary weapon sheet, 1x2 strip. Left cell (epic, Shareholder Sauce Club): thick crystallized condiment bottle forged into a cudgel, curved bottle silhouette, ridiculous but physically blunt. Right cell (legendary, Quest Flail): cracked headset swung from an elite strap like a flail, heavy visor mass at the striking end, clean silhouette."
+        "seed": 170513,
+        "out": "assets/weapons/mark/sheet.png",
+        "base": "Character D complete weapon sheet, 2x2 grid. Top-left (common, Sunscreen Bottle Club): oversized sunscreen bottle reinforced as a club, thick cap as striking mass, blunt and readable. Top-right (rare, Controller Nunchucks): paired game controllers linked by a taut charging cable, clean paired-weight silhouette, mass at the controllers. Bottom-left (epic, Shareholder Sauce Club): thick crystallized condiment bottle forged into a cudgel, curved bottle silhouette, ridiculous but physically blunt. Bottom-right (legendary, Quest Flail): cracked headset swung from an elite strap like a flail, heavy visor mass at the striking end, clean silhouette."
       }
     },
     "lockedSlot": {

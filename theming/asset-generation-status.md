@@ -17,7 +17,7 @@ Renderer usage:
 | Stage `platform_edge.png` | Tiled over platform tops, up to `16px` high. |
 | Stage `wall.png` | Tiled inside solid floor bodies below the top edge and into the left/right arena boundary gutters. |
 | Character `sprite.png` | `64x64` cells rendered unscaled. Sim hitbox is `28x56`; visible body target is roughly `28x56` inside the cell. |
-| Weapon `launch.png` | `48x48` cells rendered at about `0.96x` idle and `1.12x` active. |
+| Weapon `sheet.png` | 2x2 grid of `48x48` cells, one sheet per character, rendered at about `0.96x` idle and `1.12x` active. |
 | Objective payload | Source `48x48`, rendered `34x34` in-world. |
 | Objective target | Source `96x96`, rendered `96x96`, anchored so the intake ring matches the sim goal point. |
 
@@ -66,7 +66,8 @@ Current character sheets do not contain skeleton weapon guides or drawn
 weapons. That is intentional: weapons render as a separate layer. Current
 placement is still approximate, though: the renderer computes one generic hand
 point from fighter position, facing, `bodyW`, and `bodyH`, then rotates the
-weapon sprite toward the sim sword tip. Only per-weapon `visualYOffset` exists.
+weapon sprite toward the sim sword tip. There is no per-weapon vertical offset
+hack; generated weapons should be centered around their declared grip point.
 
 Better next pass:
 
@@ -90,7 +91,7 @@ Current rule of thumb:
 | Full stage skies and parallax strips | `1x` |
 | Stage preview thumbs | `2x` |
 | Packed character sheets | `3x` |
-| Portrait sheets and large portraits | `3x` |
+| Combined portrait/full-body sheets | `3x` |
 | Stage tiles, objective sprites, weapon sheets, locked-slot UI | `3x` |
 
 ## Demo Day Afterparty

@@ -58,20 +58,20 @@ The current playable art prompt set ships all four character bodies:
 **Character A (Sama)**, **Character B (Darrius)**, **Character C
 (Demis)**, and **Character D (Mark)**, plus **all three stages**:
 Datacenter, Boardroom, and Demo Day. The default prompt batch includes
-all packed character sheets, portrait sheets, large portraits, launch
-weapon sheets, and epic/legendary weapon sheets.
+all packed character sheets, combined portrait/full-body sheets, combined
+2x2 weapon sheets, objectives, and UI assets.
 
 ### Batches
 
 | batch | command | count |
 |---|---|---:|
-| Playable, copy/paste (Chars A-D, all 3 stages) | `node tools/build-prompts.mjs` | **55 files** |
+| Playable, copy/paste (Chars A-D, all 3 stages) | `node tools/build-prompts.mjs` | **47 files** |
 | Characters A-D, packed 4x4 copy/paste | `node tools/build-prompts.mjs --only characters` | 12 files |
-| Playable, GPT-sized copy/paste | `node tools/build-prompts.mjs --format gpt` | **55 files** |
-| Playable, Midjourney copy/paste | `node tools/build-prompts.mjs --format mj` | **55 files** |
+| Playable, GPT-sized copy/paste | `node tools/build-prompts.mjs --format gpt` | **47 files** |
+| Playable, Midjourney copy/paste | `node tools/build-prompts.mjs --format mj` | **47 files** |
 | Missing assets, one paste-ready `.txt` per asset | `node tools/build-prompts.mjs --missing-only` | varies |
-| Playable, Gemini JSONL | `node tools/build-prompts.mjs --format gemini-jsonl` | **55** |
-| Playable, GPT image JSONL | `node tools/build-prompts.mjs --format gpt-jsonl` | **55** |
+| Playable, Gemini JSONL | `node tools/build-prompts.mjs --format gemini-jsonl` | **47** |
+| Playable, GPT image JSONL | `node tools/build-prompts.mjs --format gpt-jsonl` | **47** |
 
 ### Common commands
 

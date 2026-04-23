@@ -25,8 +25,8 @@ const LIVE_BUFFER_FRAMES = 36;     // target after trimming -> ~300ms
 const MAX_BUFFER_FRAMES = 90;      // hard cap -> ~750ms
 const TELEPORT_PX = 200;           // position jump above this snaps instead of lerps
 const COUNTDOWN_PORTRAITS = [
-  { url: "assets/chars/sama/monastic_infra/portraits/large.png", accentVar: "--arena-p1", fallback: "#6ee7b7" },
-  { url: "assets/chars/darrius/legal_department_midnight/portraits/large.png", accentVar: "--arena-p2", fallback: "#fb923c" },
+  { url: "assets/chars/sama/monastic_infra/portraits/sheet.png", cell: 3, cellW: 96, cellH: 96, accentVar: "--arena-p1", fallback: "#6ee7b7" },
+  { url: "assets/chars/darrius/legal_department_midnight/portraits/sheet.png", cell: 3, cellW: 96, cellH: 96, accentVar: "--arena-p2", fallback: "#fb923c" },
 ];
 const SIDE_BINDINGS = [
   bindingInfo("sama", "capacity_mystic", "worldcoin_orb_flail"),
@@ -601,7 +601,14 @@ function drawCountdownPortrait(side, x, y, w, h, meta) {
   const img = loadCountdownImage(state);
   if (img) {
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, x, y, w, h);
+    const cell = state.kit.cell ?? 0;
+    const cellW = state.kit.cellW ?? img.width;
+    const cellH = state.kit.cellH ?? img.height;
+    const cols = Math.max(1, Math.floor(img.width / cellW));
+    const sx = (cell % cols) * cellW;
+    const sy = Math.floor(cell / cols) * cellH;
+    const drawSize = Math.min(w, h);
+    ctx.drawImage(img, sx, sy, cellW, cellH, x + (w - drawSize) / 2, y + (h - drawSize) / 2, drawSize, drawSize);
   } else {
     ctx.globalAlpha = 0.16;
     ctx.fillStyle = accent;

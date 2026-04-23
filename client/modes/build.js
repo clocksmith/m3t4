@@ -112,6 +112,10 @@ const modes = ["user", "preset"]; // "user" | "preset"; no browser-executed brai
 // --- remote preview playback ---
 const SIM_HZ = 120;
 const STAGE_IDS = Object.keys(STAGES);
+const STAGE_THUMBS = {
+  boardroom: "assets/stages/boardroom/fiduciary_basement/ui/preview_thumb.png",
+  demoday: "assets/stages/demoday/demo_day_afterparty/ui/preview_thumb.png",
+};
 const KEY_MAP = [
   { left: "KeyA", right: "KeyD", up: "KeyW", down: "KeyS", act: "KeyF", moveHint: "W/A/S/D", strikeHint: "F" },
   { left: "KeyL", right: "Quote", up: "KeyP", down: "Semicolon", act: "BracketLeft", moveHint: "P/L/;/'", strikeHint: "[" },
@@ -140,6 +144,38 @@ let previewDirty = false;
 let previewError = "";
 let previewRequestId = 0;
 let previewEditVersion = 0;
+
+function stageLabel(id) {
+  return STAGES[id]?.name ?? id;
+}
+
+function stagePickerHtml() {
+  return `
+        <div class="stage-picker" id="test-stage" aria-label="stage">
+          <span class="stage-picker-label tight">stage</span>
+          ${STAGE_IDS.map((id) => stagePickerOptionHtml(id)).join("")}
+        </div>`;
+}
+
+function stagePickerOptionHtml(id) {
+  const thumb = STAGE_THUMBS[id];
+  const selected = id === stageId;
+  const classes = `stage-option${thumb ? " has-thumb" : " no-thumb"}${selected ? " is-selected" : ""}`;
+  const thumbStyle = thumb ? ` style="--stage-thumb: url('${thumb}')"` : "";
+  return `
+          <button type="button" class="${classes}" aria-pressed="${selected ? "true" : "false"}" data-stage-id="${escapeHtml(id)}">
+            <span class="stage-option-thumb"${thumbStyle} aria-hidden="true"></span>
+            <span class="stage-option-label">${escapeHtml(stageLabel(id))}</span>
+          </button>`;
+}
+
+function syncStagePicker(root = document) {
+  root.querySelectorAll(".stage-option[data-stage-id]").forEach((btn) => {
+    const selected = btn.dataset.stageId === stageId;
+    btn.classList.toggle("is-selected", selected);
+    btn.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
+}
 
 // Preset dropdown: flat list of all 16 presets, sorted by round-robin
 // win rate (strongest top). The easy/medium/hard tier labels were
@@ -268,9 +304,7 @@ export function mount(root, { setStatus }) {
         title: "Tune",
         subtitle: "server preview · not ranked until sent live",
         action: `
-        <label class="inline-control"><span class="tight">stage</span>
-          <select id="test-stage">${STAGE_IDS.map((s) => `<option value="${s}" ${s === stageId ? "selected" : ""}>${s}</option>`).join("")}</select>
-        </label>
+        ${stagePickerHtml()}
         ${buttonHtml({ id: "test-reset", text: "reset match" })}
         ${buttonHtml({ id: "test-resim", variant: "primary", text: "test fight" })}
         <span class="tight" id="test-hud"></span>`,
@@ -450,7 +484,6 @@ function playerPanelHtml(slot) {
           <div class="toolbar">
             ${buttonHtml({ className: "slot-reset", attrs: { "data-slot": slot }, text: "reset" })}
             ${buttonHtml({ className: "slot-randomize", attrs: { "data-slot": slot }, text: "randomize" })}
-            ${buttonHtml({ className: "slot-copy", attrs: { "data-slot": slot }, text: "copy JSON" })}
             ${buttonHtml({ className: "slot-submit", variant: "primary", attrs: { "data-slot": slot }, text: "send to live roster" })}
           </div>
           <div class="build-install-note tight">Preview only until sent live.</div>
@@ -481,11 +514,16 @@ function refreshFoldBadge(slot) {
 
 function wireMatchBar(root) {
   const refocus = () => { keyset.clear(); testCanvas.focus(); };
-  root.querySelector("#test-stage").addEventListener("change", (e) => {
-    stageId = e.target.value;
+  const setStage = (nextStageId) => {
+    if (!STAGE_IDS.includes(nextStageId) || nextStageId === stageId) return;
+    stageId = nextStageId;
+    syncStagePicker(root);
     requestPreview({ newSeed: true });
     refocus();
     trackBuildStageChange(stageId);
+  };
+  root.querySelectorAll(".stage-option[data-stage-id]").forEach((btn) => {
+    btn.addEventListener("click", () => setStage(btn.dataset.stageId));
   });
   root.querySelector("#test-reset").addEventListener("click", () => {
     requestPreview({ newSeed: true }); refocus(); trackBuildAction("reset_match");
@@ -554,14 +592,6 @@ function wireSlot(root, slot) {
     markPreviewDirty();
     trackBuildAction("randomize");
   });
-  panel.querySelector(".slot-copy").addEventListener("click", async () => {
-    const txt = panel.querySelector(".slot-export").textContent;
-    try {
-      await navigator.clipboard.writeText(txt);
-      flashMsg(`${slot === 0 ? "P1" : "P2"} JSON copied`);
-      trackBuildAction("copy_json");
-    } catch { flashMsg("copy failed"); }
-  });
   panel.querySelector(".slot-submit").addEventListener("click", () => {
     const cfg = slotConfig(slot);
     sessionStorage.setItem("m3t4:pendingSubmit", JSON.stringify(cfg));
@@ -609,9 +639,6 @@ function applyModeVisibility(slot) {
     const btn = buildBody.querySelector(`.${cls}`);
     if (btn) btn.disabled = mode === "preset" || mode === "human";
   }
-  const copyBtn = buildBody.querySelector(".slot-copy");
-  if (copyBtn) copyBtn.disabled = mode === "preset" || mode === "human";
-
   // In PRESET mode always display the current preset's knob values.
   if (mode === "preset") {
     loadPresetIntoSliders(slot, slotPresetNames[slot]);
@@ -933,7 +960,7 @@ function setBuildStat(id, value) {
 function updatePreviewControls() {
   const resim = document.getElementById("test-resim");
   const reset = document.getElementById("test-reset");
-  const stage = document.getElementById("test-stage");
+  const stageButtons = document.querySelectorAll(".stage-option[data-stage-id]");
 
   if (resim) {
     resim.disabled = previewLoading;
@@ -943,5 +970,5 @@ function updatePreviewControls() {
     resim.setAttribute("aria-busy", previewLoading ? "true" : "false");
   }
   if (reset) reset.disabled = previewLoading;
-  if (stage) stage.disabled = previewLoading;
+  stageButtons.forEach((btn) => { btn.disabled = previewLoading; });
 }

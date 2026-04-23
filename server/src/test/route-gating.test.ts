@@ -268,7 +268,7 @@ test("public stable strips configs but owner stable returns private configs", as
   store.setStable("alice", {
     userId: "alice",
     handle: "alice",
-    slots: [{
+    slots: [null, {
       slotId: "slot-a",
       config: cfg,
       name: "private-build",
@@ -290,8 +290,9 @@ test("public stable strips configs but owner stable returns private configs", as
 
   const pub = await req(srv.port, "GET", "/api/stables/alice");
   assert.equal(pub.status, 200);
+  assert.equal(pub.body.slots[0].slotIdx, 1);
   assert.equal(pub.body.slots[0].name, "private-build");
-  assert.deepEqual(pub.body.slots[0].cosmetics, { body: "mark", weapon: "quest_flail" });
+  assert.deepEqual(pub.body.slots[0].cosmetics, { body: "mark", weapon: "sunscreen_bottle_club" });
   assert.equal(pub.body.slots[0].config, undefined);
 
   const missingAuth = await req(srv.port, "GET", "/api/me/stable");
@@ -304,8 +305,11 @@ test("public stable strips configs but owner stable returns private configs", as
   assert.equal(own.body.eloAggregate, 1000);
   assert.equal(own.body.wins, 0);
   assert.equal(own.body.losses, 0);
-  assert.deepEqual(own.body.slots[0].config, cfg);
-  assert.deepEqual(own.body.slots[0].cosmetics, { body: "mark", weapon: "quest_flail" });
+  assert.equal(own.body.slots.length, 5);
+  assert.equal(own.body.slots[0], null);
+  assert.equal(own.body.slots[1].slotIdx, 1);
+  assert.deepEqual(own.body.slots[1].config, cfg);
+  assert.deepEqual(own.body.slots[1].cosmetics, { body: "mark", weapon: "sunscreen_bottle_club" });
 });
 
 test("production internal routes require the internal token", async (t) => {

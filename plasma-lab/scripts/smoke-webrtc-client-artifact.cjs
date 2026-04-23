@@ -7,6 +7,17 @@ const DEFAULT_GAME_ORIGIN = "https://m3t4.ai";
 const REQUEST_TIMEOUT_MS = 15_000;
 const TASK_TIMEOUT_MS = 120_000;
 const PAGE_LOG_LIMIT = 80;
+const DEFAULT_WEBGPU_BROWSER_ARGS = Object.freeze([
+  "--enable-unsafe-webgpu",
+  "--enable-webgpu-developer-features",
+  "--disable-dawn-features=disallow_unsafe_apis",
+  "--ignore-gpu-blocklist",
+]);
+const PLATFORM_WEBGPU_ARGS = Object.freeze({
+  darwin: Object.freeze(["--use-angle=metal"]),
+  linux: Object.freeze(["--use-angle=vulkan", "--enable-features=Vulkan", "--disable-vulkan-surface"]),
+  win32: Object.freeze([]),
+});
 const ASSET_TILE_AUDIT_KERNEL = "asset.tile_audit.v0";
 const EXPLOIT_SEARCH_KERNEL = "m3t4.exploit_search.v0";
 const IMAGE_TILE_INFER_KERNEL = "ml.image_tile_infer.v0";
@@ -54,7 +65,10 @@ async function runOnce(chromium, config, pass) {
   let warmup = [];
   let seeded = null;
   try {
-    browser = await chromium.launch({ headless: config.headless });
+    browser = await chromium.launch({
+      headless: config.headless,
+      args: smokeBrowserArgs(),
+    });
     contexts = await Promise.all([browser.newContext(), browser.newContext()]);
     pages = await Promise.all(contexts.map((context) => context.newPage()));
     pages.forEach((page, index) => {
@@ -827,6 +841,13 @@ function sha256Hex(value) {
 
 function cleanOrigin(value) {
   return String(value || "").replace(/\/+$/, "");
+}
+
+function smokeBrowserArgs() {
+  return [
+    ...DEFAULT_WEBGPU_BROWSER_ARGS,
+    ...(PLATFORM_WEBGPU_ARGS[process.platform] || []),
+  ];
 }
 
 function delay(ms) {

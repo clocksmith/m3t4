@@ -18,19 +18,16 @@ import { escapeHtml } from "../ui/html.js";
 import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
 import { statListHtml } from "../ui/stats.js";
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
+import rosterCatalog from "../content/roster-catalog.v1.json" with { type: "json" };
 
 const SIM_HZ = 120;                // canonical sim rate
 const JITTER_BUFFER_FRAMES = 24;   // ~8 chunks at STRIDE=3 -> ~200ms
 const LIVE_BUFFER_FRAMES = 36;     // target after trimming -> ~300ms
 const MAX_BUFFER_FRAMES = 90;      // hard cap -> ~750ms
 const TELEPORT_PX = 200;           // position jump above this snaps instead of lerps
-const COUNTDOWN_PORTRAITS = [
-  { url: "assets/chars/sama/monastic_infra/portraits/sheet.png", cell: 3, cellW: 96, cellH: 96, accentVar: "--arena-p1", fallback: "#6ee7b7" },
-  { url: "assets/chars/darrius/legal_department_midnight/portraits/sheet.png", cell: 3, cellW: 96, cellH: 96, accentVar: "--arena-p2", fallback: "#fb923c" },
-];
-const SIDE_BINDINGS = [
-  bindingInfo("sama", "capacity_mystic", "worldcoin_orb_flail"),
-  bindingInfo("darrius", "policy_undertaker", "rolled_constitution_bat"),
+const COUNTDOWN_PORTRAIT_ACCENTS = [
+  { accentVar: "--arena-p1", fallback: "#6ee7b7" },
+  { accentVar: "--arena-p2", fallback: "#fb923c" },
 ];
 const BODY_VARIANTS = {
   sama: "capacity_mystic",
@@ -38,6 +35,24 @@ const BODY_VARIANTS = {
   demis: "quiet_solver",
   mark: "sunlit_operator",
 };
+const BODY_PORTRAIT_SHEETS = {
+  sama: "assets/chars/sama/monastic_infra/portraits/sheet.png",
+  darrius: "assets/chars/darrius/legal_department_midnight/portraits/sheet.png",
+  demis: "assets/chars/demis/chalk_and_static/portraits/sheet.png",
+  mark: "assets/chars/mark/wellness_berserker/portraits/sheet.png",
+};
+const WEAPON_SHEETS = Object.fromEntries(
+  rosterCatalog.bodies.map((body) => [
+    body,
+    Object.fromEntries((rosterCatalog.weapons?.[body] ?? [])
+      .filter((weapon) => weapon.available && weapon.asset)
+      .map((weapon) => [weapon.id, weapon.asset])),
+  ]),
+);
+const SIDE_BINDINGS = [
+  bindingInfo("sama", "capacity_mystic", "worldcoin_orb_flail"),
+  bindingInfo("darrius", "policy_undertaker", "rolled_constitution_bat"),
+];
 
 let ws = null;
 let renderState = {
@@ -64,12 +79,7 @@ let rafId = 0;
 let statusCb = () => {};
 let computeClient = null;
 let reconnectTimer = null;
-const countdownPortraitState = COUNTDOWN_PORTRAITS.map((kit) => ({
-  kit,
-  image: null,
-  loaded: false,
-  failed: false,
-}));
+const countdownPortraitState = new Map();
 
 // Playback state — reset on every matchStart.
 let frameBuf = [];
@@ -112,7 +122,6 @@ export function mount(root, { setStatus }) {
       ${contextCardHtml({
         className: "live-briefing-card",
         body: `
-        <div class="context-card-kicker" id="match-hud">now playing</div>
         <div class="live-briefing-sides">
           ${liveBriefingSideHtml(0)}
           <div class="live-briefing-vs">VS</div>
@@ -273,7 +282,7 @@ function onEvent(m) {
     renderState.labels = {
       p1: `@${handleA} [${mt.a?.name ?? "slot"}]`,
       p2: `@${handleB} [${mt.b?.name ?? "slot"}]`,
-      cosmetics: [mt.a?.cosmetics, mt.b?.cosmetics],
+      cosmetics: [presentationCosmeticsForCompetitor(mt.a, 0), presentationCosmeticsForCompetitor(mt.b, 1)],
     };
     renderState.stage = STAGES[mt.stageId] ?? STAGES.datacenter;
     const hudEl = document.getElementById("match-hud");
@@ -351,23 +360,24 @@ function bindingInfo(characterKey, characterVariant, weaponKey) {
   const character = gameCopy.characters?.[characterKey]?.[characterVariant] ?? {};
   const weapon = gameCopy.weapons?.[characterKey]?.[weaponKey] ?? {};
   return {
+    body: characterKey,
+    weaponKey,
     characterName: character.name ?? characterKey,
     characterLabel: character.label ?? characterVariant,
     weaponName: weapon.name ?? weaponKey,
+    portraitStyle: briefingPortraitStyle(characterKey),
+    weaponStyle: briefingWeaponStyle(characterKey, weaponKey),
   };
 }
 
 function liveBriefingSideHtml(side) {
   const binding = SIDE_BINDINGS[side];
-  const label = side === 0 ? "P1" : "P2";
   return `
     <article class="live-briefing-side is-p${side + 1}">
       <div class="live-briefing-head">
-        <span>${label}</span>
-        <strong id="brief-p${side + 1}-identity">@${side === 0 ? "p1" : "p2"} · slot · ?</strong>
+        <strong id="brief-p${side + 1}-identity">P${side + 1} · @${side === 0 ? "p1" : "p2"} · slot · ?</strong>
       </div>
-      <div class="live-briefing-binding" id="brief-p${side + 1}-binding">${escapeHtml(binding.characterName)} · ${escapeHtml(binding.characterLabel)}</div>
-      <div class="live-briefing-weapon" id="brief-p${side + 1}-weapon">${escapeHtml(binding.weaponName)}</div>
+      <div class="live-briefing-binding" id="brief-p${side + 1}-binding">${liveBindingHtml(binding)}</div>
     </article>`;
 }
 
@@ -382,21 +392,91 @@ function updateBriefingSide(side, data) {
   const handle = data?.handle ?? (side === 0 ? "p1" : "p2");
   const name = data?.name ?? "slot";
   const elo = data?.elo ?? "?";
-  identityEl.textContent = `@${handle} · ${name} · ${elo}`;
-  const binding = bindingForCosmetics(data?.cosmetics, side);
+  identityEl.textContent = `P${side + 1} · @${handle} · ${name} · ${elo}`;
+  const binding = bindingForCompetitor(data, side);
   const bindingEl = document.getElementById(`brief-p${side + 1}-binding`);
-  const weaponEl = document.getElementById(`brief-p${side + 1}-weapon`);
-  if (bindingEl) bindingEl.textContent = `${binding.characterName} · ${binding.characterLabel}`;
-  if (weaponEl) weaponEl.textContent = binding.weaponName;
+  if (bindingEl) bindingEl.innerHTML = liveBindingHtml(binding);
 }
 
-function bindingForCosmetics(cosmetics, side) {
-  const fallback = side === 0
+function bindingForCompetitor(data, side) {
+  const cosmetics = presentationCosmeticsForCompetitor(data, side);
+  return bindingInfo(cosmetics.body, BODY_VARIANTS[cosmetics.body] ?? cosmetics.body, cosmetics.weapon);
+}
+
+function liveBindingHtml(binding) {
+  return `
+    <span class="live-briefing-portrait${binding.portraitStyle ? "" : " is-missing"}"${binding.portraitStyle ? ` style="${binding.portraitStyle}"` : ""} aria-hidden="true"></span>
+    <span class="live-briefing-copy">
+      <span class="live-briefing-character">${escapeHtml(binding.characterName)} · ${escapeHtml(binding.characterLabel)}</span>
+      <span class="live-briefing-weapon-name">${escapeHtml(binding.weaponName)}</span>
+    </span>
+    <span class="live-briefing-weapon-tile${binding.weaponStyle ? "" : " is-missing"}"${binding.weaponStyle ? ` style="${binding.weaponStyle}"` : ""} aria-hidden="true"></span>`;
+}
+
+function briefingPortraitStyle(body) {
+  const url = BODY_PORTRAIT_SHEETS[body];
+  return url ? spriteSheetStyle({ url, cols: 2, rows: 2, cell: 3 }) : "";
+}
+
+function briefingWeaponStyle(body, weaponKey) {
+  const asset = WEAPON_SHEETS[body]?.[weaponKey];
+  if (!asset?.url) return "";
+  const cols = Math.max(1, Number(asset.cols ?? 1) || 1);
+  return spriteSheetStyle({
+    url: asset.url,
+    cols,
+    rows: briefingWeaponRows(body, asset, cols),
+    cell: Math.max(0, Number(asset.cell ?? 0) || 0),
+  });
+}
+
+function briefingWeaponRows(body, asset, cols) {
+  const maxCell = (rosterCatalog.weapons?.[body] ?? [])
+    .filter((weapon) => weapon.available && weapon.asset?.url === asset.url)
+    .reduce((max, weapon) => Math.max(max, Number(weapon.asset?.cell ?? 0) || 0), Number(asset.cell ?? 0) || 0);
+  return Math.max(1, Math.floor(maxCell / cols) + 1);
+}
+
+function spriteSheetStyle({ url, cols = 1, rows = 1, cell = 0 }) {
+  const col = cols > 0 ? cell % cols : 0;
+  const row = cols > 0 ? Math.floor(cell / cols) : 0;
+  const x = cols > 1 ? (col / (cols - 1)) * 100 : 0;
+  const y = rows > 1 ? (row / (rows - 1)) * 100 : 0;
+  return [
+    `background-image:url('${escapeHtml(url)}')`,
+    `background-size:${cols * 100}% ${rows * 100}%`,
+    `background-position:${x}% ${y}%`,
+  ].join(";");
+}
+
+function fallbackCosmeticsForSide(side) {
+  return side === 0
     ? { body: "sama", weapon: "worldcoin_orb_flail" }
     : { body: "darrius", weapon: "rolled_constitution_bat" };
-  const body = typeof cosmetics?.body === "string" ? cosmetics.body : fallback.body;
-  const weapon = typeof cosmetics?.weapon === "string" ? cosmetics.weapon : fallback.weapon;
-  return bindingInfo(body, BODY_VARIANTS[body] ?? body, weapon);
+}
+
+function presentationCosmeticsForCompetitor(data, side) {
+  const fallback = fallbackCosmeticsForSide(side);
+  const body = BODY_VARIANTS[data?.cosmetics?.body] ? data.cosmetics.body : fallback.body;
+  return {
+    body,
+    weapon: highestUnlockedWeapon(body, data?.elo, data?.cosmetics?.weapon ?? fallback.weapon),
+  };
+}
+
+function highestUnlockedWeapon(body, elo, preferredWeapon) {
+  const unlockElo = Math.max(1000, Number(elo) || 1000);
+  const options = (rosterCatalog.weapons?.[body] ?? []).filter((weapon) => weapon.available);
+  const unlocked = options.filter((weapon) => Number(weapon.minElo ?? 0) <= unlockElo);
+  if (!unlocked.length) return preferredWeapon;
+  const maxMinElo = Math.max(...unlocked.map((weapon) => Number(weapon.minElo ?? 0)));
+  if (preferredWeapon && unlocked.some((weapon) => weapon.id === preferredWeapon && Number(weapon.minElo ?? 0) === maxMinElo)) {
+    return preferredWeapon;
+  }
+  for (let i = unlocked.length - 1; i >= 0; i -= 1) {
+    if (Number(unlocked[i].minElo ?? 0) === maxMinElo) return unlocked[i].id;
+  }
+  return unlocked[unlocked.length - 1]?.id ?? preferredWeapon;
 }
 
 function appendFrames(frames) {
@@ -589,8 +669,8 @@ function drawCountdownBackdrop() {
 }
 
 function drawCountdownPortrait(side, x, y, w, h, meta) {
-  const state = countdownPortraitState[side];
-  const accent = cssColor(state.kit.accentVar, state.kit.fallback);
+  const kit = countdownPortraitKit(meta, side);
+  const accent = cssColor(kit.accentVar, kit.fallback);
   ctx.save();
   ctx.fillStyle = "rgba(0,0,0,0.52)";
   ctx.fillRect(x - 14, y - 14, w + 28, h + 28);
@@ -598,12 +678,12 @@ function drawCountdownPortrait(side, x, y, w, h, meta) {
   ctx.lineWidth = 3;
   ctx.strokeRect(x - 14, y - 14, w + 28, h + 28);
 
-  const img = loadCountdownImage(state);
+  const img = loadCountdownImage(kit);
   if (img) {
     ctx.imageSmoothingEnabled = false;
-    const cell = state.kit.cell ?? 0;
-    const cellW = state.kit.cellW ?? img.width;
-    const cellH = state.kit.cellH ?? img.height;
+    const cell = kit.cell ?? 0;
+    const cellW = kit.cellW ?? img.width;
+    const cellH = kit.cellH ?? img.height;
     const cols = Math.max(1, Math.floor(img.width / cellW));
     const sx = (cell % cols) * cellW;
     const sy = Math.floor(cell / cols) * cellH;
@@ -629,14 +709,33 @@ function drawCountdownPortrait(side, x, y, w, h, meta) {
   ctx.restore();
 }
 
-function loadCountdownImage(state) {
+function countdownPortraitKit(meta, side) {
+  const cosmetics = presentationCosmeticsForCompetitor(meta, side);
+  const body = cosmetics.body;
+  const accent = COUNTDOWN_PORTRAIT_ACCENTS[side] ?? COUNTDOWN_PORTRAIT_ACCENTS[0];
+  return {
+    url: BODY_PORTRAIT_SHEETS[body] ?? BODY_PORTRAIT_SHEETS[fallbackCosmeticsForSide(side).body],
+    cell: 3,
+    cellW: 96,
+    cellH: 96,
+    accentVar: accent.accentVar,
+    fallback: accent.fallback,
+  };
+}
+
+function loadCountdownImage(kit) {
+  let state = countdownPortraitState.get(kit.url);
+  if (!state) {
+    state = { image: null, loaded: false, failed: false };
+    countdownPortraitState.set(kit.url, state);
+  }
   if (state.failed) return null;
   if (state.loaded) return state.image;
   if (!state.image && typeof Image !== "undefined") {
     const img = new Image();
     img.onload = () => { state.loaded = true; };
     img.onerror = () => { state.failed = true; };
-    img.src = state.kit.url;
+    img.src = kit.url;
     state.image = img;
   }
   return state.loaded ? state.image : null;

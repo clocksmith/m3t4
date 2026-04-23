@@ -10,6 +10,8 @@ export const DEFAULT_FEATURES = {
   computeWebRtcArtifacts: false,
   computeEmbedTile: false,
   computePrefillTopkProbe: false,
+  computeLogitDivergence: false,
+  computeGenomeKmer: false,
   computeReceiptDashboard: false,
   computeLiveBadges: false,
   webgpuRenderer: false,

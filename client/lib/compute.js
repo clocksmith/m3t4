@@ -6,11 +6,21 @@
 //   3. the user has explicitly opted in via the console helper:
 //      window.m3t4Compute.start()
 //
-// Live rendering owns the device. This client only borrows slack and refuses
-// work whenever the tab is hidden, battery is low, frames are struggling, or
-// the current mode says work should wait until intermission.
+// Once opted in, the donation is real by default: the worker keeps running
+// when the tab is hidden, on battery, and under render stress. Spectators can
+// opt into gentler behavior per-guard via m3t4Compute.policy({...}):
+//   - pauseWhenHidden
+//   - pauseOnLowBattery
+//   - pauseOnRenderStruggle
+// The `after-match` mode gate is unchanged — it is a mode choice, not a guard.
 
 const OPT_IN_KEY = "m3t4.compute.optIn";
+const POLICY_KEY = "m3t4.compute.policy";
+const DEFAULT_POLICY = Object.freeze({
+  pauseWhenHidden: false,
+  pauseOnLowBattery: false,
+  pauseOnRenderStruggle: false,
+});
 const CLIENT_VERSION = "compute-slack-http-v1";
 const SESSION_TOKEN_HEADER = "x-worker-session-token";
 const ASSET_TILE_AUDIT_KERNEL = "asset.tile_audit.v0";
@@ -68,11 +78,12 @@ class ComputeClient {
     this.frameSamples = [];
     this.lastFrameAt = 0;
     this.renderPauseUntil = 0;
+    this.policy = loadPolicy();
     this.onVisibility = () => {
-      this.health.hiddenPauses++;
       this.reevaluate();
     };
     this.onInput = () => {
+      if (!this.policy.pauseOnRenderStruggle) return;
       this.renderPauseUntil = performance.now() + 1200;
       this.reevaluate();
     };
@@ -109,6 +120,7 @@ class ComputeClient {
       frameP95Ms: p95(this.frameSamples),
       origin: computeLabOrigin(),
       optIn: persistedOptIn(),
+      policy: { ...this.policy },
       webrtcArtifacts: artifactWebRtcEnabled(),
     };
   }
@@ -189,8 +201,8 @@ class ComputeClient {
   recordFrame(renderMs) {
     const now = performance.now();
     if (this.lastFrameAt && now - this.lastFrameAt > 45) {
-      this.renderPauseUntil = now + 8000;
       this.health.droppedFrameBursts++;
+      if (this.policy.pauseOnRenderStruggle) this.renderPauseUntil = now + 8000;
     }
     this.lastFrameAt = now;
     if (Number.isFinite(renderMs)) {
@@ -202,13 +214,28 @@ class ComputeClient {
   currentGate() {
     if (!this.enabled) return "user-disabled";
     if (!this.isConfigured()) return "unconfigured";
-    if (document.visibilityState !== "visible") return "tab-hidden";
-    if (this.battery && !this.battery.charging && this.battery.level < 0.35) return "low-battery";
+    if (this.policy.pauseWhenHidden && document.visibilityState !== "visible") return "tab-hidden";
+    if (this.policy.pauseOnLowBattery && this.battery && !this.battery.charging && this.battery.level < 0.35) return "low-battery";
     if (this.mode === "after-match" && this.matchPhase === "active") return "not-now";
-    if (performance.now() < this.renderPauseUntil) return "render-struggling";
-    const renderP95 = p95(this.frameSamples);
-    if (renderP95 > MODE_PROFILE[this.mode].maxRenderMs) return "render-struggling";
+    if (this.policy.pauseOnRenderStruggle) {
+      if (performance.now() < this.renderPauseUntil) return "render-struggling";
+      const renderP95 = p95(this.frameSamples);
+      if (renderP95 > MODE_PROFILE[this.mode].maxRenderMs) return "render-struggling";
+    }
     return null;
+  }
+
+  setPolicy(patch) {
+    if (!patch || typeof patch !== "object") return;
+    const next = { ...this.policy };
+    for (const key of Object.keys(DEFAULT_POLICY)) {
+      if (key in patch) next[key] = !!patch[key];
+    }
+    this.policy = next;
+    savePolicy(this.policy);
+    if (!this.policy.pauseOnRenderStruggle) this.renderPauseUntil = 0;
+    this.reevaluate();
+    this.emit();
   }
 
   async ensureWorkerRegistered() {
@@ -736,6 +763,7 @@ function installConsoleHelper(client) {
     stop: () => client.stop({ persist: true }),
     status: () => client.snapshot(),
     mode: (mode) => client.setMode(mode),
+    policy: (patch) => client.setPolicy(patch),
     webrtcWitness: () => client.witnessWebRtc(),
   };
 }
@@ -788,6 +816,29 @@ function persistOptIn(value) {
   try {
     if (value) localStorage.setItem(OPT_IN_KEY, "1");
     else localStorage.removeItem(OPT_IN_KEY);
+  } catch {
+    // localStorage can be unavailable in private contexts.
+  }
+}
+
+function loadPolicy() {
+  try {
+    const raw = localStorage.getItem(POLICY_KEY);
+    if (!raw) return { ...DEFAULT_POLICY };
+    const parsed = JSON.parse(raw);
+    const out = { ...DEFAULT_POLICY };
+    for (const key of Object.keys(DEFAULT_POLICY)) {
+      if (typeof parsed?.[key] === "boolean") out[key] = parsed[key];
+    }
+    return out;
+  } catch {
+    return { ...DEFAULT_POLICY };
+  }
+}
+
+function savePolicy(policy) {
+  try {
+    localStorage.setItem(POLICY_KEY, JSON.stringify(policy));
   } catch {
     // localStorage can be unavailable in private contexts.
   }

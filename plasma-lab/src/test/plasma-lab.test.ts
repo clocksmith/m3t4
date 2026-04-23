@@ -3196,6 +3196,60 @@ test("HTTP public stats suppress detailed aggregates until enough workers exist"
   assert.equal(resp.body.webgpuSupportedPct, null);
 });
 
+test("HTTP public contact map aggregate exposes accepted receipts", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const worker = store.registerWorker({ capability: webgpuCapability });
+  acceptWebGpuWitness(store, worker);
+  const task = store.seedContactMapTileTask({
+    rowResidues: "MKTAYIAKQRQISFVK",
+    colResidues: "SHFSRQDILDLIPTSS",
+    rowStart: 0,
+    colStart: 24,
+    minSeparation: 8,
+    minExecutions: 1,
+    minAgreeing: 1,
+  });
+  const nextBody = store.assignNext(auth(worker))!;
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const expectedOutputHash = runContactMapTileReference({
+    rowResidues: "MKTAYIAKQRQISFVK",
+    colResidues: "SHFSRQDILDLIPTSS",
+    rowStart: 0,
+    colStart: 24,
+    minSeparation: 8,
+  }).outputHash;
+  store.submitReceipt({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: nextBody.task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...referenceReceiptFields(nextBody.chunk),
+    outputHash: expectedOutputHash,
+    executionMode: "webgpu",
+    transport: "http",
+    computeMs: 7,
+  });
+  const srv = await boot(store, baseConfig);
+  t.after(() => srv.close());
+
+  const resp = await req(srv.port, "GET", "/compute/public/contact-map/aggregate");
+  assert.equal(resp.status, 200);
+  assert.equal(resp.body.kernelId, "science.contact_map_tile.v0");
+  assert.equal(resp.body.totalTasks, 1);
+  assert.equal(resp.body.totalAcceptedReceipts, 1);
+  assert.equal(resp.body.tiles.length, 1);
+  assert.equal(resp.body.tiles[0].taskId, task.taskId);
+  assert.equal(resp.body.tiles[0].rowStart, 0);
+  assert.equal(resp.body.tiles[0].colStart, 24);
+  assert.equal(resp.body.tiles[0].receipts.length, 1);
+  assert.equal(resp.body.tiles[0].receipts[0].transport, "http");
+});
+
 test("HTTP public replay badge route exposes verified artifact summaries only", async (t) => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const payload = {

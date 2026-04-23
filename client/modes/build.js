@@ -113,9 +113,9 @@ const modes = ["user", "preset"]; // "user" | "preset"; no browser-executed brai
 const SIM_HZ = 120;
 const STAGE_IDS = Object.keys(STAGES);
 const STAGE_THUMBS = {
-  datacenter: "assets/stages/datacenter/cold_aisle_chapel/ui/preview_thumb.png",
-  boardroom: "assets/stages/boardroom/fiduciary_basement/ui/preview_thumb.png",
-  demoday: "assets/stages/demoday/demo_day_afterparty/ui/preview_thumb.png",
+  datacenter: "assets/stages/datacenter/cold_aisle_chapel/ui/preview_thumb.webp",
+  boardroom: "assets/stages/boardroom/fiduciary_basement/ui/preview_thumb.webp",
+  demoday: "assets/stages/demoday/demo_day_afterparty/ui/preview_thumb.webp",
 };
 const KEY_MAP = [
   { left: "KeyA", right: "KeyD", up: "KeyW", down: "KeyS", act: "KeyF", moveHint: "W/A/S/D", strikeHint: "F" },
@@ -304,17 +304,20 @@ export function mount(root, { setStatus }) {
       ${pageHeaderHtml({
         title: "Tune",
         subtitle: "server preview · not ranked until sent live",
-        action: `
-        ${stagePickerHtml()}
-        ${buttonHtml({ id: "test-reset", text: "reset match" })}
-        ${buttonHtml({ id: "test-resim", variant: "primary", text: "test fight" })}
-        <span class="tight" id="test-hud"></span>`,
       })}
       ${contextCardHtml({
         className: "build-context-card",
-        kicker: "remote simulation",
-        strong: "Tune policy tendencies here.",
-        copy: "Test fights run on the server and return replay frames; the browser only renders what comes back.",
+        body: `
+          <div class="build-preview-topbar">
+            <div class="build-preview-controls">
+              ${stagePickerHtml()}
+              <div class="build-preview-actions">
+                ${buttonHtml({ id: "test-reset", text: "reset match" })}
+                ${buttonHtml({ id: "test-resim", variant: "primary", text: "test fight" })}
+              </div>
+            </div>
+            ${buildPreviewBriefingHtml()}
+          </div>`,
       })}
 
       <div class="grid-3">
@@ -496,6 +499,24 @@ function playerPanelHtml(slot) {
       </details>
       </details>
     </section>`;
+}
+
+function buildPreviewBriefingHtml() {
+  return `
+    <div class="build-preview-briefing" aria-live="polite">
+      <div class="build-preview-side is-p1" id="build-brief-side-0">
+        <span class="build-preview-side-label">P1</span>
+        <strong class="build-preview-side-name" id="build-brief-p1">${escapeHtml(labelForSlot(0))}</strong>
+      </div>
+      <div class="build-preview-center">
+        <div class="build-preview-result" id="build-brief-result">simulating on server</div>
+        <div class="build-preview-meta" id="build-brief-meta">${escapeHtml(stageLabel(stageId))} · seed —</div>
+      </div>
+      <div class="build-preview-side is-p2" id="build-brief-side-1">
+        <span class="build-preview-side-label">P2</span>
+        <strong class="build-preview-side-name" id="build-brief-p2">${escapeHtml(labelForSlot(1))}</strong>
+      </div>
+    </div>`;
 }
 
 // Compact text for the panel-level fold summary (shown on mobile): the
@@ -879,34 +900,60 @@ function emptyFrame() {
 
 function updatePreviewHud(frame = currentPreviewFrame()) {
   updatePreviewControls();
-  const hud = document.getElementById("test-hud");
-  if (!hud) {
-    updatePreviewStats(frame);
-    return;
-  }
-  const matchup = `${labelForSlot(0)} vs ${labelForSlot(1)} — ${stageId}`;
+  updatePreviewBriefing(frame);
+  updatePreviewStats(frame);
+}
+
+function updatePreviewBriefing(frame = currentPreviewFrame()) {
+  setBuildStat("build-brief-p1", labelForSlot(0));
+  setBuildStat("build-brief-p2", labelForSlot(1));
+  setBriefWinnerState(-1);
+
   if (previewLoading) {
-    hud.textContent = `${matchup} — simulating on server`;
-    updatePreviewStats(frame);
+    setBuildStat("build-brief-result", "simulating on server");
+    setBuildStat("build-brief-meta", `${stageLabel(stageId)} · seed pending`);
     return;
   }
   if (previewError) {
-    hud.textContent = `${matchup} — preview failed: ${previewError}`;
-    updatePreviewStats(frame);
+    setBuildStat("build-brief-result", "preview failed");
+    setBuildStat("build-brief-meta", previewError);
     return;
   }
   if (!frame) {
-    hud.textContent = `${matchup} — press test fight`;
-    updatePreviewStats(frame);
+    setBuildStat("build-brief-result", "press test fight");
+    setBuildStat("build-brief-meta", `${stageLabel(stageId)} · seed —`);
     return;
   }
-  const ended = previewResult && frame === previewFrames[previewFrames.length - 1];
+
+  const finalTick = previewResult?.ticks ?? previewFrames[previewFrames.length - 1]?.tick ?? "—";
   const winner = previewResult?.winner;
-  const outcome = !ended ? "replay"
-    : winner === -1 ? "draw"
-    : `${winner === 0 ? previewLabels.p1 : previewLabels.p2} wins`;
-  hud.textContent = `${matchup} — tick ${frame.tick}${previewDirty ? " — changed; test again" : ""} — ${outcome}`;
-  updatePreviewStats(frame);
+  const score = Array.isArray(previewResult?.finalScore)
+    ? `${previewResult.finalScore[0]}-${previewResult.finalScore[1]}`
+    : "";
+  const replayState = previewDirty ? "changed · test again" : `replay ${frame.tick}/${finalTick}`;
+  const result = previewDirty
+    ? "changed · test again"
+    : winner === -1
+      ? `draw${score ? ` · ${score}` : ""}`
+      : winner === 0 || winner === 1
+        ? `${winner === 0 ? previewLabels.p1 : previewLabels.p2} wins${score ? ` · ${score}` : ""}`
+        : "replay ready";
+
+  setBuildStat("build-brief-result", result);
+  setBuildStat(
+    "build-brief-meta",
+    `${stageLabel(stageId)} · seed ${previewResult?.seed ?? "—"} · ${replayState}`
+  );
+  if (!previewDirty && (winner === 0 || winner === 1)) setBriefWinnerState(winner);
+}
+
+function setBriefWinnerState(winner) {
+  for (let side = 0; side < 2; side++) {
+    const el = document.getElementById(`build-brief-side-${side}`);
+    if (!el) continue;
+    el.classList.toggle("is-winner", winner === side);
+    el.classList.toggle("is-loser", winner === 0 || winner === 1 ? winner !== side : false);
+  }
 }
 
 function updatePreviewStats(frame = currentPreviewFrame()) {

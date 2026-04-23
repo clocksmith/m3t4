@@ -3,6 +3,7 @@ import * as build from "./modes/build.js";
 import * as profile from "./modes/profile.js";
 import * as intro from "./modes/intro.js";
 import * as rules from "./modes/rules.js";
+import * as compute from "./modes/compute.js";
 
 export {
   DEFAULT_FEATURES,
@@ -16,6 +17,7 @@ export const MODES = {
   build,
   spectate,
   profile,
+  compute,
   rules,
   about: rules,
 };

@@ -152,7 +152,7 @@ gcloud run deploy arena-worker \
   --image "gcr.io/$PROJECT_ID/arena-server" \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars "^|^SERVER_ROLE=worker|NODE_ENV=production|STORE_BACKEND=firestore|AUTH_MODE=firebase|ARENA_API_ORIGIN=https://m3t4.ai|CORS_ORIGINS=https://m3t4.ai,https://www.m3t4.ai,https://m3ta-ai.web.app,https://m3ta-ai.firebaseapp.com|CYCLE_MS=20000|WS_CLIENT_SOFT_LIMIT=50|AUTH_PROVIDERS=google,github|FEATURE_P2P_DUEL=false|FEATURE_COMMUNITY_VERIFY=false|FEATURE_PROOF_LAB=false|FEATURE_ZK=false|FEATURE_DISTRIBUTED_COMPUTE=false|FEATURE_COMPUTE_TASK_ADMIN=false" \
+  --set-env-vars "^|^SERVER_ROLE=worker|NODE_ENV=production|STORE_BACKEND=firestore|AUTH_MODE=firebase|ARENA_API_ORIGIN=https://m3t4.ai|CORS_ORIGINS=https://m3t4.ai,https://www.m3t4.ai,https://m3ta-ai.web.app,https://m3ta-ai.firebaseapp.com|CYCLE_MS=20000|STABLE_MAX_SLOTS=4|SUBMIT_RATE_MS=30000|WS_CLIENT_SOFT_LIMIT=50|AUTH_PROVIDERS=google,github|FEATURE_P2P_DUEL=false|FEATURE_COMMUNITY_VERIFY=false|FEATURE_PROOF_LAB=false|FEATURE_ZK=false|FEATURE_DISTRIBUTED_COMPUTE=false|FEATURE_COMPUTE_TASK_ADMIN=false" \
   --set-secrets "M3T4_MATCH_TOKEN_SECRET=m3t4-match-token-secret:latest,M3T4_INTERNAL_TOKEN=m3t4-internal-cron-token:latest" \
   --min-instances 1 \
   --max-instances 1 \
@@ -168,7 +168,7 @@ gcloud run deploy arena-server \
   --image "gcr.io/$PROJECT_ID/arena-server" \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars "^|^SERVER_ROLE=api|FIREHOSE_WS_ORIGIN=wss://arena-worker-789525635095.us-central1.run.app|NODE_ENV=production|STORE_BACKEND=firestore|AUTH_MODE=firebase|ARENA_API_ORIGIN=https://m3t4.ai|ARENA_WS_ORIGIN=wss://arena-server-789525635095.us-central1.run.app|CORS_ORIGINS=https://m3t4.ai,https://www.m3t4.ai,https://m3ta-ai.web.app,https://m3ta-ai.firebaseapp.com|CYCLE_MS=20000|WS_CLIENT_SOFT_LIMIT=450|AUTH_PROVIDERS=google,github|FEATURE_P2P_DUEL=false|FEATURE_COMMUNITY_VERIFY=false|FEATURE_PROOF_LAB=false|FEATURE_ZK=false|FEATURE_DISTRIBUTED_COMPUTE=false|FEATURE_COMPUTE_TASK_ADMIN=false" \
+  --set-env-vars "^|^SERVER_ROLE=api|FIREHOSE_WS_ORIGIN=wss://arena-worker-789525635095.us-central1.run.app|NODE_ENV=production|STORE_BACKEND=firestore|AUTH_MODE=firebase|ARENA_API_ORIGIN=https://m3t4.ai|ARENA_WS_ORIGIN=wss://arena-server-789525635095.us-central1.run.app|CORS_ORIGINS=https://m3t4.ai,https://www.m3t4.ai,https://m3ta-ai.web.app,https://m3ta-ai.firebaseapp.com|CYCLE_MS=20000|STABLE_MAX_SLOTS=4|SUBMIT_RATE_MS=30000|WS_CLIENT_SOFT_LIMIT=450|AUTH_PROVIDERS=google,github|FEATURE_P2P_DUEL=false|FEATURE_COMMUNITY_VERIFY=false|FEATURE_PROOF_LAB=false|FEATURE_ZK=false|FEATURE_DISTRIBUTED_COMPUTE=false|FEATURE_COMPUTE_TASK_ADMIN=false" \
   --set-secrets "M3T4_MATCH_TOKEN_SECRET=m3t4-match-token-secret:latest,M3T4_INTERNAL_TOKEN=m3t4-internal-cron-token:latest" \
   --min-instances 1 \
   --max-instances 10 \

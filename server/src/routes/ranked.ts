@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import type { StableStore } from "../stable.js";
-import { slotCosmetics, stablePublic } from "../stable.js";
+import { effectiveRateLockedUntil, slotCosmetics, stablePublic } from "../stable.js";
 import { handleClaimHandle, handleSubmit } from "../submit.js";
 import { verifyAuth } from "../auth.js";
 import { json } from "../http-utils.js";
@@ -76,9 +76,15 @@ export function registerRankedRoutes(routes: RouteList, deps: RankedRouteDeps): 
         if (!st) json(res, 404, { error: "not found" });
         else json(res, 200, {
           ...stablePublic(st),
-          slots: st.slots.slice(0, config.maxSlots).map((slot, slotIdx) => (
-            slot ? { ...slot, cosmetics: slotCosmetics(slot, slotIdx) } : slot
-          )),
+          slots: Array.from({ length: config.maxSlots }, (_, slotIdx) => {
+            const slot = st.slots[slotIdx];
+            return slot ? {
+              ...slot,
+              slotIdx,
+              cosmetics: slotCosmetics(slot, slotIdx),
+              rateLockedUntil: effectiveRateLockedUntil(slot),
+            } : null;
+          }),
           createdAt: st.createdAt,
           updatedAt: st.updatedAt,
         });

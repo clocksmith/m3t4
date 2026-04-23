@@ -8,9 +8,12 @@ import {
   assertUniqueBodyInStable,
   computeAggregate,
   defaultSlotCosmetics,
+  effectiveRateLockedUntil,
+  nextSlotName,
   normalizeSlotCosmetics,
   normalizeStableSlotCosmetics,
   slotCosmetics,
+  slotUnlockElo,
   stablePublic,
   type MatchUpdate,
   type Slot,
@@ -123,22 +126,30 @@ export class FirestoreStableStore implements StableStore {
       const st = snap.data() as Stable;
       const now = Date.now();
       const existing = st.slots[slotIdx];
-      if (existing && existing.rateLockedUntil > now) {
-        const wait = Math.ceil((existing.rateLockedUntil - now) / 1000 / 60);
+      const lockedUntil = existing ? effectiveRateLockedUntil(existing) : 0;
+      if (lockedUntil > now) {
+        const wait = Math.ceil((lockedUntil - now) / 1000 / 60);
         throw new Error(`rate limited — try again in ${wait} min`);
       }
 
-      const slotCos = normalizeSlotCosmetics(cosmetics, slotIdx, existing ? slotCosmetics(existing, slotIdx) : defaultSlotCosmetics(slotIdx));
+      const unlockElo = slotUnlockElo(existing);
+      const slotCos = normalizeSlotCosmetics(
+        cosmetics,
+        slotIdx,
+        existing ? slotCosmetics(existing, slotIdx) : defaultSlotCosmetics(slotIdx),
+        unlockElo,
+      );
       assertUniqueBodyInStable(st, slotIdx, slotCos);
       const slotId = existing?.slotId ?? randomId();
       const slot: Slot = {
         slotId,
         config,
-        name: name ?? existing?.name ?? `slot-${slotIdx + 1}`,
+        name: nextSlotName(name, existing?.name),
         cosmetics: slotCos,
         submittedAt: now,
         rateLockedUntil: now + CONFIG.submitRateMs,
         elo: existing?.elo ?? CONFIG.eloAnchor,
+        peakElo: unlockElo,
         wins: existing?.wins ?? 0,
         losses: existing?.losses ?? 0,
         draws: existing?.draws ?? 0,
@@ -184,6 +195,8 @@ export class FirestoreStableStore implements StableStore {
 
       sa.elo = res.aEloAfter;
       sb.elo = res.bEloAfter;
+      sa.peakElo = Math.max(slotUnlockElo(sa), res.aEloAfter);
+      sb.peakElo = Math.max(slotUnlockElo(sb), res.bEloAfter);
       sa.lastPlayedAt = sb.lastPlayedAt = res.playedAt;
       if (res.winner === 0) { sa.wins++; sb.losses++; }
       else if (res.winner === 1) { sb.wins++; sa.losses++; }
@@ -263,6 +276,7 @@ export class FirestoreStableStore implements StableStore {
           slot.config = cfg;
           slot.name = name;
           slot.rateLockedUntil = 0;
+          slot.peakElo = Math.max(slotUnlockElo(slot), slot.elo);
           slot.cosmetics = normalizeSlotCosmetics(slot.cosmetics, 0, seededCosmetics);
         }
         st.handle = `sys_${name}`;
@@ -279,6 +293,7 @@ export class FirestoreStableStore implements StableStore {
             submittedAt: now,
             rateLockedUntil: 0,
             elo: CONFIG.eloAnchor,
+            peakElo: CONFIG.eloAnchor,
             wins: 0,
             losses: 0,
             draws: 0,

@@ -9,6 +9,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { compileBrain, STRATEGIES, type BrainConfig, type Character, type ReplayArtifactV1 } from "@m3t4/sim";
 import { CONFIG } from "./config.js";
+import rosterCatalog from "./generated/roster-catalog.js";
 import { publicReplayArtifactFromReplay, type PublicReplayArtifactV1 } from "./public-artifacts.js";
 
 // System user — owner of phantom seed bots (the 16 named strategies).
@@ -16,17 +17,52 @@ import { publicReplayArtifactFromReplay, type PublicReplayArtifactV1 } from "./p
 // provides a "floor" meta that new users can beat their way past.
 const SYSTEM_UID = "system";
 
-export const ROSTER_BODY_IDS = ["sama", "darrius", "demis", "mark"] as const;
+export const ROSTER_BODY_IDS = rosterCatalog.bodies;
 export type RosterBodyId = typeof ROSTER_BODY_IDS[number];
+type RosterWeaponEntry = (typeof rosterCatalog.weapons)[RosterBodyId][number];
+export type RosterWeaponId = RosterWeaponEntry["id"];
 
-export const ROSTER_WEAPON_IDS_BY_BODY = {
-  sama: ["worldcoin_orb_flail", "backpack_maul", "gpu_server_blade", "heat_sink_greatsword"],
-  darrius: ["rolled_constitution_bat", "alignment_baton", "red_team_pike", "guardrail_greatsword"],
-  demis: ["nobel_medal_flail", "folded_chess_axe", "go_board_maul", "alphafold_blade"],
-  mark: ["sunscreen_bottle_club", "controller_nunchucks", "shareholder_sauce_club", "quest_flail"],
-} as const satisfies Record<RosterBodyId, readonly string[]>;
+export const ROSTER_WEAPON_IDS_BY_BODY = Object.fromEntries(
+  ROSTER_BODY_IDS.map((body) => [
+    body,
+    rosterCatalog.weapons[body].filter((weapon) => weapon.available).map((weapon) => weapon.id),
+  ]),
+) as unknown as Record<RosterBodyId, readonly RosterWeaponId[]>;
 
-export type RosterWeaponId = (typeof ROSTER_WEAPON_IDS_BY_BODY)[RosterBodyId][number];
+const ROSTER_DEFAULT_NAMES = [
+  "wingus",
+  "dingus",
+  "hambone",
+  "zapper",
+  "bonk",
+  "dialup",
+  "floppy",
+  "shareware",
+  "lanparty",
+  "hotseat",
+  "modem",
+  "megabyte",
+  "joystick",
+  "gamepad",
+  "turbo",
+  "pog",
+  "slammer",
+  "radmax",
+  "dozer",
+  "widget",
+  "sprocket",
+  "kludge",
+  "glitch",
+  "zipdrive",
+  "winamp",
+  "geocities",
+  "tripod",
+  "angelfire",
+  "boombox",
+  "vhs",
+  "jolt",
+  "neon",
+] as const;
 
 export interface SlotCosmetics {
   body: RosterBodyId;
@@ -50,6 +86,7 @@ export interface Slot {
   submittedAt: number;
   rateLockedUntil: number;
   elo: number;
+  peakElo?: number;
   wins: number;
   losses: number;
   draws: number;
@@ -75,6 +112,7 @@ export interface StablePublic {
 }
 
 export interface SlotPublic {
+  slotIdx: number;
   slotId: string;
   name: string;
   cosmetics: SlotCosmetics;
@@ -105,27 +143,41 @@ export function activeRosterSlotEntries<T>(
 
 export function defaultSlotCosmetics(slotIdx: number): SlotCosmetics {
   const body = ROSTER_BODY_IDS[((slotIdx % ROSTER_BODY_IDS.length) + ROSTER_BODY_IDS.length) % ROSTER_BODY_IDS.length];
-  return { body, weapon: ROSTER_WEAPON_IDS_BY_BODY[body][0] };
+  return { body, weapon: firstAvailableWeapon(body) };
 }
 
 export function normalizeSlotCosmetics(
   input: unknown,
   slotIdx: number,
   fallback: SlotCosmetics = defaultSlotCosmetics(slotIdx),
+  unlockElo = CONFIG.eloAnchor,
 ): SlotCosmetics {
   const source = input && typeof input === "object" ? input as SlotCosmeticsInput : {};
   const body = isRosterBodyId(source.body) ? source.body : fallback.body;
-  const fallbackWeapon = weaponBelongsToBody(body, fallback.weapon)
+  const fallbackWeapon = weaponBelongsToBody(body, fallback.weapon, unlockElo)
     ? fallback.weapon
-    : ROSTER_WEAPON_IDS_BY_BODY[body][0];
-  const weapon = weaponBelongsToBody(body, source.weapon)
+    : firstAvailableWeapon(body);
+  const weapon = weaponBelongsToBody(body, source.weapon, unlockElo)
     ? source.weapon
     : fallbackWeapon;
   return { body, weapon };
 }
 
-export function slotCosmetics(slot: Pick<Slot, "cosmetics"> | null | undefined, slotIdx: number): SlotCosmetics {
-  return normalizeSlotCosmetics(slot?.cosmetics, slotIdx);
+export function slotUnlockElo(slot: Pick<Slot, "elo" | "peakElo"> | null | undefined): number {
+  const peak = Number(slot?.peakElo);
+  const elo = Number(slot?.elo);
+  return Math.max(
+    Number.isFinite(peak) ? peak : CONFIG.eloAnchor,
+    Number.isFinite(elo) ? elo : CONFIG.eloAnchor,
+    CONFIG.eloAnchor,
+  );
+}
+
+export function slotCosmetics(
+  slot: Pick<Slot, "cosmetics" | "elo" | "peakElo"> | null | undefined,
+  slotIdx: number,
+): SlotCosmetics {
+  return normalizeSlotCosmetics(slot?.cosmetics, slotIdx, defaultSlotCosmetics(slotIdx), slotUnlockElo(slot));
 }
 
 export function characterForCosmetics(cosmetics: SlotCosmetics): Character {
@@ -175,6 +227,7 @@ export function stablePublic(st: Stable): StablePublic {
     wins,
     losses,
     slots: entries.map(({ slot: s, slotIdx }) => ({
+      slotIdx,
       slotId: s.slotId,
       name: s.name,
       cosmetics: slotCosmetics(s, slotIdx),
@@ -185,6 +238,35 @@ export function stablePublic(st: Stable): StablePublic {
       lastPlayedAt: s.lastPlayedAt,
     })),
   };
+}
+
+export function effectiveRateLockedUntil(slot: Pick<Slot, "rateLockedUntil" | "submittedAt">): number {
+  const stored = Number(slot.rateLockedUntil ?? 0);
+  const submittedAt = Number(slot.submittedAt ?? 0);
+  const configured = Number.isFinite(submittedAt) && submittedAt > 0
+    ? submittedAt + CONFIG.submitRateMs
+    : stored;
+  if (!Number.isFinite(stored) || stored <= 0) return Math.max(0, configured);
+  if (!Number.isFinite(configured) || configured <= 0) return Math.max(0, stored);
+  return Math.max(0, Math.min(stored, configured));
+}
+
+function normalizeSlotNameInput(input: unknown): string | null {
+  if (typeof input !== "string") return null;
+  const clean = input.trim().toLowerCase();
+  if (!clean) return null;
+  if (/^(slot|seat)[\s_-]*\d+$/i.test(clean)) return null;
+  return clean.slice(0, 32);
+}
+
+function randomRosterName(): string {
+  return ROSTER_DEFAULT_NAMES[crypto.randomInt(ROSTER_DEFAULT_NAMES.length)];
+}
+
+export function nextSlotName(input: unknown, existing: string | undefined): string {
+  return normalizeSlotNameInput(input)
+    ?? normalizeSlotNameInput(existing)
+    ?? randomRosterName();
 }
 
 // ---------- Abstract interface ----------
@@ -278,6 +360,7 @@ export class FileStableStore implements StableStore {
           slot.config = cfg;
           slot.name = name;
           slot.rateLockedUntil = 0;
+          slot.peakElo = Math.max(slotUnlockElo(slot), slot.elo);
           slot.cosmetics = normalizeSlotCosmetics(slot.cosmetics, 0, seededCosmetics);
         }
         existing.handle = `sys_${name}`;
@@ -298,6 +381,7 @@ export class FileStableStore implements StableStore {
             submittedAt: now,
             rateLockedUntil: 0, // phantoms can't be rate-limited
             elo: CONFIG.eloAnchor,
+            peakElo: CONFIG.eloAnchor,
             wins: 0,
             losses: 0,
             draws: 0,
@@ -370,22 +454,30 @@ export class FileStableStore implements StableStore {
 
     const now = Date.now();
     const existing = st.slots[slotIdx];
-    if (existing && existing.rateLockedUntil > now) {
-      const wait = Math.ceil((existing.rateLockedUntil - now) / 1000 / 60);
+    const lockedUntil = existing ? effectiveRateLockedUntil(existing) : 0;
+    if (lockedUntil > now) {
+      const wait = Math.ceil((lockedUntil - now) / 1000 / 60);
       throw new Error(`rate limited — try again in ${wait} min`);
     }
 
-    const slotCos = normalizeSlotCosmetics(cosmetics, slotIdx, existing ? slotCosmetics(existing, slotIdx) : defaultSlotCosmetics(slotIdx));
+    const unlockElo = slotUnlockElo(existing);
+    const slotCos = normalizeSlotCosmetics(
+      cosmetics,
+      slotIdx,
+      existing ? slotCosmetics(existing, slotIdx) : defaultSlotCosmetics(slotIdx),
+      unlockElo,
+    );
     assertUniqueBodyInStable(st, slotIdx, slotCos);
     const slotId = existing?.slotId ?? crypto.randomBytes(8).toString("hex");
     const slot: Slot = {
       slotId,
       config,
-      name: name ?? existing?.name ?? `slot-${slotIdx + 1}`,
+      name: nextSlotName(name, existing?.name),
       cosmetics: slotCos,
       submittedAt: now,
       rateLockedUntil: now + CONFIG.submitRateMs,
       elo: existing?.elo ?? CONFIG.eloAnchor,
+      peakElo: unlockElo,
       wins: existing?.wins ?? 0,
       losses: existing?.losses ?? 0,
       draws: existing?.draws ?? 0,
@@ -414,6 +506,8 @@ export class FileStableStore implements StableStore {
     if (!sa || !sb) return;
     sa.elo = res.aEloAfter;
     sb.elo = res.bEloAfter;
+    sa.peakElo = Math.max(slotUnlockElo(sa), res.aEloAfter);
+    sb.peakElo = Math.max(slotUnlockElo(sb), res.bEloAfter);
     sa.lastPlayedAt = sb.lastPlayedAt = res.playedAt;
     if (res.winner === 0) { sa.wins++; sb.losses++; }
     else if (res.winner === 1) { sb.wins++; sa.losses++; }
@@ -473,6 +567,20 @@ function isRosterBodyId(value: unknown): value is RosterBodyId {
   return typeof value === "string" && (ROSTER_BODY_IDS as readonly string[]).includes(value);
 }
 
-function weaponBelongsToBody(body: RosterBodyId, value: unknown): value is RosterWeaponId {
-  return typeof value === "string" && (ROSTER_WEAPON_IDS_BY_BODY[body] as readonly string[]).includes(value);
+function weaponEntriesForBody(body: RosterBodyId): readonly RosterWeaponEntry[] {
+  return rosterCatalog.weapons[body];
+}
+
+function firstAvailableWeapon(body: RosterBodyId): RosterWeaponId {
+  const weapon = weaponEntriesForBody(body).find((entry) => entry.available)?.id;
+  if (!weapon) throw new Error(`no available weapons for ${body}`);
+  return weapon;
+}
+
+function weaponBelongsToBody(body: RosterBodyId, value: unknown, unlockElo: number): value is RosterWeaponId {
+  return typeof value === "string" && weaponEntriesForBody(body).some((entry) =>
+    entry.id === value &&
+    entry.available &&
+    unlockElo >= Number(entry.minElo ?? 0)
+  );
 }

@@ -11,6 +11,7 @@ import {
   SIM_HZ,
 } from "../lib/public-sim.js";
 import { H, W, setupCanvasSurface } from "./surface.js";
+import rosterCatalog from "../content/roster-catalog.v1.json" with { type: "json" };
 
 export { H, W };
 
@@ -83,39 +84,30 @@ const CHARACTER_SPRITES = [
 
 const BODY_KITS = Object.fromEntries(CHARACTER_SPRITES);
 const DEFAULT_BODIES = ["sama", "darrius"];
-const DEFAULT_WEAPONS = {
-  sama: "worldcoin_orb_flail",
-  darrius: "rolled_constitution_bat",
-  demis: "nobel_medal_flail",
-  mark: "sunscreen_bottle_club",
-};
+const DEFAULT_WEAPONS = Object.fromEntries(
+  rosterCatalog.bodies.map((body) => [
+    body,
+    (rosterCatalog.weapons[body] ?? []).find((weapon) => weapon.available)?.id,
+  ]),
+);
 
-const WEAPON_SHEETS = {
-  sama: {
-    worldcoin_orb_flail: { url: "assets/weapons/sama/sheet.png", frameW: 48, frameH: 48, cell: 0, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/sama/launch.png", fallbackCell: 0 },
-    backpack_maul: { url: "assets/weapons/sama/sheet.png", frameW: 48, frameH: 48, cell: 1, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/sama/launch.png", fallbackCell: 1 },
-    gpu_server_blade: { url: "assets/weapons/sama/sheet.png", frameW: 48, frameH: 48, cell: 2, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/sama/epic_legendary.png", fallbackCell: 0 },
-    heat_sink_greatsword: { url: "assets/weapons/sama/sheet.png", frameW: 48, frameH: 48, cell: 3, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/sama/epic_legendary.png", fallbackCell: 1 },
-  },
-  darrius: {
-    rolled_constitution_bat: { url: "assets/weapons/darrius/sheet.png", frameW: 48, frameH: 48, cell: 0, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/darrius/launch.png", fallbackCell: 0 },
-    alignment_baton: { url: "assets/weapons/darrius/sheet.png", frameW: 48, frameH: 48, cell: 1, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/darrius/launch.png", fallbackCell: 1 },
-    red_team_pike: { url: "assets/weapons/darrius/sheet.png", frameW: 48, frameH: 48, cell: 2, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/darrius/epic_legendary.png", fallbackCell: 0 },
-    guardrail_greatsword: { url: "assets/weapons/darrius/sheet.png", frameW: 48, frameH: 48, cell: 3, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/darrius/epic_legendary.png", fallbackCell: 1 },
-  },
-  demis: {
-    nobel_medal_flail: { url: "assets/weapons/demis/sheet.png", frameW: 48, frameH: 48, cell: 0, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/demis/launch.png", fallbackCell: 0 },
-    folded_chess_axe: { url: "assets/weapons/demis/sheet.png", frameW: 48, frameH: 48, cell: 1, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/demis/launch.png", fallbackCell: 1 },
-    go_board_maul: { url: "assets/weapons/demis/sheet.png", frameW: 48, frameH: 48, cell: 2, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/demis/epic_legendary.png", fallbackCell: 0 },
-    alphafold_blade: { url: "assets/weapons/demis/sheet.png", frameW: 48, frameH: 48, cell: 3, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/demis/epic_legendary.png", fallbackCell: 1 },
-  },
-  mark: {
-    sunscreen_bottle_club: { url: "assets/weapons/mark/sheet.png", frameW: 48, frameH: 48, cell: 0, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/mark/launch.png", fallbackCell: 0 },
-    controller_nunchucks: { url: "assets/weapons/mark/sheet.png", frameW: 48, frameH: 48, cell: 1, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/mark/launch.png", fallbackCell: 1 },
-    shareholder_sauce_club: { url: "assets/weapons/mark/sheet.png", frameW: 48, frameH: 48, cell: 2, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/mark/epic_legendary.png", fallbackCell: 0 },
-    quest_flail: { url: "assets/weapons/mark/sheet.png", frameW: 48, frameH: 48, cell: 3, cols: 2, gripX: 6, gripY: 24, fallbackUrl: "assets/weapons/mark/epic_legendary.png", fallbackCell: 1 },
-  },
-};
+const AVAILABLE_WEAPONS = Object.fromEntries(
+  rosterCatalog.bodies.map((body) => [
+    body,
+    (rosterCatalog.weapons[body] ?? [])
+      .filter((weapon) => weapon.available)
+      .map((weapon) => weapon.id),
+  ]),
+);
+
+const WEAPON_SHEETS = Object.fromEntries(
+  rosterCatalog.bodies.map((body) => [
+    body,
+    Object.fromEntries((rosterCatalog.weapons[body] ?? [])
+      .filter((weapon) => weapon.available && weapon.asset)
+      .map((weapon) => [weapon.id, weapon.asset])),
+  ]),
+);
 
 const PORTRAIT_SHEETS = {
   sama: { url: "assets/chars/sama/monastic_infra/portraits/sheet.png", cellW: 96, cellH: 96 },
@@ -123,6 +115,14 @@ const PORTRAIT_SHEETS = {
   demis: { url: "assets/chars/demis/chalk_and_static/portraits/sheet.png", cellW: 96, cellH: 96 },
   mark: { url: "assets/chars/mark/wellness_berserker/portraits/sheet.png", cellW: 96, cellH: 96 },
 };
+const HUD_PORTRAIT_CELL = {
+  neutral: 0, // top-left: neutral head/shoulders
+  hurt: 1,    // top-right: hurt head/shoulders
+  ko: 2,      // bottom-left: KO head/shoulders
+  fullBody: 3, // bottom-right: full-body character-select portrait
+};
+const HUD_HURT_HOLD_TICKS = Math.round(0.24 * SIM_HZ);
+const HUD_KO_HOLD_TICKS = Math.round(0.42 * SIM_HZ);
 
 const characterImages = Object.fromEntries(Object.entries(BODY_KITS).map(([body, kit]) => [
   body,
@@ -142,6 +142,7 @@ const spriteState = DEFAULT_BODIES.map((bodyId) => ({
 
 const weaponState = new Map();
 const portraitState = new Map(Object.entries(PORTRAIT_SHEETS).map(([body, kit]) => [body, { ...imageState(kit.url), kit }]));
+const hudPortraitState = [hudPortraitInitialState(), hudPortraitInitialState()];
 let sideCosmetics = DEFAULT_BODIES.map((body) => ({ body, weapon: DEFAULT_WEAPONS[body] }));
 
 const OBJECTIVE_IMAGES = {
@@ -260,7 +261,7 @@ function cosmeticsForSide(labels, side) {
   const fallbackBody = DEFAULT_BODIES[side] ?? DEFAULT_BODIES[0];
   const raw = labels?.cosmetics?.[side] ?? labels?.[`p${side + 1}Cosmetics`] ?? {};
   const body = BODY_KITS[raw.body] ? raw.body : fallbackBody;
-  const weapon = WEAPON_SHEETS[body]?.[raw.weapon] ? raw.weapon : DEFAULT_WEAPONS[body];
+  const weapon = AVAILABLE_WEAPONS[body]?.includes(raw.weapon) ? raw.weapon : DEFAULT_WEAPONS[body];
   return { body, weapon };
 }
 
@@ -790,7 +791,7 @@ function drawClashFx(ctx, frame) {
 
 function drawWeaponSprite(ctx, side, bx, by, tx, ty, active) {
   const selected = sideCosmetics[side] ?? cosmeticsForSide(null, side);
-  const state = weaponImageState(selected.body, selected.weapon, side);
+  const state = weaponImageState(selected.body, selected.weapon);
   if (!state) return false;
   const img = loadImage(state);
   if (!img) return false;
@@ -829,21 +830,12 @@ function drawWeaponSprite(ctx, side, bx, by, tx, ty, active) {
   return true;
 }
 
-function weaponImageState(body, weapon, side) {
+function weaponImageState(body, weapon) {
   const selectedKit = WEAPON_SHEETS[body]?.[weapon];
-  if (selectedKit) {
-    const state = weaponImageStateForKit(`${body}:${weapon}`, selectedKit);
-    if (state) return state;
-    const fallbackState = weaponImageStateForKit(`${body}:${weapon}:fallback`, fallbackWeaponKit(selectedKit));
-    if (fallbackState) return fallbackState;
-  }
-
-  const fallbackBody = DEFAULT_BODIES[side] ?? DEFAULT_BODIES[0];
-  const fallbackWeapon = DEFAULT_WEAPONS[fallbackBody];
-  const fallbackKit = WEAPON_SHEETS[fallbackBody]?.[fallbackWeapon];
-  if (!fallbackKit) return null;
-  return weaponImageStateForKit(`${fallbackBody}:${fallbackWeapon}`, fallbackKit)
-    ?? weaponImageStateForKit(`${fallbackBody}:${fallbackWeapon}:fallback`, fallbackWeaponKit(fallbackKit));
+  if (!selectedKit) return null;
+  const state = weaponImageStateForKit(`${body}:${weapon}`, selectedKit);
+  if (state) return state;
+  return weaponImageStateForKit(`${body}:${weapon}:fallback`, fallbackWeaponKit(selectedKit));
 }
 
 function weaponImageStateForKit(key, kit) {
@@ -1006,8 +998,37 @@ function portraitImageState(body, side) {
   return portraitState.get(DEFAULT_BODIES[side] ?? DEFAULT_BODIES[0]) ?? selected;
 }
 
+function hudPortraitInitialState() {
+  return {
+    lastTick: null,
+    hurtUntil: -Infinity,
+    koUntil: -Infinity,
+    wasDead: false,
+    wasHurt: false,
+  };
+}
+
+export function portraitCellForHudState(fighter, frame = {}, side = 0) {
+  const state = hudPortraitState[side] ?? hudPortraitInitialState();
+  hudPortraitState[side] = state;
+  const tick = Number.isFinite(frame.tick) ? frame.tick : 0;
+  if (state.lastTick == null || tick < state.lastTick) {
+    Object.assign(state, hudPortraitInitialState());
+  }
+  state.lastTick = tick;
+
+  const dead = !!fighter?.dead;
+  const hurt = Number(fighter?.stun ?? 0) > 0;
+  if (dead && !state.wasDead) state.koUntil = Math.max(state.koUntil, tick + HUD_KO_HOLD_TICKS);
+  if (hurt && !dead && !state.wasHurt) state.hurtUntil = Math.max(state.hurtUntil, tick + HUD_HURT_HOLD_TICKS);
+  state.wasDead = dead;
+  state.wasHurt = hurt;
+
+  if (dead || tick <= state.koUntil) return HUD_PORTRAIT_CELL.ko;
+  if (hurt || tick <= state.hurtUntil) return HUD_PORTRAIT_CELL.hurt;
+  return HUD_PORTRAIT_CELL.neutral;
+}
+
 function portraitIndex(side, fighter, frame) {
-  if (fighter.dead) return 2;              // ko
-  if ((fighter.stun ?? 0) > 0) return 1;   // hurt
-  return 0;                                // neutral; cell 3 is full-body art
+  return portraitCellForHudState(fighter, frame, side);
 }

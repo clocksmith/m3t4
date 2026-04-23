@@ -8,6 +8,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const TASK_TIMEOUT_MS = 120_000;
 const PUBLIC_ARTIFACT_KERNEL = "m3t4.public_artifact_verify.v0";
 const REPLAY_VERIFY_KERNEL = "m3t4.replay_verify.v1";
+const TENSOR_TILE_KERNEL = "plasma.tensor_tile.v0";
 
 async function main() {
   const { chromium } = loadPlaywright();
@@ -50,16 +51,22 @@ async function runOnce(chromium, config, pass) {
       prepareStaffPage(page, config, index === 0 ? "A" : "B")
     ));
 
-    const witness = await seedRenderWitnessTask(config);
-    if (witness.chunks !== 1) throw new Error(`expected 1 witness chunk, got ${witness.chunks}`);
-
     await setAssignments(config, true, config.assignmentWindowMs);
     const startedAt = Date.now();
     await Promise.all(pages.map((page) =>
       page.evaluate(() => window.__M3T4_COMPUTE_CLIENT__?.poll())
     ));
-    const acceptedWitness = await waitForAcceptedTask(config, witness.taskId);
-    await waitForComputeClientsIdle(pages);
+
+    const witnessTasks = [await seedRenderWitnessTask(config)];
+    if (config.kernel === "tensor-tile") witnessTasks.push(await seedWebGpuWitnessTask(config));
+    for (const witness of witnessTasks) {
+      if (witness.chunks !== 1) throw new Error(`expected 1 witness chunk, got ${witness.chunks}`);
+      await waitForAcceptedTask(config, witness.taskId);
+      await waitForComputeClientsIdle(pages);
+    }
+    if (config.kernel === "tensor-tile") {
+      await waitForWorkerTiers(config, preflight.map((status) => status.workerId).filter(Boolean), "webgpu-light");
+    }
 
     const seeded = await seedTask(config, pass);
     if (seeded.chunks !== 1) throw new Error(`expected 1 chunk, got ${seeded.chunks}`);
@@ -81,15 +88,14 @@ async function runOnce(chromium, config, pass) {
     await browser.close();
     browser = null;
 
-    assertWebRtcArtifactReceipts(receipts, accepted.task.chunks?.[0]);
+    assertWebRtcDataReceipts(receipts, accepted.task);
 
     return {
       ok: true,
       computeOrigin: config.computeOrigin,
       gameOrigin: config.gameOrigin,
       taskKind: accepted.task.kind,
-      witnessTaskId: witness.taskId,
-      witnessValidationId: acceptedWitness.validation.validationId,
+      witnessTaskIds: witnessTasks.map((task) => task.taskId),
       taskId: seeded.taskId,
       chunkId: accepted.task.chunks?.[0]?.chunkId,
       validationId: validation.validationId,
@@ -115,6 +121,7 @@ async function runOnce(chromium, config, pass) {
         decision: receipt.decision,
         transport: receipt.transport,
         validationMode: receipt.validationMode,
+        executionMode: receipt.executionMode,
         outputHash: receipt.outputHash?.value,
         transcript: receipt.adapterInfo,
       })),
@@ -166,11 +173,21 @@ function readConfig() {
 async function seedTask(config, pass) {
   if (config.kernel === "replay-verify") return seedReplayVerifyTask(config, pass);
   if (config.kernel === "seed-sweep") return seedSeedSweepTask(config, pass);
+  if (config.kernel === "tensor-tile") return seedTensorTileTask(config, pass);
   return seedPublicArtifactTask(config, pass);
 }
 
 async function seedRenderWitnessTask(config) {
   return adminPost(config, "/compute/admin/tasks/device-witness-render", {
+    minExecutions: 2,
+    minAgreeing: 2,
+  });
+}
+
+async function seedWebGpuWitnessTask(config) {
+  return adminPost(config, "/compute/admin/tasks/device-witness-webgpu", {
+    seed: 7,
+    count: 32,
     minExecutions: 2,
     minAgreeing: 2,
   });
@@ -221,6 +238,19 @@ async function seedSeedSweepTask(config, pass) {
     seedEndExclusive: 108 + pass * 8,
     seedChunkSize: 8,
     maxTicks: 180,
+    minExecutions: 2,
+    minAgreeing: 2,
+    requiredTransport: "webrtc",
+    requiredPeerSubreceipt: true,
+  });
+}
+
+async function seedTensorTileTask(config, pass) {
+  return adminPost(config, "/compute/admin/tasks/tensor-tile", {
+    seed: 1000 + pass,
+    rows: 16,
+    cols: 16,
+    depth: 32,
     minExecutions: 2,
     minAgreeing: 2,
     requiredTransport: "webrtc",
@@ -334,7 +364,22 @@ async function waitForTaskAssignments(config, pages, taskId, expected, timeoutMs
   throw new Error(`timed out waiting for ${expected} task assignments: ${JSON.stringify(last)}`);
 }
 
-function assertWebRtcArtifactReceipts(receipts, chunk) {
+async function waitForWorkerTiers(config, workerIds, expectedTier, timeoutMs = 20_000) {
+  const wanted = new Set(workerIds.filter(Boolean));
+  if (!wanted.size) throw new Error("worker ids required to check workload tiers");
+  const startedAt = Date.now();
+  let last = [];
+  while (Date.now() - startedAt < timeoutMs) {
+    const dashboard = await adminGet(config, "/compute/admin/dashboard");
+    last = (dashboard.workerProfiles || []).filter((profile) => wanted.has(profile.workerId));
+    if (last.length === wanted.size && last.every((profile) => profile.allowedWorkloadTier === expectedTier)) return last;
+    await delay(500);
+  }
+  throw new Error(`timed out waiting for worker tier ${expectedTier}: ${JSON.stringify(last)}`);
+}
+
+function assertWebRtcDataReceipts(receipts, task) {
+  const chunk = task.chunks?.[0];
   if (receipts.length !== 2) throw new Error(`expected 2 accepted receipts, got ${receipts.length}`);
   for (const receipt of receipts) {
     if (receipt.decision !== "accepted") throw new Error(`${receipt.receiptId} was ${receipt.decision}`);
@@ -363,6 +408,9 @@ function assertWebRtcArtifactReceipts(receipts, chunk) {
     if (transcript.peerSubreceipt?.peerAssignmentId !== transcript.peerAssignmentId) {
       throw new Error(`${receipt.receiptId} peer subreceipt did not bind peer assignment`);
     }
+    if (task.kind === TENSOR_TILE_KERNEL && receipt.executionMode !== "webgpu") {
+      throw new Error(`${receipt.receiptId} execution mode was ${receipt.executionMode}`);
+    }
   }
 }
 
@@ -385,8 +433,8 @@ function aggregatePasses(passes) {
 
 function kernelOption() {
   const value = argValue("kernel") || process.env.PLASMA_LAB_SMOKE_KERNEL || "public-artifact";
-  if (value !== "public-artifact" && value !== "replay-verify" && value !== "seed-sweep") {
-    throw new Error("kernel must be public-artifact, replay-verify, or seed-sweep");
+  if (value !== "public-artifact" && value !== "replay-verify" && value !== "seed-sweep" && value !== "tensor-tile") {
+    throw new Error("kernel must be public-artifact, replay-verify, seed-sweep, or tensor-tile");
   }
   return value;
 }

@@ -3118,21 +3118,6 @@ test("HTTP use case registry reports implemented advisory workloads", async (t) 
     useCase.workload === "m3t4.seed_sweep.v0"
   ));
   assert.ok(resp.body.useCases.some((useCase: any) =>
-    useCase.id === "embedding-batches" &&
-    useCase.workload === "ml.embedding_tile.v0" &&
-    useCase.status === "experimental"
-  ));
-  assert.ok(resp.body.useCases.some((useCase: any) =>
-    useCase.id === "prefill-topk-probes" &&
-    useCase.workload === "ml.prefill_topk_probe.v0" &&
-    useCase.status === "experimental"
-  ));
-  assert.ok(resp.body.useCases.some((useCase: any) =>
-    useCase.id === "logit-divergence" &&
-    useCase.workload === "ml.logit_divergence.v0" &&
-    useCase.status === "experimental"
-  ));
-  assert.ok(resp.body.useCases.some((useCase: any) =>
     useCase.id === "contact-map-tiles" &&
     useCase.workload === "science.contact_map_tile.v0" &&
     useCase.status === "experimental"

@@ -6,6 +6,7 @@ import { canonicalJson } from "./plasma/hash.js";
 import type { ContentHash, DerivedExecutionEvidence, ExecutionMode, GovernorMode, TransportKind, ValidationPolicy, WorkerCapability, WorkerRefusalReason } from "./plasma/types.js";
 import { ComputeLabStore, type ComputeChunk, type ExecutionReceipt, type PeerSubassignment, type PeerSubreceipt, type ValidationRecord, type WebRtcPairRecord, type WebRtcSessionRecord } from "./store.js";
 import { COMPUTE_USE_CASES } from "./use-cases.js";
+import { CONTACT_MAP_PRESETS, resolveContactMapPreset } from "./contact-map-presets.js";
 
 export interface RouteDeps {
   store: ComputeLabStore;
@@ -751,6 +752,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/contact-map-tile") {
     const body = await readJson<{
+      presetId?: string;
       rowResidues?: string;
       colResidues?: string;
       rowStart?: number;
@@ -762,19 +764,25 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       requiredPeerSubreceipt?: boolean;
     }>(req);
     try {
+      const preset = body?.presetId ? resolveContactMapPreset(body.presetId) : null;
       const task = deps.store.seedContactMapTileTask({
-        rowResidues: String(body?.rowResidues ?? ""),
-        colResidues: String(body?.colResidues ?? ""),
-        rowStart: body?.rowStart,
-        colStart: body?.colStart,
-        minSeparation: body?.minSeparation,
+        rowResidues: String(body?.rowResidues ?? preset?.rowResidues ?? ""),
+        colResidues: String(body?.colResidues ?? preset?.colResidues ?? ""),
+        rowStart: body?.rowStart ?? preset?.rowStart,
+        colStart: body?.colStart ?? preset?.colStart,
+        minSeparation: body?.minSeparation ?? preset?.minSeparation,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
         requiredTransport: transportPolicy(body?.requiredTransport),
         requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
       });
       await flushStore(deps.store);
-      json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
+      json(res, 200, {
+        taskId: task.taskId,
+        chunks: task.chunks.length,
+        validationPolicy: task.validationPolicy,
+        presetId: preset?.id ?? null,
+      });
     } catch (e) {
       json(res, 400, { error: message(e) });
     }
@@ -1234,13 +1242,17 @@ td,th{border-bottom:1px solid #252b3a;padding:7px;text-align:left;vertical-align
   <div class="card">
     <div>contact map tile</div>
     <div class="muted">Low-bandwidth heuristic protein contact-score tile; public residue windows only, no model download</div>
-    <textarea id="contactRows" placeholder="row residue window">MKTAYIAKQRQISFVK</textarea>
-    <textarea id="contactCols" placeholder="column residue window">SHFSRQDILDLIPTSS</textarea>
+    <select id="contactPreset" aria-label="contact map preset">
+      ${CONTACT_MAP_PRESETS.map((preset) => `<option value="${preset.id}">${preset.label} · ${preset.accession}</option>`).join("")}
+    </select>
+    <textarea id="contactRows" placeholder="row residue window">${CONTACT_MAP_PRESETS[0]?.rowResidues ?? ""}</textarea>
+    <textarea id="contactCols" placeholder="column residue window">${CONTACT_MAP_PRESETS[0]?.colResidues ?? ""}</textarea>
     <div class="row">
-      <input id="contactRowStart" value="0" aria-label="contact row start">
-      <input id="contactColStart" value="24" aria-label="contact col start">
-      <input id="contactMinSeparation" value="8" aria-label="contact min separation">
+      <input id="contactRowStart" value="${String(CONTACT_MAP_PRESETS[0]?.rowStart ?? 0)}" aria-label="contact row start">
+      <input id="contactColStart" value="${String(CONTACT_MAP_PRESETS[0]?.colStart ?? 0)}" aria-label="contact col start">
+      <input id="contactMinSeparation" value="${String(CONTACT_MAP_PRESETS[0]?.minSeparation ?? 8)}" aria-label="contact min separation">
     </div>
+    <div id="contactPresetMeta" class="muted">${CONTACT_MAP_PRESETS[0]?.proteinName ?? ""} · ${CONTACT_MAP_PRESETS[0]?.organism ?? ""} · ${CONTACT_MAP_PRESETS[0]?.sourceDb ?? ""}</div>
     <div class="row"><button id="seedContactMapTile">seed contact map tile</button></div>
   </div>
   <div class="card">
@@ -1328,13 +1340,29 @@ document.getElementById("seedEmbeddingTile").onclick = () => adminPost("/compute
   documents: JSON.parse(val("embeddingDocs") || "[]"),
   topK: asNum("embeddingTopK"),
 });
+const contactMapPresets = ${JSON.stringify(CONTACT_MAP_PRESETS)};
+const contactPresetSelect = document.getElementById("contactPreset");
+const contactPresetMeta = document.getElementById("contactPresetMeta");
+function applyContactPreset(id) {
+  const preset = contactMapPresets.find((entry) => entry.id === id) || contactMapPresets[0];
+  if (!preset) return;
+  document.getElementById("contactRows").value = preset.rowResidues;
+  document.getElementById("contactCols").value = preset.colResidues;
+  document.getElementById("contactRowStart").value = String(preset.rowStart);
+  document.getElementById("contactColStart").value = String(preset.colStart);
+  document.getElementById("contactMinSeparation").value = String(preset.minSeparation);
+  contactPresetMeta.textContent = preset.proteinName + " · " + preset.organism + " · " + preset.sourceDb;
+}
+contactPresetSelect.addEventListener("change", () => applyContactPreset(contactPresetSelect.value));
 document.getElementById("seedContactMapTile").onclick = () => adminPost("/compute/admin/tasks/contact-map-tile", {
+  presetId: contactPresetSelect.value,
   rowResidues: val("contactRows"),
   colResidues: val("contactCols"),
   rowStart: asNum("contactRowStart"),
   colStart: asNum("contactColStart"),
   minSeparation: asNum("contactMinSeparation"),
 });
+applyContactPreset(contactPresetSelect.value);
 document.getElementById("seedSweep").onclick = () => adminPost("/compute/admin/tasks/seed-sweep", {
   stageId: val("sweepStage"),
   brainA: val("sweepA"),

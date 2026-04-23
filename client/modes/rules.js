@@ -67,6 +67,7 @@ function computeScoreHtml() {
       </div>
       <div id="compute-score-value" class="compute-score-value">0</div>
       <div class="compute-score-grid">
+        <div><span>contact cells</span><strong id="compute-score-contact">0</strong></div>
         <div><span>tensor cells</span><strong id="compute-score-tensor">0</strong></div>
         <div><span>seed tiles</span><strong id="compute-score-seeds">0</strong></div>
         <div><span>replay checks</span><strong id="compute-score-replays">0</strong></div>
@@ -171,6 +172,7 @@ function wireComputeScore(root) {
   computeScoreTimer = null;
   const valueEl = panel.querySelector("#compute-score-value");
   const privacyEl = panel.querySelector("#compute-score-privacy");
+  const contactEl = panel.querySelector("#compute-score-contact");
   const tensorEl = panel.querySelector("#compute-score-tensor");
   const seedsEl = panel.querySelector("#compute-score-seeds");
   const replaysEl = panel.querySelector("#compute-score-replays");
@@ -185,6 +187,7 @@ function wireComputeScore(root) {
       const breakdown = stats.scoreBreakdown || {};
       valueEl.textContent = formatInt(stats.computeScore);
       privacyEl.textContent = stats.privacy === "suppressed" ? "aggregate" : "live aggregate";
+      contactEl.textContent = formatInt(breakdown.acceptedContactMapTileCells);
       tensorEl.textContent = formatInt(breakdown.acceptedTensorTileCells);
       seedsEl.textContent = formatInt(breakdown.acceptedSeedSweepSeeds);
       replaysEl.textContent = formatInt(

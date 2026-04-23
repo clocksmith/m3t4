@@ -8,6 +8,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const TASK_TIMEOUT_MS = 120_000;
 const PUBLIC_ARTIFACT_KERNEL = "m3t4.public_artifact_verify.v0";
 const REPLAY_VERIFY_KERNEL = "m3t4.replay_verify.v1";
+const CONTACT_MAP_TILE_KERNEL = "science.contact_map_tile.v0";
 const TENSOR_TILE_KERNEL = "plasma.tensor_tile.v0";
 
 async function main() {
@@ -58,13 +59,15 @@ async function runOnce(chromium, config, pass) {
     ));
 
     const witnessTasks = [await seedRenderWitnessTask(config)];
-    if (config.kernel === "tensor-tile") witnessTasks.push(await seedWebGpuWitnessTask(config));
+    if (config.kernel === "tensor-tile" || config.kernel === "contact-map-tile") {
+      witnessTasks.push(await seedWebGpuWitnessTask(config));
+    }
     for (const witness of witnessTasks) {
       if (witness.chunks !== 1) throw new Error(`expected 1 witness chunk, got ${witness.chunks}`);
       await waitForAcceptedTask(config, witness.taskId);
       await waitForComputeClientsIdle(pages);
     }
-    if (config.kernel === "tensor-tile") {
+    if (config.kernel === "tensor-tile" || config.kernel === "contact-map-tile") {
       await waitForWorkerTiers(config, preflight.map((status) => status.workerId).filter(Boolean), "webgpu-light");
     }
 
@@ -173,6 +176,7 @@ function readConfig() {
 async function seedTask(config, pass) {
   if (config.kernel === "replay-verify") return seedReplayVerifyTask(config, pass);
   if (config.kernel === "seed-sweep") return seedSeedSweepTask(config, pass);
+  if (config.kernel === "contact-map-tile") return seedContactMapTileTask(config, pass);
   if (config.kernel === "tensor-tile") return seedTensorTileTask(config, pass);
   return seedPublicArtifactTask(config, pass);
 }
@@ -251,6 +255,21 @@ async function seedTensorTileTask(config, pass) {
     rows: 16,
     cols: 16,
     depth: 32,
+    minExecutions: 2,
+    minAgreeing: 2,
+    requiredTransport: "webrtc",
+    requiredPeerSubreceipt: true,
+  });
+}
+
+async function seedContactMapTileTask(config, pass) {
+  const presets = [
+    "human-myoglobin-core-helices",
+    "human-hemoglobin-alpha-fold-core",
+    "human-lysozyme-stable-core",
+  ];
+  return adminPost(config, "/compute/admin/tasks/contact-map-tile", {
+    presetId: presets[(pass - 1) % presets.length],
     minExecutions: 2,
     minAgreeing: 2,
     requiredTransport: "webrtc",
@@ -408,7 +427,7 @@ function assertWebRtcDataReceipts(receipts, task) {
     if (transcript.peerSubreceipt?.peerAssignmentId !== transcript.peerAssignmentId) {
       throw new Error(`${receipt.receiptId} peer subreceipt did not bind peer assignment`);
     }
-    if (task.kind === TENSOR_TILE_KERNEL && receipt.executionMode !== "webgpu") {
+    if ((task.kind === TENSOR_TILE_KERNEL || task.kind === CONTACT_MAP_TILE_KERNEL) && receipt.executionMode !== "webgpu") {
       throw new Error(`${receipt.receiptId} execution mode was ${receipt.executionMode}`);
     }
   }
@@ -433,8 +452,8 @@ function aggregatePasses(passes) {
 
 function kernelOption() {
   const value = argValue("kernel") || process.env.PLASMA_LAB_SMOKE_KERNEL || "public-artifact";
-  if (value !== "public-artifact" && value !== "replay-verify" && value !== "seed-sweep" && value !== "tensor-tile") {
-    throw new Error("kernel must be public-artifact, replay-verify, seed-sweep, or tensor-tile");
+  if (value !== "public-artifact" && value !== "replay-verify" && value !== "seed-sweep" && value !== "tensor-tile" && value !== "contact-map-tile") {
+    throw new Error("kernel must be public-artifact, replay-verify, seed-sweep, tensor-tile, or contact-map-tile");
   }
   return value;
 }

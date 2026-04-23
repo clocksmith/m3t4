@@ -23,6 +23,12 @@ import {
   type PrimeParams,
 } from "./kernels/prime-search.js";
 import {
+  ASSET_TILE_AUDIT_KERNEL_HASH,
+  ASSET_TILE_AUDIT_KERNEL_ID,
+  normalizeAssetTileAuditParams,
+  runAssetTileAuditReference,
+} from "./kernels/asset-tile-audit.js";
+import {
   EMBEDDING_TILE_KERNEL_HASH,
   EMBEDDING_TILE_KERNEL_ID,
   EMBEDDING_TILE_MODEL_ID,
@@ -30,12 +36,30 @@ import {
   normalizeEmbeddingTileParams,
 } from "./kernels/embedding-tile.js";
 import {
+  EXPLOIT_SEARCH_KERNEL_HASH,
+  EXPLOIT_SEARCH_KERNEL_ID,
+  normalizeExploitSearchParams,
+  runExploitSearchReference,
+} from "./kernels/exploit-search.js";
+import {
+  IMAGE_TILE_INFER_KERNEL_HASH,
+  IMAGE_TILE_INFER_KERNEL_ID,
+  normalizeImageTileInferParams,
+  runImageTileInferReference,
+} from "./kernels/image-tile-infer.js";
+import {
   PREFILL_TOPK_PROBE_KERNEL_HASH,
   PREFILL_TOPK_PROBE_KERNEL_ID,
   PREFILL_TOPK_PROBE_MODEL_ID,
   normalizePrefillTopkProbeParams,
   prefillTopkProbePlaceholderOutputHash,
 } from "./kernels/prefill-topk-probe.js";
+import {
+  MICROSCOPY_TILE_SCORE_KERNEL_HASH,
+  MICROSCOPY_TILE_SCORE_KERNEL_ID,
+  normalizeMicroscopyTileScoreParams,
+  runMicroscopyTileScoreReference,
+} from "./kernels/microscopy-tile-score.js";
 import {
   CONTACT_MAP_TILE_KERNEL_HASH,
   CONTACT_MAP_TILE_KERNEL_ID,
@@ -108,7 +132,11 @@ const KNOWN_KERNELS = [
   DEVICE_WITNESS_RENDER_KERNEL_ID,
   DEVICE_WITNESS_WEBRTC_KERNEL_ID,
   DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID,
+  ASSET_TILE_AUDIT_KERNEL_ID,
   EMBEDDING_TILE_KERNEL_ID,
+  EXPLOIT_SEARCH_KERNEL_ID,
+  IMAGE_TILE_INFER_KERNEL_ID,
+  MICROSCOPY_TILE_SCORE_KERNEL_ID,
   PREFILL_TOPK_PROBE_KERNEL_ID,
   CONTACT_MAP_TILE_KERNEL_ID,
   PUBLIC_ARTIFACT_VERIFY_KERNEL_ID,
@@ -420,9 +448,14 @@ export interface PublicComputeStats {
 export interface ComputeScoreBreakdown {
   acceptedReceipts: number;
   rejectedReceipts: number;
+  acceptedAssetTileAuditChunks: number;
   acceptedContactMapTileChunks: number;
   acceptedContactMapTileCells: number;
   acceptedEmbeddingTileChunks: number;
+  acceptedExploitSearchChunks: number;
+  acceptedExploitSearchSeeds: number;
+  acceptedImageTileInferChunks: number;
+  acceptedMicroscopyTileScoreChunks: number;
   acceptedPrefillTopkProbeChunks: number;
   acceptedPublicArtifactChunks: number;
   acceptedReplayVerifyChunks: number;
@@ -1244,6 +1277,67 @@ export class ComputeLabStore {
     return task;
   }
 
+  seedImageTileInferTask(input: {
+    sourceId?: string;
+    width: number;
+    height: number;
+    rgbaBase64: string;
+    topK?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const normalized = normalizeImageTileInferParams({
+      sourceId: input.sourceId ?? "image-tile",
+      width: input.width,
+      height: input.height,
+      rgbaBase64: input.rgbaBase64,
+      topK: input.topK ?? 3,
+    });
+    const params = {
+      sourceId: normalized.sourceId,
+      width: normalized.width,
+      height: normalized.height,
+      rgbaBase64: normalized.rgbaBase64,
+      topK: normalized.topK,
+    };
+    const expectedOutputHash = runImageTileInferReference(normalized).outputHash;
+    const taskId = randomId("task");
+    const minExecutions = Math.max(1, input.minExecutions ?? 2);
+    const minAgreeing = Math.min(minExecutions, Math.max(1, input.minAgreeing ?? 2));
+    const chunk: ComputeChunk = {
+      chunkId: `${taskId}-chunk-0`,
+      taskId,
+      ordinal: 0,
+      kind: IMAGE_TILE_INFER_KERNEL_ID,
+      params,
+      kernelId: IMAGE_TILE_INFER_KERNEL_ID,
+      kernelHash: IMAGE_TILE_INFER_KERNEL_HASH,
+      inputHash: hashCanonical({ kind: IMAGE_TILE_INFER_KERNEL_ID, params }),
+      expectedOutputHash,
+      status: "pending",
+    };
+    const task: ComputeTask = {
+      taskId,
+      kind: IMAGE_TILE_INFER_KERNEL_ID,
+      status: "running",
+      createdAt: this.now(),
+      validationPolicy: {
+        determinismClass: "bit-exact",
+        validationMode: "expected-hash",
+        minExecutions,
+        minAgreeing,
+        expectedOutputHash,
+        requiredTransport: input.requiredTransport,
+        requiredPeerSubreceipt: input.requiredPeerSubreceipt,
+      },
+      chunks: [chunk],
+    };
+    this.tasks.set(taskId, task);
+    return task;
+  }
+
   seedPrefillTopkProbeTask(input: {
     modelId?: string;
     promptText: string;
@@ -1341,6 +1435,189 @@ export class ComputeLabStore {
     const task: ComputeTask = {
       taskId,
       kind: CONTACT_MAP_TILE_KERNEL_ID,
+      status: "running",
+      createdAt: this.now(),
+      validationPolicy: {
+        determinismClass: "bit-exact",
+        validationMode: "expected-hash",
+        minExecutions,
+        minAgreeing,
+        expectedOutputHash,
+        requiredTransport: input.requiredTransport,
+        requiredPeerSubreceipt: input.requiredPeerSubreceipt,
+      },
+      chunks: [chunk],
+    };
+    this.tasks.set(taskId, task);
+    return task;
+  }
+
+  seedMicroscopyTileScoreTask(input: {
+    sourceId?: string;
+    width: number;
+    height: number;
+    rgbaBase64: string;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const normalized = normalizeMicroscopyTileScoreParams({
+      sourceId: input.sourceId ?? "microscopy-tile",
+      width: input.width,
+      height: input.height,
+      rgbaBase64: input.rgbaBase64,
+    });
+    const params = {
+      sourceId: normalized.sourceId,
+      width: normalized.width,
+      height: normalized.height,
+      rgbaBase64: normalized.rgbaBase64,
+    };
+    const expectedOutputHash = runMicroscopyTileScoreReference(normalized).outputHash;
+    const taskId = randomId("task");
+    const minExecutions = Math.max(1, input.minExecutions ?? 2);
+    const minAgreeing = Math.min(minExecutions, Math.max(1, input.minAgreeing ?? 2));
+    const chunk: ComputeChunk = {
+      chunkId: `${taskId}-chunk-0`,
+      taskId,
+      ordinal: 0,
+      kind: MICROSCOPY_TILE_SCORE_KERNEL_ID,
+      params,
+      kernelId: MICROSCOPY_TILE_SCORE_KERNEL_ID,
+      kernelHash: MICROSCOPY_TILE_SCORE_KERNEL_HASH,
+      inputHash: hashCanonical({ kind: MICROSCOPY_TILE_SCORE_KERNEL_ID, params }),
+      expectedOutputHash,
+      status: "pending",
+    };
+    const task: ComputeTask = {
+      taskId,
+      kind: MICROSCOPY_TILE_SCORE_KERNEL_ID,
+      status: "running",
+      createdAt: this.now(),
+      validationPolicy: {
+        determinismClass: "bit-exact",
+        validationMode: "expected-hash",
+        minExecutions,
+        minAgreeing,
+        expectedOutputHash,
+        requiredTransport: input.requiredTransport,
+        requiredPeerSubreceipt: input.requiredPeerSubreceipt,
+      },
+      chunks: [chunk],
+    };
+    this.tasks.set(taskId, task);
+    return task;
+  }
+
+  seedExploitSearchTask(input: {
+    stageId: string;
+    brainA: string;
+    brainB: string;
+    seedStart: number;
+    seedEndExclusive: number;
+    maxTicks?: number;
+    topFindings?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const normalized = normalizeExploitSearchParams({
+      stageId: input.stageId,
+      brainA: input.brainA,
+      brainB: input.brainB,
+      seedStart: input.seedStart,
+      seedEndExclusive: input.seedEndExclusive,
+      maxTicks: input.maxTicks ?? 5400,
+      topFindings: input.topFindings ?? 8,
+    });
+    const params = {
+      stageId: normalized.stageId,
+      brainA: normalized.brainA,
+      brainB: normalized.brainB,
+      seedStart: normalized.seedStart,
+      seedEndExclusive: normalized.seedEndExclusive,
+      maxTicks: normalized.maxTicks,
+      topFindings: normalized.topFindings,
+    };
+    const expectedOutputHash = runExploitSearchReference(normalized).outputHash;
+    const taskId = randomId("task");
+    const minExecutions = Math.max(1, input.minExecutions ?? 1);
+    const minAgreeing = Math.min(minExecutions, Math.max(1, input.minAgreeing ?? 1));
+    const chunk: ComputeChunk = {
+      chunkId: `${taskId}-chunk-0`,
+      taskId,
+      ordinal: 0,
+      kind: EXPLOIT_SEARCH_KERNEL_ID,
+      params,
+      kernelId: EXPLOIT_SEARCH_KERNEL_ID,
+      kernelHash: EXPLOIT_SEARCH_KERNEL_HASH,
+      inputHash: hashCanonical({ kind: EXPLOIT_SEARCH_KERNEL_ID, params }),
+      expectedOutputHash,
+      status: "pending",
+    };
+    const task: ComputeTask = {
+      taskId,
+      kind: EXPLOIT_SEARCH_KERNEL_ID,
+      status: "running",
+      createdAt: this.now(),
+      validationPolicy: {
+        determinismClass: "bit-exact",
+        validationMode: "expected-hash",
+        minExecutions,
+        minAgreeing,
+        expectedOutputHash,
+        requiredTransport: input.requiredTransport,
+        requiredPeerSubreceipt: input.requiredPeerSubreceipt,
+      },
+      chunks: [chunk],
+    };
+    this.tasks.set(taskId, task);
+    return task;
+  }
+
+  seedAssetTileAuditTask(input: {
+    sourceId?: string;
+    width: number;
+    height: number;
+    rgbaBase64: string;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const normalized = normalizeAssetTileAuditParams({
+      sourceId: input.sourceId ?? "asset-tile",
+      width: input.width,
+      height: input.height,
+      rgbaBase64: input.rgbaBase64,
+    });
+    const params = {
+      sourceId: normalized.sourceId,
+      width: normalized.width,
+      height: normalized.height,
+      rgbaBase64: normalized.rgbaBase64,
+    };
+    const expectedOutputHash = runAssetTileAuditReference(normalized).outputHash;
+    const taskId = randomId("task");
+    const minExecutions = Math.max(1, input.minExecutions ?? 2);
+    const minAgreeing = Math.min(minExecutions, Math.max(1, input.minAgreeing ?? 2));
+    const chunk: ComputeChunk = {
+      chunkId: `${taskId}-chunk-0`,
+      taskId,
+      ordinal: 0,
+      kind: ASSET_TILE_AUDIT_KERNEL_ID,
+      params,
+      kernelId: ASSET_TILE_AUDIT_KERNEL_ID,
+      kernelHash: ASSET_TILE_AUDIT_KERNEL_HASH,
+      inputHash: hashCanonical({ kind: ASSET_TILE_AUDIT_KERNEL_ID, params }),
+      expectedOutputHash,
+      status: "pending",
+    };
+    const task: ComputeTask = {
+      taskId,
+      kind: ASSET_TILE_AUDIT_KERNEL_ID,
       status: "running",
       createdAt: this.now(),
       validationPolicy: {
@@ -2800,8 +3077,12 @@ function peerSubreceiptPayload(input: Omit<PeerSubreceipt, "peerReceiptHash" | "
 
 function isWebRtcDataTask(kind: TaskKind): boolean {
   return (
+    kind === ASSET_TILE_AUDIT_KERNEL_ID ||
     kind === CONTACT_MAP_TILE_KERNEL_ID ||
     kind === EMBEDDING_TILE_KERNEL_ID ||
+    kind === EXPLOIT_SEARCH_KERNEL_ID ||
+    kind === IMAGE_TILE_INFER_KERNEL_ID ||
+    kind === MICROSCOPY_TILE_SCORE_KERNEL_ID ||
     kind === PREFILL_TOPK_PROBE_KERNEL_ID ||
     kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID ||
     kind === REPLAY_VERIFY_KERNEL_ID ||
@@ -3382,9 +3663,14 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
       if (chunk.status === "accepted") acceptedChunkIds.add(chunk.chunkId);
     }
   }
+  let acceptedAssetTileAuditChunks = 0;
   let acceptedContactMapTileChunks = 0;
   let acceptedContactMapTileCells = 0;
   let acceptedEmbeddingTileChunks = 0;
+  let acceptedExploitSearchChunks = 0;
+  let acceptedExploitSearchSeeds = 0;
+  let acceptedImageTileInferChunks = 0;
+  let acceptedMicroscopyTileScoreChunks = 0;
   let acceptedPrefillTopkProbeChunks = 0;
   let acceptedPublicArtifactChunks = 0;
   let acceptedReplayVerifyChunks = 0;
@@ -3395,13 +3681,22 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
   for (const task of tasks) {
     for (const chunk of task.chunks) {
       if (!acceptedChunkIds.has(chunk.chunkId)) continue;
-      if (task.kind === CONTACT_MAP_TILE_KERNEL_ID) {
+      if (task.kind === ASSET_TILE_AUDIT_KERNEL_ID) acceptedAssetTileAuditChunks++;
+      else if (task.kind === CONTACT_MAP_TILE_KERNEL_ID) {
         acceptedContactMapTileChunks++;
         acceptedContactMapTileCells += Math.max(
           0,
           stringParam(chunk.params.rowResidues).length * stringParam(chunk.params.colResidues).length,
         );
       } else if (task.kind === EMBEDDING_TILE_KERNEL_ID) acceptedEmbeddingTileChunks++;
+      else if (task.kind === EXPLOIT_SEARCH_KERNEL_ID) {
+        acceptedExploitSearchChunks++;
+        acceptedExploitSearchSeeds += Math.max(
+          0,
+          asInt(chunk.params.seedEndExclusive, "seedEndExclusive") - asInt(chunk.params.seedStart, "seedStart"),
+        );
+      } else if (task.kind === IMAGE_TILE_INFER_KERNEL_ID) acceptedImageTileInferChunks++;
+      else if (task.kind === MICROSCOPY_TILE_SCORE_KERNEL_ID) acceptedMicroscopyTileScoreChunks++;
       else if (task.kind === PREFILL_TOPK_PROBE_KERNEL_ID) acceptedPrefillTopkProbeChunks++;
       else if (task.kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID) acceptedPublicArtifactChunks++;
       else if (task.kind === REPLAY_VERIFY_KERNEL_ID) acceptedReplayVerifyChunks++;
@@ -3423,9 +3718,14 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
   return {
     acceptedReceipts: receipts.filter((receipt) => receipt.decision === "accepted").length,
     rejectedReceipts: receipts.filter((receipt) => isRejectedDecision(receipt.decision)).length,
+    acceptedAssetTileAuditChunks,
     acceptedContactMapTileChunks,
     acceptedContactMapTileCells,
     acceptedEmbeddingTileChunks,
+    acceptedExploitSearchChunks,
+    acceptedExploitSearchSeeds,
+    acceptedImageTileInferChunks,
+    acceptedMicroscopyTileScoreChunks,
     acceptedPrefillTopkProbeChunks,
     acceptedPublicArtifactChunks,
     acceptedReplayVerifyChunks,
@@ -3445,9 +3745,14 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
 function computeScore(breakdown: ComputeScoreBreakdown): number {
   return Math.max(0, Math.round(
     breakdown.acceptedReceipts * 10 +
+    breakdown.acceptedAssetTileAuditChunks * 70 +
     breakdown.acceptedContactMapTileChunks * 110 +
     breakdown.acceptedContactMapTileCells * 2 +
     breakdown.acceptedEmbeddingTileChunks * 140 +
+    breakdown.acceptedExploitSearchChunks * 85 +
+    breakdown.acceptedExploitSearchSeeds * 2 +
+    breakdown.acceptedImageTileInferChunks * 90 +
+    breakdown.acceptedMicroscopyTileScoreChunks * 95 +
     breakdown.acceptedPrefillTopkProbeChunks * 125 +
     breakdown.acceptedPublicArtifactChunks * 80 +
     breakdown.acceptedReplayVerifyChunks * 120 +
@@ -3564,6 +3869,10 @@ function schedulerCandidateScore(profile: WorkerProfile, task: ComputeTask, live
 
 function taskRequiredWorkloadTier(task: ComputeTask): WorkloadTier {
   if (
+    task.kind === ASSET_TILE_AUDIT_KERNEL_ID ||
+    task.kind === EXPLOIT_SEARCH_KERNEL_ID ||
+    task.kind === IMAGE_TILE_INFER_KERNEL_ID ||
+    task.kind === MICROSCOPY_TILE_SCORE_KERNEL_ID ||
     task.kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID ||
     task.kind === REPLAY_VERIFY_KERNEL_ID ||
     task.kind === SEED_SWEEP_KERNEL_ID
@@ -3836,6 +4145,13 @@ function referenceOutputHash(chunk: Omit<ComputeChunk, "expectedOutputHash">): C
   switch (chunk.kind) {
     case PRIME_SEARCH_KERNEL_ID:
       return runPrimeSearch(chunk.params as unknown as PrimeParams).outputHash;
+    case ASSET_TILE_AUDIT_KERNEL_ID:
+      return runAssetTileAuditReference({
+        sourceId: stringParam(chunk.params.sourceId),
+        width: asInt(chunk.params.width, "width"),
+        height: asInt(chunk.params.height, "height"),
+        rgbaBase64: stringParam(chunk.params.rgbaBase64),
+      }).outputHash;
     case DEVICE_WITNESS_WEBGPU_KERNEL_ID:
       return runDeviceWitnessWebGpuReference(chunk.params as { seed: number; count: number }).outputHash;
     case DEVICE_WITNESS_RENDER_KERNEL_ID:
@@ -3858,6 +4174,31 @@ function referenceOutputHash(chunk: Omit<ComputeChunk, "expectedOutputHash">): C
         documentsJson: stringParam(chunk.params.documentsJson),
         topK: asInt(chunk.params.topK, "topK"),
       }));
+    case EXPLOIT_SEARCH_KERNEL_ID:
+      return runExploitSearchReference({
+        stageId: stringParam(chunk.params.stageId),
+        brainA: stringParam(chunk.params.brainA),
+        brainB: stringParam(chunk.params.brainB),
+        seedStart: asInt(chunk.params.seedStart, "seedStart"),
+        seedEndExclusive: asInt(chunk.params.seedEndExclusive, "seedEndExclusive"),
+        maxTicks: asInt(chunk.params.maxTicks, "maxTicks"),
+        topFindings: asInt(chunk.params.topFindings, "topFindings"),
+      }).outputHash;
+    case IMAGE_TILE_INFER_KERNEL_ID:
+      return runImageTileInferReference({
+        sourceId: stringParam(chunk.params.sourceId),
+        width: asInt(chunk.params.width, "width"),
+        height: asInt(chunk.params.height, "height"),
+        rgbaBase64: stringParam(chunk.params.rgbaBase64),
+        topK: asInt(chunk.params.topK, "topK"),
+      }).outputHash;
+    case MICROSCOPY_TILE_SCORE_KERNEL_ID:
+      return runMicroscopyTileScoreReference({
+        sourceId: stringParam(chunk.params.sourceId),
+        width: asInt(chunk.params.width, "width"),
+        height: asInt(chunk.params.height, "height"),
+        rgbaBase64: stringParam(chunk.params.rgbaBase64),
+      }).outputHash;
     case PREFILL_TOPK_PROBE_KERNEL_ID:
       return prefillTopkProbePlaceholderOutputHash(normalizePrefillTopkProbeParams({
         modelId: stringParam(chunk.params.modelId),

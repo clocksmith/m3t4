@@ -13,12 +13,16 @@
 const OPT_IN_KEY = "m3t4.compute.optIn";
 const CLIENT_VERSION = "compute-slack-http-v1";
 const SESSION_TOKEN_HEADER = "x-worker-session-token";
+const ASSET_TILE_AUDIT_KERNEL = "asset.tile_audit.v0";
 const PUBLIC_ARTIFACT_KERNEL = "m3t4.public_artifact_verify.v0";
 const REPLAY_VERIFY_KERNEL = "m3t4.replay_verify.v1";
 const SEED_SWEEP_KERNEL = "m3t4.seed_sweep.v0";
 const EMBEDDING_TILE_KERNEL = "ml.embedding_tile.v0";
+const IMAGE_TILE_INFER_KERNEL = "ml.image_tile_infer.v0";
 const PREFILL_TOPK_PROBE_KERNEL = "ml.prefill_topk_probe.v0";
 const CONTACT_MAP_TILE_KERNEL = "science.contact_map_tile.v0";
+const MICROSCOPY_TILE_SCORE_KERNEL = "science.microscopy_tile_score.v0";
+const EXPLOIT_SEARCH_KERNEL = "m3t4.exploit_search.v0";
 const TENSOR_TILE_KERNEL = "plasma.tensor_tile.v0";
 
 const MODE_PROFILE = {
@@ -808,7 +812,16 @@ async function buildCapability(runtimeInfo = {}, opts = {}) {
   const deviceWitness = await workerDeviceWitnessBucket(opts.benchmark === true);
   const runtimeSurfaces = ["browser-js"];
   if (webgpu.webgpu === "available") runtimeSurfaces.push("browser-webgpu");
-  const kernels = [PUBLIC_ARTIFACT_KERNEL, "prime-search.v0", REPLAY_VERIFY_KERNEL, SEED_SWEEP_KERNEL];
+  const kernels = [
+    ASSET_TILE_AUDIT_KERNEL,
+    PUBLIC_ARTIFACT_KERNEL,
+    "prime-search.v0",
+    REPLAY_VERIFY_KERNEL,
+    SEED_SWEEP_KERNEL,
+    IMAGE_TILE_INFER_KERNEL,
+    MICROSCOPY_TILE_SCORE_KERNEL,
+    EXPLOIT_SEARCH_KERNEL,
+  ];
   if (deviceWitness.canvas2dFixture === "ok" || deviceWitness.canvas2dFixture === "mismatch") {
     kernels.push("device_witness.render_fixture.v0");
     kernels.push("device_witness.derived_buffer.v0");
@@ -1718,7 +1731,7 @@ function safeWebRtcDataChunk(chunk) {
 }
 
 function webRtcDataKernel(kind) {
-  return kind === PUBLIC_ARTIFACT_KERNEL || kind === REPLAY_VERIFY_KERNEL || kind === SEED_SWEEP_KERNEL || kind === EMBEDDING_TILE_KERNEL || kind === PREFILL_TOPK_PROBE_KERNEL || kind === CONTACT_MAP_TILE_KERNEL || kind === TENSOR_TILE_KERNEL;
+  return kind === ASSET_TILE_AUDIT_KERNEL || kind === PUBLIC_ARTIFACT_KERNEL || kind === REPLAY_VERIFY_KERNEL || kind === SEED_SWEEP_KERNEL || kind === EMBEDDING_TILE_KERNEL || kind === IMAGE_TILE_INFER_KERNEL || kind === PREFILL_TOPK_PROBE_KERNEL || kind === CONTACT_MAP_TILE_KERNEL || kind === MICROSCOPY_TILE_SCORE_KERNEL || kind === EXPLOIT_SEARCH_KERNEL || kind === TENSOR_TILE_KERNEL;
 }
 
 const PEER_WORK_PARAMS = Object.freeze({ start: 1009, endExclusive: 1033 });

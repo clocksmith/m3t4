@@ -87,9 +87,9 @@ Recommended workload ladder:
 | 1 | `m3t4.replay_verify.v1` | Uses public action logs or frame/checkpoint hashes; no brain required | bit-exact replay/action hash | Spectators help verify public receipts and tournament artifacts |
 | 2 | `m3t4.match_batch.v0` | Embarrassingly parallel match sweeps, but only safe for public bots or non-secret kernels | bit-exact result hash | Meta-health, public build validation, tournament sweeps |
 | 3 | `m3t4.webgpu_benchmark.v0` | Measures real browser GPU capability before assigning harder work | deterministic fixtures plus tolerance checks | Hardware scouting for scheduler policy |
-| 4 | `m3t4.asset_tile.v0` | Visual, parallel, useful, low-risk | hash plus pixel tolerance | Sprite cleanup, alpha keying, palette quantization, parallax checks |
+| 4 | `asset.tile_audit.v0` | Visual, parallel, useful, low-risk, and tiny to ship | exact-hash audit summaries | Sprite cleanup, trim validation, fringe-alpha and bleed checks |
 | 5 | `science.docking_pose_toy.v0` | Independent ligand/pose chunks without full wet-lab claims | replicated quorum plus known controls | First science-looking adapter without overclaiming |
-| 6 | `science.microscopy_tile_score.v0` | Image tiles parallelize naturally on browser GPUs | ensemble agreement plus reference tiles | Cancer-adjacent and more browser-realistic than folding |
+| 6 | `science.microscopy_tile_score.v0` | Public microscopy tiles stay bounded and low-bandwidth | exact-hash deterministic scorecards first | Science-shaped without claiming diagnosis or hidden truth |
 | 7 | `science.drug_combo_sweep.v0` | Large parameter grids with independent seeds | statistical quorum and confidence intervals | Useful research shape with manageable validation |
 | 8 | `science.contact_map_tile.v0` | Folding-adjacent, low-bandwidth, and easy to shard by residue window | exact-hash integer contact-score tiles first; later tolerance-bounded learned scores | Bridge toward protein workloads without model downloads |
 | 9 | `science.conformer_search_mini.v0` | Many short stochastic trajectories | replicated seeds plus energy sanity checks | Realistic but validation is harder |
@@ -100,33 +100,39 @@ artifact hashes, public replay action logs, and public preset seed sweeps.
 Match batches remain unsafe unless every policy kernel, bot, and input is
 public, or a later attested/proof-carrying runtime exists.
 
-Near-term real workloads should be added in this order:
+Repo head now supports the following near-term real workloads:
 
 1. `science.contact_map_tile.v0`: public residue-window contact-score tiles.
    This is now the low-bandwidth protein-shaped path: bounded integer tiles on
    published sequences, validated by exact hash against a server-held
    heuristic reference.
-2. `ml.prefill_topk_probe.v0`: public prompt prefill probes on a fixed small
+2. `m3t4.exploit_search.v0`: bounded public-preset exploit scans over seed
+   windows. This uses deterministic sim telemetry to flag timeout draws,
+   clash loops, escape spirals, objective thrash, and reciprocal side-bias
+   evidence without touching private brains.
+3. `asset.tile_audit.v0`: public asset tile audits for trim, palette,
+   fringe-alpha, and edge-bleed risk. This is useful immediately for m3t4 art
+   cleanup and remains exact-hash + low-bandwidth.
+4. `ml.image_tile_infer.v0`: public image-tile classification on bounded RGBA
+   tiles using a fixed low-bandwidth classifier. This is the honest first
+   image lane before any heavier vision-model rollout.
+5. `science.microscopy_tile_score.v0`: public microscopy/pathology tile
+   scoring with deterministic focus, stain-balance, cellularity, artifact, and
+   anomaly heuristics. This keeps the science-shaped lane truthful without
+   requiring a heavyweight browser model.
+6. `ml.prefill_topk_probe.v0`: public prompt prefill probes on a fixed small
    browser model. This is the first honest text-generation-shaped workload:
    small prompt in, tiny top-k token receipt out, replicated by quorum before
    any attempt at branch decode or KV transport.
-3. `ml.embedding_tile.v0`: public embedding and rerank batches over published
+7. `ml.embedding_tile.v0`: public embedding and rerank batches over published
    corpora. This is still useful, but the model artifact cost is much higher
    than the contact-tile path.
-4. `ml.image_tile_infer.v0`: public image-tile classification, segmentation,
-   background removal, or depth-style inference. This reuses the same browser
-   ML path as embeddings while producing more obviously useful outputs for asset
-   processing and public research imagery.
-5. `science.microscopy_tile_score.v0`: public microscopy/pathology tile
-   scoring. Same tile/inference shape as the vision adapter above, but aimed at
-   public research datasets and validated with reference tiles plus replicated
-   agreement.
 
 Do not jump straight from `plasma.tensor_tile.v0` to full training, private
 inference, or full protein folding. The honest next constraint is validator
-shape: exact-hash integer kernels work now, while browser ML inference and
-science tiles need a tolerance-bounded validator path before they are
-production-truthful.
+shape: exact-hash bounded kernels work now, while heavier browser-ML and
+tolerance-bounded scientific inference still need a stronger validator story
+before they are production-truthful.
 
 Not safe for browser peers:
 

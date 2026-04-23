@@ -7,6 +7,7 @@ export interface ComputeUseCase {
   inputBoundary: string;
   validation: string;
   notes: string;
+  publicEndpoint?: string;
 }
 
 export const COMPUTE_USE_CASES: ComputeUseCase[] = [
@@ -149,6 +150,16 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
     notes: "First Doppler-backed text-generation probe. Browser WebGPU workers run a bounded prefill on a small fixed model and return only the next-token top-k IDs, which is small enough to receipt cleanly before attempting branch decode or KV transport.",
   },
   {
+    id: "logit-divergence",
+    title: "Cross-hardware logit divergence measurement",
+    status: "experimental",
+    workload: "ml.logit_divergence.v0",
+    authority: "advisory",
+    inputBoundary: "public prompt text only, capped to a bounded short prompt length",
+    validation: "tolerance-bounded measurement receipts carrying quantized top-k logit buckets plus delta-from-top; receipts are signed and persisted regardless of inter-hardware agreement",
+    notes: "Extension of ml.prefill_topk_probe.v0 intended as a cross-vendor WebGPU measurement instrument. Each receipt captures a quantized logit fingerprint for one (prompt, hardware) pair; outliers are kept rather than rejected because the divergence across vendors is the artifact.",
+  },
+  {
     id: "image-tile-inference",
     title: "Image tile inference",
     status: "implemented",
@@ -176,6 +187,17 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
     authority: "advisory",
     inputBoundary: "public residue windows from published proteins only; no private sequences or hidden labels",
     validation: "assignment-bound expected-hash receipts against a server-held integer contact-score tile reference",
-    notes: "Low-bandwidth protein-shaped workload. Browser WebGPU workers score bounded residue-window tiles with a deterministic heuristic contact function, which is honest enough to ship now without claiming learned folding or hidden science truth.",
+    notes: "Low-bandwidth protein-shaped workload. Browser WebGPU workers score bounded residue-window tiles with a deterministic heuristic contact function, which is honest enough to ship now without claiming learned folding or hidden science truth. A public aggregate of accepted receipts is served at /compute/public/contact-map/aggregate.",
+    publicEndpoint: "/compute/public/contact-map/aggregate",
+  },
+  {
+    id: "genome-kmer",
+    title: "Reference genome k-mer histograms",
+    status: "implemented",
+    workload: "science.genome_kmer.v0",
+    authority: "advisory",
+    inputBoundary: "public ACGT-only reference-genome windows up to 256 bases; no private or unpublished sequences",
+    validation: "assignment-bound expected-hash receipts against a server-held CPU reference k-mer histogram",
+    notes: "Low-bandwidth bioinformatics lane. Deterministic CPU kernel producing a u32 k-mer count histogram for k in 2..6 over a bounded DNA window. Useful as a receipt-backed reproducibility primitive for taxonomy, contamination, and composition-based public-genome studies.",
   },
 ];

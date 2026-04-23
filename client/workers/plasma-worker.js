@@ -17,7 +17,11 @@ const ASSET_TILE_AUDIT_KERNEL = "asset.tile_audit.v0";
 const EMBEDDING_TILE_KERNEL = "ml.embedding_tile.v0";
 const IMAGE_TILE_INFER_KERNEL = "ml.image_tile_infer.v0";
 const PREFILL_TOPK_PROBE_KERNEL = "ml.prefill_topk_probe.v0";
+const LOGIT_DIVERGENCE_KERNEL = "ml.logit_divergence.v0";
+const LOGIT_DIVERGENCE_LOGIT_SCALE = 256;
 const CONTACT_MAP_TILE_KERNEL = "science.contact_map_tile.v0";
+const GENOME_KMER_KERNEL = "science.genome_kmer.v0";
+const GENOME_KMER_ALPHABET = "ACGT";
 const MICROSCOPY_TILE_SCORE_KERNEL = "science.microscopy_tile_score.v0";
 const EXPLOIT_SEARCH_KERNEL = "m3t4.exploit_search.v0";
 const EMBEDDING_TILE_MODEL = "google-embeddinggemma-300m-q4k-ehf16-af32";
@@ -67,7 +71,9 @@ const KERNELS = {
   [EMBEDDING_TILE_KERNEL]: runEmbeddingTile,
   [IMAGE_TILE_INFER_KERNEL]: runImageTileInfer,
   [PREFILL_TOPK_PROBE_KERNEL]: runPrefillTopkProbe,
+  [LOGIT_DIVERGENCE_KERNEL]: runLogitDivergence,
   [CONTACT_MAP_TILE_KERNEL]: runContactMapTile,
+  [GENOME_KMER_KERNEL]: runGenomeKmer,
   [MICROSCOPY_TILE_SCORE_KERNEL]: runMicroscopyTileScore,
   [EXPLOIT_SEARCH_KERNEL]: runExploitSearch,
   "plasma.tensor_tile.v0": runTensorTile,
@@ -111,6 +117,7 @@ self.onmessage = async (ev) => {
       artifactHash: chunk.artifactHash,
       outputHash,
       derived: result?.derived,
+      publicOutput: result?.publicOutput,
       computeMs,
       executionMode: result?.executionMode || (chunk.kind === "device_witness.webgpu.v0" ? "webgpu" : "cpu"),
     });
@@ -231,6 +238,62 @@ async function runPrefillTopkProbe(params) {
     hits,
   }));
   return { bytes, executionMode: "webgpu" };
+}
+
+async function runLogitDivergence(params) {
+  if (!navigator.gpu?.requestAdapter) throw new Error("WebGPU unavailable");
+  const spec = normalizeLogitDivergenceParams(params);
+  const pipeline = await getDopplerPipeline(spec.modelId);
+  pipeline.reset?.();
+  const prefill = await pipeline.prefillWithLogits(spec.promptText, {
+    temperature: 0,
+    topK: 1,
+    topP: 1,
+  });
+  const logits = prefill?.logits;
+  const inputTokens = Array.isArray(prefill?.tokens) ? prefill.tokens : [];
+  if (!(logits instanceof Float32Array) || logits.length === 0) {
+    throw new Error("prefill logits missing");
+  }
+  const topHits = topKLogitHits(logits, spec.topK);
+  const topLogit = topHits[0].logit;
+  const hits = topHits.map((entry, rank) => ({
+    rank: rank + 1,
+    tokenId: entry.tokenId,
+    logitQ: Math.round(entry.logit * LOGIT_DIVERGENCE_LOGIT_SCALE) | 0,
+    deltaTopQ: rank === 0 ? 0 : Math.min(0, Math.round((entry.logit - topLogit) * LOGIT_DIVERGENCE_LOGIT_SCALE)) | 0,
+  }));
+  const publicOutput = {
+    kind: LOGIT_DIVERGENCE_KERNEL,
+    modelId: spec.modelId,
+    promptHash: await hashText(spec.promptText),
+    promptLength: spec.promptText.length,
+    prefillTokenCount: inputTokens.length,
+    topK: spec.topK,
+    logitScale: LOGIT_DIVERGENCE_LOGIT_SCALE,
+    hits,
+  };
+  const bytes = new TextEncoder().encode(stableJson(publicOutput));
+  return { bytes, publicOutput, executionMode: "webgpu" };
+}
+
+function runGenomeKmer(params) {
+  const spec = normalizeGenomeKmerParams(params);
+  const histogramSize = 1 << (2 * spec.k);
+  const bytes = new Uint8Array(histogramSize * 4);
+  const view = new DataView(bytes.buffer);
+  const windowCount = spec.sequence.length - spec.k + 1;
+  for (let start = 0; start < windowCount; start++) {
+    let index = 0;
+    for (let offset = 0; offset < spec.k; offset++) {
+      const code = GENOME_KMER_ALPHABET.indexOf(spec.sequence[start + offset]);
+      index = (index << 2) | code;
+    }
+    const position = index * 4;
+    const current = view.getUint32(position, true);
+    view.setUint32(position, (current + 1) >>> 0, true);
+  }
+  return { bytes, executionMode: "cpu" };
 }
 
 async function runContactMapTile(params) {
@@ -1289,6 +1352,56 @@ function normalizePrefillTopkProbeParams(params) {
   const topK = asInt(params.topK ?? 4);
   if (topK < 1 || topK > 8) throw new Error("topK must be 1..8");
   return { modelId, promptText, topK };
+}
+
+function normalizeLogitDivergenceParams(params) {
+  const modelId = String(params.modelId || PREFILL_TOPK_PROBE_MODEL).trim();
+  if (modelId !== PREFILL_TOPK_PROBE_MODEL) {
+    throw new Error(`unsupported logit divergence model: ${modelId}`);
+  }
+  const promptText = normalizeTextParam(params.promptText, "promptText", 1, 1024);
+  const topK = asInt(params.topK ?? 4);
+  if (topK < 1 || topK > 8) throw new Error("topK must be 1..8");
+  return { modelId, promptText, topK };
+}
+
+function normalizeGenomeKmerParams(params) {
+  const sequenceId = String(params.sequenceId ?? "").trim().slice(0, 128);
+  const sequence = String(params.sequence ?? "").trim().toUpperCase();
+  if (sequence.length < 1 || sequence.length > 256) {
+    throw new Error("sequence must be 1..256 bases");
+  }
+  for (const base of sequence) {
+    if (!GENOME_KMER_ALPHABET.includes(base)) {
+      throw new Error(`sequence contains unsupported base "${base}"`);
+    }
+  }
+  const k = asInt(params.k ?? 3);
+  if (k < 2 || k > 6) throw new Error("k must be 2..6");
+  if (k > sequence.length) throw new Error("k cannot exceed sequence length");
+  return { sequenceId, sequence, k };
+}
+
+function topKLogitHits(logits, topK) {
+  const best = [];
+  for (let tokenId = 0; tokenId < logits.length; tokenId++) {
+    const logit = Number(logits[tokenId]);
+    if (!Number.isFinite(logit)) continue;
+    const entry = { tokenId, logit };
+    let inserted = false;
+    for (let i = 0; i < best.length; i++) {
+      const current = best[i];
+      if (logit > current.logit || (logit === current.logit && tokenId < current.tokenId)) {
+        best.splice(i, 0, entry);
+        inserted = true;
+        break;
+      }
+    }
+    if (!inserted && best.length < topK) best.push(entry);
+    if (best.length > topK) best.length = topK;
+  }
+  if (best.length === 0) throw new Error("no finite logits");
+  return best;
 }
 
 function normalizeEmbeddingTileParams(params) {

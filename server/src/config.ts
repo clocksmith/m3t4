@@ -105,6 +105,8 @@ export const CONFIG = {
     computeWebRtcArtifacts: envFlag("FEATURE_COMPUTE_WEBRTC_ARTIFACTS", false),
     computeEmbedTile: envFlag("FEATURE_COMPUTE_EMBED_TILE", false),
     computePrefillTopkProbe: envFlag("FEATURE_COMPUTE_PREFILL_TOPK_PROBE", false),
+    computeLogitDivergence: envFlag("FEATURE_COMPUTE_LOGIT_DIVERGENCE", false),
+    computeGenomeKmer: envFlag("FEATURE_COMPUTE_GENOME_KMER", false),
     computeAutoSeedReplayTasks: envFlag("FEATURE_COMPUTE_AUTO_SEED_REPLAY_TASKS", false),
     computeAutoSeedSeedSweepTasks: envFlag("FEATURE_COMPUTE_AUTO_SEED_SEED_SWEEP_TASKS", false),
     computeAutoSeedTensorTileTasks: envFlag("FEATURE_COMPUTE_AUTO_SEED_TENSOR_TILE_TASKS", false),

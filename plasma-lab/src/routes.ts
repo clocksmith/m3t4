@@ -8,6 +8,7 @@ import { ComputeLabStore, type ComputeChunk, type ExecutionReceipt, type PeerSub
 import { COMPUTE_USE_CASES } from "./use-cases.js";
 import { CONTACT_MAP_PRESETS, resolveContactMapPreset } from "./contact-map-presets.js";
 import { IMAGE_TILE_SAMPLE_PRESETS, MICROSCOPY_TILE_SAMPLE_PRESETS, resolveTileSamplePreset } from "./image-tile-presets.js";
+import { LOGIT_DIVERGENCE_MODEL_ID } from "./kernels/logit-divergence.js";
 import { PREFILL_TOPK_PROBE_MODEL_ID } from "./kernels/prefill-topk-probe.js";
 
 export interface RouteDeps {
@@ -251,6 +252,7 @@ export async function handleComputeLabRequest(
       deviceClass?: string;
       adapterInfo?: Record<string, unknown>;
       derived?: DerivedExecutionEvidence;
+      publicOutput?: Record<string, unknown>;
       computeMs?: number;
       clientVersion?: string;
       receiptHash?: ContentHash;
@@ -276,6 +278,7 @@ export async function handleComputeLabRequest(
         deviceClass: body.deviceClass,
         adapterInfo: body.adapterInfo,
         derived: body.derived,
+        publicOutput: body.publicOutput,
         computeMs: Number(body.computeMs) || 0,
         clientVersion: body.clientVersion,
         receiptHash: body.receiptHash,
@@ -321,6 +324,11 @@ export async function handleComputeLabRequest(
     const badge = deps.store.replayBadge(matchId);
     if (!badge || badge.status !== "verified") json(res, 404, { error: "verified replay badge not found" });
     else json(res, 200, badge);
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/compute/public/contact-map/aggregate") {
+    json(res, 200, deps.store.publicContactMapAggregate());
     return true;
   }
 
@@ -805,6 +813,60 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         modelId: body?.modelId,
         promptText: String(body?.promptText ?? ""),
         topK: body?.topK,
+        minExecutions: body?.minExecutions,
+        minAgreeing: body?.minAgreeing,
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+      });
+      await flushStore(deps.store);
+      json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/logit-divergence") {
+    const body = await readJson<{
+      modelId?: string;
+      promptText?: string;
+      topK?: number;
+      minExecutions?: number;
+      minAgreeing?: number;
+      requiredTransport?: TransportKind;
+      requiredPeerSubreceipt?: boolean;
+    }>(req);
+    try {
+      const task = deps.store.seedLogitDivergenceTask({
+        modelId: body?.modelId,
+        promptText: String(body?.promptText ?? ""),
+        topK: body?.topK,
+        minExecutions: body?.minExecutions,
+        minAgreeing: body?.minAgreeing,
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+      });
+      await flushStore(deps.store);
+      json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/genome-kmer") {
+    const body = await readJson<{
+      sequenceId?: string;
+      sequence?: string;
+      k?: number;
+      minExecutions?: number;
+      minAgreeing?: number;
+      requiredTransport?: TransportKind;
+      requiredPeerSubreceipt?: boolean;
+    }>(req);
+    try {
+      const task = deps.store.seedGenomeKmerTask({
+        sequenceId: body?.sequenceId,
+        sequence: String(body?.sequence ?? ""),
+        k: body?.k,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
         requiredTransport: transportPolicy(body?.requiredTransport),
@@ -1435,6 +1497,15 @@ td,th{border-bottom:1px solid #252b3a;padding:7px;text-align:left;vertical-align
     <div class="row"><button id="seedPrefillTopkProbe">seed prefill top-k probe</button></div>
   </div>
   <div class="card">
+    <div>logit divergence</div>
+    <div class="muted">Quantized top-k logit buckets for cross-hardware measurement; fixed model ${LOGIT_DIVERGENCE_MODEL_ID}</div>
+    <textarea id="logitDivergencePrompt" placeholder="prompt text">Finish this technical note in one line: WebGPU lets browsers run</textarea>
+    <div class="row">
+      <input id="logitDivergenceK" value="4" aria-label="logit divergence top k">
+    </div>
+    <div class="row"><button id="seedLogitDivergence">seed logit divergence</button></div>
+  </div>
+  <div class="card">
     <div>microscopy tile score</div>
     <div class="muted">Deterministic microscopy scorecard for focus, stain balance, cellularity, and artifact risk</div>
     <select id="microscopyPreset" aria-label="microscopy tile preset">
@@ -1590,6 +1661,10 @@ document.getElementById("seedPrefillTopkProbe").onclick = () => adminPost("/comp
   promptText: val("prefillTopkPrompt"),
   topK: asNum("prefillTopkK"),
 });
+document.getElementById("seedLogitDivergence").onclick = () => adminPost("/compute/admin/tasks/logit-divergence", {
+  promptText: val("logitDivergencePrompt"),
+  topK: asNum("logitDivergenceK"),
+});
 document.getElementById("seedMicroscopyTileScore").onclick = () => adminPost("/compute/admin/tasks/microscopy-tile-score", {
   presetId: val("microscopyPreset"),
   sourceId: val("microscopySourceId"),
@@ -1702,7 +1777,7 @@ function render(data, useCases) {
     .map((k) => '<div class="card"><div>'+k+'</div><div class="n">'+(data[k] ?? 0)+'</div></div>').join("");
   document.getElementById("useCases").innerHTML = table(["id","status","workload","inputBoundary","validation"], useCases);
   document.getElementById("publicStats").innerHTML = table(["generatedAt","privacy","computeScore","totalWorkers","activeWorkers","totalReceipts","acceptedReceiptPct","webgpuSupportedPct","webgpuCorrectnessPct","renderFixturePct","webrtcDirectSuccessPct","turnRequiredPct","medianKernelMs","p95KernelMs"], [data.publicStats || {}]) +
-    table(["acceptedReceipts","rejectedReceipts","acceptedContactMapTileChunks","acceptedContactMapTileCells","acceptedEmbeddingTileChunks","acceptedPrefillTopkProbeChunks","acceptedPublicArtifactChunks","acceptedReplayVerifyChunks","acceptedSeedSweepChunks","acceptedSeedSweepSeeds","acceptedTensorTileChunks","acceptedTensorTileCells","acceptedWebGpuWitnessReceipts","acceptedWebRtcReceipts"], [data.publicStats?.scoreBreakdown || {}]);
+    table(["acceptedReceipts","rejectedReceipts","acceptedContactMapTileChunks","acceptedContactMapTileCells","acceptedEmbeddingTileChunks","acceptedLogitDivergenceChunks","acceptedPrefillTopkProbeChunks","acceptedPublicArtifactChunks","acceptedReplayVerifyChunks","acceptedSeedSweepChunks","acceptedSeedSweepSeeds","acceptedTensorTileChunks","acceptedTensorTileCells","acceptedWebGpuWitnessReceipts","acceptedWebRtcReceipts"], [data.publicStats?.scoreBreakdown || {}]);
   document.getElementById("workerProfiles").innerHTML = table(["workerId","browserFamily","deviceClass","adapterClass","webgpuAvailable","webgpuCorrectnessScore","renderFixtureScore","webrtcDirectSuccessRate","turnRequiredRate","p95KernelMs","allowedWorkloadTier","acceptedReceipts","rejectedReceipts"], data.workerProfiles || []);
   document.getElementById("deviceClasses").innerHTML = table(["classId","workers","activeWorkers","webgpuCorrectnessScore","renderFixtureScore","webrtcDirectSuccessRate","turnRequiredRate","p95KernelMs"], data.deviceClassProfiles || []);
   document.getElementById("networkClasses").innerHTML = table(["classId","workers","activeWorkers","webrtcDirectSuccessRate","turnRequiredRate","p95KernelMs"], data.networkClassProfiles || []);

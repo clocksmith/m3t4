@@ -55,8 +55,8 @@ function defaultParams(overrides: Partial<Params> = {}): Params {
 
 // --- Tests ---
 
-test("BEHAVIOR_VERSION is 22", () => {
-  assert.equal(BEHAVIOR_VERSION, 22);
+test("BEHAVIOR_VERSION is 23", () => {
+  assert.equal(BEHAVIOR_VERSION, 23);
 });
 
 test("createBrainState initializes neutral with empty buffers", () => {
@@ -532,6 +532,34 @@ test("stalled direct delivery cancels across plan refresh instead of repeating b
   assert.equal(state.deliveryPlan!.startedAt, 300, "cancel can trigger after the short direct plan replans");
   assert.equal(action.left, true, "feint steps away from the goal to break the repeated blocked route");
   assert.notEqual(action.right, true);
+});
+
+test("recent same-goal direct failure biases planner away from immediate direct retry", () => {
+  const params = defaultParams({ shipRate: 0.65, greed: 0.1, cunning: 0.95, discipline: 0 });
+  const obs = baseObs({
+    tick: 300,
+    self: { ...baseObs().self, hasToken: true, x: 600, y: 500, onGround: true },
+    opp: { ...baseObs().opp, x: 760, y: 500 },
+    token: { exists: true, x: 600, y: 448, carrier: 0, dwellT: 0 },
+    goal: { exists: true, x: 900, y: 500, label: "g1", timer: 8 },
+    dx: 160, absDx: 160, dy: 0,
+  });
+
+  const fresh = createBrainState(0);
+  runParamBrain(obs, params, fresh);
+  const freshTactic = fresh.deliveryPlan!.tactic;
+
+  const remembered = createBrainState(0);
+  remembered.lastDeliveryCancelTick = 280;
+  remembered.lastDeliveryCancelTactic = "feint";
+  remembered.deliveryProgressGoalKey = "g1:900:500";
+  remembered.deliveryBestDxGoal = 300;
+  remembered.deliveryProgressTick = 260;
+  runParamBrain(obs, params, remembered);
+
+  assert.equal(freshTactic, "direct", "fresh planner can still choose direct");
+  assert.equal(remembered.deliveryPlan!.tactic, "feint",
+    "recent failed direct route should briefly prefer the bait route");
 });
 
 test("delivery planner can hold feint through its back-step window", () => {

@@ -113,6 +113,7 @@ const modes = ["user", "preset"]; // "user" | "preset"; no browser-executed brai
 const SIM_HZ = 120;
 const STAGE_IDS = Object.keys(STAGES);
 const STAGE_THUMBS = {
+  datacenter: "assets/stages/datacenter/cold_aisle_chapel/ui/preview_thumb.png",
   boardroom: "assets/stages/boardroom/fiduciary_basement/ui/preview_thumb.png",
   demoday: "assets/stages/demoday/demo_day_afterparty/ui/preview_thumb.png",
 };

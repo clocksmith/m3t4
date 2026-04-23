@@ -97,6 +97,30 @@ artifact hashes, public replay action logs, and public preset seed sweeps.
 Match batches remain unsafe unless every policy kernel, bot, and input is
 public, or a later attested/proof-carrying runtime exists.
 
+Near-term real workloads should be added in this order:
+
+1. `ml.embedding_tile.v0`: public embedding and rerank batches over published
+   corpora. This is the cleanest next step because browser WebGPU inference
+   stacks already support feature extraction and quantized execution, and the
+   outputs are compact enough for server-side reference checks on bounded tiles.
+2. `ml.image_tile_infer.v0`: public image-tile classification, segmentation,
+   background removal, or depth-style inference. This reuses the same browser
+   ML path as embeddings while producing more obviously useful outputs for asset
+   processing and public research imagery.
+3. `science.microscopy_tile_score.v0`: public microscopy/pathology tile
+   scoring. Same tile/inference shape as the vision adapter above, but aimed at
+   public research datasets and validated with reference tiles plus replicated
+   agreement.
+4. `science.contact_map_tile.v0`: protein-adjacent score tiles on public
+   sequences. This is the right way to approach "protein-folding-style" work:
+   start with bounded pairwise/contact tiles, not full folding claims.
+
+Do not jump straight from `plasma.tensor_tile.v0` to full training, private
+inference, or full protein folding. The honest next constraint is validator
+shape: exact-hash integer kernels work now, while browser ML inference and
+science tiles need a tolerance-bounded validator path before they are
+production-truthful.
+
 Not safe for browser peers:
 
 - ranked match execution

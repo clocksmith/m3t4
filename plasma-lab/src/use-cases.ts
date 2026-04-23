@@ -137,6 +137,16 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
     notes: "First Doppler-backed ML workload. Browser WebGPU workers run EmbeddingGemma retrieval tiles and agree on quantized rerank outputs without giving ranked authority to the sidecar.",
   },
   {
+    id: "prefill-topk-probes",
+    title: "Prompt prefill top-k probes",
+    status: "experimental",
+    workload: "ml.prefill_topk_probe.v0",
+    authority: "advisory",
+    inputBoundary: "public prompt text only, capped to a bounded short prompt length",
+    validation: "replicated quorum on canonical top-k token-id receipts from a fixed browser model",
+    notes: "First Doppler-backed text-generation probe. Browser WebGPU workers run a bounded prefill on a small fixed model and return only the next-token top-k IDs, which is small enough to receipt cleanly before attempting branch decode or KV transport.",
+  },
+  {
     id: "image-tile-inference",
     title: "Image tile inference",
     status: "planned",

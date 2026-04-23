@@ -72,6 +72,9 @@ async function loadFeatures() {
     if (FEATURES.computeEmbedTile === true) {
       window.__M3T4_COMPUTE_EMBED_TILE__ = true;
     }
+    if (FEATURES.computePrefillTopkProbe === true) {
+      window.__M3T4_COMPUTE_PREFILL_TOPK_PROBE__ = true;
+    }
     if (typeof s.computeEmbedModelId === "string" && s.computeEmbedModelId && !window.__M3T4_COMPUTE_EMBED_MODEL__) {
       window.__M3T4_COMPUTE_EMBED_MODEL__ = s.computeEmbedModelId;
     }

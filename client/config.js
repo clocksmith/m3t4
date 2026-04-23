@@ -10,6 +10,7 @@ window.__M3T4_AUTH_MODE__ = isLocalM3t4Config ? "dev" : "firebase";
 window.__M3T4_COMPUTE_SLACK_WORKER__ = false;
 window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS__ = false;
 window.__M3T4_COMPUTE_EMBED_TILE__ = false;
+window.__M3T4_COMPUTE_PREFILL_TOPK_PROBE__ = false;
 window.__M3T4_COMPUTE_EMBED_MODEL__ = "";
 window.__M3T4_COMPUTE_LAB_ORIGIN__ = "";
 window.__M3T4_COMPUTE_STUN_URLS__ = [];

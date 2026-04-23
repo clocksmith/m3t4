@@ -7,6 +7,7 @@ import type { ContentHash, DerivedExecutionEvidence, ExecutionMode, GovernorMode
 import { ComputeLabStore, type ComputeChunk, type ExecutionReceipt, type PeerSubassignment, type PeerSubreceipt, type ValidationRecord, type WebRtcPairRecord, type WebRtcSessionRecord } from "./store.js";
 import { COMPUTE_USE_CASES } from "./use-cases.js";
 import { CONTACT_MAP_PRESETS, resolveContactMapPreset } from "./contact-map-presets.js";
+import { PREFILL_TOPK_PROBE_MODEL_ID } from "./kernels/prefill-topk-probe.js";
 
 export interface RouteDeps {
   store: ComputeLabStore;
@@ -750,6 +751,33 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     }
     return true;
   }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/prefill-topk-probe") {
+    const body = await readJson<{
+      modelId?: string;
+      promptText?: string;
+      topK?: number;
+      minExecutions?: number;
+      minAgreeing?: number;
+      requiredTransport?: TransportKind;
+      requiredPeerSubreceipt?: boolean;
+    }>(req);
+    try {
+      const task = deps.store.seedPrefillTopkProbeTask({
+        modelId: body?.modelId,
+        promptText: String(body?.promptText ?? ""),
+        topK: body?.topK,
+        minExecutions: body?.minExecutions,
+        minAgreeing: body?.minAgreeing,
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+      });
+      await flushStore(deps.store);
+      json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/contact-map-tile") {
     const body = await readJson<{
       presetId?: string;
@@ -1240,6 +1268,15 @@ td,th{border-bottom:1px solid #252b3a;padding:7px;text-align:left;vertical-align
     <div class="row"><button id="seedEmbeddingTile">seed embedding tile</button></div>
   </div>
   <div class="card">
+    <div>prefill top-k probe</div>
+    <div class="muted">Doppler Gemma 3 270M next-token top-k probe; public prompts only, replicated quorum, fixed model ${PREFILL_TOPK_PROBE_MODEL_ID}</div>
+    <textarea id="prefillTopkPrompt" placeholder="prompt text">Finish this technical note in one line: WebGPU lets browsers run</textarea>
+    <div class="row">
+      <input id="prefillTopkK" value="4" aria-label="prefill top k">
+    </div>
+    <div class="row"><button id="seedPrefillTopkProbe">seed prefill top-k probe</button></div>
+  </div>
+  <div class="card">
     <div>contact map tile</div>
     <div class="muted">Low-bandwidth heuristic protein contact-score tile; public residue windows only, no model download</div>
     <select id="contactPreset" aria-label="contact map preset">
@@ -1340,6 +1377,10 @@ document.getElementById("seedEmbeddingTile").onclick = () => adminPost("/compute
   documents: JSON.parse(val("embeddingDocs") || "[]"),
   topK: asNum("embeddingTopK"),
 });
+document.getElementById("seedPrefillTopkProbe").onclick = () => adminPost("/compute/admin/tasks/prefill-topk-probe", {
+  promptText: val("prefillTopkPrompt"),
+  topK: asNum("prefillTopkK"),
+});
 const contactMapPresets = ${JSON.stringify(CONTACT_MAP_PRESETS)};
 const contactPresetSelect = document.getElementById("contactPreset");
 const contactPresetMeta = document.getElementById("contactPresetMeta");
@@ -1430,7 +1471,7 @@ function render(data, useCases) {
     .map((k) => '<div class="card"><div>'+k+'</div><div class="n">'+(data[k] ?? 0)+'</div></div>').join("");
   document.getElementById("useCases").innerHTML = table(["id","status","workload","inputBoundary","validation"], useCases);
   document.getElementById("publicStats").innerHTML = table(["generatedAt","privacy","computeScore","totalWorkers","activeWorkers","totalReceipts","acceptedReceiptPct","webgpuSupportedPct","webgpuCorrectnessPct","renderFixturePct","webrtcDirectSuccessPct","turnRequiredPct","medianKernelMs","p95KernelMs"], [data.publicStats || {}]) +
-    table(["acceptedReceipts","rejectedReceipts","acceptedContactMapTileChunks","acceptedContactMapTileCells","acceptedPublicArtifactChunks","acceptedReplayVerifyChunks","acceptedSeedSweepChunks","acceptedSeedSweepSeeds","acceptedTensorTileChunks","acceptedTensorTileCells","acceptedWebGpuWitnessReceipts","acceptedWebRtcReceipts"], [data.publicStats?.scoreBreakdown || {}]);
+    table(["acceptedReceipts","rejectedReceipts","acceptedContactMapTileChunks","acceptedContactMapTileCells","acceptedEmbeddingTileChunks","acceptedPrefillTopkProbeChunks","acceptedPublicArtifactChunks","acceptedReplayVerifyChunks","acceptedSeedSweepChunks","acceptedSeedSweepSeeds","acceptedTensorTileChunks","acceptedTensorTileCells","acceptedWebGpuWitnessReceipts","acceptedWebRtcReceipts"], [data.publicStats?.scoreBreakdown || {}]);
   document.getElementById("workerProfiles").innerHTML = table(["workerId","browserFamily","deviceClass","adapterClass","webgpuAvailable","webgpuCorrectnessScore","renderFixtureScore","webrtcDirectSuccessRate","turnRequiredRate","p95KernelMs","allowedWorkloadTier","acceptedReceipts","rejectedReceipts"], data.workerProfiles || []);
   document.getElementById("deviceClasses").innerHTML = table(["classId","workers","activeWorkers","webgpuCorrectnessScore","renderFixtureScore","webrtcDirectSuccessRate","turnRequiredRate","p95KernelMs"], data.deviceClassProfiles || []);
   document.getElementById("networkClasses").innerHTML = table(["classId","workers","activeWorkers","webrtcDirectSuccessRate","turnRequiredRate","p95KernelMs"], data.networkClassProfiles || []);

@@ -47,6 +47,9 @@ Current controlled-production status as of 2026-04-22:
   accepted public chunks and receipts, not per-user credit.
 - `plasma.tensor_tile.v0` is implemented as the first bounded WebGPU
   useful-work fixture, gated to workers with accepted WebGPU witness evidence.
+- repo head also supports `ml.prefill_topk_probe.v0`, a Doppler-backed browser
+  text prefill probe on a fixed small model that returns only next-token top-k
+  receipts under replicated quorum.
 - repo head also supports `plasma.tensor_tile.v0` over strict WebRTC
   `plasma-data` with task-required transport and peer subassignments; the next
   hosted smoke is still pending deploy auth recovery.
@@ -103,14 +106,18 @@ Near-term real workloads should be added in this order:
    This is now the low-bandwidth protein-shaped path: bounded integer tiles on
    published sequences, validated by exact hash against a server-held
    heuristic reference.
-2. `ml.embedding_tile.v0`: public embedding and rerank batches over published
+2. `ml.prefill_topk_probe.v0`: public prompt prefill probes on a fixed small
+   browser model. This is the first honest text-generation-shaped workload:
+   small prompt in, tiny top-k token receipt out, replicated by quorum before
+   any attempt at branch decode or KV transport.
+3. `ml.embedding_tile.v0`: public embedding and rerank batches over published
    corpora. This is still useful, but the model artifact cost is much higher
    than the contact-tile path.
-3. `ml.image_tile_infer.v0`: public image-tile classification, segmentation,
+4. `ml.image_tile_infer.v0`: public image-tile classification, segmentation,
    background removal, or depth-style inference. This reuses the same browser
    ML path as embeddings while producing more obviously useful outputs for asset
    processing and public research imagery.
-4. `science.microscopy_tile_score.v0`: public microscopy/pathology tile
+5. `science.microscopy_tile_score.v0`: public microscopy/pathology tile
    scoring. Same tile/inference shape as the vision adapter above, but aimed at
    public research datasets and validated with reference tiles plus replicated
    agreement.

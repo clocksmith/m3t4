@@ -9,6 +9,7 @@ export const DEFAULT_FEATURES = {
   computeSlackWorker: false,
   computeWebRtcArtifacts: false,
   computeEmbedTile: false,
+  computePrefillTopkProbe: false,
   computeReceiptDashboard: false,
   computeLiveBadges: false,
   webgpuRenderer: false,

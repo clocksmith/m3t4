@@ -14,8 +14,10 @@ import { BEHAVIOR_VERSION, REPLAY_CONSTANTS_HASH, replayArtifactToResultV1, simu
 // them with Web Crypto so the server can verify bit-for-bit.
 
 const EMBEDDING_TILE_KERNEL = "ml.embedding_tile.v0";
+const PREFILL_TOPK_PROBE_KERNEL = "ml.prefill_topk_probe.v0";
 const CONTACT_MAP_TILE_KERNEL = "science.contact_map_tile.v0";
 const EMBEDDING_TILE_MODEL = "google-embeddinggemma-300m-q4k-ehf16-af32";
+const PREFILL_TOPK_PROBE_MODEL = "gemma-3-270m-it-q4k-ehf16-af32";
 const EMBEDDING_TILE_SCORE_SCALE = 1000;
 const DOPPLER_GENERATION_URL = new URL("../vendor/doppler/src/generation/index.js", import.meta.url).href;
 const DOPPLER_REGISTRY_URL = new URL("../vendor/doppler/src/client/doppler-registry.js", import.meta.url).href;
@@ -55,6 +57,7 @@ const KERNELS = {
   "m3t4.replay_verify.v1": runReplayVerify,
   "m3t4.seed_sweep.v0": runSeedSweep,
   [EMBEDDING_TILE_KERNEL]: runEmbeddingTile,
+  [PREFILL_TOPK_PROBE_KERNEL]: runPrefillTopkProbe,
   [CONTACT_MAP_TILE_KERNEL]: runContactMapTile,
   "plasma.tensor_tile.v0": runTensorTile,
   "device_witness.webgpu.v0": runDeviceWitnessWebGpu,
@@ -165,7 +168,7 @@ function canvas2dFixtureBytes() {
 async function runEmbeddingTile(params) {
   if (!navigator.gpu?.requestAdapter) throw new Error("WebGPU unavailable");
   const spec = normalizeEmbeddingTileParams(params);
-  const pipeline = await getDopplerEmbeddingPipeline(spec.modelId);
+  const pipeline = await getDopplerPipeline(spec.modelId);
   const queryEmbedding = await embedText(pipeline, spec.queryText, "query", spec.modelId);
   const docs = [];
   for (let docIndex = 0; docIndex < spec.documents.length; docIndex++) {
@@ -187,6 +190,34 @@ async function runEmbeddingTile(params) {
     topK: spec.topK,
     scoreScale: EMBEDDING_TILE_SCORE_SCALE,
     hits: topHits,
+  }));
+  return { bytes, executionMode: "webgpu" };
+}
+
+async function runPrefillTopkProbe(params) {
+  if (!navigator.gpu?.requestAdapter) throw new Error("WebGPU unavailable");
+  const spec = normalizePrefillTopkProbeParams(params);
+  const pipeline = await getDopplerPipeline(spec.modelId);
+  pipeline.reset?.();
+  const prefill = await pipeline.prefillWithLogits(spec.promptText, {
+    temperature: 0,
+    topK: 1,
+    topP: 1,
+  });
+  const logits = prefill?.logits;
+  const inputTokens = Array.isArray(prefill?.tokens) ? prefill.tokens : [];
+  if (!(logits instanceof Float32Array) || logits.length === 0) {
+    throw new Error("prefill logits missing");
+  }
+  const hits = topKTokenIds(logits, spec.topK).map((tokenId, rank) => ({ rank: rank + 1, tokenId }));
+  const bytes = new TextEncoder().encode(stableJson({
+    kind: PREFILL_TOPK_PROBE_KERNEL,
+    modelId: spec.modelId,
+    promptHash: await hashText(spec.promptText),
+    promptLength: spec.promptText.length,
+    prefillTokenCount: inputTokens.length,
+    topK: spec.topK,
+    hits,
   }));
   return { bytes, executionMode: "webgpu" };
 }
@@ -317,7 +348,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   }
 }
 
-async function getDopplerEmbeddingPipeline(modelId) {
+async function getDopplerPipeline(modelId) {
   const key = String(modelId || "").trim();
   if (!key) throw new Error("embedding modelId required");
   if (!dopplerPipelineCache.has(key)) {
@@ -778,6 +809,17 @@ function encodeContactResidues(text) {
   });
 }
 
+function normalizePrefillTopkProbeParams(params) {
+  const modelId = String(params.modelId || PREFILL_TOPK_PROBE_MODEL).trim();
+  if (modelId !== PREFILL_TOPK_PROBE_MODEL) {
+    throw new Error(`unsupported prefill probe model: ${modelId}`);
+  }
+  const promptText = normalizeTextParam(params.promptText, "promptText", 1, 1024);
+  const topK = asInt(params.topK ?? 4);
+  if (topK < 1 || topK > 8) throw new Error("topK must be 1..8");
+  return { modelId, promptText, topK };
+}
+
 function normalizeEmbeddingTileParams(params) {
   const modelId = String(params.modelId || EMBEDDING_TILE_MODEL).trim();
   if (modelId !== EMBEDDING_TILE_MODEL) {
@@ -833,6 +875,28 @@ function cosineSimilarity(a, b) {
   }
   if (normA <= 0 || normB <= 0) throw new Error("embedding norm invalid");
   return dot / Math.sqrt(normA * normB);
+}
+
+function topKTokenIds(logits, topK) {
+  const best = [];
+  for (let tokenId = 0; tokenId < logits.length; tokenId++) {
+    const logit = Number(logits[tokenId]);
+    if (!Number.isFinite(logit)) continue;
+    const entry = { tokenId, logit };
+    let inserted = false;
+    for (let i = 0; i < best.length; i++) {
+      const current = best[i];
+      if (logit > current.logit || (logit === current.logit && tokenId < current.tokenId)) {
+        best.splice(i, 0, entry);
+        inserted = true;
+        break;
+      }
+    }
+    if (!inserted && best.length < topK) best.push(entry);
+    if (best.length > topK) best.length = topK;
+  }
+  if (best.length === 0) throw new Error("no finite logits");
+  return best.map((entry) => entry.tokenId);
 }
 
 function stableJson(value) {

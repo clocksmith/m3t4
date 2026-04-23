@@ -30,6 +30,13 @@ import {
   normalizeEmbeddingTileParams,
 } from "./kernels/embedding-tile.js";
 import {
+  PREFILL_TOPK_PROBE_KERNEL_HASH,
+  PREFILL_TOPK_PROBE_KERNEL_ID,
+  PREFILL_TOPK_PROBE_MODEL_ID,
+  normalizePrefillTopkProbeParams,
+  prefillTopkProbePlaceholderOutputHash,
+} from "./kernels/prefill-topk-probe.js";
+import {
   CONTACT_MAP_TILE_KERNEL_HASH,
   CONTACT_MAP_TILE_KERNEL_ID,
   normalizeContactMapTileParams,
@@ -102,6 +109,7 @@ const KNOWN_KERNELS = [
   DEVICE_WITNESS_WEBRTC_KERNEL_ID,
   DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID,
   EMBEDDING_TILE_KERNEL_ID,
+  PREFILL_TOPK_PROBE_KERNEL_ID,
   CONTACT_MAP_TILE_KERNEL_ID,
   PUBLIC_ARTIFACT_VERIFY_KERNEL_ID,
   SEED_SWEEP_KERNEL_ID,
@@ -415,6 +423,7 @@ export interface ComputeScoreBreakdown {
   acceptedContactMapTileChunks: number;
   acceptedContactMapTileCells: number;
   acceptedEmbeddingTileChunks: number;
+  acceptedPrefillTopkProbeChunks: number;
   acceptedPublicArtifactChunks: number;
   acceptedReplayVerifyChunks: number;
   acceptedSeedSweepChunks: number;
@@ -1219,6 +1228,59 @@ export class ComputeLabStore {
     const task: ComputeTask = {
       taskId,
       kind: EMBEDDING_TILE_KERNEL_ID,
+      status: "running",
+      createdAt: this.now(),
+      validationPolicy: {
+        determinismClass: "replicated-quorum",
+        validationMode: "quorum",
+        minExecutions,
+        minAgreeing,
+        requiredTransport: input.requiredTransport,
+        requiredPeerSubreceipt: input.requiredPeerSubreceipt,
+      },
+      chunks: [chunk],
+    };
+    this.tasks.set(taskId, task);
+    return task;
+  }
+
+  seedPrefillTopkProbeTask(input: {
+    modelId?: string;
+    promptText: string;
+    topK?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const normalized = normalizePrefillTopkProbeParams({
+      modelId: input.modelId ?? PREFILL_TOPK_PROBE_MODEL_ID,
+      promptText: input.promptText,
+      topK: input.topK ?? 4,
+    });
+    const params = {
+      modelId: normalized.modelId,
+      promptText: normalized.promptText,
+      topK: normalized.topK,
+    };
+    const taskId = randomId("task");
+    const minExecutions = Math.max(2, input.minExecutions ?? 2);
+    const minAgreeing = Math.min(minExecutions, Math.max(2, input.minAgreeing ?? 2));
+    const chunk: ComputeChunk = {
+      chunkId: `${taskId}-chunk-0`,
+      taskId,
+      ordinal: 0,
+      kind: PREFILL_TOPK_PROBE_KERNEL_ID,
+      params,
+      kernelId: PREFILL_TOPK_PROBE_KERNEL_ID,
+      kernelHash: PREFILL_TOPK_PROBE_KERNEL_HASH,
+      inputHash: hashCanonical({ kind: PREFILL_TOPK_PROBE_KERNEL_ID, params }),
+      expectedOutputHash: prefillTopkProbePlaceholderOutputHash(normalized),
+      status: "pending",
+    };
+    const task: ComputeTask = {
+      taskId,
+      kind: PREFILL_TOPK_PROBE_KERNEL_ID,
       status: "running",
       createdAt: this.now(),
       validationPolicy: {
@@ -2740,6 +2802,7 @@ function isWebRtcDataTask(kind: TaskKind): boolean {
   return (
     kind === CONTACT_MAP_TILE_KERNEL_ID ||
     kind === EMBEDDING_TILE_KERNEL_ID ||
+    kind === PREFILL_TOPK_PROBE_KERNEL_ID ||
     kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID ||
     kind === REPLAY_VERIFY_KERNEL_ID ||
     kind === SEED_SWEEP_KERNEL_ID ||
@@ -3322,6 +3385,7 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
   let acceptedContactMapTileChunks = 0;
   let acceptedContactMapTileCells = 0;
   let acceptedEmbeddingTileChunks = 0;
+  let acceptedPrefillTopkProbeChunks = 0;
   let acceptedPublicArtifactChunks = 0;
   let acceptedReplayVerifyChunks = 0;
   let acceptedSeedSweepChunks = 0;
@@ -3338,6 +3402,7 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
           stringParam(chunk.params.rowResidues).length * stringParam(chunk.params.colResidues).length,
         );
       } else if (task.kind === EMBEDDING_TILE_KERNEL_ID) acceptedEmbeddingTileChunks++;
+      else if (task.kind === PREFILL_TOPK_PROBE_KERNEL_ID) acceptedPrefillTopkProbeChunks++;
       else if (task.kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID) acceptedPublicArtifactChunks++;
       else if (task.kind === REPLAY_VERIFY_KERNEL_ID) acceptedReplayVerifyChunks++;
       else if (task.kind === SEED_SWEEP_KERNEL_ID) {
@@ -3361,6 +3426,7 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
     acceptedContactMapTileChunks,
     acceptedContactMapTileCells,
     acceptedEmbeddingTileChunks,
+    acceptedPrefillTopkProbeChunks,
     acceptedPublicArtifactChunks,
     acceptedReplayVerifyChunks,
     acceptedSeedSweepChunks,
@@ -3382,6 +3448,7 @@ function computeScore(breakdown: ComputeScoreBreakdown): number {
     breakdown.acceptedContactMapTileChunks * 110 +
     breakdown.acceptedContactMapTileCells * 2 +
     breakdown.acceptedEmbeddingTileChunks * 140 +
+    breakdown.acceptedPrefillTopkProbeChunks * 125 +
     breakdown.acceptedPublicArtifactChunks * 80 +
     breakdown.acceptedReplayVerifyChunks * 120 +
     breakdown.acceptedSeedSweepChunks * 60 +
@@ -3506,6 +3573,7 @@ function taskRequiredWorkloadTier(task: ComputeTask): WorkloadTier {
   if (
     task.kind === TENSOR_TILE_KERNEL_ID ||
     task.kind === EMBEDDING_TILE_KERNEL_ID ||
+    task.kind === PREFILL_TOPK_PROBE_KERNEL_ID ||
     task.kind === CONTACT_MAP_TILE_KERNEL_ID
   ) return "webgpu-light";
   return "observe-only";
@@ -3739,7 +3807,7 @@ export function referenceReceiptFields(chunk: Omit<ComputeChunk, "expectedOutput
   "kernelId" | "kernelHash" | "inputHash" | "artifactHash" | "outputHash" | "derived" | "determinismClass" | "validationMode"
 > {
   const outputHash = chunk.expectedOutputHash ?? referenceOutputHash(chunk);
-  const quorumTask = chunk.kind === EMBEDDING_TILE_KERNEL_ID;
+  const quorumTask = chunk.kind === EMBEDDING_TILE_KERNEL_ID || chunk.kind === PREFILL_TOPK_PROBE_KERNEL_ID;
   const derived = chunk.kind === DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID
     ? {
       contractVersion: "derived-compute-extension.v0" as const,
@@ -3788,6 +3856,12 @@ function referenceOutputHash(chunk: Omit<ComputeChunk, "expectedOutputHash">): C
         modelId: stringParam(chunk.params.modelId),
         queryText: stringParam(chunk.params.queryText),
         documentsJson: stringParam(chunk.params.documentsJson),
+        topK: asInt(chunk.params.topK, "topK"),
+      }));
+    case PREFILL_TOPK_PROBE_KERNEL_ID:
+      return prefillTopkProbePlaceholderOutputHash(normalizePrefillTopkProbeParams({
+        modelId: stringParam(chunk.params.modelId),
+        promptText: stringParam(chunk.params.promptText),
         topK: asInt(chunk.params.topK, "topK"),
       }));
     case CONTACT_MAP_TILE_KERNEL_ID:

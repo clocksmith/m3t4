@@ -10,6 +10,7 @@ import type { WorkerCapability } from "../plasma/types.js";
 import { canonicalJson, hashCanonical, sha256 } from "../plasma/hash.js";
 import { PersistentComputeLabStore } from "../persistent-store.js";
 import { retainLoadWebRtcPair } from "../firestore-persistence.js";
+import { IMAGE_TILE_SAMPLE_PRESETS, MICROSCOPY_TILE_SAMPLE_PRESETS } from "../image-tile-presets.js";
 import { runReplayVerify } from "../kernels/replay-verify.js";
 import { runSeedSweep } from "../kernels/seed-sweep.js";
 import { runContactMapTileReference } from "../kernels/contact-map-tile.js";
@@ -42,7 +43,16 @@ const baseConfig: PlasmaLabConfig = {
 };
 
 const capability: WorkerCapability = {
-  kernels: ["prime-search.v0", "m3t4.public_artifact_verify.v0", "m3t4.replay_verify.v1", "m3t4.seed_sweep.v0"],
+  kernels: [
+    "prime-search.v0",
+    "asset.tile_audit.v0",
+    "m3t4.public_artifact_verify.v0",
+    "m3t4.replay_verify.v1",
+    "m3t4.seed_sweep.v0",
+    "ml.image_tile_infer.v0",
+    "science.microscopy_tile_score.v0",
+    "m3t4.exploit_search.v0",
+  ],
   runtimeSurfaces: ["cpu-reference"],
   maxChunkBytes: 1024 * 1024,
   maxConcurrentChunks: 1,
@@ -914,6 +924,149 @@ test("seed sweep receipts accept deterministic public preset batches", () => {
   assert.equal(stats.scoreBreakdown.acceptedSeedSweepSeeds, 4);
   assert.equal(stats.scoreBreakdown.acceptedReceipts, 2);
   assert.ok(stats.computeScore > 0);
+});
+
+test("image tile infer receipts accept deterministic low-bandwidth tile classification", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const preset = IMAGE_TILE_SAMPLE_PRESETS[0];
+  const task = store.seedImageTileInferTask({
+    sourceId: preset.sourceId,
+    width: preset.width,
+    height: preset.height,
+    rgbaBase64: preset.rgbaBase64,
+    topK: 3,
+    minExecutions: 1,
+    minAgreeing: 1,
+  });
+  const worker = store.registerWorker({ capability });
+  const nextBody = store.assignNext(auth(worker))!;
+  assert.equal(nextBody.task.kind, "ml.image_tile_infer.v0");
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const result = store.submitReceipt({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: nextBody.task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...referenceReceiptFields(nextBody.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 4,
+  });
+  assert.equal(result.receipt.decision, "accepted");
+  assert.equal(result.validation?.status, "accepted");
+  assert.equal(store.getTask(task.taskId)?.status, "complete");
+});
+
+test("microscopy tile score receipts accept deterministic scorecards", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const preset = MICROSCOPY_TILE_SAMPLE_PRESETS[0];
+  const task = store.seedMicroscopyTileScoreTask({
+    sourceId: preset.sourceId,
+    width: preset.width,
+    height: preset.height,
+    rgbaBase64: preset.rgbaBase64,
+    minExecutions: 1,
+    minAgreeing: 1,
+  });
+  const worker = store.registerWorker({ capability });
+  const nextBody = store.assignNext(auth(worker))!;
+  assert.equal(nextBody.task.kind, "science.microscopy_tile_score.v0");
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const result = store.submitReceipt({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: nextBody.task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...referenceReceiptFields(nextBody.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 4,
+  });
+  assert.equal(result.receipt.decision, "accepted");
+  assert.equal(result.validation?.status, "accepted");
+  assert.equal(store.getTask(task.taskId)?.status, "complete");
+});
+
+test("exploit search receipts accept deterministic flagged-findings summaries", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const task = store.seedExploitSearchTask({
+    stageId: "boardroom",
+    brainA: "unicorn",
+    brainB: "disruptor",
+    seedStart: 1,
+    seedEndExclusive: 5,
+    maxTicks: 3600,
+    topFindings: 4,
+    minExecutions: 1,
+    minAgreeing: 1,
+  });
+  const worker = store.registerWorker({ capability });
+  const nextBody = store.assignNext(auth(worker))!;
+  assert.equal(nextBody.task.kind, "m3t4.exploit_search.v0");
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const result = store.submitReceipt({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: nextBody.task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...referenceReceiptFields(nextBody.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 12,
+  });
+  assert.equal(result.receipt.decision, "accepted");
+  assert.equal(result.validation?.status, "accepted");
+  assert.equal(store.getTask(task.taskId)?.status, "complete");
+});
+
+test("asset tile audit receipts accept deterministic trim and bleed summaries", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const preset = IMAGE_TILE_SAMPLE_PRESETS[1];
+  const task = store.seedAssetTileAuditTask({
+    sourceId: preset.sourceId,
+    width: preset.width,
+    height: preset.height,
+    rgbaBase64: preset.rgbaBase64,
+    minExecutions: 1,
+    minAgreeing: 1,
+  });
+  const worker = store.registerWorker({ capability });
+  const nextBody = store.assignNext(auth(worker))!;
+  assert.equal(nextBody.task.kind, "asset.tile_audit.v0");
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const result = store.submitReceipt({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: nextBody.task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...referenceReceiptFields(nextBody.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 4,
+  });
+  assert.equal(result.receipt.decision, "accepted");
+  assert.equal(result.validation?.status, "accepted");
+  assert.equal(store.getTask(task.taskId)?.status, "complete");
 });
 
 test("tensor tile receipts require webgpu-light workers and accept CPU reference hashes", () => {
@@ -2385,6 +2538,83 @@ test("HTTP admin can seed prefill top-k probes", async (t) => {
   assert.equal(witness.status, 200);
   const first = await next(srv.port, worker);
   assert.equal(first.task.kind, "device_witness.webgpu.v0");
+});
+
+test("HTTP admin can seed image tile infer and asset tile audit tasks from sample presets", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const srv = await boot(store, { ...baseConfig, adminToken: "secret" });
+  t.after(() => srv.close());
+
+  const imageSeeded = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/image-tile-infer",
+    {
+      presetId: IMAGE_TILE_SAMPLE_PRESETS[0].id,
+      topK: 3,
+      minExecutions: 1,
+      minAgreeing: 1,
+    },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(imageSeeded.status, 200);
+  assert.equal(imageSeeded.body.chunks, 1);
+  assert.equal(imageSeeded.body.presetId, IMAGE_TILE_SAMPLE_PRESETS[0].id);
+
+  const assetSeeded = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/asset-tile-audit",
+    {
+      presetId: IMAGE_TILE_SAMPLE_PRESETS[1].id,
+      minExecutions: 1,
+      minAgreeing: 1,
+    },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(assetSeeded.status, 200);
+  assert.equal(assetSeeded.body.chunks, 1);
+  assert.equal(assetSeeded.body.presetId, IMAGE_TILE_SAMPLE_PRESETS[1].id);
+});
+
+test("HTTP admin can seed microscopy tile scores and exploit searches", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const srv = await boot(store, { ...baseConfig, adminToken: "secret" });
+  t.after(() => srv.close());
+
+  const microscopySeeded = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/microscopy-tile-score",
+    {
+      presetId: MICROSCOPY_TILE_SAMPLE_PRESETS[0].id,
+      minExecutions: 1,
+      minAgreeing: 1,
+    },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(microscopySeeded.status, 200);
+  assert.equal(microscopySeeded.body.chunks, 1);
+  assert.equal(microscopySeeded.body.presetId, MICROSCOPY_TILE_SAMPLE_PRESETS[0].id);
+
+  const exploitSeeded = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/exploit-search",
+    {
+      stageId: "boardroom",
+      brainA: "unicorn",
+      brainB: "disruptor",
+      seedStart: 1,
+      seedEndExclusive: 5,
+      maxTicks: 3600,
+      minExecutions: 1,
+      minAgreeing: 1,
+    },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(exploitSeeded.status, 200);
+  assert.equal(exploitSeeded.body.chunks, 1);
 });
 
 test("HTTP admin can seed contact map tiles", async (t) => {

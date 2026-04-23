@@ -7,6 +7,7 @@ import type { ContentHash, DerivedExecutionEvidence, ExecutionMode, GovernorMode
 import { ComputeLabStore, type ComputeChunk, type ExecutionReceipt, type PeerSubassignment, type PeerSubreceipt, type ValidationRecord, type WebRtcPairRecord, type WebRtcSessionRecord } from "./store.js";
 import { COMPUTE_USE_CASES } from "./use-cases.js";
 import { CONTACT_MAP_PRESETS, resolveContactMapPreset } from "./contact-map-presets.js";
+import { IMAGE_TILE_SAMPLE_PRESETS, MICROSCOPY_TILE_SAMPLE_PRESETS, resolveTileSamplePreset } from "./image-tile-presets.js";
 import { PREFILL_TOPK_PROBE_MODEL_ID } from "./kernels/prefill-topk-probe.js";
 
 export interface RouteDeps {
@@ -751,6 +752,44 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     }
     return true;
   }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/image-tile-infer") {
+    const body = await readJson<{
+      presetId?: string;
+      sourceId?: string;
+      width?: number;
+      height?: number;
+      rgbaBase64?: string;
+      topK?: number;
+      minExecutions?: number;
+      minAgreeing?: number;
+      requiredTransport?: TransportKind;
+      requiredPeerSubreceipt?: boolean;
+    }>(req);
+    try {
+      const preset = body?.presetId ? resolveTileSamplePreset(body.presetId, "image") : null;
+      const task = deps.store.seedImageTileInferTask({
+        sourceId: body?.sourceId ?? preset?.sourceId,
+        width: body?.width ?? preset?.width ?? 0,
+        height: body?.height ?? preset?.height ?? 0,
+        rgbaBase64: String(body?.rgbaBase64 ?? preset?.rgbaBase64 ?? ""),
+        topK: body?.topK,
+        minExecutions: body?.minExecutions,
+        minAgreeing: body?.minAgreeing,
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+      });
+      await flushStore(deps.store);
+      json(res, 200, {
+        taskId: task.taskId,
+        chunks: task.chunks.length,
+        validationPolicy: task.validationPolicy,
+        presetId: preset?.id ?? null,
+      });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/prefill-topk-probe") {
     const body = await readJson<{
       modelId?: string;
@@ -773,6 +812,113 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       });
       await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/microscopy-tile-score") {
+    const body = await readJson<{
+      presetId?: string;
+      sourceId?: string;
+      width?: number;
+      height?: number;
+      rgbaBase64?: string;
+      minExecutions?: number;
+      minAgreeing?: number;
+      requiredTransport?: TransportKind;
+      requiredPeerSubreceipt?: boolean;
+    }>(req);
+    try {
+      const preset = body?.presetId ? resolveTileSamplePreset(body.presetId, "microscopy") : null;
+      const task = deps.store.seedMicroscopyTileScoreTask({
+        sourceId: body?.sourceId ?? preset?.sourceId,
+        width: body?.width ?? preset?.width ?? 0,
+        height: body?.height ?? preset?.height ?? 0,
+        rgbaBase64: String(body?.rgbaBase64 ?? preset?.rgbaBase64 ?? ""),
+        minExecutions: body?.minExecutions,
+        minAgreeing: body?.minAgreeing,
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+      });
+      await flushStore(deps.store);
+      json(res, 200, {
+        taskId: task.taskId,
+        chunks: task.chunks.length,
+        validationPolicy: task.validationPolicy,
+        presetId: preset?.id ?? null,
+      });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/exploit-search") {
+    const body = await readJson<{
+      stageId?: string;
+      brainA?: string;
+      brainB?: string;
+      seedStart?: number;
+      seedEndExclusive?: number;
+      maxTicks?: number;
+      topFindings?: number;
+      minExecutions?: number;
+      minAgreeing?: number;
+      requiredTransport?: TransportKind;
+      requiredPeerSubreceipt?: boolean;
+    }>(req);
+    try {
+      const task = deps.store.seedExploitSearchTask({
+        stageId: String(body?.stageId ?? ""),
+        brainA: String(body?.brainA ?? ""),
+        brainB: String(body?.brainB ?? ""),
+        seedStart: body?.seedStart ?? 0,
+        seedEndExclusive: body?.seedEndExclusive ?? 0,
+        maxTicks: body?.maxTicks,
+        topFindings: body?.topFindings,
+        minExecutions: body?.minExecutions,
+        minAgreeing: body?.minAgreeing,
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+      });
+      await flushStore(deps.store);
+      json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/asset-tile-audit") {
+    const body = await readJson<{
+      presetId?: string;
+      sourceId?: string;
+      width?: number;
+      height?: number;
+      rgbaBase64?: string;
+      minExecutions?: number;
+      minAgreeing?: number;
+      requiredTransport?: TransportKind;
+      requiredPeerSubreceipt?: boolean;
+    }>(req);
+    try {
+      const preset = body?.presetId ? resolveTileSamplePreset(body.presetId, "image") : null;
+      const task = deps.store.seedAssetTileAuditTask({
+        sourceId: body?.sourceId ?? preset?.sourceId,
+        width: body?.width ?? preset?.width ?? 0,
+        height: body?.height ?? preset?.height ?? 0,
+        rgbaBase64: String(body?.rgbaBase64 ?? preset?.rgbaBase64 ?? ""),
+        minExecutions: body?.minExecutions,
+        minAgreeing: body?.minAgreeing,
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+      });
+      await flushStore(deps.store);
+      json(res, 200, {
+        taskId: task.taskId,
+        chunks: task.chunks.length,
+        validationPolicy: task.validationPolicy,
+        presetId: preset?.id ?? null,
+      });
     } catch (e) {
       json(res, 400, { error: message(e) });
     }
@@ -1268,6 +1414,18 @@ td,th{border-bottom:1px solid #252b3a;padding:7px;text-align:left;vertical-align
     <div class="row"><button id="seedEmbeddingTile">seed embedding tile</button></div>
   </div>
   <div class="card">
+    <div>image tile infer</div>
+    <div class="muted">Low-bandwidth fixed tile classifier over bounded public RGBA tiles</div>
+    <select id="imageTilePreset" aria-label="image tile preset">
+      ${IMAGE_TILE_SAMPLE_PRESETS.map((preset) => `<option value="${preset.id}">${preset.label}</option>`).join("")}
+    </select>
+    <div class="row">
+      <input id="imageTileSourceId" value="${IMAGE_TILE_SAMPLE_PRESETS[0]?.sourceId ?? "image-tile"}" aria-label="image tile source id">
+      <input id="imageTileTopK" value="3" aria-label="image tile top k">
+    </div>
+    <div class="row"><button id="seedImageTileInfer">seed image tile infer</button></div>
+  </div>
+  <div class="card">
     <div>prefill top-k probe</div>
     <div class="muted">Doppler Gemma 3 270M next-token top-k probe; public prompts only, replicated quorum, fixed model ${PREFILL_TOPK_PROBE_MODEL_ID}</div>
     <textarea id="prefillTopkPrompt" placeholder="prompt text">Finish this technical note in one line: WebGPU lets browsers run</textarea>
@@ -1275,6 +1433,17 @@ td,th{border-bottom:1px solid #252b3a;padding:7px;text-align:left;vertical-align
       <input id="prefillTopkK" value="4" aria-label="prefill top k">
     </div>
     <div class="row"><button id="seedPrefillTopkProbe">seed prefill top-k probe</button></div>
+  </div>
+  <div class="card">
+    <div>microscopy tile score</div>
+    <div class="muted">Deterministic microscopy scorecard for focus, stain balance, cellularity, and artifact risk</div>
+    <select id="microscopyPreset" aria-label="microscopy tile preset">
+      ${MICROSCOPY_TILE_SAMPLE_PRESETS.map((preset) => `<option value="${preset.id}">${preset.label}</option>`).join("")}
+    </select>
+    <div class="row">
+      <input id="microscopySourceId" value="${MICROSCOPY_TILE_SAMPLE_PRESETS[0]?.sourceId ?? "microscopy-tile"}" aria-label="microscopy source id">
+    </div>
+    <div class="row"><button id="seedMicroscopyTileScore">seed microscopy score</button></div>
   </div>
   <div class="card">
     <div>contact map tile</div>
@@ -1305,6 +1474,32 @@ td,th{border-bottom:1px solid #252b3a;padding:7px;text-align:left;vertical-align
       <input id="sweepChunk" value="8" aria-label="chunk size">
     </div>
     <div class="row"><button id="seedSweep">seed sweep</button></div>
+  </div>
+  <div class="card">
+    <div>exploit search</div>
+    <div class="muted">Deterministic public-preset exploit scan over bounded seed windows</div>
+    <div class="row">
+      <input id="exploitStage" value="boardroom" aria-label="exploit stage id">
+      <input id="exploitA" value="unicorn" aria-label="exploit preset A">
+      <input id="exploitB" value="disruptor" aria-label="exploit preset B">
+    </div>
+    <div class="row">
+      <input id="exploitStart" value="1" aria-label="exploit seed start">
+      <input id="exploitEnd" value="17" aria-label="exploit seed end">
+      <input id="exploitMaxTicks" value="5400" aria-label="exploit max ticks">
+    </div>
+    <div class="row"><button id="seedExploitSearch">seed exploit search</button></div>
+  </div>
+  <div class="card">
+    <div>asset tile audit</div>
+    <div class="muted">Trim, palette, fringe-alpha, and edge-bleed audit for public asset tiles</div>
+    <select id="assetTilePreset" aria-label="asset tile preset">
+      ${IMAGE_TILE_SAMPLE_PRESETS.map((preset) => `<option value="${preset.id}">${preset.label}</option>`).join("")}
+    </select>
+    <div class="row">
+      <input id="assetTileSourceId" value="${IMAGE_TILE_SAMPLE_PRESETS[0]?.sourceId ?? "asset-tile"}" aria-label="asset tile source id">
+    </div>
+    <div class="row"><button id="seedAssetTileAudit">seed asset audit</button></div>
   </div>
   <div class="card">
     <div>public artifact verify</div>
@@ -1377,9 +1572,27 @@ document.getElementById("seedEmbeddingTile").onclick = () => adminPost("/compute
   documents: JSON.parse(val("embeddingDocs") || "[]"),
   topK: asNum("embeddingTopK"),
 });
+const imageTilePresets = ${JSON.stringify(IMAGE_TILE_SAMPLE_PRESETS)};
+const microscopyTilePresets = ${JSON.stringify(MICROSCOPY_TILE_SAMPLE_PRESETS)};
+function applySimplePreset(selectId, presets, sourceIdInput) {
+  const select = document.getElementById(selectId);
+  const target = document.getElementById(sourceIdInput);
+  const preset = presets.find((entry) => entry.id === select.value) || presets[0];
+  if (!preset || !target) return;
+  target.value = preset.sourceId;
+}
+document.getElementById("seedImageTileInfer").onclick = () => adminPost("/compute/admin/tasks/image-tile-infer", {
+  presetId: val("imageTilePreset"),
+  sourceId: val("imageTileSourceId"),
+  topK: asNum("imageTileTopK"),
+});
 document.getElementById("seedPrefillTopkProbe").onclick = () => adminPost("/compute/admin/tasks/prefill-topk-probe", {
   promptText: val("prefillTopkPrompt"),
   topK: asNum("prefillTopkK"),
+});
+document.getElementById("seedMicroscopyTileScore").onclick = () => adminPost("/compute/admin/tasks/microscopy-tile-score", {
+  presetId: val("microscopyPreset"),
+  sourceId: val("microscopySourceId"),
 });
 const contactMapPresets = ${JSON.stringify(CONTACT_MAP_PRESETS)};
 const contactPresetSelect = document.getElementById("contactPreset");
@@ -1412,6 +1625,24 @@ document.getElementById("seedSweep").onclick = () => adminPost("/compute/admin/t
   seedEndExclusive: asNum("sweepEnd"),
   seedChunkSize: asNum("sweepChunk"),
 });
+document.getElementById("seedExploitSearch").onclick = () => adminPost("/compute/admin/tasks/exploit-search", {
+  stageId: val("exploitStage"),
+  brainA: val("exploitA"),
+  brainB: val("exploitB"),
+  seedStart: asNum("exploitStart"),
+  seedEndExclusive: asNum("exploitEnd"),
+  maxTicks: asNum("exploitMaxTicks"),
+});
+document.getElementById("seedAssetTileAudit").onclick = () => adminPost("/compute/admin/tasks/asset-tile-audit", {
+  presetId: val("assetTilePreset"),
+  sourceId: val("assetTileSourceId"),
+});
+document.getElementById("imageTilePreset").addEventListener("change", () => applySimplePreset("imageTilePreset", imageTilePresets, "imageTileSourceId"));
+document.getElementById("microscopyPreset").addEventListener("change", () => applySimplePreset("microscopyPreset", microscopyTilePresets, "microscopySourceId"));
+document.getElementById("assetTilePreset").addEventListener("change", () => applySimplePreset("assetTilePreset", imageTilePresets, "assetTileSourceId"));
+applySimplePreset("imageTilePreset", imageTilePresets, "imageTileSourceId");
+applySimplePreset("microscopyPreset", microscopyTilePresets, "microscopySourceId");
+applySimplePreset("assetTilePreset", imageTilePresets, "assetTileSourceId");
 document.getElementById("seedArtifact").onclick = () => {
   const raw = val("artifactJson");
   if (!raw) throwStatus("artifact JSON required");

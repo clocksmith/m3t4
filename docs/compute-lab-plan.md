@@ -35,6 +35,13 @@ Current production status as of 2026-04-22:
 - repo head now also supports `plasma.tensor_tile.v0` over the same strict
   WebRTC peer-subassignment path; the next hosted smoke should validate that
   end to end after deploy auth is restored.
+- repo head now also supports four bounded exact-hash advisory workloads that
+  are code-complete and admin-seedable but not yet production-smoked in this
+  run:
+  - `m3t4.exploit_search.v0`
+  - `asset.tile_audit.v0`
+  - `ml.image_tile_infer.v0`
+  - `science.microscopy_tile_score.v0`
 
 Do not describe the current implementation as fused-kernel, zero-copy,
 shared-buffer, or "every game frame is a science frame." The browser worker

@@ -1,4 +1,4 @@
-import { BEHAVIOR_VERSION, REPLAY_CONSTANTS_HASH, replayArtifactToResultV1, simulate, stableReplayJson, STAGES, STRATEGIES } from "../sim/index.js";
+import { BEHAVIOR_VERSION, REPLAY_CONSTANTS_HASH, evaluateReciprocalSideBias, replayArtifactToResultV1, simulate, stableReplayJson, STAGES, STRATEGIES } from "../sim/index.js";
 
 // Plasma compute worker. Runs deterministic kernels off the main
 // thread so the spectator render loop stays smooth.
@@ -13,12 +13,19 @@ import { BEHAVIOR_VERSION, REPLAY_CONSTANTS_HASH, replayArtifactToResultV1, simu
 // All kernels produce little-endian byte outputs and the worker hashes
 // them with Web Crypto so the server can verify bit-for-bit.
 
+const ASSET_TILE_AUDIT_KERNEL = "asset.tile_audit.v0";
 const EMBEDDING_TILE_KERNEL = "ml.embedding_tile.v0";
+const IMAGE_TILE_INFER_KERNEL = "ml.image_tile_infer.v0";
 const PREFILL_TOPK_PROBE_KERNEL = "ml.prefill_topk_probe.v0";
 const CONTACT_MAP_TILE_KERNEL = "science.contact_map_tile.v0";
+const MICROSCOPY_TILE_SCORE_KERNEL = "science.microscopy_tile_score.v0";
+const EXPLOIT_SEARCH_KERNEL = "m3t4.exploit_search.v0";
 const EMBEDDING_TILE_MODEL = "google-embeddinggemma-300m-q4k-ehf16-af32";
 const PREFILL_TOPK_PROBE_MODEL = "gemma-3-270m-it-q4k-ehf16-af32";
 const EMBEDDING_TILE_SCORE_SCALE = 1000;
+const IMAGE_TILE_INFER_MODEL = "tile-linear-v1";
+const MAX_TILE_DIM = 96;
+const MAX_TILE_PIXELS = MAX_TILE_DIM * MAX_TILE_DIM;
 const DOPPLER_GENERATION_URL = new URL("../vendor/doppler/src/generation/index.js", import.meta.url).href;
 const DOPPLER_REGISTRY_URL = new URL("../vendor/doppler/src/client/doppler-registry.js", import.meta.url).href;
 const DOPPLER_MODEL_SOURCE_URL = new URL("../vendor/doppler/src/client/runtime/model-source.js", import.meta.url).href;
@@ -56,9 +63,13 @@ const KERNELS = {
   },
   "m3t4.replay_verify.v1": runReplayVerify,
   "m3t4.seed_sweep.v0": runSeedSweep,
+  [ASSET_TILE_AUDIT_KERNEL]: runAssetTileAudit,
   [EMBEDDING_TILE_KERNEL]: runEmbeddingTile,
+  [IMAGE_TILE_INFER_KERNEL]: runImageTileInfer,
   [PREFILL_TOPK_PROBE_KERNEL]: runPrefillTopkProbe,
   [CONTACT_MAP_TILE_KERNEL]: runContactMapTile,
+  [MICROSCOPY_TILE_SCORE_KERNEL]: runMicroscopyTileScore,
+  [EXPLOIT_SEARCH_KERNEL]: runExploitSearch,
   "plasma.tensor_tile.v0": runTensorTile,
   "device_witness.webgpu.v0": runDeviceWitnessWebGpu,
   "device_witness.render_fixture.v0": () => canvas2dFixtureBytes(),
@@ -512,6 +523,253 @@ function runSeedSweep(params) {
   return new TextEncoder().encode(stableReplayJson(summary));
 }
 
+function runAssetTileAudit(params) {
+  const spec = normalizeRgbaTileParams(params);
+  const bytes = decodeRgbaBase64(spec);
+  const analysis = analyzeRgbaTile(bytes, spec.width, spec.height);
+  const bleedRiskQ = clampQ(
+    (analysis.edgeTouchMask !== 0 ? 260 : 0) +
+    analysis.fringeAlphaQ * 0.42 +
+    Math.max(0, 220 - Math.min(
+      analysis.alphaRect.x0,
+      analysis.alphaRect.y0,
+      spec.width - analysis.alphaRect.x1,
+      spec.height - analysis.alphaRect.y1,
+    )) * 2
+  );
+  const recommendedPadPx = analysis.blank ? 0 : bleedRiskQ >= 700 ? 2 : bleedRiskQ >= 380 ? 1 : 0;
+  return new TextEncoder().encode(stableJson({
+    kind: ASSET_TILE_AUDIT_KERNEL,
+    sourceId: spec.sourceId,
+    width: spec.width,
+    height: spec.height,
+    blank: analysis.blank,
+    trimRect: [analysis.alphaRect.x0, analysis.alphaRect.y0, analysis.alphaRect.x1, analysis.alphaRect.y1],
+    alphaCoverageQ: analysis.activeCoverageQ,
+    fringeAlphaQ: analysis.fringeAlphaQ,
+    bleedRiskQ,
+    edgeTouchMask: analysis.edgeTouchMask,
+    quantizedColorCount: analysis.quantizedColorCount,
+    dominantColors: analysis.dominantColors,
+    recommendedPadPx,
+  }));
+}
+
+function runImageTileInfer(params) {
+  const spec = normalizeImageTileInferParamsLowBandwidth(params);
+  const bytes = decodeRgbaBase64(spec);
+  const analysis = analyzeRgbaTile(bytes, spec.width, spec.height);
+  const midCoverageQ = 1000 - Math.min(1000, Math.abs(analysis.activeCoverageQ - 520) * 2);
+  const edgeTouchPenalty = analysis.edgeTouchMask === 0 ? 0 : 80;
+  const scores = {
+    sprite: clampQ(120 + midCoverageQ * 0.34 + analysis.saturationQ * 0.24 + analysis.contrastQ * 0.18 + analysis.symmetryQ * 0.12 - analysis.textStrokeQ * 0.12 - edgeTouchPenalty),
+    ui: clampQ(120 + analysis.textStrokeQ * 0.32 + analysis.flatnessQ * 0.28 + analysis.edgeDensityQ * 0.18 + (analysis.edgeTouchMask !== 0 ? 120 : 20) + (analysis.activeCoverageQ > 760 ? 80 : 0) - analysis.saturationQ * 0.08),
+    terrain: clampQ(120 + analysis.activeCoverageQ * 0.22 + analysis.entropyQ * 0.28 + analysis.edgeDensityQ * 0.16 + (analysis.edgeTouchMask !== 0 ? 70 : 0) - analysis.symmetryQ * 0.1),
+    text: clampQ(110 + analysis.textStrokeQ * 0.42 + analysis.contrastQ * 0.24 + analysis.flatnessQ * 0.16 + (analysis.activeCoverageQ < 720 ? 90 : 0) - analysis.saturationQ * 0.14),
+    effect: clampQ(110 + (1000 - analysis.activeCoverageQ) * 0.24 + analysis.saturationQ * 0.36 + analysis.contrastQ * 0.18 + Math.max(analysis.warmRatioQ, analysis.coolRatioQ) * 0.12),
+    portrait: clampQ(100 + analysis.warmRatioQ * 0.26 + analysis.symmetryQ * 0.24 + midCoverageQ * 0.16 + (analysis.activeCoverageQ > 220 && analysis.activeCoverageQ < 940 ? 90 : 0)),
+    other: clampQ(100 + analysis.entropyQ * 0.12 + analysis.saturationQ * 0.12 + analysis.contrastQ * 0.1),
+  };
+  const topLabels = Object.entries(scores)
+    .map(([label, scoreQ]) => ({ label, scoreQ }))
+    .sort((a, b) => b.scoreQ - a.scoreQ || a.label.localeCompare(b.label))
+    .slice(0, spec.topK);
+  return new TextEncoder().encode(stableJson({
+    kind: IMAGE_TILE_INFER_KERNEL,
+    modelId: IMAGE_TILE_INFER_MODEL,
+    sourceId: spec.sourceId,
+    width: spec.width,
+    height: spec.height,
+    topK: spec.topK,
+    alphaRect: [analysis.alphaRect.x0, analysis.alphaRect.y0, analysis.alphaRect.x1, analysis.alphaRect.y1],
+    featureQ: {
+      activeCoverageQ: analysis.activeCoverageQ,
+      edgeDensityQ: analysis.edgeDensityQ,
+      contrastQ: analysis.contrastQ,
+      saturationQ: analysis.saturationQ,
+      textStrokeQ: analysis.textStrokeQ,
+      symmetryQ: analysis.symmetryQ,
+      warmRatioQ: analysis.warmRatioQ,
+      coolRatioQ: analysis.coolRatioQ,
+      flatnessQ: analysis.flatnessQ,
+    },
+    topLabels,
+  }));
+}
+
+function runMicroscopyTileScore(params) {
+  const spec = normalizeRgbaTileParams(params);
+  const bytes = decodeRgbaBase64(spec);
+  const analysis = analyzeRgbaTile(bytes, spec.width, spec.height);
+  const focusQ = clampQ(analysis.edgeDensityQ * 0.5 + analysis.contrastQ * 0.25 + analysis.granularityQ * 0.25);
+  const cellularityQ = clampQ(
+    analysis.purpleDensityQ * 0.38 +
+    analysis.darkDensityQ * 0.24 +
+    analysis.granularityQ * 0.18 +
+    analysis.activeCoverageQ * 0.1 +
+    analysis.pinkDensityQ * 0.1
+  );
+  const stainBalanceQ = clampQ(1000 - Math.abs(analysis.purpleDensityQ - analysis.pinkDensityQ));
+  const artifactQ = clampQ(
+    (analysis.edgeTouchMask !== 0 ? 220 : 0) +
+    analysis.fringeAlphaQ * 0.32 +
+    (1000 - focusQ) * 0.16 +
+    Math.max(0, analysis.saturationQ - 760) * 0.18 +
+    Math.max(0, Math.abs(analysis.activeCoverageQ - 820) - 120) * 0.2
+  );
+  const anomalyQ = clampQ(artifactQ * 0.36 + Math.max(0, cellularityQ - 680) * 0.28 + (1000 - stainBalanceQ) * 0.2 + (1000 - focusQ) * 0.16);
+  const label = artifactQ >= 620 ? "artifact-heavy" : cellularityQ >= 620 ? "cell-dense" : cellularityQ <= 260 ? "sparse-field" : "mixed-field";
+  return new TextEncoder().encode(stableJson({
+    kind: MICROSCOPY_TILE_SCORE_KERNEL,
+    sourceId: spec.sourceId,
+    width: spec.width,
+    height: spec.height,
+    label,
+    alphaRect: [analysis.alphaRect.x0, analysis.alphaRect.y0, analysis.alphaRect.x1, analysis.alphaRect.y1],
+    scoreQ: {
+      focusQ,
+      cellularityQ,
+      stainBalanceQ,
+      artifactQ,
+      anomalyQ,
+      purpleDensityQ: analysis.purpleDensityQ,
+      pinkDensityQ: analysis.pinkDensityQ,
+      darkDensityQ: analysis.darkDensityQ,
+      granularityQ: analysis.granularityQ,
+    },
+  }));
+}
+
+function runExploitSearch(params) {
+  const spec = normalizeExploitSearchParams(params);
+  const stage = STAGES[spec.stageId];
+  const brainA = STRATEGIES[spec.brainA];
+  const brainB = STRATEGIES[spec.brainB];
+  const findings = [];
+  const seeds = [];
+  let timeoutDraws = 0;
+  let stallHeavyCount = 0;
+  let clashLoopCount = 0;
+  let escapeSpiralCount = 0;
+  let objectiveThrashCount = 0;
+  let totalTicks = 0;
+  for (let seed = spec.seedStart; seed < spec.seedEndExclusive; seed++) {
+    seeds.push(seed >>> 0);
+    const result = simulate({
+      stage,
+      brainA,
+      brainB,
+      seed,
+      maxTicks: spec.maxTicks,
+      telemetry: true,
+    });
+    totalTicks += result.ticks;
+    const telemetry = result.telemetry || [emptyTelemetry(), emptyTelemetry()];
+    const issue = exploitIssueForSeed(result, telemetry, spec.maxTicks);
+    if (issue.flags.includes("timeout-draw")) timeoutDraws++;
+    if (issue.flags.includes("stall-heavy")) stallHeavyCount++;
+    if (issue.flags.includes("clash-loop")) clashLoopCount++;
+    if (issue.flags.includes("escape-spiral")) escapeSpiralCount++;
+    if (issue.flags.includes("objective-thrash")) objectiveThrashCount++;
+    if (issue.flags.length > 0) {
+      findings.push({
+        seed,
+        winner: result.winner,
+        ticks: result.ticks,
+        severityQ: issue.severityQ,
+        flags: issue.flags,
+        stallQ: issue.stallQ,
+        clashLoopQ: issue.clashLoopQ,
+        escapeSpiralQ: issue.escapeSpiralQ,
+        objectiveThrashQ: issue.objectiveThrashQ,
+      });
+    }
+  }
+  const reciprocal = evaluateReciprocalSideBias({ stage, brainA, brainB, seeds });
+  findings.sort((a, b) => b.severityQ - a.severityQ || a.seed - b.seed);
+  return new TextEncoder().encode(stableJson({
+    kind: EXPLOIT_SEARCH_KERNEL,
+    stageId: spec.stageId,
+    brainA: spec.brainA,
+    brainB: spec.brainB,
+    seedStart: spec.seedStart,
+    seedEndExclusive: spec.seedEndExclusive,
+    maxTicks: spec.maxTicks,
+    behaviorVersion: BEHAVIOR_VERSION,
+    simConstantsHash: REPLAY_CONSTANTS_HASH,
+    summary: {
+      sweptSeeds: seeds.length,
+      flaggedSeeds: findings.length,
+      timeoutDraws,
+      stallHeavyCount,
+      clashLoopCount,
+      escapeSpiralCount,
+      objectiveThrashCount,
+      reciprocalSideBiasQ: clampQ(Math.abs(reciprocal.sideBias) * 1000),
+      reciprocalDisagreements: reciprocal.reciprocalDisagreements,
+      avgTickUsageQ: clampQ((totalTicks / Math.max(1, seeds.length * spec.maxTicks)) * 1000),
+    },
+    findings: findings.slice(0, spec.topFindings),
+  }));
+}
+
+function exploitIssueForSeed(result, telemetry, maxTicks) {
+  const [a, b] = telemetry;
+  const totalDecisionTicks = Math.max(1, a.ticks + b.ticks);
+  const timeoutDraw = result.winner === -1 && result.ticks >= maxTicks;
+  const zoneEscapeTicks = a.modeTicks.zone + a.modeTicks.escape + b.modeTicks.zone + b.modeTicks.escape;
+  const zoneEscapeQ = clampQ((zoneEscapeTicks / totalDecisionTicks) * 1000);
+  const clashes = a.clashes + b.clashes;
+  const attacks = a.swipes + a.dives + b.swipes + b.dives;
+  const deliveries = a.deliveries + b.deliveries;
+  const deliveryCancels = a.deliveryCancels + b.deliveryCancels;
+  const escapeEntries = a.escapeEntries + b.escapeEntries;
+  const clashRateQ = clampQ((clashes / Math.max(1, totalDecisionTicks / 8)) * 1000);
+  const attackRateQ = clampQ((attacks / Math.max(1, totalDecisionTicks / 6)) * 1000);
+  const objectiveThrashQ = clampQ(deliveryCancels * 90 + (deliveries === 0 ? 120 : 0));
+  const stallQ = clampQ(zoneEscapeQ * 0.55 + (timeoutDraw ? 240 : 0) + Math.max(0, 320 - attackRateQ) * 0.45);
+  const clashLoopQ = clampQ(clashRateQ * 0.62 + Math.max(0, 380 - attackRateQ) * 0.34 + (timeoutDraw ? 140 : 0));
+  const escapeSpiralQ = clampQ(zoneEscapeQ * 0.72 + escapeEntries * 22 + (timeoutDraw ? 90 : 0));
+  const flags = [];
+  if (timeoutDraw) flags.push("timeout-draw");
+  if (stallQ >= 620) flags.push("stall-heavy");
+  if (clashLoopQ >= 560) flags.push("clash-loop");
+  if (escapeSpiralQ >= 620) flags.push("escape-spiral");
+  if (objectiveThrashQ >= 520) flags.push("objective-thrash");
+  return {
+    flags,
+    severityQ: Math.max(timeoutDraw ? 680 : 0, stallQ, clashLoopQ, escapeSpiralQ, objectiveThrashQ),
+    stallQ,
+    clashLoopQ,
+    escapeSpiralQ,
+    objectiveThrashQ,
+  };
+}
+
+function emptyTelemetry() {
+  return {
+    modeTicks: { neutral: 0, offense: 0, zone: 0, objective: 0, escape: 0 },
+    substateTicks: { press: 0, bait: 0, punish: 0, deliver: 0, intercept: 0, pickup: 0 },
+    modeSwitches: 0,
+    zoneEntries: 0,
+    objectiveEntries: 0,
+    escapeEntries: 0,
+    swipes: 0,
+    dives: 0,
+    kills: 0,
+    deaths: 0,
+    clashes: 0,
+    deliveries: 0,
+    deliveryCancels: 0,
+    deliveryFeintCancels: 0,
+    deliveryKillFirstCancels: 0,
+    ticks: 0,
+    modeSwipes: { neutral: 0, offense: 0, zone: 0, objective: 0, escape: 0 },
+    modeDives: { neutral: 0, offense: 0, zone: 0, objective: 0, escape: 0 },
+    modeClashes: { neutral: 0, offense: 0, zone: 0, objective: 0, escape: 0 },
+  };
+}
+
 async function runDeviceWitnessWebGpu(params) {
   if (!navigator.gpu?.requestAdapter) throw new Error("WebGPU unavailable");
   const seed = asInt(params.seed);
@@ -708,6 +966,219 @@ function witnessInput(seed, index) {
   return (Math.imul(seed >>> 0, 747796405) + Math.imul(index >>> 0, 2891336453) + 1013904223) >>> 0;
 }
 
+function normalizeRgbaTileParams(params) {
+  const sourceId = normalizeTextParam(params.sourceId ?? "tile", "sourceId", 1, 120);
+  const width = asInt(params.width);
+  const height = asInt(params.height);
+  if (width < 1 || width > MAX_TILE_DIM) throw new Error(`width must be 1..${MAX_TILE_DIM}`);
+  if (height < 1 || height > MAX_TILE_DIM) throw new Error(`height must be 1..${MAX_TILE_DIM}`);
+  if (width * height > MAX_TILE_PIXELS) throw new Error(`tile area must be <= ${MAX_TILE_PIXELS} pixels`);
+  const rgbaBase64 = normalizeTextParam(params.rgbaBase64, "rgbaBase64", 1, 200000);
+  const bytes = decodeRgbaBase64({ width, height, rgbaBase64 });
+  if (bytes.length !== width * height * 4) throw new Error("rgbaBase64 byte length mismatch");
+  return { sourceId, width, height, rgbaBase64 };
+}
+
+function normalizeImageTileInferParamsLowBandwidth(params) {
+  const tile = normalizeRgbaTileParams(params);
+  const topK = asInt(params.topK ?? 3);
+  if (topK < 1 || topK > 4) throw new Error("topK must be 1..4");
+  return { ...tile, topK };
+}
+
+function normalizeExploitSearchParams(params) {
+  const stageId = normalizeTextParam(params.stageId, "stageId", 1, 64);
+  const brainA = normalizeTextParam(params.brainA, "brainA", 1, 64);
+  const brainB = normalizeTextParam(params.brainB, "brainB", 1, 64);
+  const seedStart = asInt(params.seedStart);
+  const seedEndExclusive = asInt(params.seedEndExclusive);
+  const maxTicks = asInt(params.maxTicks ?? 5400);
+  const topFindings = asInt(params.topFindings ?? 8);
+  if (!STAGES[stageId]) throw new Error(`unknown public stage: ${stageId}`);
+  if (!STRATEGIES[brainA]) throw new Error(`unknown public preset brainA: ${brainA}`);
+  if (!STRATEGIES[brainB]) throw new Error(`unknown public preset brainB: ${brainB}`);
+  if (seedEndExclusive <= seedStart) throw new Error("seedEndExclusive must be greater than seedStart");
+  if (seedEndExclusive - seedStart > 32) throw new Error("exploit search is capped at 32 seeds per chunk");
+  if (maxTicks < 600 || maxTicks > 20000) throw new Error("maxTicks must be 600..20000");
+  if (topFindings < 1 || topFindings > 16) throw new Error("topFindings must be 1..16");
+  return { stageId, brainA, brainB, seedStart, seedEndExclusive, maxTicks, topFindings };
+}
+
+function decodeRgbaBase64(params) {
+  const text = String(params.rgbaBase64 || "");
+  const binary = atob(text);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  if (out.length !== params.width * params.height * 4) {
+    throw new Error("rgbaBase64 must decode to width*height*4 bytes");
+  }
+  return out;
+}
+
+function analyzeRgbaTile(bytes, width, height) {
+  if (bytes.length !== width * height * 4) throw new Error("rgba byte length mismatch");
+  const totalPixels = width * height;
+  const activeMask = new Uint8Array(totalPixels);
+  const lumaValues = new Uint8Array(totalPixels);
+  const lumaHist = new Array(16).fill(0);
+  const colorCounts = new Map();
+  let activePixels = 0;
+  let lumaSum = 0;
+  let lumaSqSum = 0;
+  let satSum = 0;
+  let warmPixels = 0;
+  let coolPixels = 0;
+  let purplePixels = 0;
+  let pinkPixels = 0;
+  let darkPixels = 0;
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  let edgeTouchMask = 0;
+  let fringeAlphaSum = 0;
+  let fringeAlphaCount = 0;
+  for (let i = 0; i < totalPixels; i++) {
+    const o = i * 4;
+    const r = bytes[o];
+    const g = bytes[o + 1];
+    const b = bytes[o + 2];
+    const a = bytes[o + 3];
+    const x = i % width;
+    const y = Math.floor(i / width);
+    const luma = rgbLuma(r, g, b);
+    lumaValues[i] = luma;
+    const active = a >= 24 ? 1 : 0;
+    activeMask[i] = active;
+    if (!active) continue;
+    activePixels++;
+    lumaSum += luma;
+    lumaSqSum += luma * luma;
+    lumaHist[Math.min(15, Math.floor((luma / 256) * 16))]++;
+    satSum += channelRange(r, g, b);
+    if (isWarmPixel(r, g, b)) warmPixels++;
+    if (isCoolPixel(r, g, b)) coolPixels++;
+    if (isPurplePixel(r, g, b)) purplePixels++;
+    if (isPinkPixel(r, g, b)) pinkPixels++;
+    if (luma < 90) darkPixels++;
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+    if (x === 0) edgeTouchMask |= 8;
+    if (x === width - 1) edgeTouchMask |= 2;
+    if (y === 0) edgeTouchMask |= 1;
+    if (y === height - 1) edgeTouchMask |= 4;
+    if ((x === 0 || x === width - 1 || y === 0 || y === height - 1) && a > 0 && a < 255) {
+      fringeAlphaSum += a;
+      fringeAlphaCount++;
+    }
+    const color = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+    colorCounts.set(color, (colorCounts.get(color) || 0) + 1);
+  }
+  if (activePixels === 0) {
+    return {
+      blank: true,
+      activePixels: 0,
+      totalPixels,
+      activeCoverageQ: 0,
+      meanLumaQ: 0,
+      contrastQ: 0,
+      saturationQ: 0,
+      edgeDensityQ: 0,
+      entropyQ: 0,
+      symmetryQ: 0,
+      textStrokeQ: 0,
+      flatnessQ: 1000,
+      warmRatioQ: 0,
+      coolRatioQ: 0,
+      purpleDensityQ: 0,
+      pinkDensityQ: 0,
+      darkDensityQ: 0,
+      granularityQ: 0,
+      fringeAlphaQ: 0,
+      edgeTouchMask: 0,
+      alphaRect: { x0: 0, y0: 0, x1: 0, y1: 0, width: 0, height: 0 },
+      dominantColors: [],
+      quantizedColorCount: 0,
+    };
+  }
+  let edgeSum = 0;
+  let edgeCount = 0;
+  let textTransitions = 0;
+  let granularSum = 0;
+  let granularCount = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x;
+      if (!activeMask[i]) continue;
+      const center = lumaValues[i];
+      if (x + 1 < width && activeMask[i + 1]) {
+        const diff = Math.abs(center - lumaValues[i + 1]);
+        edgeSum += diff;
+        edgeCount++;
+        if (diff >= 120) textTransitions++;
+      }
+      if (y + 1 < height && activeMask[i + width]) {
+        const diff = Math.abs(center - lumaValues[i + width]);
+        edgeSum += diff;
+        edgeCount++;
+        if (diff >= 120) textTransitions++;
+      }
+      if (x > 0 && x + 1 < width && y > 0 && y + 1 < height) {
+        const left = lumaValues[i - 1];
+        const right = lumaValues[i + 1];
+        const up = lumaValues[i - width];
+        const down = lumaValues[i + width];
+        granularSum += Math.abs(left - right) + Math.abs(up - down);
+        granularCount += 2;
+      }
+    }
+  }
+  let symmetryDiff = 0;
+  let symmetryCount = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < Math.floor(width / 2); x++) {
+      const i = y * width + x;
+      const j = y * width + (width - 1 - x);
+      if (!activeMask[i] && !activeMask[j]) continue;
+      symmetryCount++;
+      symmetryDiff += Math.abs((activeMask[i] ? 255 : 0) - (activeMask[j] ? 255 : 0)) + Math.abs(lumaValues[i] - lumaValues[j]);
+    }
+  }
+  const meanLuma = lumaSum / activePixels;
+  const variance = Math.max(0, lumaSqSum / activePixels - meanLuma * meanLuma);
+  const edgeDensityQ = clampQ((edgeCount > 0 ? edgeSum / (edgeCount * 255) : 0) * 1000);
+  const entropyQ = clampQ((entropyFromHistogram(lumaHist, activePixels) / Math.log2(16)) * 1000);
+  const symmetryQ = clampQ(1000 - Math.round((symmetryDiff / Math.max(1, symmetryCount * 510)) * 1000));
+  const flatnessQ = clampQ(1000 - Math.round((entropyQ * 0.65) + (edgeDensityQ * 0.35)));
+  return {
+    blank: false,
+    activePixels,
+    totalPixels,
+    activeCoverageQ: clampQ((activePixels / totalPixels) * 1000),
+    meanLumaQ: clampQ((meanLuma / 255) * 1000),
+    contrastQ: clampQ((Math.sqrt(variance) / 128) * 1000),
+    saturationQ: clampQ((satSum / (activePixels * 255)) * 1000),
+    edgeDensityQ,
+    entropyQ,
+    symmetryQ,
+    textStrokeQ: clampQ((textTransitions / Math.max(1, activePixels)) * 1000),
+    flatnessQ,
+    warmRatioQ: clampQ((warmPixels / activePixels) * 1000),
+    coolRatioQ: clampQ((coolPixels / activePixels) * 1000),
+    purpleDensityQ: clampQ((purplePixels / activePixels) * 1000),
+    pinkDensityQ: clampQ((pinkPixels / activePixels) * 1000),
+    darkDensityQ: clampQ((darkPixels / activePixels) * 1000),
+    granularityQ: clampQ((granularCount > 0 ? granularSum / (granularCount * 255) : 0) * 1000),
+    fringeAlphaQ: fringeAlphaCount > 0 ? clampQ((fringeAlphaSum / (fringeAlphaCount * 255)) * 1000) : 0,
+    edgeTouchMask,
+    alphaRect: { x0: minX, y0: minY, x1: maxX + 1, y1: maxY + 1, width: maxX - minX + 1, height: maxY - minY + 1 },
+    dominantColors: dominantColorList(colorCounts, 4),
+    quantizedColorCount: colorCounts.size,
+  };
+}
+
 function normalizeTensorTileParams(params) {
   const seed = asInt(params.seed);
   const rows = asInt(params.rows);
@@ -840,6 +1311,61 @@ function normalizeEmbeddingTileParams(params) {
     throw new Error("topK must be 1..min(8, documents.length)");
   }
   return { modelId, queryText, documents, topK };
+}
+
+function entropyFromHistogram(hist, total) {
+  if (total <= 0) return 0;
+  let entropy = 0;
+  for (const count of hist) {
+    if (!count) continue;
+    const p = count / total;
+    entropy -= p * Math.log2(p);
+  }
+  return entropy;
+}
+
+function rgbLuma(r, g, b) {
+  return Math.round((r * 77 + g * 150 + b * 29) / 256);
+}
+
+function channelRange(r, g, b) {
+  return Math.max(r, g, b) - Math.min(r, g, b);
+}
+
+function dominantColorList(colorCounts, limit) {
+  return [...colorCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0] - b[0])
+    .slice(0, limit)
+    .map(([color]) => {
+      const r = ((color >> 8) & 0xf) * 17;
+      const g = ((color >> 4) & 0xf) * 17;
+      const b = (color & 0xf) * 17;
+      return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+    });
+}
+
+function isWarmPixel(r, g, b) {
+  return r > 96 && r >= g + 12 && g >= b - 8;
+}
+
+function isCoolPixel(r, g, b) {
+  return b > 96 && b >= r + 12 && b >= g + 8;
+}
+
+function isPurplePixel(r, g, b) {
+  return r > 70 && b > 70 && g < Math.min(r, b) - 10;
+}
+
+function isPinkPixel(r, g, b) {
+  return r > 120 && b > 80 && g < r - 12;
+}
+
+function clampQ(value) {
+  return Math.max(0, Math.min(1000, Math.round(value)));
+}
+
+function toHex(value) {
+  return value.toString(16).padStart(2, "0");
 }
 
 function normalizeTextParam(value, label, min, max) {

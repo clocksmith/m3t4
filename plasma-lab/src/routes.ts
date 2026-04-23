@@ -631,6 +631,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       count?: number;
       minExecutions?: number;
       minAgreeing?: number;
+      targetWorkerIds?: string[];
     }>(req);
     try {
       const task = deps.store.seedDeviceWitnessWebGpuTask({
@@ -638,6 +639,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         count: body?.count,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
+        targetWorkerIds: workerIdTargets(body?.targetWorkerIds),
       });
       await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
@@ -650,11 +652,13 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     const body = await readJson<{
       minExecutions?: number;
       minAgreeing?: number;
+      targetWorkerIds?: string[];
     }>(req);
     try {
       const task = deps.store.seedDeviceWitnessRenderTask({
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
+        targetWorkerIds: workerIdTargets(body?.targetWorkerIds),
       });
       await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
@@ -835,6 +839,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       minAgreeing?: number;
       requiredTransport?: TransportKind;
       requiredPeerSubreceipt?: boolean;
+      targetWorkerIds?: string[];
     }>(req);
     try {
       const task = deps.store.seedLogitDivergenceTask({
@@ -845,6 +850,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         minAgreeing: body?.minAgreeing,
         requiredTransport: transportPolicy(body?.requiredTransport),
         requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+        targetWorkerIds: workerIdTargets(body?.targetWorkerIds),
       });
       await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
@@ -1251,6 +1257,12 @@ function transportPolicy(value: unknown): TransportKind | undefined {
   if (value === undefined) return undefined;
   if (value === "http" || value === "webrtc" || value === "local") return value;
   throw new Error("requiredTransport must be http, webrtc, or local");
+}
+
+function workerIdTargets(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const normalized = Array.from(new Set(value.map((entry) => String(entry ?? "").trim()).filter(Boolean))).sort();
+  return normalized.length ? normalized : undefined;
 }
 
 function sanitizePublicWorkerCapability(capability: WorkerCapability, trustedReference: boolean): WorkerCapability {

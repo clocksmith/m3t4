@@ -82,6 +82,7 @@ async function runOnce(chromium, config, pass) {
     preflight = await Promise.all(pages.map((page, index) =>
       prepareStaffPage(page, config, index === 0 ? "A" : "B")
     ));
+    const targetWorkerIds = preflight.map((status) => status.workerId).filter(Boolean);
 
     await cancelActiveTasks(config);
     await setAssignments(config, true, config.assignmentWindowMs);
@@ -90,13 +91,13 @@ async function runOnce(chromium, config, pass) {
       page.evaluate(() => window.__M3T4_COMPUTE_CLIENT__?.poll())
     ));
 
-    witnessTasks = [await seedRenderWitnessTask(config)];
+    witnessTasks = [await seedRenderWitnessTask(config, targetWorkerIds)];
     if (
       config.kernel === "tensor-tile" ||
       config.kernel === "contact-map-tile" ||
       config.kernel === "logit-divergence"
     ) {
-      witnessTasks.push(await seedWebGpuWitnessTask(config));
+      witnessTasks.push(await seedWebGpuWitnessTask(config, targetWorkerIds));
     }
     for (const witness of witnessTasks) {
       if (witness.chunks !== 1) throw new Error(`expected 1 witness chunk, got ${witness.chunks}`);
@@ -110,7 +111,7 @@ async function runOnce(chromium, config, pass) {
     );
     warmup = await prewarmWorkers(pages, config);
 
-    seeded = await seedTask(config, pass);
+    seeded = await seedTask(config, pass, targetWorkerIds);
     if (seeded.chunks !== 1) throw new Error(`expected 1 chunk, got ${seeded.chunks}`);
     await Promise.all(pages.map((page) =>
       page.evaluate(() => window.__M3T4_COMPUTE_CLIENT__?.poll())
@@ -229,7 +230,7 @@ function readConfig() {
   };
 }
 
-async function seedTask(config, pass) {
+async function seedTask(config, pass, targetWorkerIds) {
   if (config.kernel === "replay-verify") return seedReplayVerifyTask(config, pass);
   if (config.kernel === "seed-sweep") return seedSeedSweepTask(config, pass);
   if (config.kernel === "image-tile-infer") return seedImageTileInferTask(config, pass);
@@ -238,7 +239,7 @@ async function seedTask(config, pass) {
   if (config.kernel === "asset-tile-audit") return seedAssetTileAuditTask(config, pass);
   if (config.kernel === "contact-map-tile") return seedContactMapTileTask(config, pass);
   if (config.kernel === "tensor-tile") return seedTensorTileTask(config, pass);
-  if (config.kernel === "logit-divergence") return seedLogitDivergenceTask(config, pass);
+  if (config.kernel === "logit-divergence") return seedLogitDivergenceTask(config, pass, targetWorkerIds);
   return seedPublicArtifactTask(config, pass);
 }
 
@@ -252,19 +253,21 @@ async function cancelActiveTasks(config) {
   }
 }
 
-async function seedRenderWitnessTask(config) {
+async function seedRenderWitnessTask(config, targetWorkerIds) {
   return adminPost(config, "/compute/admin/tasks/device-witness-render", {
     minExecutions: 2,
     minAgreeing: 2,
+    targetWorkerIds,
   });
 }
 
-async function seedWebGpuWitnessTask(config) {
+async function seedWebGpuWitnessTask(config, targetWorkerIds) {
   return adminPost(config, "/compute/admin/tasks/device-witness-webgpu", {
     seed: 7,
     count: 32,
     minExecutions: 2,
     minAgreeing: 2,
+    targetWorkerIds,
   });
 }
 
@@ -333,7 +336,7 @@ async function seedTensorTileTask(config, pass) {
   });
 }
 
-async function seedLogitDivergenceTask(config, pass) {
+async function seedLogitDivergenceTask(config, pass, targetWorkerIds) {
   return adminPost(config, "/compute/admin/tasks/logit-divergence", {
     promptText: `Finish this technical note in one line ${pass}: WebGPU lets browsers run`,
     topK: 4,
@@ -341,6 +344,7 @@ async function seedLogitDivergenceTask(config, pass) {
     minAgreeing: 2,
     requiredTransport: "webrtc",
     requiredPeerSubreceipt: true,
+    targetWorkerIds,
   });
 }
 

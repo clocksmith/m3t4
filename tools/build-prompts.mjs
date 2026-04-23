@@ -2,7 +2,7 @@
 // Expand theming/visual-theme.v1.json into one prompt-per-asset,
 // ready to paste into an image generator (Gemini / GPT image / Midjourney).
 //
-// Playable batch (default): 55 prompts. Emits packed character sprite
+// Playable batch (default): 47 prompts. Emits packed character sprite
 // sheets plus all current stage/objective/UI assets and all four character
 // weapon lines.
 //
@@ -27,7 +27,7 @@
 //   node tools/build-prompts.mjs --missing-only        # only assets missing from client/
 //   node tools/build-prompts.mjs --stdout              # print copy/paste formats instead
 //
-// Playable → 55 prompts.
+// Playable → 47 prompts.
 //
 // Each emitted record has:
 //   out          — asset path the renderer expects
@@ -269,8 +269,8 @@ function packedPromptCells({ frames, packIndex, promptCols, promptRows, promptPo
 
 function collectPortraits() {
   const out = [];
-  // New shape: one 2x2 portrait sheet per character (neutral/hurt/ko/victory),
-  // plus a separate large character-select portrait per character.
+  // Current shape: one 2x2 sheet per character with three HUD portraits
+  // plus one full-body character-select/countdown cell.
   const sheets = doc.prompts.portraitSheets;
   if (sheets) {
     const shared = sheets._sharedRules;
@@ -285,7 +285,11 @@ function collectPortraits() {
                 genCellW: shared.genCellW, genCellH: shared.genCellH, cellOrder: shared.cellOrder },
       }));
     }
+    return out;
   }
+
+  // Legacy fallback: older themes emitted the full-body character-select art
+  // as separate large portrait files.
   const large = doc.prompts.portraitsLarge;
   if (large) {
     const shared = large._sharedRules;
@@ -303,9 +307,26 @@ function collectPortraits() {
 }
 
 function collectWeapons() {
-  // Launch = common+rare per character. Advanced = epic+legendary per
-  // character. lockedSlot is the shared locked-placeholder icon.
   const out = [];
+  // Current shape: one 2x2 weapon sheet per character with all rarities.
+  const sheets = doc.prompts.weaponSheets;
+  if (sheets) {
+    const shared = sheets._sharedRules;
+    for (const [char, v] of Object.entries(sheets)) {
+      if (char.startsWith("_")) continue;
+      out.push(promptRecord({
+        out: v.out,
+        outW: shared.outW, outH: shared.outH, genW: shared.genW, genH: shared.genH,
+        seed: v.seed,
+        basePrompt: `${v.base}\n\n${shared.layoutDirective}`,
+        grid: { cols: shared.cols, rows: shared.rows, cellW: shared.cellW, cellH: shared.cellH,
+                genCellW: shared.genCellW, genCellH: shared.genCellH, cellOrder: shared.cellOrder },
+      }));
+    }
+    return out;
+  }
+
+  // Legacy fallback: launch = common+rare, advanced = epic+legendary.
   const launch = doc.prompts.weaponSheetsLaunch;
   if (launch) {
     const shared = launch._sharedRules;

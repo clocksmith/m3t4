@@ -30,11 +30,11 @@ The fallback canvas renderer may read `--arena-*` tokens from `client/app.css` u
 - `stageVisualPacks[stage][pack].textures.{platform,platformEdge,wall,floorDetail}` -> platform/wall/floor draw.
 - `stageVisualPacks[stage][pack].particles` -> particle pack id in `theming/visual-theme.v1.json.particlePacks`.
 - `selection.characterGraphics[char] + characterGraphics[char][pack].spriteSheet` -> animated body draw.
-- `selection.characterGraphics[char] + characterGraphics[char][pack].portraits` -> HUD + character select draw.
+- `selection.characterGraphics[char] + characterGraphics[char][pack].portraits.sheet` and portrait cells -> HUD + character select draw.
 - `selection.characters[char] + characterVisualPacks[char][pack].colors` -> HP bar, damage numbers, UI accents.
 - `selection.characters[char] + content/game-copy.v1.json.characters[char][pack]` -> name, label, archetype, voice lines.
 - `selection.stages[stage] + content/game-copy.v1.json.stages[stage][pack]` -> stage display name and subtitle.
-- `selection.weaponFamilies[char][tier] + weaponVisuals[char][weaponId].sprite` -> weapon layer on top of hand.
+- `selection.weaponFamilies[char][tier] + weaponVisuals[char][weaponId].sprite` and `spriteCell` -> weapon layer on top of hand.
 - `selection.weaponFamilies[char][tier] + weaponVisuals[char][weaponId].trail.{color,width,ttl}` -> swing-trail particle system.
 - `selection.weaponFamilies[char][tier] + weaponVisuals[char][weaponId].hitVFX` -> particle burst on impact frame.
 - `selection.weaponFamilies[char][tier] + content/game-copy.v1.json.weapons[char][weaponId]` -> weapon name and copy.

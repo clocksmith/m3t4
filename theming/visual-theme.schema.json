@@ -32,7 +32,7 @@
     },
     "prompts": {
       "type": "object",
-      "required": ["stages", "characterSheets", "portraits", "weaponSheets"],
+      "required": ["stages", "characterSheets", "portraitSheets", "weaponSheets"],
       "additionalProperties": true
     }
   },

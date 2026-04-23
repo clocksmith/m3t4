@@ -202,7 +202,7 @@ function inferExactPromptTarget(assetPath) {
     const found = findDirectGroupTarget(prompts[groupName], assetPath);
     if (found) return found;
   }
-  const sharedGroups = ["portraitSheets", "portraitsLarge", "weaponSheetsLaunch", "weaponSheetsAdvanced", "lockedSlot"];
+  const sharedGroups = ["portraitSheets", "portraitsLarge", "weaponSheets", "weaponSheetsLaunch", "weaponSheetsAdvanced", "lockedSlot"];
   for (const groupName of sharedGroups) {
     const found = findSharedGroupTarget(prompts[groupName], assetPath);
     if (found) return found;

@@ -475,7 +475,7 @@ class ComputeClient {
       return;
     }
     if (webRtcDataKernel(chunk.kind) && artifactWebRtcEnabled()) {
-      this.runWebRtcArtifactAssignment({ assignment, chunk, task });
+      this.runWebRtcDataAssignment({ assignment, chunk, task });
       return;
     }
     this.runWorkerAssignment({ assignment, chunk, task });
@@ -561,7 +561,7 @@ class ComputeClient {
     }
   }
 
-  async runWebRtcArtifactAssignment({ assignment, chunk, task }) {
+  async runWebRtcDataAssignment({ assignment, chunk, task }) {
     this.current = {
       assignmentId: assignment.assignmentId,
       assignmentToken: assignment.assignmentToken,
@@ -576,9 +576,9 @@ class ComputeClient {
     try {
       const status = await computeLabStatus();
       if (!status?.webrtcSignalingEnabled || !status?.webrtcDataEnabled) {
-        throw new Error("webrtc artifact transport disabled");
+        throw new Error("webrtc data transport disabled");
       }
-      const transfer = await runWebRtcArtifactTransfer(this, { assignment, chunk, task }, 6500);
+      const transfer = await runWebRtcDataTransfer(this, { assignment, chunk, task }, 6500);
       const receipt = {
         workerId: this.workerId,
         workerSessionId: this.workerSessionId,
@@ -1228,7 +1228,7 @@ async function signaledWebRtcProbe(client, timeoutMs) {
   }
 }
 
-async function runWebRtcArtifactTransfer(client, work, timeoutMs) {
+async function runWebRtcDataTransfer(client, work, timeoutMs) {
   let lastError = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
@@ -1310,7 +1310,7 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
     channels.set(ch.label || "unknown", ch);
     if (ch.label === "plasma-data") {
       ch.onmessage = (ev) => {
-        handleArtifactWorkMessage(ev.data, channels, client, pairId, timeoutMs, servedRequestIds).then((ack) => {
+        handleWebRtcDataWorkMessage(ev.data, channels, client, pairId, timeoutMs, servedRequestIds).then((ack) => {
           if (ack) servedResult = ack;
         }).catch((e) => {
           servedResult = { ok: false, error: message(e) };
@@ -1410,12 +1410,12 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
       if (performance.now() >= nextSendAt) sendRequest();
       return null;
     }, timeoutMs);
-    if (!gotResult) throw new Error("artifact result timeout");
+    if (!gotResult) throw new Error("peer result timeout");
     if (!remoteResult.ok || typeof remoteResult.outputHash !== "string") {
-      throw new Error(`artifact peer failed: ${remoteResult.error || "unknown"}`);
+      throw new Error(`peer compute failed: ${remoteResult.error || "unknown"}`);
     }
     if (!remoteResult.peerSubreceipt || typeof remoteResult.peerSubreceipt !== "object") {
-      throw new Error("artifact peer subreceipt missing");
+      throw new Error("peer subreceipt missing");
     }
     // Keep the pair alive briefly so the peer can finish its reciprocal request.
     if (!servedResult) {
@@ -1455,7 +1455,7 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
   }
 }
 
-async function handleArtifactWorkMessage(raw, channels, client, pairId, timeoutMs, servedRequestIds = new Set()) {
+async function handleWebRtcDataWorkMessage(raw, channels, client, pairId, timeoutMs, servedRequestIds = new Set()) {
   const msg = parseJsonMessage(raw);
   if (msg?.protocol !== "plasma-data.v0" || msg?.type !== "artifact-work" || typeof msg.requestId !== "string") {
     return null;
@@ -1468,7 +1468,7 @@ async function handleArtifactWorkMessage(raw, channels, client, pairId, timeoutM
       channels.get("plasma-receipts")?.readyState === "open" ? channels.get("plasma-receipts") : null
     ), 1000);
     if (!receiptChannel) throw new Error("receipt channel unavailable");
-    const chunk = safeArtifactChunk(msg.chunk);
+    const chunk = safeWebRtcDataChunk(msg.chunk);
     const result = await executeWorkerChunk(chunk, msg.requestId, Math.min(3500, timeoutMs));
     const outputHash = { algorithm: "sha256", value: result.outputHash };
     const peerAssignment = msg.peerAssignment && typeof msg.peerAssignment === "object" ? msg.peerAssignment : null;
@@ -1546,8 +1546,8 @@ async function submitPeerSubassignmentReceipt(client, peerAssignment, peerSubrec
   return body.peerSubassignment;
 }
 
-function safeArtifactChunk(chunk) {
-  if (!chunk || !webRtcDataKernel(chunk.kind)) throw new Error("unsupported artifact chunk");
+function safeWebRtcDataChunk(chunk) {
+  if (!chunk || !webRtcDataKernel(chunk.kind)) throw new Error("unsupported data chunk");
   if (chunk.kind === PUBLIC_ARTIFACT_KERNEL) {
     if (typeof chunk.params?.artifactJson !== "string" || chunk.params.artifactJson.length === 0) {
       throw new Error("artifactJson required");
@@ -1582,6 +1582,28 @@ function safeArtifactChunk(chunk) {
       throw new Error("seed sweep public preset params required");
     }
   }
+  if (chunk.kind === TENSOR_TILE_KERNEL) {
+    const seed = Number(chunk.params?.seed);
+    const rows = Number(chunk.params?.rows);
+    const cols = Number(chunk.params?.cols);
+    const depth = Number(chunk.params?.depth);
+    if (
+      !Number.isSafeInteger(seed) ||
+      !Number.isSafeInteger(rows) ||
+      !Number.isSafeInteger(cols) ||
+      !Number.isSafeInteger(depth) ||
+      seed < 0 ||
+      seed > 2 ** 31 - 1
+    ) {
+      throw new Error("tensor tile params required");
+    }
+    if (rows <= 0 || rows > 64 || cols <= 0 || cols > 64 || depth <= 0 || depth > 256) {
+      throw new Error("tensor tile bounds invalid");
+    }
+    if (rows * cols > 4096 || rows * depth > 16384 || depth * cols > 16384) {
+      throw new Error("tensor tile shape invalid");
+    }
+  }
   return {
     chunkId: String(chunk.chunkId || "artifact-chunk"),
     kind: chunk.kind,
@@ -1594,7 +1616,7 @@ function safeArtifactChunk(chunk) {
 }
 
 function webRtcDataKernel(kind) {
-  return kind === PUBLIC_ARTIFACT_KERNEL || kind === REPLAY_VERIFY_KERNEL || kind === SEED_SWEEP_KERNEL;
+  return kind === PUBLIC_ARTIFACT_KERNEL || kind === REPLAY_VERIFY_KERNEL || kind === SEED_SWEEP_KERNEL || kind === TENSOR_TILE_KERNEL;
 }
 
 const PEER_WORK_PARAMS = Object.freeze({ start: 1009, endExclusive: 1033 });

@@ -977,6 +977,42 @@ test("tensor tile receipts require webgpu-light workers and accept CPU reference
   assert.ok(stats.computeScore > 0);
 });
 
+test("WebRTC tensor tile peer subassignments require webgpu-light peers", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const requesterSigning = signingKeyPair();
+  const peerSigning = signingKeyPair();
+  const requester = store.registerWorker({ capability: webgpuCapability, signingPublicKey: requesterSigning.publicJwk });
+  const peer = store.registerWorker({ capability: webgpuCapability, signingPublicKey: peerSigning.publicJwk });
+  acceptWebGpuWitness(store, requester, requesterSigning.privateKey);
+  const task = store.seedTensorTileTask({
+    seed: 5,
+    rows: 4,
+    cols: 4,
+    depth: 8,
+    minExecutions: 1,
+    minAgreeing: 1,
+    requiredTransport: "webrtc",
+    requiredPeerSubreceipt: true,
+  });
+  store.joinWebRtcPair(auth(requester));
+  const pair = store.joinWebRtcPair(auth(peer)).pair;
+  const nextBody = store.assignNext(auth(requester))!;
+  store.acceptAssignment({
+    ...auth(requester),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  assert.throws(() => store.issuePeerSubassignment({
+    ...auth(requester),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    pairId: pair.pairId,
+    pairToken: pair.token,
+    requestId: "tensor-peer-tier",
+  }), /peer workload tier insufficient/);
+  assert.equal(task.kind, "plasma.tensor_tile.v0");
+});
+
 test("WebRTC data receipts require peer-signed subreceipts bound to the pair", () => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const requesterSigning = signingKeyPair();
@@ -1281,6 +1317,91 @@ test("WebRTC proof tasks require accepted server-issued peer subassignments", ()
     executionMode: "cpu",
     computeMs: 8,
     clientVersion: "peer-test",
+  }, peerSigning.privateKey);
+  const peerReceipt = store.submitPeerSubassignmentReceipt({
+    ...auth(peer),
+    peerAssignmentId: peerSubassignment.peerAssignmentId,
+    peerAssignmentToken: peerSubassignment.peerAssignmentToken,
+    peerSubreceipt,
+  });
+  assert.equal(peerReceipt.status, "accepted");
+
+  const acceptedFields = {
+    ...baseReceipt,
+    adapterInfo: { peerSubreceipt },
+  };
+  const accepted = store.submitReceipt({
+    ...acceptedFields,
+    ...signedReceiptFields(acceptedFields, requesterSigning.privateKey),
+  });
+  assert.equal(accepted.receipt.decision, "accepted");
+  assert.equal(accepted.validation?.status, "accepted");
+});
+
+test("WebRTC tensor tile proof tasks accept accepted peer subassignments from webgpu-light peers", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const requesterSigning = signingKeyPair();
+  const peerSigning = signingKeyPair();
+  const requester = store.registerWorker({ capability: webgpuCapability, signingPublicKey: requesterSigning.publicJwk });
+  const peer = store.registerWorker({ capability: webgpuCapability, signingPublicKey: peerSigning.publicJwk });
+  acceptWebGpuWitness(store, requester, requesterSigning.privateKey);
+  acceptWebGpuWitness(store, peer, peerSigning.privateKey);
+  const task = store.seedTensorTileTask({
+    seed: 11,
+    rows: 4,
+    cols: 5,
+    depth: 6,
+    minExecutions: 1,
+    minAgreeing: 1,
+    requiredTransport: "webrtc",
+    requiredPeerSubreceipt: true,
+  });
+  store.joinWebRtcPair(auth(requester));
+  const pair = store.joinWebRtcPair(auth(peer)).pair;
+  const nextBody = store.assignNext(auth(requester))!;
+  store.acceptAssignment({
+    ...auth(requester),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const fields = referenceReceiptFields(nextBody.chunk);
+  const baseReceipt = {
+    ...auth(requester),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...fields,
+    executionMode: "webgpu" as const,
+    transport: "webrtc" as const,
+    computeMs: 9,
+    clientVersion: "webrtc-tensor-test",
+  };
+  const peerSubassignment = store.issuePeerSubassignment({
+    ...auth(requester),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    pairId: pair.pairId,
+    pairToken: pair.token,
+    requestId: "tensor-peer-ok",
+  });
+  const peerSubreceipt = signedPeerSubreceipt({
+    peerAssignmentId: peerSubassignment.peerAssignmentId,
+    pairId: pair.pairId,
+    requestId: peerSubassignment.requestId,
+    requester,
+    peer,
+    assignmentId: nextBody.assignment.assignmentId,
+    taskId: task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    kernelId: fields.kernelId,
+    kernelHash: fields.kernelHash,
+    inputHash: fields.inputHash,
+    artifactHash: fields.artifactHash,
+    outputHash: fields.outputHash,
+    executionMode: "webgpu",
+    computeMs: 7,
+    clientVersion: "tensor-peer-test",
   }, peerSigning.privateKey);
   const peerReceipt = store.submitPeerSubassignmentReceipt({
     ...auth(peer),
@@ -2607,6 +2728,42 @@ function auth(reg: ReturnType<ComputeLabStore["registerWorker"]>) {
     workerSessionId: reg.session.workerSessionId,
     workerSessionToken: reg.session.token,
   };
+}
+
+function acceptWebGpuWitness(
+  store: ComputeLabStore,
+  worker: ReturnType<ComputeLabStore["registerWorker"]>,
+  privateKey?: KeyObject,
+) {
+  const witnessTask = store.seedDeviceWitnessWebGpuTask({
+    seed: 7,
+    count: 16,
+    minExecutions: 1,
+    minAgreeing: 1,
+  });
+  const witness = store.assignNext(auth(worker));
+  assert.ok(witness);
+  assert.equal(witness.task.taskId, witnessTask.taskId);
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: witness.assignment.assignmentId,
+    assignmentToken: witness.assignment.assignmentToken,
+  });
+  const receiptFields = {
+    ...auth(worker),
+    assignmentId: witness.assignment.assignmentId,
+    assignmentToken: witness.assignment.assignmentToken,
+    taskId: witness.task.taskId,
+    chunkId: witness.chunk.chunkId,
+    ...referenceReceiptFields(witness.chunk),
+    executionMode: "webgpu" as const,
+    transport: "http" as const,
+    computeMs: 4,
+  };
+  const result = store.submitReceipt(privateKey
+    ? { ...receiptFields, ...signedReceiptFields(receiptFields, privateKey) }
+    : receiptFields);
+  assert.equal(result.receipt.decision, "accepted");
 }
 
 function signingKeyPair(): { publicJwk: JsonWebKey; privateKey: KeyObject } {

@@ -1567,9 +1567,17 @@ export class ComputeLabStore {
     if (!peerSession || peerSession.workerId !== peer.workerId || !peerSession.signingPublicKey) {
       throw new Error("peer signing key required");
     }
+    const peerWorker = this.requireWorker(peer.workerId);
     const task = this.requireTask(assignment.taskId);
     const chunk = this.requireChunk(assignment.chunkId);
     if (!isWebRtcDataTask(chunk.kind)) throw new Error("peer subassignment requires WebRTC data task");
+    if (!peerWorker.capability.kernels.includes(chunk.kind)) {
+      throw new Error("peer unsupported kernel");
+    }
+    const peerProfile = this.workerProfiles().find((profile) => profile.workerId === peer.workerId);
+    if (!peerProfile || !tierSatisfies(peerProfile.allowedWorkloadTier, taskRequiredWorkloadTier(task))) {
+      throw new Error("peer workload tier insufficient");
+    }
 
     const existing = Array.from(this.peerSubassignments.values()).find((subassignment) =>
       subassignment.parentAssignmentId === assignment.assignmentId &&
@@ -2542,7 +2550,12 @@ function peerSubreceiptPayload(input: Omit<PeerSubreceipt, "peerReceiptHash" | "
 }
 
 function isWebRtcDataTask(kind: TaskKind): boolean {
-  return kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID || kind === REPLAY_VERIFY_KERNEL_ID || kind === SEED_SWEEP_KERNEL_ID;
+  return (
+    kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID ||
+    kind === REPLAY_VERIFY_KERNEL_ID ||
+    kind === SEED_SWEEP_KERNEL_ID ||
+    kind === TENSOR_TILE_KERNEL_ID
+  );
 }
 
 function pairParticipantRole(

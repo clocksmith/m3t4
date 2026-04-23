@@ -12,6 +12,7 @@
     "smoke:webrtc-client-artifact": "node scripts/smoke-webrtc-client-artifact.cjs",
     "smoke:webrtc-replay-verify": "PLASMA_LAB_SMOKE_KERNEL=replay-verify node scripts/smoke-webrtc-client-artifact.cjs",
     "smoke:webrtc-seed-sweep": "PLASMA_LAB_SMOKE_KERNEL=seed-sweep node scripts/smoke-webrtc-client-artifact.cjs",
+    "smoke:webrtc-tensor-tile": "PLASMA_LAB_SMOKE_KERNEL=tensor-tile node scripts/smoke-webrtc-client-artifact.cjs",
     "smoke:webrtc-artifact": "node scripts/smoke-webrtc-client-artifact.cjs",
     "start": "tsc && node dist/index.js"
   },

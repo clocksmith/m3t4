@@ -14,30 +14,15 @@ import { BEHAVIOR_VERSION, REPLAY_CONSTANTS_HASH, evaluateReciprocalSideBias, re
 // them with Web Crypto so the server can verify bit-for-bit.
 
 const ASSET_TILE_AUDIT_KERNEL = "asset.tile_audit.v0";
-const EMBEDDING_TILE_KERNEL = "ml.embedding_tile.v0";
 const IMAGE_TILE_INFER_KERNEL = "ml.image_tile_infer.v0";
-const PREFILL_TOPK_PROBE_KERNEL = "ml.prefill_topk_probe.v0";
-const LOGIT_DIVERGENCE_KERNEL = "ml.logit_divergence.v0";
-const LOGIT_DIVERGENCE_LOGIT_SCALE = 256;
 const CONTACT_MAP_TILE_KERNEL = "science.contact_map_tile.v0";
 const GENOME_KMER_KERNEL = "science.genome_kmer.v0";
 const GENOME_KMER_ALPHABET = "ACGT";
 const MICROSCOPY_TILE_SCORE_KERNEL = "science.microscopy_tile_score.v0";
 const EXPLOIT_SEARCH_KERNEL = "m3t4.exploit_search.v0";
-const EMBEDDING_TILE_MODEL = "google-embeddinggemma-300m-q4k-ehf16-af32";
-const PREFILL_TOPK_PROBE_MODEL = "gemma-3-270m-it-q4k-ehf16-af32";
-const PREFILL_WARM_PROMPT = "Warmup: WebGPU browser inference.";
-const EMBEDDING_TILE_SCORE_SCALE = 1000;
 const IMAGE_TILE_INFER_MODEL = "tile-linear-v1";
 const MAX_TILE_DIM = 96;
 const MAX_TILE_PIXELS = MAX_TILE_DIM * MAX_TILE_DIM;
-const DOPPLER_GENERATION_URL = new URL("../vendor/doppler/src/generation/index.js", import.meta.url).href;
-const DOPPLER_REGISTRY_URL = new URL("../vendor/doppler/src/client/doppler-registry.js", import.meta.url).href;
-const DOPPLER_MODEL_SOURCE_URL = new URL("../vendor/doppler/src/client/runtime/model-source.js", import.meta.url).href;
-const DOPPLER_STORAGE_URL = new URL("../vendor/doppler/src/storage/artifact-storage-context.js", import.meta.url).href;
-
-let dopplerModulesPromise = null;
-const dopplerPipelineCache = new Map();
 const CONTACT_RESIDUES = "ACDEFGHIKLMNPQRSTVWYX";
 const CONTACT_HYDROPHOBICITY = [1, 2, 0, 0, 3, 0, 1, 4, 0, 4, 3, 0, 0, 0, 0, 0, 1, 3, 3, 2, 0];
 const CONTACT_CHARGE = [0, 0, -1, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0];
@@ -69,10 +54,7 @@ const KERNELS = {
   "m3t4.replay_verify.v1": runReplayVerify,
   "m3t4.seed_sweep.v0": runSeedSweep,
   [ASSET_TILE_AUDIT_KERNEL]: runAssetTileAudit,
-  [EMBEDDING_TILE_KERNEL]: runEmbeddingTile,
   [IMAGE_TILE_INFER_KERNEL]: runImageTileInfer,
-  [PREFILL_TOPK_PROBE_KERNEL]: runPrefillTopkProbe,
-  [LOGIT_DIVERGENCE_KERNEL]: runLogitDivergence,
   [CONTACT_MAP_TILE_KERNEL]: runContactMapTile,
   [GENOME_KMER_KERNEL]: runGenomeKmer,
   [MICROSCOPY_TILE_SCORE_KERNEL]: runMicroscopyTileScore,
@@ -210,107 +192,7 @@ function canvas2dFixtureBytes() {
   ]);
 }
 
-async function runEmbeddingTile(params) {
-  if (!navigator.gpu?.requestAdapter) throw new Error("WebGPU unavailable");
-  const spec = normalizeEmbeddingTileParams(params);
-  const pipeline = await getDopplerPipeline(spec.modelId);
-  const queryEmbedding = await embedText(pipeline, spec.queryText, "query", spec.modelId);
-  const docs = [];
-  for (let docIndex = 0; docIndex < spec.documents.length; docIndex++) {
-    const embedding = await embedText(pipeline, spec.documents[docIndex], "document", spec.modelId);
-    const score = cosineSimilarity(queryEmbedding, embedding);
-    docs.push({
-      docIndex,
-      scoreQ: quantizeEmbeddingScore(score),
-    });
-  }
-  docs.sort((a, b) => b.scoreQ - a.scoreQ || a.docIndex - b.docIndex);
-  const topHits = docs.slice(0, spec.topK);
-  const bytes = new TextEncoder().encode(stableJson({
-    kind: EMBEDDING_TILE_KERNEL,
-    modelId: spec.modelId,
-    queryHash: await hashText(spec.queryText),
-    documentsHash: await hashText(stableJson(spec.documents)),
-    documentCount: spec.documents.length,
-    topK: spec.topK,
-    scoreScale: EMBEDDING_TILE_SCORE_SCALE,
-    hits: topHits,
-  }));
-  return { bytes, executionMode: "webgpu" };
-}
-
-async function runPrefillTopkProbe(params) {
-  if (!navigator.gpu?.requestAdapter) throw new Error("WebGPU unavailable");
-  const spec = normalizePrefillTopkProbeParams(params);
-  const { logits, inputTokens } = await runDopplerPrefill(spec, PREFILL_TOPK_PROBE_KERNEL);
-  const hits = topKTokenIds(logits, spec.topK).map((tokenId, rank) => ({ rank: rank + 1, tokenId }));
-  const bytes = new TextEncoder().encode(stableJson({
-    kind: PREFILL_TOPK_PROBE_KERNEL,
-    modelId: spec.modelId,
-    promptHash: await hashText(spec.promptText),
-    promptLength: spec.promptText.length,
-    prefillTokenCount: inputTokens.length,
-    topK: spec.topK,
-    hits,
-  }));
-  return { bytes, executionMode: "webgpu" };
-}
-
-async function runLogitDivergence(params) {
-  if (!navigator.gpu?.requestAdapter) throw new Error("WebGPU unavailable");
-  const spec = normalizeLogitDivergenceParams(params);
-  const { logits, inputTokens } = await runDopplerPrefill(spec, LOGIT_DIVERGENCE_KERNEL);
-  const topHits = topKLogitHits(logits, spec.topK);
-  const topLogit = topHits[0].logit;
-  const hits = topHits.map((entry, rank) => ({
-    rank: rank + 1,
-    tokenId: entry.tokenId,
-    logitQ: Math.round(entry.logit * LOGIT_DIVERGENCE_LOGIT_SCALE) | 0,
-    deltaTopQ: rank === 0 ? 0 : Math.min(0, Math.round((entry.logit - topLogit) * LOGIT_DIVERGENCE_LOGIT_SCALE)) | 0,
-  }));
-  const publicOutput = {
-    kind: LOGIT_DIVERGENCE_KERNEL,
-    modelId: spec.modelId,
-    promptHash: await hashText(spec.promptText),
-    promptLength: spec.promptText.length,
-    prefillTokenCount: inputTokens.length,
-    topK: spec.topK,
-    logitScale: LOGIT_DIVERGENCE_LOGIT_SCALE,
-    hits,
-  };
-  const bytes = new TextEncoder().encode(stableJson(publicOutput));
-  return { bytes, publicOutput, executionMode: "webgpu" };
-}
-
 async function prepareKernel(kind, params = {}) {
-  if (kind === PREFILL_TOPK_PROBE_KERNEL) {
-    const spec = normalizePrefillTopkProbeParams({
-      ...params,
-      promptText: params.promptText ?? PREFILL_WARM_PROMPT,
-      topK: params.topK ?? 1,
-    });
-    const { trace } = await runDopplerPrefill(spec, `${PREFILL_TOPK_PROBE_KERNEL}:prepare`);
-    return {
-      kind,
-      modelId: spec.modelId,
-      warmPromptLength: spec.promptText.length,
-      ...trace,
-    };
-  }
-  if (kind === LOGIT_DIVERGENCE_KERNEL) {
-    const spec = normalizeLogitDivergenceParams({
-      ...params,
-      promptText: params.promptText ?? PREFILL_WARM_PROMPT,
-      topK: params.topK ?? 1,
-    });
-    const { trace } = await runDopplerPrefill(spec, `${LOGIT_DIVERGENCE_KERNEL}:prepare`);
-    return {
-      kind,
-      modelId: spec.modelId,
-      warmPromptLength: spec.promptText.length,
-      ...trace,
-    };
-  }
   throw new Error(`unsupported warm kernel: ${kind}`);
 }
 
@@ -457,132 +339,6 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     try { readBuffer?.destroy?.(); } catch {}
     try { device?.destroy?.(); } catch {}
   }
-}
-
-async function getDopplerPipeline(modelId, trace = null) {
-  const key = String(modelId || "").trim();
-  if (!key) throw new Error("embedding modelId required");
-  if (trace && trace.pipelineCacheHit === undefined) {
-    trace.pipelineCacheHit = dopplerPipelineCache.has(key);
-  }
-  if (!dopplerPipelineCache.has(key)) {
-    dopplerPipelineCache.set(key, (async () => {
-      const modules = await loadDopplerModules();
-      const entry = await modules.resolveQuickstartModel(key);
-      const baseUrl = modules.buildQuickstartModelBaseUrl(entry);
-      const manifestPayload = await modules.fetchManifestPayloadFromBaseUrl(baseUrl);
-      const resolved = await modules.resolveManifestArtifactSource({
-        modelId: key,
-        baseUrl,
-        manifest: null,
-        trace: [],
-      }, manifestPayload);
-      const storage = modules.createHttpArtifactStorageContext(
-        resolved.storageBaseUrl ?? resolved.baseUrl,
-        resolved.storageManifest ?? resolved.manifest,
-      );
-      await storage.preflight?.();
-      return modules.createPipeline(resolved.manifest, {
-        baseUrl: resolved.storageBaseUrl ?? resolved.baseUrl,
-        storage,
-      });
-    })().catch((error) => {
-      dopplerPipelineCache.delete(key);
-      throw error;
-    }));
-  }
-  return dopplerPipelineCache.get(key);
-}
-
-async function runDopplerPrefill(spec, kernelLabel) {
-  const trace = {
-    kernel: kernelLabel,
-    modelId: spec.modelId,
-    pipelineCacheHit: dopplerPipelineCache.has(spec.modelId),
-    pipelineLoadMs: null,
-    prefillMs: null,
-    totalMs: null,
-  };
-  const startedAt = performance.now();
-  let stage = "pipeline";
-  try {
-    const pipelineStartedAt = performance.now();
-    const pipeline = await getDopplerPipeline(spec.modelId, trace);
-    trace.pipelineLoadMs = Math.round(performance.now() - pipelineStartedAt);
-    stage = "prefill";
-    pipeline.reset?.();
-    const prefillStartedAt = performance.now();
-    const prefill = await pipeline.prefillWithLogits(spec.promptText, {
-      temperature: 0,
-      topK: 1,
-      topP: 1,
-    });
-    trace.prefillMs = Math.round(performance.now() - prefillStartedAt);
-    trace.totalMs = Math.round(performance.now() - startedAt);
-    const logits = prefill?.logits;
-    const inputTokens = Array.isArray(prefill?.tokens) ? prefill.tokens : [];
-    if (!(logits instanceof Float32Array) || logits.length === 0) {
-      throw new Error("prefill logits missing");
-    }
-    return { prefill, logits, inputTokens, trace };
-  } catch (error) {
-    throw buildWorkerError(
-      `${kernelLabel} failed during ${stage}: ${errorMessage(error)}`,
-      {
-        stage,
-        modelId: spec.modelId,
-        pipelineCacheHit: trace.pipelineCacheHit,
-        pipelineLoadMs: trace.pipelineLoadMs,
-        prefillMs: trace.prefillMs,
-        totalMs: Math.round(performance.now() - startedAt),
-      },
-      error,
-    );
-  }
-}
-
-async function loadDopplerModules() {
-  if (!dopplerModulesPromise) {
-    dopplerModulesPromise = Promise.all([
-      import(DOPPLER_GENERATION_URL),
-      import(DOPPLER_REGISTRY_URL),
-      import(DOPPLER_MODEL_SOURCE_URL),
-      import(DOPPLER_STORAGE_URL),
-    ]).then(([generation, registry, modelSource, storage]) => ({
-      createPipeline: generation.createPipeline,
-      resolveQuickstartModel: registry.resolveQuickstartModel,
-      buildQuickstartModelBaseUrl: registry.buildQuickstartModelBaseUrl,
-      fetchManifestPayloadFromBaseUrl: modelSource.fetchManifestPayloadFromBaseUrl,
-      resolveManifestArtifactSource: modelSource.resolveManifestArtifactSource,
-      createHttpArtifactStorageContext: storage.createHttpArtifactStorageContext,
-    })).catch((error) => {
-      dopplerModulesPromise = null;
-      throw new Error(
-        `Doppler vendor runtime unavailable: ${error?.message || error}. ` +
-        "Run `npm run sync:doppler:client` before enabling embedding tiles."
-      );
-    });
-  }
-  return dopplerModulesPromise;
-}
-
-async function embedText(pipeline, text, kind, modelId) {
-  pipeline.reset?.();
-  const formatted = formatEmbeddingText(text, kind, modelId);
-  const result = await pipeline.embed(formatted);
-  const embedding = result?.embedding;
-  if (!embedding || !Number.isFinite(embedding.length) || embedding.length <= 0) {
-    throw new Error("embedding output missing");
-  }
-  return embedding;
-}
-
-function formatEmbeddingText(text, kind, modelId) {
-  if (String(modelId || "").includes("embeddinggemma")) {
-    if (kind === "query") return `task: search result | query: ${text}`;
-    if (kind === "document") return `title: None | text: ${text}`;
-  }
-  return text;
 }
 
 function runReplayVerify(params) {
@@ -1430,28 +1186,6 @@ function encodeContactResidues(text) {
   });
 }
 
-function normalizePrefillTopkProbeParams(params) {
-  const modelId = String(params.modelId || PREFILL_TOPK_PROBE_MODEL).trim();
-  if (modelId !== PREFILL_TOPK_PROBE_MODEL) {
-    throw new Error(`unsupported prefill probe model: ${modelId}`);
-  }
-  const promptText = normalizeTextParam(params.promptText, "promptText", 1, 1024);
-  const topK = asInt(params.topK ?? 4);
-  if (topK < 1 || topK > 8) throw new Error("topK must be 1..8");
-  return { modelId, promptText, topK };
-}
-
-function normalizeLogitDivergenceParams(params) {
-  const modelId = String(params.modelId || PREFILL_TOPK_PROBE_MODEL).trim();
-  if (modelId !== PREFILL_TOPK_PROBE_MODEL) {
-    throw new Error(`unsupported logit divergence model: ${modelId}`);
-  }
-  const promptText = normalizeTextParam(params.promptText, "promptText", 1, 1024);
-  const topK = asInt(params.topK ?? 4);
-  if (topK < 1 || topK > 8) throw new Error("topK must be 1..8");
-  return { modelId, promptText, topK };
-}
-
 function normalizeGenomeKmerParams(params) {
   const sequenceId = String(params.sequenceId ?? "").trim().slice(0, 128);
   const sequence = String(params.sequence ?? "").trim().toUpperCase();
@@ -1469,37 +1203,6 @@ function normalizeGenomeKmerParams(params) {
   return { sequenceId, sequence, k };
 }
 
-function topKLogitHits(logits, topK) {
-  const best = [];
-  for (let tokenId = 0; tokenId < logits.length; tokenId++) {
-    const logit = Number(logits[tokenId]);
-    if (!Number.isFinite(logit)) continue;
-    const entry = { tokenId, logit };
-    let inserted = false;
-    for (let i = 0; i < best.length; i++) {
-      const current = best[i];
-      if (logit > current.logit || (logit === current.logit && tokenId < current.tokenId)) {
-        best.splice(i, 0, entry);
-        inserted = true;
-        break;
-      }
-    }
-    if (!inserted && best.length < topK) best.push(entry);
-    if (best.length > topK) best.length = topK;
-  }
-  if (best.length === 0) throw new Error("no finite logits");
-  return best;
-}
-
-function buildWorkerError(message, details = {}, cause = null) {
-  const error = new Error(message);
-  error.details = {
-    ...details,
-    cause: cause ? errorMessage(cause) : undefined,
-  };
-  return error;
-}
-
 function workerErrorDetails(error) {
   return error && typeof error === "object" && error.details && typeof error.details === "object"
     ? error.details
@@ -1508,28 +1211,6 @@ function workerErrorDetails(error) {
 
 function errorMessage(error) {
   return String(error?.message ?? error ?? "unknown error");
-}
-
-function normalizeEmbeddingTileParams(params) {
-  const modelId = String(params.modelId || EMBEDDING_TILE_MODEL).trim();
-  if (modelId !== EMBEDDING_TILE_MODEL) {
-    throw new Error(`unsupported embedding model: ${modelId}`);
-  }
-  const queryText = normalizeTextParam(params.queryText, "queryText", 1, 2048);
-  if (typeof params.documentsJson !== "string" || params.documentsJson.length === 0 || params.documentsJson.length > 16 * 1024) {
-    throw new Error("documentsJson required");
-  }
-  let documents = null;
-  try { documents = JSON.parse(params.documentsJson); } catch {}
-  if (!Array.isArray(documents) || documents.length < 1 || documents.length > 16) {
-    throw new Error("embedding tile requires 1..16 documents");
-  }
-  documents = documents.map((value) => normalizeTextParam(value, "document", 1, 2048));
-  const topK = asInt(params.topK);
-  if (topK < 1 || topK > Math.min(8, documents.length)) {
-    throw new Error("topK must be 1..min(8, documents.length)");
-  }
-  return { modelId, queryText, documents, topK };
 }
 
 function entropyFromHistogram(hist, total) {
@@ -1593,55 +1274,6 @@ function normalizeTextParam(value, label, min, max) {
     throw new Error(`${label} must be ${min}..${max} chars`);
   }
   return text;
-}
-
-function quantizeEmbeddingScore(value) {
-  if (!Number.isFinite(value)) throw new Error("non-finite embedding score");
-  return Math.max(-EMBEDDING_TILE_SCORE_SCALE, Math.min(
-    EMBEDDING_TILE_SCORE_SCALE,
-    Math.round(value * EMBEDDING_TILE_SCORE_SCALE),
-  ));
-}
-
-function cosineSimilarity(a, b) {
-  if (!a || !b || !Number.isFinite(a.length) || !Number.isFinite(b.length) || a.length !== b.length || a.length === 0) {
-    throw new Error("embedding vectors incompatible");
-  }
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    const av = Number(a[i]);
-    const bv = Number(b[i]);
-    if (!Number.isFinite(av) || !Number.isFinite(bv)) throw new Error("embedding vector contained non-finite values");
-    dot += av * bv;
-    normA += av * av;
-    normB += bv * bv;
-  }
-  if (normA <= 0 || normB <= 0) throw new Error("embedding norm invalid");
-  return dot / Math.sqrt(normA * normB);
-}
-
-function topKTokenIds(logits, topK) {
-  const best = [];
-  for (let tokenId = 0; tokenId < logits.length; tokenId++) {
-    const logit = Number(logits[tokenId]);
-    if (!Number.isFinite(logit)) continue;
-    const entry = { tokenId, logit };
-    let inserted = false;
-    for (let i = 0; i < best.length; i++) {
-      const current = best[i];
-      if (logit > current.logit || (logit === current.logit && tokenId < current.tokenId)) {
-        best.splice(i, 0, entry);
-        inserted = true;
-        break;
-      }
-    }
-    if (!inserted && best.length < topK) best.push(entry);
-    if (best.length > topK) best.length = topK;
-  }
-  if (best.length === 0) throw new Error("no finite logits");
-  return best.map((entry) => entry.tokenId);
 }
 
 function stableJson(value) {

@@ -14,7 +14,6 @@ test("route config keeps browser feature gates centralized", () => {
   assert.equal(LEGACY_HASH.practice, "build");
   assert.equal(LEGACY_HASH.rules, "about");
   assert.equal(DEFAULT_FEATURES.p2pDuel, false);
-  assert.equal(DEFAULT_FEATURES.computeLogitDivergence, false);
   assert.equal(DEFAULT_FEATURES.computeGenomeKmer, false);
   assert.equal(DEFAULT_FEATURES.webgpuRenderer, false);
   assert.equal(DEFAULT_FEATURES.webglRenderer, false);

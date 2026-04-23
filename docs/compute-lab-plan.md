@@ -1011,10 +1011,9 @@ Initial public presets checked into the repo:
 - `human-hemoglobin-alpha-fold-core` (`P69905`)
 - `human-lysozyme-stable-core` (`P61626`)
 
-The Doppler-backed browser ML probes are parked out of the active Hosting
-surface. Immediate public work stays on non-ML kernels while the browser
-runtime boundary is redesigned so `m3t4` does not ship the whole Doppler source
-tree for one workload lane.
+Browser-model ML probes are removed from the active Hosting surface. Immediate
+public work stays on bounded non-ML kernels while the browser runtime and
+validator boundaries are redesigned.
 
 ## Public Artifact Export
 

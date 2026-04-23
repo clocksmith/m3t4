@@ -29,13 +29,6 @@ import {
   runAssetTileAuditReference,
 } from "./kernels/asset-tile-audit.js";
 import {
-  EMBEDDING_TILE_KERNEL_HASH,
-  EMBEDDING_TILE_KERNEL_ID,
-  EMBEDDING_TILE_MODEL_ID,
-  embeddingTilePlaceholderOutputHash,
-  normalizeEmbeddingTileParams,
-} from "./kernels/embedding-tile.js";
-import {
   EXPLOIT_SEARCH_KERNEL_HASH,
   EXPLOIT_SEARCH_KERNEL_ID,
   normalizeExploitSearchParams,
@@ -47,22 +40,6 @@ import {
   normalizeImageTileInferParams,
   runImageTileInferReference,
 } from "./kernels/image-tile-infer.js";
-import {
-  PREFILL_TOPK_PROBE_KERNEL_HASH,
-  PREFILL_TOPK_PROBE_KERNEL_ID,
-  PREFILL_TOPK_PROBE_MODEL_ID,
-  normalizePrefillTopkProbeParams,
-  prefillTopkProbePlaceholderOutputHash,
-} from "./kernels/prefill-topk-probe.js";
-import {
-  LOGIT_DIVERGENCE_KERNEL_HASH,
-  LOGIT_DIVERGENCE_KERNEL_ID,
-  LOGIT_DIVERGENCE_MODEL_ID,
-  logitDivergencePlaceholderOutputHash,
-  logitDivergencePublicOutputHash,
-  normalizeLogitDivergenceParams,
-  normalizeLogitDivergencePublicOutput,
-} from "./kernels/logit-divergence.js";
 import {
   GENOME_KMER_KERNEL_HASH,
   GENOME_KMER_KERNEL_ID,
@@ -148,12 +125,9 @@ const KNOWN_KERNELS = [
   DEVICE_WITNESS_WEBRTC_KERNEL_ID,
   DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID,
   ASSET_TILE_AUDIT_KERNEL_ID,
-  EMBEDDING_TILE_KERNEL_ID,
   EXPLOIT_SEARCH_KERNEL_ID,
   IMAGE_TILE_INFER_KERNEL_ID,
   MICROSCOPY_TILE_SCORE_KERNEL_ID,
-  PREFILL_TOPK_PROBE_KERNEL_ID,
-  LOGIT_DIVERGENCE_KERNEL_ID,
   CONTACT_MAP_TILE_KERNEL_ID,
   GENOME_KMER_KERNEL_ID,
   PUBLIC_ARTIFACT_VERIFY_KERNEL_ID,
@@ -470,13 +444,10 @@ export interface ComputeScoreBreakdown {
   acceptedAssetTileAuditChunks: number;
   acceptedContactMapTileChunks: number;
   acceptedContactMapTileCells: number;
-  acceptedEmbeddingTileChunks: number;
   acceptedExploitSearchChunks: number;
   acceptedExploitSearchSeeds: number;
   acceptedImageTileInferChunks: number;
-  acceptedLogitDivergenceChunks: number;
   acceptedMicroscopyTileScoreChunks: number;
-  acceptedPrefillTopkProbeChunks: number;
   acceptedPublicArtifactChunks: number;
   acceptedReplayVerifyChunks: number;
   acceptedSeedSweepChunks: number;
@@ -1275,62 +1246,6 @@ export class ComputeLabStore {
     return task;
   }
 
-  seedEmbeddingTileTask(input: {
-    modelId?: string;
-    queryText: string;
-    documents: string[];
-    topK?: number;
-    minExecutions?: number;
-    minAgreeing?: number;
-    requiredTransport?: TransportKind;
-    requiredPeerSubreceipt?: boolean;
-  }): ComputeTask {
-    const normalized = normalizeEmbeddingTileParams({
-      modelId: input.modelId ?? EMBEDDING_TILE_MODEL_ID,
-      queryText: input.queryText,
-      documentsJson: JSON.stringify(input.documents ?? []),
-      topK: input.topK ?? 4,
-    });
-    const params = {
-      modelId: normalized.modelId,
-      queryText: normalized.queryText,
-      documentsJson: normalized.documentsJson,
-      topK: normalized.topK,
-    };
-    const taskId = randomId("task");
-    const minExecutions = Math.max(2, input.minExecutions ?? 2);
-    const minAgreeing = Math.min(minExecutions, Math.max(2, input.minAgreeing ?? 2));
-    const chunk: ComputeChunk = {
-      chunkId: `${taskId}-chunk-0`,
-      taskId,
-      ordinal: 0,
-      kind: EMBEDDING_TILE_KERNEL_ID,
-      params,
-      kernelId: EMBEDDING_TILE_KERNEL_ID,
-      kernelHash: EMBEDDING_TILE_KERNEL_HASH,
-      inputHash: hashCanonical({ kind: EMBEDDING_TILE_KERNEL_ID, params }),
-      expectedOutputHash: embeddingTilePlaceholderOutputHash(normalized),
-      status: "pending",
-    };
-    const task: ComputeTask = {
-      taskId,
-      kind: EMBEDDING_TILE_KERNEL_ID,
-      status: "running",
-      createdAt: this.now(),
-      validationPolicy: {
-        determinismClass: "replicated-quorum",
-        validationMode: "quorum",
-        minExecutions,
-        minAgreeing,
-        requiredTransport: input.requiredTransport,
-        requiredPeerSubreceipt: input.requiredPeerSubreceipt,
-      },
-      chunks: [chunk],
-    };
-    this.tasks.set(taskId, task);
-    return task;
-  }
-
   seedImageTileInferTask(input: {
     sourceId?: string;
     width: number;
@@ -1383,114 +1298,6 @@ export class ComputeLabStore {
         minExecutions,
         minAgreeing,
         expectedOutputHash,
-        requiredTransport: input.requiredTransport,
-        requiredPeerSubreceipt: input.requiredPeerSubreceipt,
-      },
-      chunks: [chunk],
-    };
-    this.tasks.set(taskId, task);
-    return task;
-  }
-
-  seedPrefillTopkProbeTask(input: {
-    modelId?: string;
-    promptText: string;
-    topK?: number;
-    minExecutions?: number;
-    minAgreeing?: number;
-    requiredTransport?: TransportKind;
-    requiredPeerSubreceipt?: boolean;
-  }): ComputeTask {
-    const normalized = normalizePrefillTopkProbeParams({
-      modelId: input.modelId ?? PREFILL_TOPK_PROBE_MODEL_ID,
-      promptText: input.promptText,
-      topK: input.topK ?? 4,
-    });
-    const params = {
-      modelId: normalized.modelId,
-      promptText: normalized.promptText,
-      topK: normalized.topK,
-    };
-    const taskId = randomId("task");
-    const minExecutions = Math.max(2, input.minExecutions ?? 2);
-    const minAgreeing = Math.min(minExecutions, Math.max(2, input.minAgreeing ?? 2));
-    const chunk: ComputeChunk = {
-      chunkId: `${taskId}-chunk-0`,
-      taskId,
-      ordinal: 0,
-      kind: PREFILL_TOPK_PROBE_KERNEL_ID,
-      params,
-      kernelId: PREFILL_TOPK_PROBE_KERNEL_ID,
-      kernelHash: PREFILL_TOPK_PROBE_KERNEL_HASH,
-      inputHash: hashCanonical({ kind: PREFILL_TOPK_PROBE_KERNEL_ID, params }),
-      expectedOutputHash: prefillTopkProbePlaceholderOutputHash(normalized),
-      status: "pending",
-    };
-    const task: ComputeTask = {
-      taskId,
-      kind: PREFILL_TOPK_PROBE_KERNEL_ID,
-      status: "running",
-      createdAt: this.now(),
-      validationPolicy: {
-        determinismClass: "replicated-quorum",
-        validationMode: "quorum",
-        minExecutions,
-        minAgreeing,
-        requiredTransport: input.requiredTransport,
-        requiredPeerSubreceipt: input.requiredPeerSubreceipt,
-      },
-      chunks: [chunk],
-    };
-    this.tasks.set(taskId, task);
-    return task;
-  }
-
-  seedLogitDivergenceTask(input: {
-    modelId?: string;
-    promptText: string;
-    topK?: number;
-    minExecutions?: number;
-    minAgreeing?: number;
-    requiredTransport?: TransportKind;
-    requiredPeerSubreceipt?: boolean;
-    targetWorkerIds?: string[];
-  }): ComputeTask {
-    const normalized = normalizeLogitDivergenceParams({
-      modelId: input.modelId ?? LOGIT_DIVERGENCE_MODEL_ID,
-      promptText: input.promptText,
-      topK: input.topK ?? 4,
-    });
-    const params = {
-      modelId: normalized.modelId,
-      promptText: normalized.promptText,
-      topK: normalized.topK,
-    };
-    const taskId = randomId("task");
-    const minExecutions = Math.max(2, input.minExecutions ?? 2);
-    const minAgreeing = Math.min(minExecutions, Math.max(2, input.minAgreeing ?? 2));
-    const chunk: ComputeChunk = {
-      chunkId: `${taskId}-chunk-0`,
-      taskId,
-      ordinal: 0,
-      kind: LOGIT_DIVERGENCE_KERNEL_ID,
-      params,
-      kernelId: LOGIT_DIVERGENCE_KERNEL_ID,
-      kernelHash: LOGIT_DIVERGENCE_KERNEL_HASH,
-      inputHash: hashCanonical({ kind: LOGIT_DIVERGENCE_KERNEL_ID, params }),
-      expectedOutputHash: logitDivergencePlaceholderOutputHash(normalized),
-      status: "pending",
-    };
-    const task: ComputeTask = {
-      taskId,
-      kind: LOGIT_DIVERGENCE_KERNEL_ID,
-      status: "running",
-      createdAt: this.now(),
-      targetWorkerIds: normalizeTargetWorkerIds(input.targetWorkerIds),
-      validationPolicy: {
-        determinismClass: "tolerance-bounded",
-        validationMode: "measurement",
-        minExecutions,
-        minAgreeing,
         requiredTransport: input.requiredTransport,
         requiredPeerSubreceipt: input.requiredPeerSubreceipt,
       },
@@ -3295,11 +3102,9 @@ function isWebRtcDataTask(kind: TaskKind): boolean {
   return (
     kind === ASSET_TILE_AUDIT_KERNEL_ID ||
     kind === CONTACT_MAP_TILE_KERNEL_ID ||
-    kind === EMBEDDING_TILE_KERNEL_ID ||
     kind === EXPLOIT_SEARCH_KERNEL_ID ||
     kind === IMAGE_TILE_INFER_KERNEL_ID ||
     kind === MICROSCOPY_TILE_SCORE_KERNEL_ID ||
-    kind === PREFILL_TOPK_PROBE_KERNEL_ID ||
     kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID ||
     kind === REPLAY_VERIFY_KERNEL_ID ||
     kind === SEED_SWEEP_KERNEL_ID ||
@@ -3412,46 +3217,6 @@ function receiptMismatch(
     if (!hashesEqual(derived.derivedOutputHash, input.outputHash)) {
       return { decision: "output-mismatch", reason: "derived output hash mismatch" };
     }
-  }
-  if (chunk.kind === LOGIT_DIVERGENCE_KERNEL_ID) {
-    const publicOutputMismatch = logitDivergenceReceiptMismatch(chunk, input);
-    if (publicOutputMismatch) return publicOutputMismatch;
-  }
-  return null;
-}
-
-function logitDivergenceReceiptMismatch(
-  chunk: ComputeChunk,
-  input: Pick<ExecutionReceipt, "outputHash" | "publicOutput">,
-): { decision: ReceiptDecision; reason: string } | null {
-  if (!input.publicOutput) {
-    return { decision: "malformed", reason: "logit divergence publicOutput required" };
-  }
-  let outputSize = 0;
-  try {
-    outputSize = canonicalJson(input.publicOutput).length;
-  } catch {
-    return { decision: "malformed", reason: "logit divergence publicOutput invalid" };
-  }
-  if (outputSize <= 0 || outputSize > 8192) {
-    return { decision: "malformed", reason: "logit divergence publicOutput too large" };
-  }
-  try {
-    const normalized = normalizeLogitDivergencePublicOutput(input.publicOutput, {
-      modelId: stringParam(chunk.params.modelId),
-      promptText: stringParam(chunk.params.promptText),
-      topK: asInt(chunk.params.topK, "topK"),
-    });
-    const expectedPromptHash = sha256(stringParam(chunk.params.promptText)).value;
-    if (normalized.promptHash !== expectedPromptHash) {
-      return { decision: "input-mismatch", reason: "logit divergence prompt hash mismatch" };
-    }
-    const outputHash = logitDivergencePublicOutputHash(normalized);
-    if (!hashesEqual(outputHash, input.outputHash)) {
-      return { decision: "output-mismatch", reason: "logit divergence output hash mismatch" };
-    }
-  } catch (error) {
-    return { decision: "malformed", reason: error instanceof Error ? error.message : "logit divergence publicOutput invalid" };
   }
   return null;
 }
@@ -3924,13 +3689,10 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
   let acceptedAssetTileAuditChunks = 0;
   let acceptedContactMapTileChunks = 0;
   let acceptedContactMapTileCells = 0;
-  let acceptedEmbeddingTileChunks = 0;
   let acceptedExploitSearchChunks = 0;
   let acceptedExploitSearchSeeds = 0;
   let acceptedImageTileInferChunks = 0;
-  let acceptedLogitDivergenceChunks = 0;
   let acceptedMicroscopyTileScoreChunks = 0;
-  let acceptedPrefillTopkProbeChunks = 0;
   let acceptedPublicArtifactChunks = 0;
   let acceptedReplayVerifyChunks = 0;
   let acceptedSeedSweepChunks = 0;
@@ -3947,17 +3709,14 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
           0,
           stringParam(chunk.params.rowResidues).length * stringParam(chunk.params.colResidues).length,
         );
-      } else if (task.kind === EMBEDDING_TILE_KERNEL_ID) acceptedEmbeddingTileChunks++;
-      else if (task.kind === EXPLOIT_SEARCH_KERNEL_ID) {
+      } else if (task.kind === EXPLOIT_SEARCH_KERNEL_ID) {
         acceptedExploitSearchChunks++;
         acceptedExploitSearchSeeds += Math.max(
           0,
           asInt(chunk.params.seedEndExclusive, "seedEndExclusive") - asInt(chunk.params.seedStart, "seedStart"),
         );
       } else if (task.kind === IMAGE_TILE_INFER_KERNEL_ID) acceptedImageTileInferChunks++;
-      else if (task.kind === LOGIT_DIVERGENCE_KERNEL_ID) acceptedLogitDivergenceChunks++;
       else if (task.kind === MICROSCOPY_TILE_SCORE_KERNEL_ID) acceptedMicroscopyTileScoreChunks++;
-      else if (task.kind === PREFILL_TOPK_PROBE_KERNEL_ID) acceptedPrefillTopkProbeChunks++;
       else if (task.kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID) acceptedPublicArtifactChunks++;
       else if (task.kind === REPLAY_VERIFY_KERNEL_ID) acceptedReplayVerifyChunks++;
       else if (task.kind === SEED_SWEEP_KERNEL_ID) {
@@ -3981,13 +3740,10 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
     acceptedAssetTileAuditChunks,
     acceptedContactMapTileChunks,
     acceptedContactMapTileCells,
-    acceptedEmbeddingTileChunks,
     acceptedExploitSearchChunks,
     acceptedExploitSearchSeeds,
     acceptedImageTileInferChunks,
-    acceptedLogitDivergenceChunks,
     acceptedMicroscopyTileScoreChunks,
-    acceptedPrefillTopkProbeChunks,
     acceptedPublicArtifactChunks,
     acceptedReplayVerifyChunks,
     acceptedSeedSweepChunks,
@@ -4009,13 +3765,10 @@ function computeScore(breakdown: ComputeScoreBreakdown): number {
     breakdown.acceptedAssetTileAuditChunks * 70 +
     breakdown.acceptedContactMapTileChunks * 110 +
     breakdown.acceptedContactMapTileCells * 2 +
-    breakdown.acceptedEmbeddingTileChunks * 140 +
     breakdown.acceptedExploitSearchChunks * 85 +
     breakdown.acceptedExploitSearchSeeds * 2 +
     breakdown.acceptedImageTileInferChunks * 90 +
-    breakdown.acceptedLogitDivergenceChunks * 135 +
     breakdown.acceptedMicroscopyTileScoreChunks * 95 +
-    breakdown.acceptedPrefillTopkProbeChunks * 125 +
     breakdown.acceptedPublicArtifactChunks * 80 +
     breakdown.acceptedReplayVerifyChunks * 120 +
     breakdown.acceptedSeedSweepChunks * 60 +
@@ -4150,8 +3903,6 @@ function taskRequiredWorkloadTier(task: ComputeTask): WorkloadTier {
   }
   if (
     task.kind === TENSOR_TILE_KERNEL_ID ||
-    task.kind === EMBEDDING_TILE_KERNEL_ID ||
-    task.kind === PREFILL_TOPK_PROBE_KERNEL_ID ||
     task.kind === CONTACT_MAP_TILE_KERNEL_ID
   ) return "webgpu-light";
   return "observe-only";
@@ -4385,7 +4136,6 @@ export function referenceReceiptFields(chunk: Omit<ComputeChunk, "expectedOutput
   "kernelId" | "kernelHash" | "inputHash" | "artifactHash" | "outputHash" | "derived" | "determinismClass" | "validationMode"
 > {
   const outputHash = chunk.expectedOutputHash ?? referenceOutputHash(chunk);
-  const quorumTask = chunk.kind === EMBEDDING_TILE_KERNEL_ID || chunk.kind === PREFILL_TOPK_PROBE_KERNEL_ID;
   const derived = chunk.kind === DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID
     ? {
       contractVersion: "derived-compute-extension.v0" as const,
@@ -4403,8 +4153,8 @@ export function referenceReceiptFields(chunk: Omit<ComputeChunk, "expectedOutput
     artifactHash: chunk.artifactHash,
     outputHash,
     derived,
-    determinismClass: quorumTask ? "replicated-quorum" : "bit-exact",
-    validationMode: quorumTask ? "quorum" : "expected-hash",
+    determinismClass: "bit-exact",
+    validationMode: "expected-hash",
   };
 }
 
@@ -4436,13 +4186,6 @@ function referenceOutputHash(chunk: Omit<ComputeChunk, "expectedOutputHash">): C
       }).outputHash;
     case SEED_SWEEP_KERNEL_ID:
       return runSeedSweep(chunk.params as unknown as Parameters<typeof runSeedSweep>[0]).outputHash;
-    case EMBEDDING_TILE_KERNEL_ID:
-      return embeddingTilePlaceholderOutputHash(normalizeEmbeddingTileParams({
-        modelId: stringParam(chunk.params.modelId),
-        queryText: stringParam(chunk.params.queryText),
-        documentsJson: stringParam(chunk.params.documentsJson),
-        topK: asInt(chunk.params.topK, "topK"),
-      }));
     case EXPLOIT_SEARCH_KERNEL_ID:
       return runExploitSearchReference({
         stageId: stringParam(chunk.params.stageId),
@@ -4468,18 +4211,6 @@ function referenceOutputHash(chunk: Omit<ComputeChunk, "expectedOutputHash">): C
         height: asInt(chunk.params.height, "height"),
         rgbaBase64: stringParam(chunk.params.rgbaBase64),
       }).outputHash;
-    case PREFILL_TOPK_PROBE_KERNEL_ID:
-      return prefillTopkProbePlaceholderOutputHash(normalizePrefillTopkProbeParams({
-        modelId: stringParam(chunk.params.modelId),
-        promptText: stringParam(chunk.params.promptText),
-        topK: asInt(chunk.params.topK, "topK"),
-      }));
-    case LOGIT_DIVERGENCE_KERNEL_ID:
-      return logitDivergencePlaceholderOutputHash(normalizeLogitDivergenceParams({
-        modelId: stringParam(chunk.params.modelId),
-        promptText: stringParam(chunk.params.promptText),
-        topK: asInt(chunk.params.topK, "topK"),
-      }));
     case CONTACT_MAP_TILE_KERNEL_ID:
       return runContactMapTileReference({
         rowResidues: stringParam(chunk.params.rowResidues),

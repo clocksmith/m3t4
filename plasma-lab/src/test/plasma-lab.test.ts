@@ -1900,9 +1900,56 @@ test("persistent HTTP routes refresh and flush across store instances", async (t
   assert.equal(enabled.status, 200);
   assert.equal(enabled.body.acceptAssignments, true);
 
-  const worker = await register(srvB.port);
+  const worker = await register(srvB.port, capability, "secret");
   const assigned = await next(srvB.port, worker);
   assert.equal(assigned.task.taskId, seeded.body.taskId);
+});
+
+test("persistent HTTP routes keep image tile tasks across store instances", async (t) => {
+  let saved: Partial<ComputeLabSnapshot> = {};
+  const persistence = {
+    load: async () => clone(saved),
+    save: async (snapshot: ComputeLabSnapshot) => {
+      saved = clone(snapshot);
+    },
+  };
+  const storeA = await PersistentComputeLabStore.create({ acceptAssignments: false }, persistence);
+  const storeB = await PersistentComputeLabStore.create({ acceptAssignments: false }, persistence);
+  const srvA = await boot(storeA, { ...baseConfig, adminToken: "secret", acceptAssignments: false });
+  const srvB = await boot(storeB, { ...baseConfig, adminToken: "secret", acceptAssignments: false });
+  t.after(async () => {
+    await srvA.close();
+    await srvB.close();
+  });
+
+  const preset = IMAGE_TILE_SAMPLE_PRESETS[0];
+  const seeded = await req(
+    srvA.port,
+    "POST",
+    "/compute/admin/tasks/image-tile-infer",
+    {
+      sourceId: preset.sourceId,
+      width: preset.width,
+      height: preset.height,
+      rgbaBase64: preset.rgbaBase64,
+      topK: 3,
+      minExecutions: 1,
+      minAgreeing: 1,
+    },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(seeded.status, 200);
+
+  const taskFromB = await req(
+    srvB.port,
+    "GET",
+    `/compute/admin/tasks/${seeded.body.taskId}`,
+    undefined,
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(taskFromB.status, 200);
+  assert.equal(taskFromB.body.taskId, seeded.body.taskId);
+  assert.equal(taskFromB.body.kind, "ml.image_tile_infer.v0");
 });
 
 test("persistent refresh reconciles quorum after concurrent receipt writes", async () => {

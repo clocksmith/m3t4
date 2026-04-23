@@ -17,6 +17,7 @@ const PUBLIC_ARTIFACT_KERNEL = "m3t4.public_artifact_verify.v0";
 const REPLAY_VERIFY_KERNEL = "m3t4.replay_verify.v1";
 const SEED_SWEEP_KERNEL = "m3t4.seed_sweep.v0";
 const EMBEDDING_TILE_KERNEL = "ml.embedding_tile.v0";
+const PREFILL_TOPK_PROBE_KERNEL = "ml.prefill_topk_probe.v0";
 const CONTACT_MAP_TILE_KERNEL = "science.contact_map_tile.v0";
 const TENSOR_TILE_KERNEL = "plasma.tensor_tile.v0";
 
@@ -755,6 +756,10 @@ function embeddingTileModelId() {
   return String(window.__M3T4_COMPUTE_EMBED_MODEL__ || "").trim();
 }
 
+function prefillTopkProbeEnabled() {
+  return window.__M3T4_COMPUTE_PREFILL_TOPK_PROBE__ === true;
+}
+
 function persistedOptIn() {
   try {
     return localStorage.getItem(OPT_IN_KEY) === "1";
@@ -813,6 +818,7 @@ async function buildCapability(runtimeInfo = {}, opts = {}) {
     kernels.push(CONTACT_MAP_TILE_KERNEL);
     kernels.push(TENSOR_TILE_KERNEL);
     if (embeddingTileEnabled()) kernels.push(EMBEDDING_TILE_KERNEL);
+    if (prefillTopkProbeEnabled()) kernels.push(PREFILL_TOPK_PROBE_KERNEL);
   }
   if (typeof RTCPeerConnection !== "undefined") kernels.push("device_witness.webrtc.v0");
   const adapterInfo = {
@@ -1633,6 +1639,25 @@ function safeWebRtcDataChunk(chunk) {
       throw new Error("embedding tile documents invalid");
     }
   }
+  if (chunk.kind === PREFILL_TOPK_PROBE_KERNEL) {
+    const topK = Number(chunk.params?.topK);
+    if (!Number.isSafeInteger(topK) || topK < 1 || topK > 8) {
+      throw new Error("prefill top-k probe topK invalid");
+    }
+    if (
+      typeof chunk.params?.modelId !== "string" ||
+      chunk.params.modelId !== "gemma-3-270m-it-q4k-ehf16-af32"
+    ) {
+      throw new Error("prefill top-k probe modelId invalid");
+    }
+    if (
+      typeof chunk.params?.promptText !== "string" ||
+      chunk.params.promptText.length === 0 ||
+      chunk.params.promptText.length > 1024
+    ) {
+      throw new Error("prefill top-k probe promptText invalid");
+    }
+  }
   if (chunk.kind === CONTACT_MAP_TILE_KERNEL) {
     const rowStart = Number(chunk.params?.rowStart);
     const colStart = Number(chunk.params?.colStart);
@@ -1693,7 +1718,7 @@ function safeWebRtcDataChunk(chunk) {
 }
 
 function webRtcDataKernel(kind) {
-  return kind === PUBLIC_ARTIFACT_KERNEL || kind === REPLAY_VERIFY_KERNEL || kind === SEED_SWEEP_KERNEL || kind === EMBEDDING_TILE_KERNEL || kind === CONTACT_MAP_TILE_KERNEL || kind === TENSOR_TILE_KERNEL;
+  return kind === PUBLIC_ARTIFACT_KERNEL || kind === REPLAY_VERIFY_KERNEL || kind === SEED_SWEEP_KERNEL || kind === EMBEDDING_TILE_KERNEL || kind === PREFILL_TOPK_PROBE_KERNEL || kind === CONTACT_MAP_TILE_KERNEL || kind === TENSOR_TILE_KERNEL;
 }
 
 const PEER_WORK_PARAMS = Object.freeze({ start: 1009, endExclusive: 1033 });

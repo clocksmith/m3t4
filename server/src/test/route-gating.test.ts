@@ -130,6 +130,7 @@ function registerCore(routes: RouteList, store: MemoryStableStore): void {
       computeSlackWorker: false,
       computeWebRtcArtifacts: false,
       computeEmbedTile: false,
+      computePrefillTopkProbe: false,
       computeTaskAdmin: false,
       computeReceiptDashboard: false,
       computeLiveBadges: false,
@@ -185,6 +186,7 @@ test("centralized route graph hides P2P routes by default", async (t) => {
   assert.equal(status.body.features.computeSlackWorker, false);
   assert.equal(status.body.features.computeWebRtcArtifacts, false);
   assert.equal(status.body.features.computeEmbedTile, false);
+  assert.equal(status.body.features.computePrefillTopkProbe, false);
   assert.equal(status.body.matchmaker.rankedMode, "normal");
   assert.equal(status.body.matchmaker.activeStableCount, 0);
   assert.equal(status.body.matchmaker.effectiveCycleMs, 1500);

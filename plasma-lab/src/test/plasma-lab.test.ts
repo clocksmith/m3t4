@@ -1045,6 +1045,67 @@ test("embedding tile receipts accept replicated quorum from webgpu-light workers
   assert.ok(stats.computeScore > 0);
 });
 
+test("prefill top-k probe receipts accept replicated quorum from webgpu-light workers", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const probeCapability = {
+    ...webgpuCapability,
+    kernels: [...webgpuCapability.kernels, "ml.prefill_topk_probe.v0"],
+  };
+  const workerA = store.registerWorker({ capability: probeCapability });
+  const workerB = store.registerWorker({ capability: probeCapability });
+  acceptWebGpuWitness(store, workerA);
+  acceptWebGpuWitness(store, workerB);
+  const task = store.seedPrefillTopkProbeTask({
+    promptText: "Finish this technical note in one line: WebGPU lets browsers run",
+    topK: 4,
+    minExecutions: 2,
+    minAgreeing: 2,
+  });
+
+  const first = store.assignNext(auth(workerA))!;
+  assert.equal(first.task.taskId, task.taskId);
+  store.acceptAssignment({
+    ...auth(workerA),
+    assignmentId: first.assignment.assignmentId,
+    assignmentToken: first.assignment.assignmentToken,
+  });
+  const firstReceipt = store.submitReceipt({
+    ...auth(workerA),
+    assignmentId: first.assignment.assignmentId,
+    assignmentToken: first.assignment.assignmentToken,
+    taskId: first.task.taskId,
+    chunkId: first.chunk.chunkId,
+    ...referenceReceiptFields(first.chunk),
+    executionMode: "webgpu",
+    transport: "http",
+    computeMs: 19,
+  });
+  assert.equal(firstReceipt.receipt.decision, "pending");
+
+  const second = store.assignNext(auth(workerB))!;
+  store.acceptAssignment({
+    ...auth(workerB),
+    assignmentId: second.assignment.assignmentId,
+    assignmentToken: second.assignment.assignmentToken,
+  });
+  const secondReceipt = store.submitReceipt({
+    ...auth(workerB),
+    assignmentId: second.assignment.assignmentId,
+    assignmentToken: second.assignment.assignmentToken,
+    taskId: second.task.taskId,
+    chunkId: second.chunk.chunkId,
+    ...referenceReceiptFields(second.chunk),
+    executionMode: "webgpu",
+    transport: "http",
+    computeMs: 18,
+  });
+  assert.equal(secondReceipt.receipt.decision, "accepted");
+  assert.equal(secondReceipt.validation?.status, "accepted");
+  const stats = store.publicStats({ suppressSmall: false });
+  assert.equal(stats.scoreBreakdown.acceptedPrefillTopkProbeChunks, 1);
+  assert.ok(stats.computeScore > 0);
+});
+
 test("contact map tile receipts require webgpu-light workers and accept CPU reference hashes", () => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const worker = store.registerWorker({ capability: webgpuCapability });
@@ -2293,6 +2354,39 @@ test("HTTP admin can seed embedding tiles", async (t) => {
   assert.equal(first.task.kind, "device_witness.webgpu.v0");
 });
 
+test("HTTP admin can seed prefill top-k probes", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const srv = await boot(store, { ...baseConfig, adminToken: "secret" });
+  t.after(() => srv.close());
+
+  const seeded = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/prefill-topk-probe",
+    {
+      promptText: "Finish this technical note in one line: WebGPU lets browsers run",
+      topK: 4,
+      minExecutions: 2,
+      minAgreeing: 2,
+    },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(seeded.status, 200);
+  assert.equal(seeded.body.chunks, 1);
+
+  const worker = await register(srv.port, webgpuCapability, "secret");
+  const witness = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/device-witness-webgpu",
+    { seed: 5, count: 16, minExecutions: 1, minAgreeing: 1 },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(witness.status, 200);
+  const first = await next(srv.port, worker);
+  assert.equal(first.task.kind, "device_witness.webgpu.v0");
+});
+
 test("HTTP admin can seed contact map tiles", async (t) => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const srv = await boot(store, { ...baseConfig, adminToken: "secret" });
@@ -2565,6 +2659,11 @@ test("HTTP use case registry reports implemented advisory workloads", async (t) 
   assert.ok(resp.body.useCases.some((useCase: any) =>
     useCase.id === "embedding-batches" &&
     useCase.workload === "ml.embedding_tile.v0" &&
+    useCase.status === "experimental"
+  ));
+  assert.ok(resp.body.useCases.some((useCase: any) =>
+    useCase.id === "prefill-topk-probes" &&
+    useCase.workload === "ml.prefill_topk_probe.v0" &&
     useCase.status === "experimental"
   ));
   assert.ok(resp.body.useCases.some((useCase: any) =>

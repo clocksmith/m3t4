@@ -14,6 +14,7 @@ import { BEHAVIOR_VERSION, REPLAY_CONSTANTS_HASH, replayArtifactToResultV1, simu
 // them with Web Crypto so the server can verify bit-for-bit.
 
 const EMBEDDING_TILE_KERNEL = "ml.embedding_tile.v0";
+const CONTACT_MAP_TILE_KERNEL = "science.contact_map_tile.v0";
 const EMBEDDING_TILE_MODEL = "google-embeddinggemma-300m-q4k-ehf16-af32";
 const EMBEDDING_TILE_SCORE_SCALE = 1000;
 const DOPPLER_GENERATION_URL = new URL("../vendor/doppler/src/generation/index.js", import.meta.url).href;
@@ -23,6 +24,15 @@ const DOPPLER_STORAGE_URL = new URL("../vendor/doppler/src/storage/artifact-stor
 
 let dopplerModulesPromise = null;
 const dopplerPipelineCache = new Map();
+const CONTACT_RESIDUES = "ACDEFGHIKLMNPQRSTVWYX";
+const CONTACT_HYDROPHOBICITY = [1, 2, 0, 0, 3, 0, 1, 4, 0, 4, 3, 0, 0, 0, 0, 0, 1, 3, 3, 2, 0];
+const CONTACT_CHARGE = [0, 0, -1, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0];
+const CONTACT_AROMATIC = [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0];
+const CONTACT_POLAR = [0, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0];
+const CONTACT_CYS_INDEX = 1;
+const CONTACT_GLY_INDEX = 5;
+const CONTACT_PRO_INDEX = 12;
+const CONTACT_UNKNOWN_INDEX = 20;
 
 const KERNELS = {
   "prime-search.v0": (params) => {
@@ -45,6 +55,7 @@ const KERNELS = {
   "m3t4.replay_verify.v1": runReplayVerify,
   "m3t4.seed_sweep.v0": runSeedSweep,
   [EMBEDDING_TILE_KERNEL]: runEmbeddingTile,
+  [CONTACT_MAP_TILE_KERNEL]: runContactMapTile,
   "plasma.tensor_tile.v0": runTensorTile,
   "device_witness.webgpu.v0": runDeviceWitnessWebGpu,
   "device_witness.render_fixture.v0": () => canvas2dFixtureBytes(),
@@ -178,6 +189,132 @@ async function runEmbeddingTile(params) {
     hits: topHits,
   }));
   return { bytes, executionMode: "webgpu" };
+}
+
+async function runContactMapTile(params) {
+  if (!navigator.gpu?.requestAdapter) throw new Error("WebGPU unavailable");
+  const spec = normalizeContactMapTileParams(params);
+  const rowCodes = new Uint32Array(encodeContactResidues(spec.rowResidues));
+  const colCodes = new Uint32Array(encodeContactResidues(spec.colResidues));
+  let device = null;
+  let rowBuffer = null;
+  let colBuffer = null;
+  let outBuffer = null;
+  let readBuffer = null;
+  try {
+    const adapter = await withTimeout(navigator.gpu.requestAdapter({ powerPreference: "low-power" }), 1000);
+    if (!adapter) throw new Error("WebGPU adapter unavailable");
+    device = await withTimeout(adapter.requestDevice(), 1200);
+    if (!device) throw new Error("WebGPU device unavailable");
+
+    const outputBytes = rowCodes.length * colCodes.length * 4;
+    rowBuffer = device.createBuffer({
+      size: rowCodes.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    colBuffer = device.createBuffer({
+      size: colCodes.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    outBuffer = device.createBuffer({
+      size: outputBytes,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    readBuffer = device.createBuffer({
+      size: outputBytes,
+      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(rowBuffer, 0, rowCodes);
+    device.queue.writeBuffer(colBuffer, 0, colCodes);
+
+    const module = device.createShaderModule({
+      code: `
+const ROWS: u32 = ${spec.rowResidues.length}u;
+const COLS: u32 = ${spec.colResidues.length}u;
+const ROW_START: u32 = ${spec.rowStart}u;
+const COL_START: u32 = ${spec.colStart}u;
+const MIN_SEPARATION: i32 = ${spec.minSeparation};
+
+const HYDRO: array<i32, 21> = array<i32, 21>(1, 2, 0, 0, 3, 0, 1, 4, 0, 4, 3, 0, 0, 0, 0, 0, 1, 3, 3, 2, 0);
+const CHARGE: array<i32, 21> = array<i32, 21>(0, 0, -1, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0);
+const AROMATIC: array<i32, 21> = array<i32, 21>(0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0);
+const POLAR: array<i32, 21> = array<i32, 21>(0, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0);
+
+@group(0) @binding(0) var<storage, read> row_codes: array<u32>;
+@group(0) @binding(1) var<storage, read> col_codes: array<u32>;
+@group(0) @binding(2) var<storage, read_write> out: array<u32>;
+
+fn separation_bonus(separation: i32) -> i32 {
+  if (separation < 12) { return 8; }
+  if (separation < 24) { return 18; }
+  if (separation < 64) { return 12; }
+  return 6;
+}
+
+fn contact_score(a: u32, b: u32, row_pos: u32, col_pos: u32) -> u32 {
+  let separation = abs(i32(row_pos) - i32(col_pos));
+  if (separation < MIN_SEPARATION) { return 0u; }
+  let hydro_sum = HYDRO[a] + HYDRO[b];
+  var score: i32 = 12;
+  if (hydro_sum >= 4) { score = score + ((hydro_sum - 3) * 24); }
+  if (AROMATIC[a] == 1 && AROMATIC[b] == 1) { score = score + 40; }
+  if (POLAR[a] == 1 && POLAR[b] == 1) { score = score + 10; }
+  let charge_a = CHARGE[a];
+  let charge_b = CHARGE[b];
+  if (charge_a != 0 && charge_b != 0) {
+    if ((charge_a + charge_b) == 0) { score = score + 34; }
+    else if (charge_a == charge_b) { score = score - 22; }
+  }
+  if (a == ${CONTACT_CYS_INDEX}u && b == ${CONTACT_CYS_INDEX}u) { score = score + 52; }
+  if (a == ${CONTACT_GLY_INDEX}u || a == ${CONTACT_PRO_INDEX}u || b == ${CONTACT_GLY_INDEX}u || b == ${CONTACT_PRO_INDEX}u) { score = score - 8; }
+  if (a == ${CONTACT_UNKNOWN_INDEX}u || b == ${CONTACT_UNKNOWN_INDEX}u) { score = score - 14; }
+  score = score + separation_bonus(separation);
+  if (score < 0) { return 0u; }
+  return u32(score);
+}
+
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+  let col = id.x;
+  let row = id.y;
+  if (row >= ROWS || col >= COLS) { return; }
+  out[row * COLS + col] = contact_score(
+    row_codes[row],
+    col_codes[col],
+    ROW_START + row,
+    COL_START + col,
+  );
+}`,
+    });
+    const pipeline = device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: "main" } });
+    const bindGroup = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: rowBuffer } },
+        { binding: 1, resource: { buffer: colBuffer } },
+        { binding: 2, resource: { buffer: outBuffer } },
+      ],
+    });
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.dispatchWorkgroups(Math.ceil(spec.colResidues.length / 8), Math.ceil(spec.rowResidues.length / 8));
+    pass.end();
+    encoder.copyBufferToBuffer(outBuffer, 0, readBuffer, 0, outputBytes);
+    device.queue.submit([encoder.finish()]);
+    await withTimeout(device.queue.onSubmittedWorkDone(), 1500);
+    await withTimeout(readBuffer.mapAsync(GPUMapMode.READ), 800);
+    const bytes = new Uint8Array(readBuffer.getMappedRange().slice(0));
+    readBuffer.unmap();
+    return { bytes, executionMode: "webgpu" };
+  } finally {
+    try { rowBuffer?.destroy?.(); } catch {}
+    try { colBuffer?.destroy?.(); } catch {}
+    try { outBuffer?.destroy?.(); } catch {}
+    try { readBuffer?.destroy?.(); } catch {}
+    try { device?.destroy?.(); } catch {}
+  }
 }
 
 async function getDopplerEmbeddingPipeline(modelId) {
@@ -609,6 +746,36 @@ function bucketMs(ms) {
   if (ms < 20) return "10-20ms";
   if (ms < 50) return "20-50ms";
   return "50ms+";
+}
+
+function normalizeContactMapTileParams(params) {
+  const rowResidues = normalizeResiduesParam(params.rowResidues, "rowResidues");
+  const colResidues = normalizeResiduesParam(params.colResidues, "colResidues");
+  const rowStart = asInt(params.rowStart);
+  const colStart = asInt(params.colStart);
+  const minSeparation = asInt(params.minSeparation);
+  if (minSeparation > 256) throw new Error("minSeparation must be 0..256");
+  if (rowResidues.length * colResidues.length > 4096) {
+    throw new Error("contact map tile output is capped at 4096 cells");
+  }
+  return { rowResidues, colResidues, rowStart, colStart, minSeparation };
+}
+
+function normalizeResiduesParam(value, label) {
+  const text = String(value ?? "").trim().toUpperCase();
+  if (text.length < 1 || text.length > 64) throw new Error(`${label} must be 1..64 residues`);
+  for (const residue of text) {
+    if (!CONTACT_RESIDUES.includes(residue)) throw new Error(`${label} contains unsupported residue "${residue}"`);
+  }
+  return text;
+}
+
+function encodeContactResidues(text) {
+  return Array.from(text, (residue) => {
+    const index = CONTACT_RESIDUES.indexOf(residue);
+    if (index < 0) throw new Error(`unsupported residue "${residue}"`);
+    return index;
+  });
 }
 
 function normalizeEmbeddingTileParams(params) {

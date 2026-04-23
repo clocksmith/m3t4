@@ -159,11 +159,11 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
   {
     id: "contact-map-tiles",
     title: "Protein contact-map tiles",
-    status: "planned",
+    status: "experimental",
     workload: "science.contact_map_tile.v0",
     authority: "advisory",
-    inputBoundary: "public sequence-derived tiles or published structure tasks only",
-    validation: "reference tile outputs or tolerance-bounded score buckets after float-validator support exists",
-    notes: "This is the first credible protein-shaped target. It is much more realistic than claiming full folding, but still needs a non-bit-exact validator path.",
+    inputBoundary: "public residue windows from published proteins only; no private sequences or hidden labels",
+    validation: "assignment-bound expected-hash receipts against a server-held integer contact-score tile reference",
+    notes: "Low-bandwidth protein-shaped workload. Browser WebGPU workers score bounded residue-window tiles with a deterministic heuristic contact function, which is honest enough to ship now without claiming learned folding or hidden science truth.",
   },
 ];

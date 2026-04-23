@@ -30,6 +30,12 @@ import {
   normalizeEmbeddingTileParams,
 } from "./kernels/embedding-tile.js";
 import {
+  CONTACT_MAP_TILE_KERNEL_HASH,
+  CONTACT_MAP_TILE_KERNEL_ID,
+  normalizeContactMapTileParams,
+  runContactMapTileReference,
+} from "./kernels/contact-map-tile.js";
+import {
   PUBLIC_ARTIFACT_VERIFY_KERNEL_HASH,
   PUBLIC_ARTIFACT_VERIFY_KERNEL_ID,
   runPublicArtifactVerify,
@@ -96,6 +102,7 @@ const KNOWN_KERNELS = [
   DEVICE_WITNESS_WEBRTC_KERNEL_ID,
   DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID,
   EMBEDDING_TILE_KERNEL_ID,
+  CONTACT_MAP_TILE_KERNEL_ID,
   PUBLIC_ARTIFACT_VERIFY_KERNEL_ID,
   SEED_SWEEP_KERNEL_ID,
   REPLAY_VERIFY_KERNEL_ID,
@@ -405,6 +412,8 @@ export interface PublicComputeStats {
 export interface ComputeScoreBreakdown {
   acceptedReceipts: number;
   rejectedReceipts: number;
+  acceptedContactMapTileChunks: number;
+  acceptedContactMapTileCells: number;
   acceptedEmbeddingTileChunks: number;
   acceptedPublicArtifactChunks: number;
   acceptedReplayVerifyChunks: number;
@@ -1217,6 +1226,67 @@ export class ComputeLabStore {
         validationMode: "quorum",
         minExecutions,
         minAgreeing,
+        requiredTransport: input.requiredTransport,
+        requiredPeerSubreceipt: input.requiredPeerSubreceipt,
+      },
+      chunks: [chunk],
+    };
+    this.tasks.set(taskId, task);
+    return task;
+  }
+
+  seedContactMapTileTask(input: {
+    rowResidues: string;
+    colResidues: string;
+    rowStart?: number;
+    colStart?: number;
+    minSeparation?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const normalized = normalizeContactMapTileParams({
+      rowResidues: input.rowResidues,
+      colResidues: input.colResidues,
+      rowStart: input.rowStart ?? 0,
+      colStart: input.colStart ?? 0,
+      minSeparation: input.minSeparation ?? 8,
+    });
+    const params = {
+      rowResidues: normalized.rowResidues,
+      colResidues: normalized.colResidues,
+      rowStart: normalized.rowStart,
+      colStart: normalized.colStart,
+      minSeparation: normalized.minSeparation,
+    };
+    const expectedOutputHash = runContactMapTileReference(params).outputHash;
+    const taskId = randomId("task");
+    const minExecutions = Math.max(1, input.minExecutions ?? 2);
+    const minAgreeing = Math.min(minExecutions, Math.max(1, input.minAgreeing ?? 2));
+    const chunk: ComputeChunk = {
+      chunkId: `${taskId}-chunk-0`,
+      taskId,
+      ordinal: 0,
+      kind: CONTACT_MAP_TILE_KERNEL_ID,
+      params,
+      kernelId: CONTACT_MAP_TILE_KERNEL_ID,
+      kernelHash: CONTACT_MAP_TILE_KERNEL_HASH,
+      inputHash: hashCanonical({ kind: CONTACT_MAP_TILE_KERNEL_ID, params }),
+      expectedOutputHash,
+      status: "pending",
+    };
+    const task: ComputeTask = {
+      taskId,
+      kind: CONTACT_MAP_TILE_KERNEL_ID,
+      status: "running",
+      createdAt: this.now(),
+      validationPolicy: {
+        determinismClass: "bit-exact",
+        validationMode: "expected-hash",
+        minExecutions,
+        minAgreeing,
+        expectedOutputHash,
         requiredTransport: input.requiredTransport,
         requiredPeerSubreceipt: input.requiredPeerSubreceipt,
       },
@@ -2668,6 +2738,7 @@ function peerSubreceiptPayload(input: Omit<PeerSubreceipt, "peerReceiptHash" | "
 
 function isWebRtcDataTask(kind: TaskKind): boolean {
   return (
+    kind === CONTACT_MAP_TILE_KERNEL_ID ||
     kind === EMBEDDING_TILE_KERNEL_ID ||
     kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID ||
     kind === REPLAY_VERIFY_KERNEL_ID ||
@@ -3248,6 +3319,8 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
       if (chunk.status === "accepted") acceptedChunkIds.add(chunk.chunkId);
     }
   }
+  let acceptedContactMapTileChunks = 0;
+  let acceptedContactMapTileCells = 0;
   let acceptedEmbeddingTileChunks = 0;
   let acceptedPublicArtifactChunks = 0;
   let acceptedReplayVerifyChunks = 0;
@@ -3258,7 +3331,13 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
   for (const task of tasks) {
     for (const chunk of task.chunks) {
       if (!acceptedChunkIds.has(chunk.chunkId)) continue;
-      if (task.kind === EMBEDDING_TILE_KERNEL_ID) acceptedEmbeddingTileChunks++;
+      if (task.kind === CONTACT_MAP_TILE_KERNEL_ID) {
+        acceptedContactMapTileChunks++;
+        acceptedContactMapTileCells += Math.max(
+          0,
+          stringParam(chunk.params.rowResidues).length * stringParam(chunk.params.colResidues).length,
+        );
+      } else if (task.kind === EMBEDDING_TILE_KERNEL_ID) acceptedEmbeddingTileChunks++;
       else if (task.kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID) acceptedPublicArtifactChunks++;
       else if (task.kind === REPLAY_VERIFY_KERNEL_ID) acceptedReplayVerifyChunks++;
       else if (task.kind === SEED_SWEEP_KERNEL_ID) {
@@ -3279,6 +3358,8 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
   return {
     acceptedReceipts: receipts.filter((receipt) => receipt.decision === "accepted").length,
     rejectedReceipts: receipts.filter((receipt) => isRejectedDecision(receipt.decision)).length,
+    acceptedContactMapTileChunks,
+    acceptedContactMapTileCells,
     acceptedEmbeddingTileChunks,
     acceptedPublicArtifactChunks,
     acceptedReplayVerifyChunks,
@@ -3298,6 +3379,8 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
 function computeScore(breakdown: ComputeScoreBreakdown): number {
   return Math.max(0, Math.round(
     breakdown.acceptedReceipts * 10 +
+    breakdown.acceptedContactMapTileChunks * 110 +
+    breakdown.acceptedContactMapTileCells * 2 +
     breakdown.acceptedEmbeddingTileChunks * 140 +
     breakdown.acceptedPublicArtifactChunks * 80 +
     breakdown.acceptedReplayVerifyChunks * 120 +
@@ -3420,7 +3503,11 @@ function taskRequiredWorkloadTier(task: ComputeTask): WorkloadTier {
   ) {
     return "cpu-light";
   }
-  if (task.kind === TENSOR_TILE_KERNEL_ID || task.kind === EMBEDDING_TILE_KERNEL_ID) return "webgpu-light";
+  if (
+    task.kind === TENSOR_TILE_KERNEL_ID ||
+    task.kind === EMBEDDING_TILE_KERNEL_ID ||
+    task.kind === CONTACT_MAP_TILE_KERNEL_ID
+  ) return "webgpu-light";
   return "observe-only";
 }
 
@@ -3703,6 +3790,14 @@ function referenceOutputHash(chunk: Omit<ComputeChunk, "expectedOutputHash">): C
         documentsJson: stringParam(chunk.params.documentsJson),
         topK: asInt(chunk.params.topK, "topK"),
       }));
+    case CONTACT_MAP_TILE_KERNEL_ID:
+      return runContactMapTileReference({
+        rowResidues: stringParam(chunk.params.rowResidues),
+        colResidues: stringParam(chunk.params.colResidues),
+        rowStart: asInt(chunk.params.rowStart, "rowStart"),
+        colStart: asInt(chunk.params.colStart, "colStart"),
+        minSeparation: asInt(chunk.params.minSeparation, "minSeparation"),
+      }).outputHash;
     default:
       throw new Error(`unsupported reference chunk kind: ${chunk.kind}`);
   }

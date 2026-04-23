@@ -240,6 +240,22 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     return out;
   }
 
+  seedContactMapTileTask(input: {
+    rowResidues: string;
+    colResidues: string;
+    rowStart?: number;
+    colStart?: number;
+    minSeparation?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const out = super.seedContactMapTileTask(input);
+    this.persist(() => ({ tasks: [out] }));
+    return out;
+  }
+
   assignNext(input: {
     workerId: string;
     workerSessionId: string;

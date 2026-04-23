@@ -12,6 +12,7 @@ import { PersistentComputeLabStore } from "../persistent-store.js";
 import { retainLoadWebRtcPair } from "../firestore-persistence.js";
 import { runReplayVerify } from "../kernels/replay-verify.js";
 import { runSeedSweep } from "../kernels/seed-sweep.js";
+import { runContactMapTileReference } from "../kernels/contact-map-tile.js";
 import { runTensorTileReference } from "../kernels/tensor-tile.js";
 import {
   createReplayArtifactV1,
@@ -57,6 +58,7 @@ const webgpuCapability: WorkerCapability = {
     "device_witness.render_fixture.v0",
     "device_witness.webrtc.v0",
     "device_witness.derived_buffer.v0",
+    "science.contact_map_tile.v0",
     "plasma.tensor_tile.v0",
   ],
   runtimeSurfaces: ["browser-js", "browser-webgpu"],
@@ -1040,6 +1042,54 @@ test("embedding tile receipts accept replicated quorum from webgpu-light workers
   assert.equal(secondReceipt.validation?.status, "accepted");
   const stats = store.publicStats({ suppressSmall: false });
   assert.equal(stats.scoreBreakdown.acceptedEmbeddingTileChunks, 1);
+  assert.ok(stats.computeScore > 0);
+});
+
+test("contact map tile receipts require webgpu-light workers and accept CPU reference hashes", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const worker = store.registerWorker({ capability: webgpuCapability });
+  acceptWebGpuWitness(store, worker);
+  const task = store.seedContactMapTileTask({
+    rowResidues: "MKTAYIAKQRQISFVK",
+    colResidues: "SHFSRQDILDLIPTSS",
+    rowStart: 0,
+    colStart: 24,
+    minSeparation: 8,
+    minExecutions: 1,
+    minAgreeing: 1,
+  });
+  const next = store.assignNext(auth(worker))!;
+  assert.equal(next.task.taskId, task.taskId);
+  assert.equal(next.task.kind, "science.contact_map_tile.v0");
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: next.assignment.assignmentId,
+    assignmentToken: next.assignment.assignmentToken,
+  });
+  const expectedOutputHash = runContactMapTileReference({
+    rowResidues: "MKTAYIAKQRQISFVK",
+    colResidues: "SHFSRQDILDLIPTSS",
+    rowStart: 0,
+    colStart: 24,
+    minSeparation: 8,
+  }).outputHash;
+  const result = store.submitReceipt({
+    ...auth(worker),
+    assignmentId: next.assignment.assignmentId,
+    assignmentToken: next.assignment.assignmentToken,
+    taskId: next.task.taskId,
+    chunkId: next.chunk.chunkId,
+    ...referenceReceiptFields(next.chunk),
+    outputHash: expectedOutputHash,
+    executionMode: "webgpu",
+    transport: "http",
+    computeMs: 11,
+  });
+  assert.equal(result.receipt.decision, "accepted");
+  assert.equal(result.validation?.status, "accepted");
+  const stats = store.publicStats({ suppressSmall: false });
+  assert.equal(stats.scoreBreakdown.acceptedContactMapTileChunks, 1);
+  assert.equal(stats.scoreBreakdown.acceptedContactMapTileCells, 256);
   assert.ok(stats.computeScore > 0);
 });
 
@@ -2243,6 +2293,42 @@ test("HTTP admin can seed embedding tiles", async (t) => {
   assert.equal(first.task.kind, "device_witness.webgpu.v0");
 });
 
+test("HTTP admin can seed contact map tiles", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const srv = await boot(store, { ...baseConfig, adminToken: "secret" });
+  t.after(() => srv.close());
+
+  const seeded = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/contact-map-tile",
+    {
+      rowResidues: "MKTAYIAKQRQISFVK",
+      colResidues: "SHFSRQDILDLIPTSS",
+      rowStart: 0,
+      colStart: 24,
+      minSeparation: 8,
+      minExecutions: 1,
+      minAgreeing: 1,
+    },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(seeded.status, 200);
+  assert.equal(seeded.body.chunks, 1);
+
+  const worker = await register(srv.port, webgpuCapability, "secret");
+  const witness = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/device-witness-webgpu",
+    { seed: 5, count: 16, minExecutions: 1, minAgreeing: 1 },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(witness.status, 200);
+  const first = await next(srv.port, worker);
+  assert.equal(first.task.kind, "device_witness.webgpu.v0");
+});
+
 test("HTTP admin can seed Device Witness receipt workloads", async (t) => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const srv = await boot(store, { ...baseConfig, adminToken: "secret" });
@@ -2458,6 +2544,11 @@ test("HTTP use case registry reports implemented advisory workloads", async (t) 
   assert.ok(resp.body.useCases.some((useCase: any) =>
     useCase.id === "embedding-batches" &&
     useCase.workload === "ml.embedding_tile.v0" &&
+    useCase.status === "experimental"
+  ));
+  assert.ok(resp.body.useCases.some((useCase: any) =>
+    useCase.id === "contact-map-tiles" &&
+    useCase.workload === "science.contact_map_tile.v0" &&
     useCase.status === "experimental"
   ));
   assert.ok(resp.body.useCases.some((useCase: any) => useCase.id === "device-witness-webgpu"));

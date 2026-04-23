@@ -7,6 +7,7 @@
     "build": "tsc",
     "test": "tsc && node --test dist/test/*.test.js",
     "smoke": "tsc && node dist/smoke.js",
+    "smoke:logit-divergence": "tsc && node dist/smoke-logit-divergence.js",
     "smoke:derived-browser": "node scripts/smoke-derived-browser-n2.cjs",
     "smoke:webrtc-browser": "node scripts/smoke-webrtc-browser-n2.cjs",
     "smoke:webrtc-client-artifact": "node scripts/smoke-webrtc-client-artifact.cjs",
@@ -17,6 +18,7 @@
     "smoke:webrtc-exploit-search": "PLASMA_LAB_SMOKE_KERNEL=exploit-search node scripts/smoke-webrtc-client-artifact.cjs",
     "smoke:webrtc-asset-tile-audit": "PLASMA_LAB_SMOKE_KERNEL=asset-tile-audit node scripts/smoke-webrtc-client-artifact.cjs",
     "smoke:webrtc-contact-map-tile": "PLASMA_LAB_SMOKE_KERNEL=contact-map-tile node scripts/smoke-webrtc-client-artifact.cjs",
+    "smoke:webrtc-logit-divergence": "PLASMA_LAB_SMOKE_KERNEL=logit-divergence node scripts/smoke-webrtc-client-artifact.cjs",
     "smoke:webrtc-tensor-tile": "PLASMA_LAB_SMOKE_KERNEL=tensor-tile node scripts/smoke-webrtc-client-artifact.cjs",
     "smoke:webrtc-artifact": "node scripts/smoke-webrtc-client-artifact.cjs",
     "start": "tsc && node dist/index.js"

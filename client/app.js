@@ -16,6 +16,10 @@ initAnalytics();
 const FEATURES = { ...DEFAULT_FEATURES };
 window.__M3T4_FEATURES__ = FEATURES;
 
+const PATH_ROUTE_ALIASES = {
+  "/compute": "compute",
+};
+
 const appEl = document.getElementById("app");
 const navLinks = Array.from(document.querySelectorAll("#topnav nav a"));
 const whoamiEl = document.getElementById("whoami");
@@ -34,6 +38,13 @@ const router = createHashRouter({
   onPageView: trackPageView,
   preserveSameHashRoutes: ["spectate"],
 });
+
+function syncHashFromPath() {
+  if (window.location.hash) return;
+  const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
+  const route = PATH_ROUTE_ALIASES[pathname];
+  if (route) window.location.hash = `#${route}`;
+}
 
 function renderWhoami() {
   const u = auth.user();
@@ -96,5 +107,6 @@ renderWhoami();
 router.syncNavVisibility();
 
 window.addEventListener("hashchange", router.render);
+syncHashFromPath();
 router.render();
 loadFeatures();

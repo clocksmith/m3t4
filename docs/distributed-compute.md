@@ -187,7 +187,9 @@ Remaining before public-open use:
 Call this “contribute idle cycles” in the product. Users should understand:
 
 - it is opt-in
-- it pauses when hidden or on low battery
+- once opted in, it keeps running when the tab is hidden, on battery, and
+  under render stress by default; spectators can opt into per-guard gentle
+  behavior (`pauseWhenHidden`, `pauseOnLowBattery`, `pauseOnRenderStruggle`)
 - it runs off-thread
 - it earns local credit/reputation
 - it helps public verification and experiments

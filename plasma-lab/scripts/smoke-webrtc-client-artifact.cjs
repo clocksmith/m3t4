@@ -9,6 +9,7 @@ const TASK_TIMEOUT_MS = 120_000;
 const ASSET_TILE_AUDIT_KERNEL = "asset.tile_audit.v0";
 const EXPLOIT_SEARCH_KERNEL = "m3t4.exploit_search.v0";
 const IMAGE_TILE_INFER_KERNEL = "ml.image_tile_infer.v0";
+const LOGIT_DIVERGENCE_KERNEL = "ml.logit_divergence.v0";
 const MICROSCOPY_TILE_SCORE_KERNEL = "science.microscopy_tile_score.v0";
 const PUBLIC_ARTIFACT_KERNEL = "m3t4.public_artifact_verify.v0";
 const REPLAY_VERIFY_KERNEL = "m3t4.replay_verify.v1";
@@ -56,6 +57,7 @@ async function runOnce(chromium, config, pass) {
       prepareStaffPage(page, config, index === 0 ? "A" : "B")
     ));
 
+    await cancelRunningTasksForKernel(config);
     await setAssignments(config, true, config.assignmentWindowMs);
     const startedAt = Date.now();
     await Promise.all(pages.map((page) =>
@@ -63,7 +65,11 @@ async function runOnce(chromium, config, pass) {
     ));
 
     const witnessTasks = [await seedRenderWitnessTask(config)];
-    if (config.kernel === "tensor-tile" || config.kernel === "contact-map-tile") {
+    if (
+      config.kernel === "tensor-tile" ||
+      config.kernel === "contact-map-tile" ||
+      config.kernel === "logit-divergence"
+    ) {
       witnessTasks.push(await seedWebGpuWitnessTask(config));
     }
     for (const witness of witnessTasks) {
@@ -188,7 +194,20 @@ async function seedTask(config, pass) {
   if (config.kernel === "asset-tile-audit") return seedAssetTileAuditTask(config, pass);
   if (config.kernel === "contact-map-tile") return seedContactMapTileTask(config, pass);
   if (config.kernel === "tensor-tile") return seedTensorTileTask(config, pass);
+  if (config.kernel === "logit-divergence") return seedLogitDivergenceTask(config, pass);
   return seedPublicArtifactTask(config, pass);
+}
+
+async function cancelRunningTasksForKernel(config) {
+  const taskKind = taskKindForKernel(config.kernel);
+  if (!taskKind) return;
+  const dashboard = await adminGet(config, "/compute/admin/dashboard");
+  const stale = (dashboard.taskList || []).filter((task) =>
+    task.kind === taskKind && task.status === "running"
+  );
+  for (const task of stale) {
+    await adminPost(config, `/compute/admin/tasks/${encodeURIComponent(task.taskId)}/cancel`, {});
+  }
 }
 
 async function seedRenderWitnessTask(config) {
@@ -265,6 +284,17 @@ async function seedTensorTileTask(config, pass) {
     rows: 16,
     cols: 16,
     depth: 32,
+    minExecutions: 2,
+    minAgreeing: 2,
+    requiredTransport: "webrtc",
+    requiredPeerSubreceipt: true,
+  });
+}
+
+async function seedLogitDivergenceTask(config, pass) {
+  return adminPost(config, "/compute/admin/tasks/logit-divergence", {
+    promptText: `Finish this technical note in one line ${pass}: WebGPU lets browsers run`,
+    topK: 4,
     minExecutions: 2,
     minAgreeing: 2,
     requiredTransport: "webrtc",
@@ -382,11 +412,12 @@ async function replayArtifactFixtureJson(matchId) {
 
 async function prepareStaffPage(page, config, label) {
   await page.goto(`${config.gameOrigin}/#about`, { waitUntil: "domcontentloaded", timeout: 45_000 });
-  return page.evaluate(async ({ computeOrigin, label }) => {
+  return page.evaluate(async ({ computeOrigin, kernel, label }) => {
     window.__M3T4_COMPUTE_LAB_ORIGIN__ = computeOrigin;
     window.__M3T4_COMPUTE_SLACK_WORKER__ = true;
     window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS__ = true;
     window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__ = true;
+    window.__M3T4_COMPUTE_LOGIT_DIVERGENCE__ = kernel === "logit-divergence";
     const mod = await import(`/lib/compute.js?staff-webrtc-client-artifact=${encodeURIComponent(label)}-${Date.now()}`);
     const client = mod.getComputeClient();
     window.__M3T4_COMPUTE_CLIENT__ = client;
@@ -396,7 +427,7 @@ async function prepareStaffPage(page, config, label) {
       throw new Error(`compute unavailable: ${JSON.stringify(status)}`);
     }
     return status;
-  }, { computeOrigin: config.computeOrigin, label });
+  }, { computeOrigin: config.computeOrigin, kernel: config.kernel, label });
 }
 
 async function waitForAcceptedTask(config, taskId) {
@@ -477,11 +508,23 @@ function assertWebRtcDataReceipts(receipts, task) {
   for (const receipt of receipts) {
     if (receipt.decision !== "accepted") throw new Error(`${receipt.receiptId} was ${receipt.decision}`);
     if (receipt.transport !== "webrtc") throw new Error(`${receipt.receiptId} transport was ${receipt.transport}`);
-    if (receipt.validationMode !== "expected-hash") {
-      throw new Error(`${receipt.receiptId} validation mode was ${receipt.validationMode}`);
-    }
-    if (receipt.outputHash?.value !== chunk?.expectedOutputHash?.value) {
-      throw new Error(`${receipt.receiptId} output hash did not match expected`);
+    if (task.kind === LOGIT_DIVERGENCE_KERNEL) {
+      if (receipt.validationMode !== "measurement") {
+        throw new Error(`${receipt.receiptId} validation mode was ${receipt.validationMode}`);
+      }
+      if (!receipt.outputHash?.value) {
+        throw new Error(`${receipt.receiptId} missing output hash`);
+      }
+      if (receipt.publicOutput?.kind !== LOGIT_DIVERGENCE_KERNEL) {
+        throw new Error(`${receipt.receiptId} missing logit divergence public output`);
+      }
+    } else {
+      if (receipt.validationMode !== "expected-hash") {
+        throw new Error(`${receipt.receiptId} validation mode was ${receipt.validationMode}`);
+      }
+      if (receipt.outputHash?.value !== chunk?.expectedOutputHash?.value) {
+        throw new Error(`${receipt.receiptId} output hash did not match expected`);
+      }
     }
     const transcript = receipt.adapterInfo ?? {};
     if (transcript.status !== "ok") throw new Error(`${receipt.receiptId} status was ${transcript.status}`);
@@ -501,7 +544,10 @@ function assertWebRtcDataReceipts(receipts, task) {
     if (transcript.peerSubreceipt?.peerAssignmentId !== transcript.peerAssignmentId) {
       throw new Error(`${receipt.receiptId} peer subreceipt did not bind peer assignment`);
     }
-    if ((task.kind === TENSOR_TILE_KERNEL || task.kind === CONTACT_MAP_TILE_KERNEL) && receipt.executionMode !== "webgpu") {
+    if (
+      (task.kind === TENSOR_TILE_KERNEL || task.kind === CONTACT_MAP_TILE_KERNEL || task.kind === LOGIT_DIVERGENCE_KERNEL) &&
+      receipt.executionMode !== "webgpu"
+    ) {
       throw new Error(`${receipt.receiptId} execution mode was ${receipt.executionMode}`);
     }
     if (
@@ -537,8 +583,22 @@ function aggregatePasses(passes) {
   };
 }
 
+function taskKindForKernel(kernel) {
+  if (kernel === "public-artifact") return PUBLIC_ARTIFACT_KERNEL;
+  if (kernel === "replay-verify") return REPLAY_VERIFY_KERNEL;
+  if (kernel === "seed-sweep") return "m3t4.seed_sweep.v0";
+  if (kernel === "image-tile-infer") return IMAGE_TILE_INFER_KERNEL;
+  if (kernel === "microscopy-tile-score") return MICROSCOPY_TILE_SCORE_KERNEL;
+  if (kernel === "exploit-search") return EXPLOIT_SEARCH_KERNEL;
+  if (kernel === "asset-tile-audit") return ASSET_TILE_AUDIT_KERNEL;
+  if (kernel === "tensor-tile") return TENSOR_TILE_KERNEL;
+  if (kernel === "contact-map-tile") return CONTACT_MAP_TILE_KERNEL;
+  if (kernel === "logit-divergence") return LOGIT_DIVERGENCE_KERNEL;
+  return null;
+}
+
 function expectedTierForKernel(kernel) {
-  if (kernel === "tensor-tile" || kernel === "contact-map-tile") return "webgpu-light";
+  if (kernel === "tensor-tile" || kernel === "contact-map-tile" || kernel === "logit-divergence") return "webgpu-light";
   return "cpu-light";
 }
 
@@ -553,10 +613,11 @@ function kernelOption() {
     value !== "exploit-search" &&
     value !== "asset-tile-audit" &&
     value !== "tensor-tile" &&
-    value !== "contact-map-tile"
+    value !== "contact-map-tile" &&
+    value !== "logit-divergence"
   ) {
     throw new Error(
-      "kernel must be public-artifact, replay-verify, seed-sweep, image-tile-infer, microscopy-tile-score, exploit-search, asset-tile-audit, tensor-tile, or contact-map-tile",
+      "kernel must be public-artifact, replay-verify, seed-sweep, image-tile-infer, microscopy-tile-score, exploit-search, asset-tile-audit, tensor-tile, contact-map-tile, or logit-divergence",
     );
   }
   return value;

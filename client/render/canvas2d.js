@@ -151,36 +151,33 @@ const OBJECTIVE_IMAGES = {
 };
 
 const DATACENTER_PACK = {
-  sky: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/sky.png"),
-  farParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/far_parallax.png"),
-  midParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/mid_parallax.png"),
-  nearParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/near_parallax.png"),
+  sky: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/sky.webp"),
+  farParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/far_parallax.webp"),
+  midParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/mid_parallax.webp"),
+  nearParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/near_parallax.webp"),
   platform: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/platform.png"),
   platformEdge: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/platform_edge.png"),
   wall: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/wall.png"),
-  floorDetail: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/floor_detail.png"),
 };
 
 const BOARDROOM_PACK = {
-  sky: imageState("assets/stages/boardroom/fiduciary_basement/layers/sky.png"),
-  farParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/far_parallax.png"),
-  midParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/mid_parallax.png"),
-  nearParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/near_parallax.png"),
+  sky: imageState("assets/stages/boardroom/fiduciary_basement/layers/sky.webp"),
+  farParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/far_parallax.webp"),
+  midParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/mid_parallax.webp"),
+  nearParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/near_parallax.webp"),
   platform: imageState("assets/stages/boardroom/fiduciary_basement/textures/platform.png"),
   platformEdge: imageState("assets/stages/boardroom/fiduciary_basement/textures/platform_edge.png"),
   wall: imageState("assets/stages/boardroom/fiduciary_basement/textures/wall.png"),
-  floorDetail: imageState("assets/stages/boardroom/fiduciary_basement/textures/floor_detail.png"),
 };
 
 const DEMODAY_PACK = {
-  sky: imageState("assets/stages/demoday/demo_day_afterparty/layers/sky.png"),
-  farParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/far_parallax.png"),
-  midParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/mid_parallax.png"),
-  nearParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/near_parallax.png"),
+  sky: imageState("assets/stages/demoday/demo_day_afterparty/layers/sky.webp"),
+  farParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/far_parallax.webp"),
+  midParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/mid_parallax.webp"),
+  nearParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/near_parallax.webp"),
   platform: imageState("assets/stages/demoday/demo_day_afterparty/textures/platform.png"),
   platformEdge: imageState("assets/stages/demoday/demo_day_afterparty/textures/platform_edge.png"),
   wall: imageState("assets/stages/demoday/demo_day_afterparty/textures/wall.png"),
-  floorDetail: imageState("assets/stages/demoday/demo_day_afterparty/textures/floor_detail.png"),
 };
 
 const STAGE_ASSETS = {
@@ -359,7 +356,6 @@ function drawPlatform(ctx, p, pack) {
   const platform = pack ? loadImage(pack.platform) : null;
   const edge = pack ? loadImage(pack.platformEdge) : null;
   const wall = pack ? loadImage(pack.wall) : null;
-  const detail = pack ? loadImage(pack.floorDetail) : null;
 
   if (p.solid && wall && p.h > 18) {
     drawTiledImage(ctx, wall, p.x, p.y + 16, p.w, p.h - 16);
@@ -377,15 +373,6 @@ function drawPlatform(ctx, p, pack) {
   } else {
     ctx.fillStyle = cssColor("--arena-platform-highlight", "white");
     ctx.fillRect(p.x, p.y, p.w, 3);
-  }
-
-  if (detail && p.solid && p.w > 260) {
-    ctx.save();
-    ctx.globalAlpha = 0.75;
-    ctx.imageSmoothingEnabled = false;
-    const w = Math.min(256, p.w);
-    ctx.drawImage(detail, 0, 0, w, Math.min(64, p.h), p.x + (p.w - w) / 2, p.y + 4, w, Math.min(64, p.h));
-    ctx.restore();
   }
 }
 

@@ -7,6 +7,7 @@ import type { ContentHash, DerivedExecutionEvidence, ExecutionMode, GovernorMode
 import { ComputeLabStore, type ComputeChunk, type ExecutionReceipt, type PeerSubassignment, type PeerSubreceipt, type ValidationRecord, type WebRtcPairRecord, type WebRtcSessionRecord } from "./store.js";
 import { COMPUTE_USE_CASES } from "./use-cases.js";
 import { CONTACT_MAP_PRESETS, resolveContactMapPreset } from "./contact-map-presets.js";
+import { GENOME_KMER_PRESETS, resolveGenomeKmerPreset } from "./genome-kmer-presets.js";
 import { IMAGE_TILE_SAMPLE_PRESETS, MICROSCOPY_TILE_SAMPLE_PRESETS, resolveTileSamplePreset } from "./image-tile-presets.js";
 import { LOGIT_DIVERGENCE_MODEL_ID } from "./kernels/logit-divergence.js";
 import { PREFILL_TOPK_PROBE_MODEL_ID } from "./kernels/prefill-topk-probe.js";
@@ -854,6 +855,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/genome-kmer") {
     const body = await readJson<{
+      presetId?: string;
       sequenceId?: string;
       sequence?: string;
       k?: number;
@@ -863,17 +865,23 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       requiredPeerSubreceipt?: boolean;
     }>(req);
     try {
+      const preset = body?.presetId ? resolveGenomeKmerPreset(body.presetId) : null;
       const task = deps.store.seedGenomeKmerTask({
-        sequenceId: body?.sequenceId,
-        sequence: String(body?.sequence ?? ""),
-        k: body?.k,
+        sequenceId: body?.sequenceId ?? preset?.id,
+        sequence: String(body?.sequence ?? preset?.sequence ?? ""),
+        k: body?.k ?? preset?.defaultK,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
         requiredTransport: transportPolicy(body?.requiredTransport),
         requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
       });
       await flushStore(deps.store);
-      json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
+      json(res, 200, {
+        taskId: task.taskId,
+        chunks: task.chunks.length,
+        validationPolicy: task.validationPolicy,
+        presetId: preset?.id ?? null,
+      });
     } catch (e) {
       json(res, 400, { error: message(e) });
     }
@@ -1533,6 +1541,19 @@ td,th{border-bottom:1px solid #252b3a;padding:7px;text-align:left;vertical-align
     <div class="row"><button id="seedContactMapTile">seed contact map tile</button></div>
   </div>
   <div class="card">
+    <div>genome k-mer histogram</div>
+    <div class="muted">Deterministic ACGT k-mer histogram over bounded public reference-genome windows; CPU kernel, exact-hash validation</div>
+    <select id="genomeKmerPreset" aria-label="genome kmer preset">
+      ${GENOME_KMER_PRESETS.map((preset) => `<option value="${preset.id}">${preset.label}</option>`).join("")}
+    </select>
+    <textarea id="genomeKmerSequence" placeholder="ACGT sequence (max 256 bases)">${GENOME_KMER_PRESETS[0]?.sequence ?? ""}</textarea>
+    <div class="row">
+      <input id="genomeKmerK" value="${String(GENOME_KMER_PRESETS[0]?.defaultK ?? 3)}" aria-label="genome kmer k">
+    </div>
+    <div id="genomeKmerPresetMeta" class="muted">${GENOME_KMER_PRESETS[0]?.source ?? ""} · ${GENOME_KMER_PRESETS[0]?.notes ?? ""}</div>
+    <div class="row"><button id="seedGenomeKmer">seed genome kmer</button></div>
+  </div>
+  <div class="card">
     <div>seed sweep</div>
     <div class="row">
       <input id="sweepStage" value="boardroom" aria-label="stage id">
@@ -1692,6 +1713,23 @@ document.getElementById("seedContactMapTile").onclick = () => adminPost("/comput
   minSeparation: asNum("contactMinSeparation"),
 });
 applyContactPreset(contactPresetSelect.value);
+const genomeKmerPresets = ${JSON.stringify(GENOME_KMER_PRESETS)};
+const genomeKmerPresetSelect = document.getElementById("genomeKmerPreset");
+const genomeKmerPresetMeta = document.getElementById("genomeKmerPresetMeta");
+function applyGenomeKmerPreset(id) {
+  const preset = genomeKmerPresets.find((entry) => entry.id === id) || genomeKmerPresets[0];
+  if (!preset) return;
+  document.getElementById("genomeKmerSequence").value = preset.sequence;
+  document.getElementById("genomeKmerK").value = String(preset.defaultK);
+  genomeKmerPresetMeta.textContent = preset.source + " · " + preset.notes;
+}
+genomeKmerPresetSelect.addEventListener("change", () => applyGenomeKmerPreset(genomeKmerPresetSelect.value));
+document.getElementById("seedGenomeKmer").onclick = () => adminPost("/compute/admin/tasks/genome-kmer", {
+  presetId: genomeKmerPresetSelect.value,
+  sequence: val("genomeKmerSequence"),
+  k: asNum("genomeKmerK"),
+});
+applyGenomeKmerPreset(genomeKmerPresetSelect.value);
 document.getElementById("seedSweep").onclick = () => adminPost("/compute/admin/tasks/seed-sweep", {
   stageId: val("sweepStage"),
   brainA: val("sweepA"),

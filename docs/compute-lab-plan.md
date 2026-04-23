@@ -1011,21 +1011,10 @@ Initial public presets checked into the repo:
 - `human-hemoglobin-alpha-fold-core` (`P69905`)
 - `human-lysozyme-stable-core` (`P61626`)
 
-`ml.prefill_topk_probe.v0` is the first bounded text-generation-shaped probe:
-
-```text
-inputs: public promptText only, fixed small model, topK
-outputs: canonical top-k token-id receipt for the next token after prefill
-limits: promptText 1..1024 chars, topK 1..8
-route: POST /compute/admin/tasks/prefill-topk-probe
-browser: advertised only by WebGPU-capable opted-in browser workers when the prefill-topk feature flag is enabled
-scheduler: requires webgpu-light, which requires accepted Device Witness WebGPU evidence
-validation: replicated quorum on canonical top-k token-id outputs from the fixed Gemma 3 270M browser model
-```
-
-This is not distributed chat yet. It is the first honest Doppler text probe in
-the same receipt-backed browser pipeline: bounded public prompt in, tiny
-token-level receipt out.
+The Doppler-backed browser ML probes are parked out of the active Hosting
+surface. Immediate public work stays on non-ML kernels while the browser
+runtime boundary is redesigned so `m3t4` does not ship the whole Doppler source
+tree for one workload lane.
 
 ## Public Artifact Export
 

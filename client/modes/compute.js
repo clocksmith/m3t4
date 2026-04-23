@@ -12,7 +12,6 @@ function computeLabOrigin() {
 
 function supportedKernelNames() {
   const names = [];
-  if (window.__M3T4_COMPUTE_LOGIT_DIVERGENCE__ === true) names.push("Cross-hardware logit divergence");
   if (window.__M3T4_COMPUTE_GENOME_KMER__ === true) names.push("Genome k-mer histograms");
   if (window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS__ === true) names.push("Strict WebRTC transport");
   return names;
@@ -236,7 +235,6 @@ function wirePublicData(root) {
       const shown = useCases
         .filter((entry) => entry.authority === "advisory")
         .filter((entry) =>
-          entry.workload === "ml.logit_divergence.v0" ||
           entry.workload === "science.genome_kmer.v0" ||
           entry.workload === "science.contact_map_tile.v0" ||
           entry.workload === "m3t4.seed_sweep.v0" ||

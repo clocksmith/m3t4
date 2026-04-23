@@ -240,6 +240,36 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     return out;
   }
 
+  seedImageTileInferTask(input: {
+    sourceId?: string;
+    width: number;
+    height: number;
+    rgbaBase64: string;
+    topK?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const out = super.seedImageTileInferTask(input);
+    this.persist(() => ({ tasks: [out] }));
+    return out;
+  }
+
+  seedPrefillTopkProbeTask(input: {
+    modelId?: string;
+    promptText: string;
+    topK?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const out = super.seedPrefillTopkProbeTask(input);
+    this.persist(() => ({ tasks: [out] }));
+    return out;
+  }
+
   seedContactMapTileTask(input: {
     rowResidues: string;
     colResidues: string;
@@ -252,6 +282,54 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     requiredPeerSubreceipt?: boolean;
   }): ComputeTask {
     const out = super.seedContactMapTileTask(input);
+    this.persist(() => ({ tasks: [out] }));
+    return out;
+  }
+
+  seedMicroscopyTileScoreTask(input: {
+    sourceId?: string;
+    width: number;
+    height: number;
+    rgbaBase64: string;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const out = super.seedMicroscopyTileScoreTask(input);
+    this.persist(() => ({ tasks: [out] }));
+    return out;
+  }
+
+  seedExploitSearchTask(input: {
+    stageId: string;
+    brainA: string;
+    brainB: string;
+    seedStart: number;
+    seedEndExclusive: number;
+    maxTicks?: number;
+    topFindings?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const out = super.seedExploitSearchTask(input);
+    this.persist(() => ({ tasks: [out] }));
+    return out;
+  }
+
+  seedAssetTileAuditTask(input: {
+    sourceId?: string;
+    width: number;
+    height: number;
+    rgbaBase64: string;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const out = super.seedAssetTileAuditTask(input);
     this.persist(() => ({ tasks: [out] }));
     return out;
   }

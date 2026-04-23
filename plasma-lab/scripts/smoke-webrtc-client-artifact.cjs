@@ -6,6 +6,10 @@ const { createHash, randomUUID } = require("node:crypto");
 const DEFAULT_GAME_ORIGIN = "https://m3t4.ai";
 const REQUEST_TIMEOUT_MS = 15_000;
 const TASK_TIMEOUT_MS = 120_000;
+const ASSET_TILE_AUDIT_KERNEL = "asset.tile_audit.v0";
+const EXPLOIT_SEARCH_KERNEL = "m3t4.exploit_search.v0";
+const IMAGE_TILE_INFER_KERNEL = "ml.image_tile_infer.v0";
+const MICROSCOPY_TILE_SCORE_KERNEL = "science.microscopy_tile_score.v0";
 const PUBLIC_ARTIFACT_KERNEL = "m3t4.public_artifact_verify.v0";
 const REPLAY_VERIFY_KERNEL = "m3t4.replay_verify.v1";
 const CONTACT_MAP_TILE_KERNEL = "science.contact_map_tile.v0";
@@ -67,9 +71,11 @@ async function runOnce(chromium, config, pass) {
       await waitForAcceptedTask(config, witness.taskId);
       await waitForComputeClientsIdle(pages);
     }
-    if (config.kernel === "tensor-tile" || config.kernel === "contact-map-tile") {
-      await waitForWorkerTiers(config, preflight.map((status) => status.workerId).filter(Boolean), "webgpu-light");
-    }
+    await waitForWorkerTiers(
+      config,
+      preflight.map((status) => status.workerId).filter(Boolean),
+      expectedTierForKernel(config.kernel),
+    );
 
     const seeded = await seedTask(config, pass);
     if (seeded.chunks !== 1) throw new Error(`expected 1 chunk, got ${seeded.chunks}`);
@@ -176,6 +182,10 @@ function readConfig() {
 async function seedTask(config, pass) {
   if (config.kernel === "replay-verify") return seedReplayVerifyTask(config, pass);
   if (config.kernel === "seed-sweep") return seedSeedSweepTask(config, pass);
+  if (config.kernel === "image-tile-infer") return seedImageTileInferTask(config, pass);
+  if (config.kernel === "microscopy-tile-score") return seedMicroscopyTileScoreTask(config, pass);
+  if (config.kernel === "exploit-search") return seedExploitSearchTask(config, pass);
+  if (config.kernel === "asset-tile-audit") return seedAssetTileAuditTask(config, pass);
   if (config.kernel === "contact-map-tile") return seedContactMapTileTask(config, pass);
   if (config.kernel === "tensor-tile") return seedTensorTileTask(config, pass);
   return seedPublicArtifactTask(config, pass);
@@ -255,6 +265,70 @@ async function seedTensorTileTask(config, pass) {
     rows: 16,
     cols: 16,
     depth: 32,
+    minExecutions: 2,
+    minAgreeing: 2,
+    requiredTransport: "webrtc",
+    requiredPeerSubreceipt: true,
+  });
+}
+
+async function seedImageTileInferTask(config, pass) {
+  const presets = [
+    "ui-chip-sample",
+    "sprite-sample",
+    "terrain-sample",
+    "fx-burst-sample",
+  ];
+  return adminPost(config, "/compute/admin/tasks/image-tile-infer", {
+    presetId: presets[(pass - 1) % presets.length],
+    topK: 3,
+    minExecutions: 2,
+    minAgreeing: 2,
+    requiredTransport: "webrtc",
+    requiredPeerSubreceipt: true,
+  });
+}
+
+async function seedMicroscopyTileScoreTask(config, pass) {
+  const presets = [
+    "microscopy-dense-sample",
+    "microscopy-sparse-sample",
+    "microscopy-artifact-sample",
+  ];
+  return adminPost(config, "/compute/admin/tasks/microscopy-tile-score", {
+    presetId: presets[(pass - 1) % presets.length],
+    minExecutions: 2,
+    minAgreeing: 2,
+    requiredTransport: "webrtc",
+    requiredPeerSubreceipt: true,
+  });
+}
+
+async function seedExploitSearchTask(config, pass) {
+  return adminPost(config, "/compute/admin/tasks/exploit-search", {
+    stageId: "boardroom",
+    brainA: "unicorn",
+    brainB: "disruptor",
+    seedStart: 200 + pass * 8,
+    seedEndExclusive: 208 + pass * 8,
+    maxTicks: 180,
+    topFindings: 4,
+    minExecutions: 2,
+    minAgreeing: 2,
+    requiredTransport: "webrtc",
+    requiredPeerSubreceipt: true,
+  });
+}
+
+async function seedAssetTileAuditTask(config, pass) {
+  const presets = [
+    "sprite-sample",
+    "ui-chip-sample",
+    "terrain-sample",
+    "fx-burst-sample",
+  ];
+  return adminPost(config, "/compute/admin/tasks/asset-tile-audit", {
+    presetId: presets[(pass - 1) % presets.length],
     minExecutions: 2,
     minAgreeing: 2,
     requiredTransport: "webrtc",
@@ -430,6 +504,19 @@ function assertWebRtcDataReceipts(receipts, task) {
     if ((task.kind === TENSOR_TILE_KERNEL || task.kind === CONTACT_MAP_TILE_KERNEL) && receipt.executionMode !== "webgpu") {
       throw new Error(`${receipt.receiptId} execution mode was ${receipt.executionMode}`);
     }
+    if (
+      (
+        task.kind === ASSET_TILE_AUDIT_KERNEL ||
+        task.kind === EXPLOIT_SEARCH_KERNEL ||
+        task.kind === IMAGE_TILE_INFER_KERNEL ||
+        task.kind === MICROSCOPY_TILE_SCORE_KERNEL ||
+        task.kind === PUBLIC_ARTIFACT_KERNEL ||
+        task.kind === REPLAY_VERIFY_KERNEL
+      ) &&
+      receipt.executionMode !== "cpu"
+    ) {
+      throw new Error(`${receipt.receiptId} execution mode was ${receipt.executionMode}`);
+    }
   }
 }
 
@@ -450,10 +537,27 @@ function aggregatePasses(passes) {
   };
 }
 
+function expectedTierForKernel(kernel) {
+  if (kernel === "tensor-tile" || kernel === "contact-map-tile") return "webgpu-light";
+  return "cpu-light";
+}
+
 function kernelOption() {
   const value = argValue("kernel") || process.env.PLASMA_LAB_SMOKE_KERNEL || "public-artifact";
-  if (value !== "public-artifact" && value !== "replay-verify" && value !== "seed-sweep" && value !== "tensor-tile" && value !== "contact-map-tile") {
-    throw new Error("kernel must be public-artifact, replay-verify, seed-sweep, tensor-tile, or contact-map-tile");
+  if (
+    value !== "public-artifact" &&
+    value !== "replay-verify" &&
+    value !== "seed-sweep" &&
+    value !== "image-tile-infer" &&
+    value !== "microscopy-tile-score" &&
+    value !== "exploit-search" &&
+    value !== "asset-tile-audit" &&
+    value !== "tensor-tile" &&
+    value !== "contact-map-tile"
+  ) {
+    throw new Error(
+      "kernel must be public-artifact, replay-verify, seed-sweep, image-tile-infer, microscopy-tile-score, exploit-search, asset-tile-audit, tensor-tile, or contact-map-tile",
+    );
   }
   return value;
 }

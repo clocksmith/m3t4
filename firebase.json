@@ -5,6 +5,7 @@
   "hosting": {
     "public": "client",
     "predeploy": [
+      "npm run sync:doppler:client",
       "npm run sync:content",
       "npm run check:client-sim"
     ],

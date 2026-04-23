@@ -2329,6 +2329,27 @@ test("HTTP admin can seed contact map tiles", async (t) => {
   assert.equal(first.task.kind, "device_witness.webgpu.v0");
 });
 
+test("HTTP admin can seed contact map tiles from a public preset id", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const srv = await boot(store, { ...baseConfig, adminToken: "secret" });
+  t.after(() => srv.close());
+
+  const seeded = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/contact-map-tile",
+    {
+      presetId: "human-myoglobin-core-helices",
+      minExecutions: 1,
+      minAgreeing: 1,
+    },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(seeded.status, 200);
+  assert.equal(seeded.body.chunks, 1);
+  assert.equal(seeded.body.presetId, "human-myoglobin-core-helices");
+});
+
 test("HTTP admin can seed Device Witness receipt workloads", async (t) => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const srv = await boot(store, { ...baseConfig, adminToken: "secret" });

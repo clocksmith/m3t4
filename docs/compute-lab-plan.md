@@ -756,6 +756,7 @@ WebRTC client public-artifact transfer:
   repeat: set PLASMA_LAB_SMOKE_REPEAT=5 or pass --repeat=5 for a hosted soak
   replay verify: set PLASMA_LAB_SMOKE_KERNEL=replay-verify or pass --kernel=replay-verify
   seed sweep: set PLASMA_LAB_SMOKE_KERNEL=seed-sweep or pass --kernel=seed-sweep
+  contact map tile: set PLASMA_LAB_SMOKE_KERNEL=contact-map-tile or pass --kernel=contact-map-tile
   tensor tile: set PLASMA_LAB_SMOKE_KERNEL=tensor-tile or pass --kernel=tensor-tile
   use: launches two real browser clients, first accepts Device Witness render receipts to promote them out of observe-only, sets the staff-only WebRTC artifact flag, opens intake only during the controlled window, and requires two accepted transport=webrtc receipts with linked peer subassignments and peer-signed subreceipts
 
@@ -983,6 +984,25 @@ validation: assignment-bound expected-hash receipts against server-held CPU refe
 This is not yet protein folding or distributed ML eval. It is the first
 bounded, deterministic WebGPU useful-work fixture that exercises the same
 queue/receipt/score path those later workloads need.
+
+`science.contact_map_tile.v0` is the low-bandwidth protein-shaped workload:
+
+```text
+inputs: public residue windows, rowStart, colStart, minSeparation
+outputs: little-endian u32 contact-score tile bytes
+limits: 1..64 residues per side, max 4096 output cells
+route: POST /compute/admin/tasks/contact-map-tile
+preset seeding: pass presetId from the checked-in public preset catalog
+browser: advertised only by WebGPU-capable opted-in browser workers; executable over HTTP or strict WebRTC data channels
+scheduler: requires webgpu-light, which requires accepted Device Witness WebGPU evidence
+validation: assignment-bound expected-hash receipts against a server-held integer contact-score reference
+```
+
+Initial public presets checked into the repo:
+
+- `human-myoglobin-core-helices` (`P02144`)
+- `human-hemoglobin-alpha-fold-core` (`P69905`)
+- `human-lysozyme-stable-core` (`P61626`)
 
 ## Public Artifact Export
 

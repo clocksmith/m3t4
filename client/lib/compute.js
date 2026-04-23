@@ -1327,19 +1327,76 @@ async function computeLabStatus() {
   }
 }
 
+async function fetchJsonWithRetry(url, init, options = {}) {
+  const attempts = Math.max(1, Number(options.attempts) || 1);
+  const label = options.label || "fetch";
+  let lastError = null;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      const res = await fetch(url, init);
+      const raw = await res.text();
+      if (!res.ok) {
+        const err = new Error(`${label} ${res.status}${raw ? ` ${compactErrorText(raw)}` : ""}`);
+        err.status = res.status;
+        if (!retryableHttpStatus(res.status)) throw err;
+        throw err;
+      }
+      try {
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) {
+        const err = new Error(`${label} invalid-json${raw ? ` ${compactErrorText(raw)}` : ""}`);
+        err.cause = e;
+        throw err;
+      }
+    } catch (e) {
+      lastError = e;
+      if (attempt >= attempts - 1 || !retryableFetchError(e)) break;
+      await delay(120 + Math.floor(Math.random() * 120) + attempt * 120);
+    }
+  }
+  throw lastError || new Error(`${label} failed`);
+}
+
+function retryableHttpStatus(status) {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function retryableFetchError(error) {
+  const status = Number(error?.status);
+  if (Number.isInteger(status) && retryableHttpStatus(status)) return true;
+  const text = message(error).toLowerCase();
+  return (
+    text.includes("failed to fetch") ||
+    text.includes("networkerror") ||
+    text.includes("load failed") ||
+    text.includes("invalid-json") ||
+    text.includes("<html")
+  );
+}
+
+function compactErrorText(raw) {
+  return String(raw || "").replace(/\s+/g, " ").trim().slice(0, 120);
+}
+
 async function signaledWebRtcProbe(client, timeoutMs) {
   if (typeof RTCPeerConnection === "undefined") return { status: "unsupported", webrtcOpenMsBucket: "unsupported" };
-  const join = await fetch(computeLabOrigin() + "/compute/webrtc/pairs/join", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      workerId: client.workerId,
-      workerSessionId: client.workerSessionId,
-      workerSessionToken: client.workerSessionToken,
-    }),
-  });
-  if (!join.ok) return { status: join.status === 404 ? "unsupported" : "failed", webrtcOpenMsBucket: "failed" };
-  const joined = await join.json();
+  let joined = null;
+  try {
+    joined = await fetchJsonWithRetry(computeLabOrigin() + "/compute/webrtc/pairs/join", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        workerId: client.workerId,
+        workerSessionId: client.workerSessionId,
+        workerSessionToken: client.workerSessionToken,
+      }),
+    }, { label: "pair join", attempts: 8 });
+  } catch (e) {
+    return {
+      status: Number(e?.status) === 404 ? "unsupported" : "failed",
+      webrtcOpenMsBucket: "failed",
+    };
+  }
   const pairId = joined.pairId;
   const pairToken = joined.pairToken;
   const role = joined.role;
@@ -1356,21 +1413,17 @@ async function signaledWebRtcProbe(client, timeoutMs) {
   const iceStart = performance.now();
 
   const pairFetch = async (path = "") => {
-    const res = await fetch(computeLabOrigin() + `/compute/webrtc/pairs/${pairId}${path}`, {
+    return fetchJsonWithRetry(computeLabOrigin() + `/compute/webrtc/pairs/${pairId}${path}`, {
       headers: { "x-webrtc-pair-token": pairToken },
       cache: "no-store",
-    });
-    if (!res.ok) throw new Error(`pair fetch ${res.status}`);
-    return res.json();
+    }, { label: `pair fetch ${path || "/"}`, attempts: 6 });
   };
   const pairPost = async (path, body) => {
-    const res = await fetch(computeLabOrigin() + `/compute/webrtc/pairs/${pairId}${path}`, {
+    return fetchJsonWithRetry(computeLabOrigin() + `/compute/webrtc/pairs/${pairId}${path}`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-webrtc-pair-token": pairToken },
       body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`pair post ${path} ${res.status}`);
-    return res.json();
+    }, { label: `pair post ${path}`, attempts: 6 });
   };
   const markCandidate = (candidate) => {
     const raw = String(candidate?.candidate || "");
@@ -1533,7 +1586,7 @@ async function runWebRtcDataTransfer(client, work, timeoutMs) {
 
 async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
   if (typeof RTCPeerConnection === "undefined") throw new Error("RTCPeerConnection unavailable");
-  const join = await fetch(computeLabOrigin() + "/compute/webrtc/pairs/join", {
+  const joined = await fetchJsonWithRetry(computeLabOrigin() + "/compute/webrtc/pairs/join", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -1541,9 +1594,7 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
       workerSessionId: client.workerSessionId,
       workerSessionToken: client.workerSessionToken,
     }),
-  });
-  if (!join.ok) throw new Error(`pair join failed: ${join.status}`);
-  const joined = await join.json();
+  }, { label: "pair join", attempts: 8 });
   if (joined.dataEnabled !== true) throw new Error("webrtc data disabled");
   const pairId = joined.pairId;
   const pairToken = joined.pairToken;
@@ -1561,21 +1612,17 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
   const t0 = performance.now();
 
   const pairFetch = async (path = "") => {
-    const res = await fetch(computeLabOrigin() + `/compute/webrtc/pairs/${pairId}${path}`, {
+    return fetchJsonWithRetry(computeLabOrigin() + `/compute/webrtc/pairs/${pairId}${path}`, {
       headers: { "x-webrtc-pair-token": pairToken },
       cache: "no-store",
-    });
-    if (!res.ok) throw new Error(`pair fetch ${res.status}`);
-    return res.json();
+    }, { label: `pair fetch ${path || "/"}`, attempts: 6 });
   };
   const pairPost = async (path, body) => {
-    const res = await fetch(computeLabOrigin() + `/compute/webrtc/pairs/${pairId}${path}`, {
+    return fetchJsonWithRetry(computeLabOrigin() + `/compute/webrtc/pairs/${pairId}${path}`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-webrtc-pair-token": pairToken },
       body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`pair post ${path} ${res.status}`);
-    return res.json();
+    }, { label: `pair post ${path}`, attempts: 6 });
   };
   const markCandidate = (candidate) => {
     const raw = String(candidate?.candidate || "");

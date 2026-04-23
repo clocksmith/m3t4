@@ -6,6 +6,7 @@ const { createHash, randomUUID } = require("node:crypto");
 const DEFAULT_GAME_ORIGIN = "https://m3t4.ai";
 const REQUEST_TIMEOUT_MS = 15_000;
 const TASK_TIMEOUT_MS = 120_000;
+const PAGE_LOG_LIMIT = 80;
 const ASSET_TILE_AUDIT_KERNEL = "asset.tile_audit.v0";
 const EXPLOIT_SEARCH_KERNEL = "m3t4.exploit_search.v0";
 const IMAGE_TILE_INFER_KERNEL = "ml.image_tile_infer.v0";
@@ -44,27 +45,38 @@ async function runOnce(chromium, config, pass) {
   }
 
   let browser;
+  let contexts = [];
+  let pages = [];
+  const pageErrors = [[], []];
+  const pageConsole = [[], []];
+  let preflight = [];
+  let witnessTasks = [];
+  let warmup = [];
+  let seeded = null;
   try {
     browser = await chromium.launch({ headless: config.headless });
-    const contexts = await Promise.all([browser.newContext(), browser.newContext()]);
-    const pages = await Promise.all(contexts.map((context) => context.newPage()));
-    const pageErrors = [[], []];
+    contexts = await Promise.all([browser.newContext(), browser.newContext()]);
+    pages = await Promise.all(contexts.map((context) => context.newPage()));
     pages.forEach((page, index) => {
       page.on("pageerror", (error) => pageErrors[index].push(message(error)));
+      page.on("console", (entry) => {
+        pageConsole[index].push({ type: entry.type(), text: entry.text().slice(0, 500) });
+        if (pageConsole[index].length > PAGE_LOG_LIMIT) pageConsole[index].shift();
+      });
     });
 
-    const preflight = await Promise.all(pages.map((page, index) =>
+    preflight = await Promise.all(pages.map((page, index) =>
       prepareStaffPage(page, config, index === 0 ? "A" : "B")
     ));
 
-    await cancelRunningTasksForKernel(config);
+    await cancelActiveTasks(config);
     await setAssignments(config, true, config.assignmentWindowMs);
     const startedAt = Date.now();
     await Promise.all(pages.map((page) =>
       page.evaluate(() => window.__M3T4_COMPUTE_CLIENT__?.poll())
     ));
 
-    const witnessTasks = [await seedRenderWitnessTask(config)];
+    witnessTasks = [await seedRenderWitnessTask(config)];
     if (
       config.kernel === "tensor-tile" ||
       config.kernel === "contact-map-tile" ||
@@ -82,8 +94,9 @@ async function runOnce(chromium, config, pass) {
       preflight.map((status) => status.workerId).filter(Boolean),
       expectedTierForKernel(config.kernel),
     );
+    warmup = await prewarmWorkers(pages, config);
 
-    const seeded = await seedTask(config, pass);
+    seeded = await seedTask(config, pass);
     if (seeded.chunks !== 1) throw new Error(`expected 1 chunk, got ${seeded.chunks}`);
     await Promise.all(pages.map((page) =>
       page.evaluate(() => window.__M3T4_COMPUTE_CLIENT__?.poll())
@@ -121,6 +134,7 @@ async function runOnce(chromium, config, pass) {
       webrtcSignalingEnabled: finalStatus.webrtcSignalingEnabled,
       webrtcDataEnabled: finalStatus.webrtcDataEnabled,
       webrtcTurnEnabled: finalStatus.webrtcTurnEnabled,
+      warmup,
       preflight: preflight.map((status, index) => ({
         label: index === 0 ? "A" : "B",
         configured: status.configured,
@@ -149,8 +163,23 @@ async function runOnce(chromium, config, pass) {
         webrtcArtifacts: status.webrtcArtifacts,
       })),
       pageErrors,
+      pageConsole,
     };
+  } catch (error) {
+    const diagnostics = await collectFailureDiagnostics(config, {
+      pages,
+      pageErrors,
+      pageConsole,
+      preflight,
+      witnessTasks,
+      seededTaskId: seeded?.taskId,
+    }).catch((diagError) => ({
+      diagnosticsError: message(diagError),
+    }));
+    throw new Error(`${message(error)} :: ${JSON.stringify(diagnostics)}`);
   } finally {
+    await Promise.all(pages.map((page) => page.evaluate(() => window.m3t4Compute?.stop?.()).catch(() => undefined)));
+    await Promise.all(contexts.map((context) => context.close().catch(() => undefined)));
     if (browser) await browser.close().catch(() => undefined);
     await disableAssignments(config).catch((error) => {
       console.error(`failed to disable assignment intake: ${message(error)}`);
@@ -181,6 +210,7 @@ function readConfig() {
     headless: process.env.PLASMA_LAB_SMOKE_HEADLESS !== "0",
     kernel: kernelOption(),
     repeat: integerOption("repeat", "PLASMA_LAB_SMOKE_REPEAT", 1, 1, 50),
+    taskTimeoutMs: integerOption("task-timeout-ms", "PLASMA_LAB_SMOKE_TASK_TIMEOUT_MS", TASK_TIMEOUT_MS, 5_000, 600_000),
     assignmentWindowMs: integerOption("assignment-window-ms", "PLASMA_LAB_SMOKE_ASSIGNMENT_WINDOW_MS", TASK_TIMEOUT_MS, 1_000, 600_000),
   };
 }
@@ -198,12 +228,10 @@ async function seedTask(config, pass) {
   return seedPublicArtifactTask(config, pass);
 }
 
-async function cancelRunningTasksForKernel(config) {
-  const taskKind = taskKindForKernel(config.kernel);
-  if (!taskKind) return;
+async function cancelActiveTasks(config) {
   const dashboard = await adminGet(config, "/compute/admin/dashboard");
   const stale = (dashboard.taskList || []).filter((task) =>
-    task.kind === taskKind && task.status === "running"
+    task.status !== "complete" && task.status !== "cancelled"
   );
   for (const task of stale) {
     await adminPost(config, `/compute/admin/tasks/${encodeURIComponent(task.taskId)}/cancel`, {});
@@ -430,10 +458,36 @@ async function prepareStaffPage(page, config, label) {
   }, { computeOrigin: config.computeOrigin, kernel: config.kernel, label });
 }
 
+async function prewarmWorkers(pages, config) {
+  const spec = prewarmSpecForKernel(config.kernel);
+  if (!spec) return [];
+  return Promise.all(pages.map((page, index) =>
+    page.evaluate(async ({ kind, params }) => {
+      const client = window.__M3T4_COMPUTE_CLIENT__;
+      if (!client?.prewarmKernel) {
+        return { ok: false, error: "prewarm unavailable" };
+      }
+      try {
+        const details = await client.prewarmKernel(kind, params);
+        return { ok: true, details };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+          debug: client.diagnostics?.() ?? null,
+        };
+      }
+    }, spec).then((result) => ({
+      label: index === 0 ? "A" : "B",
+      ...result,
+    }))
+  ));
+}
+
 async function waitForAcceptedTask(config, taskId) {
   const startedAt = Date.now();
   let last;
-  while (Date.now() - startedAt < TASK_TIMEOUT_MS) {
+  while (Date.now() - startedAt < config.taskTimeoutMs) {
     const [task, dashboard] = await Promise.all([
       adminGet(config, `/compute/admin/tasks/${encodeURIComponent(taskId)}`),
       adminGet(config, "/compute/admin/dashboard"),
@@ -502,6 +556,41 @@ async function waitForWorkerTiers(config, workerIds, expectedTier, timeoutMs = 2
   throw new Error(`timed out waiting for worker tier ${expectedTier}: ${JSON.stringify(last)}`);
 }
 
+async function collectFailureDiagnostics(config, input) {
+  const dashboard = await adminGet(config, "/compute/admin/dashboard");
+  const workerIds = input.preflight.map((status) => status.workerId).filter(Boolean);
+  const wantedTasks = new Set([
+    ...input.witnessTasks.map((task) => task.taskId),
+    input.seededTaskId,
+  ].filter(Boolean));
+  const pageDiagnostics = await Promise.all(input.pages.map((page, index) =>
+    page.evaluate(() => {
+      const client = window.__M3T4_COMPUTE_CLIENT__;
+      return {
+        status: window.m3t4Compute?.status?.() ?? null,
+        debug: client?.diagnostics?.() ?? null,
+      };
+    }).then((value) => ({
+      label: index === 0 ? "A" : "B",
+      ...value,
+    })).catch((error) => ({
+      label: index === 0 ? "A" : "B",
+      error: message(error),
+    }))
+  ));
+  return {
+    preflight: input.preflight,
+    pageErrors: input.pageErrors,
+    pageConsole: input.pageConsole,
+    pageDiagnostics,
+    workerProfiles: (dashboard.workerProfiles || []).filter((profile) => workerIds.includes(profile.workerId)),
+    tasks: (dashboard.taskList || []).filter((task) => wantedTasks.has(task.taskId)),
+    assignments: (dashboard.assignmentList || []).filter((assignment) => wantedTasks.has(assignment.taskId)),
+    receipts: (dashboard.receiptList || []).filter((receipt) => wantedTasks.has(receipt.taskId)),
+    validations: (dashboard.validationList || []).filter((validation) => wantedTasks.has(validation.taskId)),
+  };
+}
+
 function assertWebRtcDataReceipts(receipts, task) {
   const chunk = task.chunks?.[0];
   if (receipts.length !== 2) throw new Error(`expected 2 accepted receipts, got ${receipts.length}`);
@@ -532,7 +621,7 @@ function assertWebRtcDataReceipts(receipts, task) {
     if (transcript.dataChannelBucket !== "open") {
       throw new Error(`${receipt.receiptId} data channel was ${transcript.dataChannelBucket}`);
     }
-    if (transcript.dataWorkBucket !== "artifact-request-ok") {
+    if (!String(transcript.dataWorkBucket || "").startsWith("artifact-request-ok")) {
       throw new Error(`${receipt.receiptId} data work bucket was ${transcript.dataWorkBucket}`);
     }
     if (transcript.dataReceiptBucket !== "ok") {
@@ -600,6 +689,19 @@ function taskKindForKernel(kernel) {
 function expectedTierForKernel(kernel) {
   if (kernel === "tensor-tile" || kernel === "contact-map-tile" || kernel === "logit-divergence") return "webgpu-light";
   return "cpu-light";
+}
+
+function prewarmSpecForKernel(kernel) {
+  if (kernel === "logit-divergence") {
+    return {
+      kind: LOGIT_DIVERGENCE_KERNEL,
+      params: {
+        promptText: "Warmup: WebGPU browser inference.",
+        topK: 1,
+      },
+    };
+  }
+  return null;
 }
 
 function kernelOption() {

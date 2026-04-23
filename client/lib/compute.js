@@ -48,6 +48,9 @@ class ComputeClient {
     this.enabled = false;
     this.mode = "quiet";
     this.worker = null;
+    this.peerWorker = null;
+    this.peerWorkerPending = new Map();
+    this.peerWorkerQueue = Promise.resolve();
     this.workerId = null;
     this.workerSessionId = null;
     this.workerSessionToken = null;
@@ -79,6 +82,13 @@ class ComputeClient {
     this.lastFrameAt = 0;
     this.renderPauseUntil = 0;
     this.policy = loadPolicy();
+    this.debug = {
+      lastWorkerError: null,
+      lastPeerWorkerError: null,
+      lastPeerWorkerResult: null,
+      lastPrewarm: null,
+      lastWebRtcTransferError: null,
+    };
     this.onVisibility = () => {
       this.reevaluate();
     };
@@ -122,6 +132,13 @@ class ComputeClient {
       optIn: persistedOptIn(),
       policy: { ...this.policy },
       webrtcArtifacts: artifactWebRtcEnabled(),
+    };
+  }
+
+  diagnostics() {
+    return {
+      snapshot: this.snapshot(),
+      debug: cloneJson(this.debug),
     };
   }
 
@@ -174,6 +191,7 @@ class ComputeClient {
     if (this.pollTimer) clearTimeout(this.pollTimer);
     this.pollTimer = null;
     this.current = null;
+    this.teardownPeerWorker("stopped");
     this.emit();
   }
 
@@ -183,6 +201,7 @@ class ComputeClient {
       this.worker.terminate();
       this.worker = null;
     }
+    this.teardownPeerWorker("destroyed");
     this.listeners.clear();
   }
 
@@ -333,6 +352,154 @@ class ComputeClient {
     });
     if (!res.ok) throw new Error(`receipt failed: ${res.status}`);
     return res.json();
+  }
+
+  async prewarmKernel(kind, params = {}) {
+    return this.enqueuePeerWorkerTask(() => this.sendPeerWorkerMessage({
+      type: "prepare",
+      prepareId: localId("warm"),
+      kind,
+      params,
+    }, peerWarmTimeoutMs(kind), {
+      key: `prepare:${kind}`,
+      kind,
+      onResolve: (details) => {
+        this.debug.lastPrewarm = {
+          ok: true,
+          kind,
+          details: cloneJson(details),
+          at: Date.now(),
+        };
+      },
+      onReject: (error, details) => {
+        this.debug.lastPrewarm = {
+          ok: false,
+          kind,
+          message: message(error),
+          details: cloneJson(details),
+          at: Date.now(),
+        };
+      },
+    }));
+  }
+
+  async runPeerWorkerChunk(chunk, assignmentId, timeoutMs) {
+    return this.enqueuePeerWorkerTask(() => this.sendPeerWorkerMessage({
+      type: "run",
+      assignmentId,
+      chunk,
+    }, timeoutMs, {
+      key: `assignment:${assignmentId}`,
+      kind: chunk.kind,
+      onResolve: (result) => {
+        this.debug.lastPeerWorkerResult = {
+          kind: chunk.kind,
+          assignmentId,
+          outputHash: result?.outputHash || null,
+          computeMs: Number(result?.computeMs) || 0,
+          executionMode: result?.executionMode || "cpu",
+          at: Date.now(),
+        };
+      },
+      onReject: (error, details) => {
+        this.debug.lastPeerWorkerError = {
+          kind: chunk.kind,
+          assignmentId,
+          message: message(error),
+          details: cloneJson(details),
+          at: Date.now(),
+        };
+      },
+    }));
+  }
+
+  enqueuePeerWorkerTask(task) {
+    const run = async () => task();
+    const next = this.peerWorkerQueue.then(run, run);
+    this.peerWorkerQueue = next.catch(() => undefined);
+    return next;
+  }
+
+  ensurePeerWorker() {
+    if (!this.peerWorker) this.peerWorker = this.spawnPeerWorker();
+    return this.peerWorker;
+  }
+
+  spawnPeerWorker() {
+    const worker = new Worker(new URL("../workers/plasma-worker.js", import.meta.url), { type: "module" });
+    worker.onmessage = (ev) => this.onPeerWorkerMessage(ev.data);
+    worker.onerror = (err) => {
+      const failure = new Error(err.message || "peer worker error");
+      this.debug.lastPeerWorkerError = {
+        kind: "worker",
+        message: message(failure),
+        at: Date.now(),
+      };
+      this.teardownPeerWorker("worker-error", failure);
+    };
+    return worker;
+  }
+
+  onPeerWorkerMessage(msg) {
+    const key = msg?.type === "prepared" || msg?.type === "prepare-error"
+      ? `prepare:${msg.kind}`
+      : `assignment:${msg.assignmentId}`;
+    const pending = this.peerWorkerPending.get(key);
+    if (!pending) return;
+    this.peerWorkerPending.delete(key);
+    clearTimeout(pending.timer);
+    if (msg.type === "done" || msg.type === "prepared") {
+      pending.onResolve?.(msg.type === "prepared" ? msg.details : msg);
+      pending.resolve(msg.type === "prepared" ? msg.details : msg);
+      return;
+    }
+    const error = new Error(msg?.message || "peer worker failed");
+    const details = msg?.details ?? null;
+    if (details) error.details = details;
+    pending.onReject?.(error, details);
+    pending.reject(error);
+  }
+
+  sendPeerWorkerMessage(payload, timeoutMs, meta) {
+    return new Promise((resolve, reject) => {
+      const worker = this.ensurePeerWorker();
+      const timer = setTimeout(() => {
+        this.peerWorkerPending.delete(meta.key);
+        const error = new Error("peer worker timeout");
+        error.details = { timeoutMs, kind: meta.kind };
+        meta.onReject?.(error, { timeoutMs, kind: meta.kind });
+        reject(error);
+      }, timeoutMs);
+      this.peerWorkerPending.set(meta.key, {
+        resolve,
+        reject,
+        timer,
+        onResolve: meta.onResolve,
+        onReject: meta.onReject,
+      });
+      try {
+        worker.postMessage(payload);
+      } catch (error) {
+        clearTimeout(timer);
+        this.peerWorkerPending.delete(meta.key);
+        meta.onReject?.(error, null);
+        reject(error);
+      }
+    });
+  }
+
+  teardownPeerWorker(reason, error = null) {
+    for (const [key, pending] of this.peerWorkerPending.entries()) {
+      clearTimeout(pending.timer);
+      const failure = error instanceof Error ? error : new Error(`peer worker ${reason}`);
+      pending.onReject?.(failure, { reason, key });
+      pending.reject(failure);
+    }
+    this.peerWorkerPending.clear();
+    if (this.peerWorker) {
+      try { this.peerWorker.terminate(); } catch {}
+      this.peerWorker = null;
+    }
   }
 
   reevaluate() {
@@ -620,7 +787,7 @@ class ComputeClient {
       if (!status?.webrtcSignalingEnabled || !status?.webrtcDataEnabled) {
         throw new Error("webrtc data transport disabled");
       }
-      const transfer = await runWebRtcDataTransfer(this, { assignment, chunk, task }, 6500);
+      const transfer = await runWebRtcDataTransfer(this, { assignment, chunk, task }, webRtcDataTimeoutMs(chunk.kind));
       const receipt = {
         workerId: this.workerId,
         workerSessionId: this.workerSessionId,
@@ -660,6 +827,12 @@ class ComputeClient {
       this.schedule(MODE_PROFILE[this.mode].cooldownMs);
       this.emit();
     } catch (e) {
+      this.debug.lastWebRtcTransferError = {
+        kind: chunk.kind,
+        assignmentId: assignment.assignmentId,
+        message: message(e),
+        at: Date.now(),
+      };
       this.current = null;
       if (artifactWebRtcStrict()) {
         this.state = `webrtc artifact failed: ${message(e)}`;
@@ -678,6 +851,11 @@ class ComputeClient {
     const worker = new Worker(new URL("../workers/plasma-worker.js", import.meta.url), { type: "module" });
     worker.onmessage = (ev) => this.onWorkerMessage(ev.data);
     worker.onerror = (err) => {
+      this.debug.lastWorkerError = {
+        kind: "worker",
+        message: err.message || "worker error",
+        at: Date.now(),
+      };
       this.state = `worker error: ${err.message}`;
       this.current = null;
       this.emit();
@@ -691,6 +869,14 @@ class ComputeClient {
     const current = this.current;
     this.current = null;
     if (msg.type === "error") {
+      this.debug.lastWorkerError = {
+        kind: current.kind,
+        assignmentId: current.assignmentId,
+        chunkId: current.chunkId,
+        message: msg.message,
+        details: cloneJson(msg.details ?? null),
+        at: Date.now(),
+      };
       this.totals.rejected++;
       this.state = `kernel error: ${msg.message}`;
       this.schedule(MODE_PROFILE[this.mode].cooldownMs);
@@ -762,8 +948,10 @@ function installConsoleHelper(client) {
     start: (mode = "quiet") => client.start({ mode, persist: true }),
     stop: () => client.stop({ persist: true }),
     status: () => client.snapshot(),
+    debug: () => client.diagnostics(),
     mode: (mode) => client.setMode(mode),
     policy: (patch) => client.setPolicy(patch),
+    prewarm: (kind, params) => client.prewarmKernel(kind, params),
     webrtcWitness: () => client.witnessWebRtc(),
   };
 }
@@ -1514,7 +1702,8 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
     }, timeoutMs);
     if (!gotResult) throw new Error("peer result timeout");
     if (!remoteResult.ok || typeof remoteResult.outputHash !== "string") {
-      throw new Error(`peer compute failed: ${remoteResult.error || "unknown"}`);
+      const detailSuffix = remoteResult.details ? ` ${stableJson(remoteResult.details)}` : "";
+      throw new Error(`peer compute failed: ${remoteResult.error || "unknown"}${detailSuffix}`);
     }
     if (!remoteResult.peerSubreceipt || typeof remoteResult.peerSubreceipt !== "object") {
       throw new Error("peer subreceipt missing");
@@ -1539,7 +1728,7 @@ async function runWebRtcArtifactTransferOnce(client, work, timeoutMs) {
         peerWorkerSessionId: remoteResult.peerSubreceipt.workerSessionId,
         peerReceiptHash: remoteResult.peerSubreceipt.peerReceiptHash?.value,
         dataChannelBucket: "open",
-        dataWorkBucket: "artifact-request-ok",
+        dataWorkBucket: `artifact-request-ok:${transcriptBucket(work.chunk.kind) || "unknown"}`,
         dataReceiptBucket: "ok",
         servedArtifactBucket: servedResult?.ok ? "served-ok" : servedResult ? "served-failed" : "none",
         webrtcOpenMsBucket: bucketMs(performance.now() - t0),
@@ -1572,7 +1761,11 @@ async function handleWebRtcDataWorkMessage(raw, channels, client, pairId, timeou
     ), 1000);
     if (!receiptChannel) throw new Error("receipt channel unavailable");
     const chunk = safeWebRtcDataChunk(msg.chunk);
-    const result = await executeWorkerChunk(chunk, msg.requestId, Math.min(3500, timeoutMs));
+    const result = await client.runPeerWorkerChunk(
+      chunk,
+      msg.requestId,
+      Math.min(peerWorkerTimeoutMs(chunk.kind), timeoutMs),
+    );
     const outputHash = { algorithm: "sha256", value: result.outputHash };
     const peerAssignment = msg.peerAssignment && typeof msg.peerAssignment === "object" ? msg.peerAssignment : null;
     const peerSubreceipt = await client.signPeerSubreceipt({
@@ -1621,6 +1814,7 @@ async function handleWebRtcDataWorkMessage(raw, channels, client, pairId, timeou
       requestId: msg.requestId,
       ok: false,
       error: message(e),
+      details: e?.details ?? null,
     };
     try { receiptChannel?.send(JSON.stringify(ack)); } catch {}
     return ack;
@@ -2212,6 +2406,38 @@ function yesNo(value) {
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function localId(prefix) {
+  if (globalThis.crypto?.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function cloneJson(value) {
+  if (value === undefined || value === null) return value ?? null;
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return null;
+  }
+}
+
+function peerWarmTimeoutMs(kind) {
+  if (kind === EMBEDDING_TILE_KERNEL) return 45_000;
+  if (kind === PREFILL_TOPK_PROBE_KERNEL || kind === LOGIT_DIVERGENCE_KERNEL) return 30_000;
+  return 5_000;
+}
+
+function peerWorkerTimeoutMs(kind) {
+  if (kind === EMBEDDING_TILE_KERNEL) return 45_000;
+  if (kind === PREFILL_TOPK_PROBE_KERNEL || kind === LOGIT_DIVERGENCE_KERNEL) return 30_000;
+  return 3_500;
+}
+
+function webRtcDataTimeoutMs(kind) {
+  if (kind === EMBEDDING_TILE_KERNEL) return 45_000;
+  if (kind === PREFILL_TOPK_PROBE_KERNEL || kind === LOGIT_DIVERGENCE_KERNEL) return 30_000;
+  return 6_500;
 }
 
 async function hashCapability(capability) {

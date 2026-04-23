@@ -26,6 +26,7 @@ const MICROSCOPY_TILE_SCORE_KERNEL = "science.microscopy_tile_score.v0";
 const EXPLOIT_SEARCH_KERNEL = "m3t4.exploit_search.v0";
 const EMBEDDING_TILE_MODEL = "google-embeddinggemma-300m-q4k-ehf16-af32";
 const PREFILL_TOPK_PROBE_MODEL = "gemma-3-270m-it-q4k-ehf16-af32";
+const PREFILL_WARM_PROMPT = "Warmup: WebGPU browser inference.";
 const EMBEDDING_TILE_SCORE_SCALE = 1000;
 const IMAGE_TILE_INFER_MODEL = "tile-linear-v1";
 const MAX_TILE_DIM = 96;
@@ -94,6 +95,26 @@ self.onmessage = async (ev) => {
     self.postMessage({ type: "probe", probeId: msg.probeId, result: await runDeviceWitnessProbe() });
     return;
   }
+  if (msg.type === "prepare") {
+    try {
+      const details = await prepareKernel(msg.kind, msg.params);
+      self.postMessage({
+        type: "prepared",
+        prepareId: msg.prepareId,
+        kind: msg.kind,
+        details,
+      });
+    } catch (e) {
+      self.postMessage({
+        type: "prepare-error",
+        prepareId: msg.prepareId,
+        kind: msg.kind,
+        message: errorMessage(e),
+        details: workerErrorDetails(e),
+      });
+    }
+    return;
+  }
   if (msg.type !== "run") return;
   const { assignmentId, chunk } = msg;
   const kernel = KERNELS[chunk?.kind];
@@ -122,7 +143,13 @@ self.onmessage = async (ev) => {
       executionMode: result?.executionMode || (chunk.kind === "device_witness.webgpu.v0" ? "webgpu" : "cpu"),
     });
   } catch (e) {
-    self.postMessage({ type: "error", assignmentId, chunkId: chunk.chunkId, message: String(e?.message ?? e) });
+    self.postMessage({
+      type: "error",
+      assignmentId,
+      chunkId: chunk.chunkId,
+      message: errorMessage(e),
+      details: workerErrorDetails(e),
+    });
   }
 };
 
@@ -215,18 +242,7 @@ async function runEmbeddingTile(params) {
 async function runPrefillTopkProbe(params) {
   if (!navigator.gpu?.requestAdapter) throw new Error("WebGPU unavailable");
   const spec = normalizePrefillTopkProbeParams(params);
-  const pipeline = await getDopplerPipeline(spec.modelId);
-  pipeline.reset?.();
-  const prefill = await pipeline.prefillWithLogits(spec.promptText, {
-    temperature: 0,
-    topK: 1,
-    topP: 1,
-  });
-  const logits = prefill?.logits;
-  const inputTokens = Array.isArray(prefill?.tokens) ? prefill.tokens : [];
-  if (!(logits instanceof Float32Array) || logits.length === 0) {
-    throw new Error("prefill logits missing");
-  }
+  const { logits, inputTokens } = await runDopplerPrefill(spec, PREFILL_TOPK_PROBE_KERNEL);
   const hits = topKTokenIds(logits, spec.topK).map((tokenId, rank) => ({ rank: rank + 1, tokenId }));
   const bytes = new TextEncoder().encode(stableJson({
     kind: PREFILL_TOPK_PROBE_KERNEL,
@@ -243,18 +259,7 @@ async function runPrefillTopkProbe(params) {
 async function runLogitDivergence(params) {
   if (!navigator.gpu?.requestAdapter) throw new Error("WebGPU unavailable");
   const spec = normalizeLogitDivergenceParams(params);
-  const pipeline = await getDopplerPipeline(spec.modelId);
-  pipeline.reset?.();
-  const prefill = await pipeline.prefillWithLogits(spec.promptText, {
-    temperature: 0,
-    topK: 1,
-    topP: 1,
-  });
-  const logits = prefill?.logits;
-  const inputTokens = Array.isArray(prefill?.tokens) ? prefill.tokens : [];
-  if (!(logits instanceof Float32Array) || logits.length === 0) {
-    throw new Error("prefill logits missing");
-  }
+  const { logits, inputTokens } = await runDopplerPrefill(spec, LOGIT_DIVERGENCE_KERNEL);
   const topHits = topKLogitHits(logits, spec.topK);
   const topLogit = topHits[0].logit;
   const hits = topHits.map((entry, rank) => ({
@@ -275,6 +280,38 @@ async function runLogitDivergence(params) {
   };
   const bytes = new TextEncoder().encode(stableJson(publicOutput));
   return { bytes, publicOutput, executionMode: "webgpu" };
+}
+
+async function prepareKernel(kind, params = {}) {
+  if (kind === PREFILL_TOPK_PROBE_KERNEL) {
+    const spec = normalizePrefillTopkProbeParams({
+      ...params,
+      promptText: params.promptText ?? PREFILL_WARM_PROMPT,
+      topK: params.topK ?? 1,
+    });
+    const { trace } = await runDopplerPrefill(spec, `${PREFILL_TOPK_PROBE_KERNEL}:prepare`);
+    return {
+      kind,
+      modelId: spec.modelId,
+      warmPromptLength: spec.promptText.length,
+      ...trace,
+    };
+  }
+  if (kind === LOGIT_DIVERGENCE_KERNEL) {
+    const spec = normalizeLogitDivergenceParams({
+      ...params,
+      promptText: params.promptText ?? PREFILL_WARM_PROMPT,
+      topK: params.topK ?? 1,
+    });
+    const { trace } = await runDopplerPrefill(spec, `${LOGIT_DIVERGENCE_KERNEL}:prepare`);
+    return {
+      kind,
+      modelId: spec.modelId,
+      warmPromptLength: spec.promptText.length,
+      ...trace,
+    };
+  }
+  throw new Error(`unsupported warm kernel: ${kind}`);
 }
 
 function runGenomeKmer(params) {
@@ -422,9 +459,12 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   }
 }
 
-async function getDopplerPipeline(modelId) {
+async function getDopplerPipeline(modelId, trace = null) {
   const key = String(modelId || "").trim();
   if (!key) throw new Error("embedding modelId required");
+  if (trace && trace.pipelineCacheHit === undefined) {
+    trace.pipelineCacheHit = dopplerPipelineCache.has(key);
+  }
   if (!dopplerPipelineCache.has(key)) {
     dopplerPipelineCache.set(key, (async () => {
       const modules = await loadDopplerModules();
@@ -452,6 +492,53 @@ async function getDopplerPipeline(modelId) {
     }));
   }
   return dopplerPipelineCache.get(key);
+}
+
+async function runDopplerPrefill(spec, kernelLabel) {
+  const trace = {
+    kernel: kernelLabel,
+    modelId: spec.modelId,
+    pipelineCacheHit: dopplerPipelineCache.has(spec.modelId),
+    pipelineLoadMs: null,
+    prefillMs: null,
+    totalMs: null,
+  };
+  const startedAt = performance.now();
+  let stage = "pipeline";
+  try {
+    const pipelineStartedAt = performance.now();
+    const pipeline = await getDopplerPipeline(spec.modelId, trace);
+    trace.pipelineLoadMs = Math.round(performance.now() - pipelineStartedAt);
+    stage = "prefill";
+    pipeline.reset?.();
+    const prefillStartedAt = performance.now();
+    const prefill = await pipeline.prefillWithLogits(spec.promptText, {
+      temperature: 0,
+      topK: 1,
+      topP: 1,
+    });
+    trace.prefillMs = Math.round(performance.now() - prefillStartedAt);
+    trace.totalMs = Math.round(performance.now() - startedAt);
+    const logits = prefill?.logits;
+    const inputTokens = Array.isArray(prefill?.tokens) ? prefill.tokens : [];
+    if (!(logits instanceof Float32Array) || logits.length === 0) {
+      throw new Error("prefill logits missing");
+    }
+    return { prefill, logits, inputTokens, trace };
+  } catch (error) {
+    throw buildWorkerError(
+      `${kernelLabel} failed during ${stage}: ${errorMessage(error)}`,
+      {
+        stage,
+        modelId: spec.modelId,
+        pipelineCacheHit: trace.pipelineCacheHit,
+        pipelineLoadMs: trace.pipelineLoadMs,
+        prefillMs: trace.prefillMs,
+        totalMs: Math.round(performance.now() - startedAt),
+      },
+      error,
+    );
+  }
 }
 
 async function loadDopplerModules() {
@@ -1402,6 +1489,25 @@ function topKLogitHits(logits, topK) {
   }
   if (best.length === 0) throw new Error("no finite logits");
   return best;
+}
+
+function buildWorkerError(message, details = {}, cause = null) {
+  const error = new Error(message);
+  error.details = {
+    ...details,
+    cause: cause ? errorMessage(cause) : undefined,
+  };
+  return error;
+}
+
+function workerErrorDetails(error) {
+  return error && typeof error === "object" && error.details && typeof error.details === "object"
+    ? error.details
+    : null;
+}
+
+function errorMessage(error) {
+  return String(error?.message ?? error ?? "unknown error");
 }
 
 function normalizeEmbeddingTileParams(params) {

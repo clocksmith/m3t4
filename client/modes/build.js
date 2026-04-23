@@ -23,6 +23,7 @@ import {
 import { createFrameRenderer, W, H } from "../render/index.js";
 import { escapeHtml } from "../ui/html.js";
 import { buttonHtml } from "../ui/actions.js";
+import { navigateTo } from "../navigate.js";
 import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
 import { statListHtml } from "../ui/stats.js";
 import { simulateBuildPreview } from "../lib/api.js";
@@ -163,10 +164,12 @@ function stagePickerOptionHtml(id) {
   const selected = id === stageId;
   const classes = `stage-option${thumb ? " has-thumb" : " no-thumb"}${selected ? " is-selected" : ""}`;
   const thumbStyle = thumb ? ` style="--stage-thumb: url('${thumb}')"` : "";
+  const label = stageLabel(id);
+  const title = `${selected ? "Selected" : "Choose"} stage: ${label}`;
   return `
-          <button type="button" class="${classes}" aria-pressed="${selected ? "true" : "false"}" data-stage-id="${escapeHtml(id)}">
+          <button type="button" class="${classes}" aria-pressed="${selected ? "true" : "false"}" data-stage-id="${escapeHtml(id)}" title="${escapeHtml(title)}">
             <span class="stage-option-thumb"${thumbStyle} aria-hidden="true"></span>
-            <span class="stage-option-label">${escapeHtml(stageLabel(id))}</span>
+            <span class="stage-option-label">${escapeHtml(label)}</span>
           </button>`;
 }
 
@@ -175,6 +178,7 @@ function syncStagePicker(root = document) {
     const selected = btn.dataset.stageId === stageId;
     btn.classList.toggle("is-selected", selected);
     btn.setAttribute("aria-pressed", selected ? "true" : "false");
+    btn.title = `${selected ? "Selected" : "Choose"} stage: ${stageLabel(btn.dataset.stageId)}`;
   });
 }
 
@@ -312,8 +316,8 @@ export function mount(root, { setStatus }) {
             <div class="build-preview-controls">
               ${stagePickerHtml()}
               <div class="build-preview-actions">
-                ${buttonHtml({ id: "test-reset", text: "reset match" })}
-                ${buttonHtml({ id: "test-resim", variant: "primary", text: "test fight" })}
+                ${buttonHtml({ id: "test-reset", text: "reset match", attrs: { title: "Rewind the test match to tick zero" } })}
+                ${buttonHtml({ id: "test-resim", variant: "primary", text: "test fight", attrs: { title: "Run a deterministic test match against the current build" } })}
               </div>
             </div>
             ${buildPreviewBriefingHtml()}
@@ -423,7 +427,7 @@ function playerPanelHtml(slot) {
   return `
     <section class="panel player-panel ${sideClass}" data-slot="${slot}">
       <details class="player-fold" open data-slot="${slot}">
-        <summary class="player-fold-summary">
+        <summary class="player-fold-summary" title="Toggle player ${label} controls">
           <span class="player-title">${label}</span>
           <span class="player-fold-badge" data-slot="${slot}">${modeBadge(slot)}</span>
           <span class="player-fold-chevron" aria-hidden="true">▸</span>
@@ -460,7 +464,7 @@ function playerPanelHtml(slot) {
       </div>
 
       <details class="player-build-body" data-section="build" open>
-        <summary class="build-fold-summary">Attributes &amp; budget</summary>
+        <summary class="build-fold-summary" title="Toggle attributes and budget">Attributes &amp; budget</summary>
         <div class="knobs" data-knobs="${slot}"></div>
 
         <div class="budget-block">
@@ -486,13 +490,13 @@ function playerPanelHtml(slot) {
             </div>
           </div>
           <div class="toolbar">
-            ${buttonHtml({ className: "slot-reset", attrs: { "data-slot": slot }, text: "reset" })}
-            ${buttonHtml({ className: "slot-randomize", attrs: { "data-slot": slot }, text: "randomize" })}
-            ${buttonHtml({ className: "slot-submit", variant: "primary", attrs: { "data-slot": slot }, text: "send to live roster" })}
+            ${buttonHtml({ className: "slot-reset", attrs: { "data-slot": slot, title: `Discard changes in slot ${Number(slot) + 1}` }, text: "reset" })}
+            ${buttonHtml({ className: "slot-randomize", attrs: { "data-slot": slot, title: "Randomize this slot's build" }, text: "randomize" })}
+            ${buttonHtml({ className: "slot-submit", variant: "primary", attrs: { "data-slot": slot, title: "Promote this tuned build into your live roster seat" }, text: "send to live roster" })}
           </div>
           <div class="build-install-note tight">Preview only until sent live.</div>
           <details class="json-fold">
-            <summary>JSON config</summary>
+            <summary title="Toggle JSON config">JSON config</summary>
             <pre class="code-export slot-export" data-slot="${slot}"></pre>
           </details>
         </div>
@@ -618,7 +622,7 @@ function wireSlot(root, slot) {
     const cfg = slotConfig(slot);
     sessionStorage.setItem("m3t4:pendingSubmit", JSON.stringify(cfg));
     trackBuildAction("submit");
-    location.hash = "#profile";
+    navigateTo("profile");
   });
 }
 
@@ -1013,6 +1017,7 @@ function updatePreviewControls() {
   if (resim) {
     resim.disabled = previewLoading;
     resim.textContent = previewLoading ? "simulating..." : previewDirty ? "test fight*" : "test fight";
+    resim.title = resim.textContent;
     resim.classList.toggle("is-simulating", previewLoading);
     resim.classList.toggle("needs-resim", previewDirty && !previewLoading);
     resim.setAttribute("aria-busy", previewLoading ? "true" : "false");

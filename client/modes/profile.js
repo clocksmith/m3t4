@@ -62,7 +62,7 @@ function rosterIntroPanelHtml({ needsHandle = false } = {}) {
         <div class="tight mb-xs">Claim a public handle first. 3-20 chars, lowercase + digits + underscore.</div>
         <div class="row">
           <input type="text" id="handle-input" placeholder="your_handle">
-          ${buttonHtml({ id: "handle-claim", variant: "primary", text: "claim" })}
+          ${buttonHtml({ id: "handle-claim", variant: "primary", text: "claim", attrs: { title: "Reserve this handle permanently" } })}
         </div>
         <div class="error" id="handle-err"></div>
       </div>` : "";
@@ -121,7 +121,7 @@ function renderSignIn() {
         </p>
         <div class="row">
           <input type="text" id="uid-input" class="u-fill" placeholder="pick a uid (3-64 chars, a-z 0-9 _ -)">
-          ${buttonHtml({ id: "signin-btn", variant: "primary", text: "sign in" })}
+          ${buttonHtml({ id: "signin-btn", variant: "primary", text: "sign in", attrs: { title: "Sign in to save your roster and track ranked progress" } })}
         </div>
         <div class="error" id="signin-err"></div>
       </div>
@@ -155,8 +155,8 @@ function renderFirebaseSignIn(authError) {
           provide window.__M3T4_FIREBASE_CONFIG__ before app.js loads.
         </p>
         <div class="row">
-          ${buttonHtml({ id: "signin-google", variant: "primary", text: "sign in with Google" })}
-          ${buttonHtml({ id: "signin-github", text: "sign in with GitHub" })}
+          ${buttonHtml({ id: "signin-google", variant: "primary", text: "sign in with Google", attrs: { title: "Sign in with your Google account" } })}
+          ${buttonHtml({ id: "signin-github", text: "sign in with GitHub", attrs: { title: "Sign in with your GitHub account" } })}
         </div>
         <div class="error" id="signin-err">${authError ? escapeHtml(authError) : ""}</div>
       </div>
@@ -189,7 +189,7 @@ async function renderDashboard(user) {
     <div class="page">
       ${rosterPageHeaderHtml({
         subtitle: `@${user.handle ?? "unclaimed"} · ${user.uid} · only you can see this`,
-        action: buttonHtml({ id: "signout", text: "sign out" }),
+        action: buttonHtml({ id: "signout", text: "sign out", attrs: { title: "End your current session" } }),
       })}
       ${rosterIntroPanelHtml({ needsHandle: !user.handle })}
       <div class="panel profile-roster-panel">
@@ -212,10 +212,10 @@ async function renderDashboard(user) {
             </div>
             <div class="weapon-unlock-hint" id="weapon-unlock-hint"></div>
             <div class="profile-submit-actions">
-              ${buttonHtml({ id: "reroll-name", className: "tight", text: "reroll name" })}
-              ${buttonHtml({ id: "reset-editor", className: "tight", text: "reset" })}
-              ${buttonHtml({ id: "paste-pending", className: "tight", text: "load tuned build" })}
-              ${buttonHtml({ id: "submit-btn", variant: "primary", text: "install" })}
+              ${buttonHtml({ id: "reroll-name", className: "tight", text: "reroll name", attrs: { title: "Generate a new random handle suggestion" } })}
+              ${buttonHtml({ id: "reset-editor", className: "tight", text: "reset", attrs: { title: "Discard edits and return to the current saved build" } })}
+              ${buttonHtml({ id: "paste-pending", className: "tight", text: "load tuned build", attrs: { title: "Import the most recently tuned build into this seat" } })}
+              ${buttonHtml({ id: "submit-btn", variant: "primary", text: "install", attrs: { title: "Save this build into the selected roster seat" } })}
             </div>
           </div>
           <div class="profile-editor-meter" id="profile-editor-meter"></div>
@@ -433,8 +433,13 @@ function renderRosterGrid(grid, stable) {
       : filled
       ? `<div class="seat-last">unplayed</div>`
       : `<div class="seat-last">vacant</div>`;
+    const seatTitle = locked
+      ? `Seat ${seatNumber(i)} · ${slot.name ?? "unnamed"} · ${body} · ${weapon} · ${slot.elo} ELO · revise in ${cooldownLabel(cooldownMs)}`
+      : filled
+      ? `Seat ${seatNumber(i)} · ${slot.name ?? "unnamed"} · ${body} · ${weapon} · ${slot.elo} ELO`
+      : `Seat ${seatNumber(i)} · vacant`;
     return `
-      <button type="button" class="seat-card ${state} ${active} ${lockedClass}" data-slot="${i}">
+      <button type="button" class="seat-card ${state} ${active} ${lockedClass}" data-slot="${i}" title="${escapeHtml(seatTitle)}">
         <div class="seat-head">
           <span class="seat-label">SEAT ${seatNumber(i)}</span>
           <span class="seat-state-dot"></span>
@@ -505,6 +510,7 @@ function updateEditor() {
   btn.textContent = cooldownMs > 0
     ? `revise in ${cooldownLabel(cooldownMs)}`
     : `${filled ? "revise" : "install"}${changes > 0 ? ` · ${changes} changed` : ""}`;
+  btn.title = btn.textContent;
   btn.classList.toggle("is-dirty", changes > 0);
   renderCosmeticsControls(cosmetics);
   renderEditorPanels(draft);
@@ -525,6 +531,7 @@ function renderCosmeticsControls(cosmetics) {
     const selected = option.id === cosmetics.weapon;
     const label = weaponLabel(cosmetics.body, option.id);
     const meta = option.locked ? `unlocks at ${option.minElo} ELO` : "available";
+    const title = `${label} · ${meta}`;
     return `
       <button
         type="button"
@@ -532,6 +539,7 @@ function renderCosmeticsControls(cosmetics) {
         data-weapon="${escapeHtml(option.id)}"
         role="option"
         aria-selected="${selected ? "true" : "false"}"
+        title="${escapeHtml(title)}"
         ${option.locked ? `aria-disabled="true" disabled` : ""}
       >
         ${weaponOptionVisualHtml(cosmetics.body, option)}
@@ -575,6 +583,7 @@ function renderEditorPanels(draft) {
   const pendingButton = root.querySelector("#paste-pending");
   if (pendingButton && pendingBuildConfig) {
     pendingButton.textContent = draft.source === "pending" ? "tuned build loaded" : "load tuned build";
+    pendingButton.title = pendingButton.textContent;
   }
 }
 
@@ -588,6 +597,7 @@ function updateSubmitButtonState(draft) {
   btn.textContent = cooldownMs > 0
     ? `revise in ${cooldownLabel(cooldownMs)}`
     : `${filled ? "revise" : "install"}${changes > 0 ? ` · ${changes} changed` : ""}`;
+  btn.title = btn.textContent;
   btn.classList.toggle("is-dirty", changes > 0);
 }
 

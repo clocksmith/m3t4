@@ -8,6 +8,8 @@
 // client submits config choices, server runs canonical simulation, client only
 // renders sanitized replay frames.
 
+import { navigateTo } from "../navigate.js";
+
 function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(props)) {
@@ -23,7 +25,8 @@ function el(tag, props = {}, ...children) {
 }
 
 function go(route) {
-  window.location.hash = route;
+  const normalized = String(route || "").replace(/^#/, "");
+  navigateTo(normalized);
 }
 
 export function renderDuel(root, { setStatus } = {}) {
@@ -50,9 +53,9 @@ export function renderDuel(root, { setStatus } = {}) {
     el(
       "div",
       { class: "duel-actions" },
-      el("button", { type: "button", class: "ui-button", onclick: () => go("build") }, "author policy"),
-      el("button", { type: "button", class: "ui-button", onclick: () => go("spectate") }, "watch receipts"),
-      el("button", { type: "button", class: "ui-button", onclick: () => go("rules") }, "read about")
+      el("button", { type: "button", class: "ui-button", onclick: () => go("build"), title: "Open Tune and edit policy settings" }, "author policy"),
+      el("button", { type: "button", class: "ui-button", onclick: () => go("spectate"), title: "Open Live and watch sanitized replay receipts" }, "watch receipts"),
+      el("button", { type: "button", class: "ui-button", onclick: () => go("rules"), title: "Open About and read the system framing" }, "read about")
     )
   );
 

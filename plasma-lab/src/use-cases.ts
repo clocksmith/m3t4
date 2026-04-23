@@ -1,3 +1,13 @@
+export type ComputeUseCaseFamily =
+  | "m3t4"
+  | "science"
+  | "ml"
+  | "plasma"
+  | "device-witness"
+  | "infra";
+
+export type ComputeUseCaseRuntime = "cpu" | "webgpu" | "webrtc";
+
 export interface ComputeUseCase {
   id: string;
   title: string;
@@ -8,41 +18,51 @@ export interface ComputeUseCase {
   validation: string;
   notes: string;
   publicEndpoint?: string;
+  family: ComputeUseCaseFamily;
+  runtime?: ComputeUseCaseRuntime;
 }
 
 export const COMPUTE_USE_CASES: ComputeUseCase[] = [
   {
     id: "replay-verification",
+    family: "m3t4",
+    runtime: "cpu",
     title: "Replay artifact verification",
     status: "implemented",
     workload: "m3t4.replay_verify.v1",
     authority: "advisory",
     inputBoundary: "public replay artifact with action bytes; private player configs rejected",
     validation: "2-of-2 assignment-bound receipts against server-held expected hashes",
-    notes: "First useful workload from the plan. Re-simulates public replay action logs, does not receive expected outputs in assignment payloads, and never receives ranked authority.",
+    notes: "Re-runs a public match replay from its action log and checks the final hash matches the server's. The receipt proves your browser reproduced the match bit-for-bit. Independent playback turns tournaments into multi-witness artifacts instead of one server's word.",
   },
   {
     id: "public-artifact-verification",
-    title: "Public artifact hash verification",
+    family: "m3t4",
+    runtime: "cpu",
+    title: "Artifact integrity check",
     status: "implemented",
     workload: "m3t4.public_artifact_verify.v0",
     authority: "advisory",
     inputBoundary: "public replay artifact payload only",
     validation: "2-of-2 assignment-bound receipts against server-held expected hashes",
-    notes: "Integrity scaffold for exported public artifacts and WebRTC data-plane transport tests. Assignment payloads do not expose expected outputs or the server-held artifact hash; strict WebRTC proof tasks require server-issued peer subassignments and peer-signed subreceipts.",
+    notes: "Hashes a published replay artifact and confirms the bytes match the recorded hash. The receipt proves the artifact you downloaded is the one the server published. Catches silent corruption and doubles as the integrity probe for the strict WebRTC data plane.",
   },
   {
     id: "seed-sweeps",
-    title: "Public preset seed sweeps",
+    family: "m3t4",
+    runtime: "cpu",
+    title: "Matchup seed sweeps",
     status: "implemented",
     workload: "m3t4.seed_sweep.v0",
     authority: "advisory",
     inputBoundary: "public stage ids and public preset names only",
     validation: "assignment-bound receipts against server-held deterministic reference output",
-    notes: "Useful for meta-health and balance diagnostics. Opted-in browsers advertise this as a CPU browser-JS workload bound to sim constants and behavior version.",
+    notes: "Runs the same public matchup across many seeds and summarizes winners, draws, and tick counts. The receipt proves your browser's summary matches the server's CPU reference. Surfaces broken matchups, loops, and side-bias faster than any single machine can sweep alone.",
   },
   {
     id: "device-witness-webgpu",
+    family: "device-witness",
+    runtime: "webgpu",
     title: "Device Witness: WebGPU conformance",
     status: "implemented",
     workload: "device_witness.webgpu.v0",
@@ -53,6 +73,8 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
   },
   {
     id: "tensor-tiles",
+    family: "plasma",
+    runtime: "webgpu",
     title: "WebGPU tensor tiles",
     status: "implemented",
     workload: "plasma.tensor_tile.v0",
@@ -63,6 +85,8 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
   },
   {
     id: "device-witness-webrtc",
+    family: "device-witness",
+    runtime: "webrtc",
     title: "Device Witness: WebRTC connectivity",
     status: "implemented",
     workload: "device_witness.webrtc.v0",
@@ -73,6 +97,8 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
   },
   {
     id: "device-witness-render-fixtures",
+    family: "device-witness",
+    runtime: "cpu",
     title: "Device Witness: rendering fixtures",
     status: "implemented",
     workload: "device_witness.render_fixture.v0",
@@ -83,6 +109,8 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
   },
   {
     id: "device-witness-derived-buffer",
+    family: "device-witness",
+    runtime: "cpu",
     title: "Device Witness: derived buffer fixture",
     status: "implemented",
     workload: "device_witness.derived_buffer.v0",
@@ -93,6 +121,8 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
   },
   {
     id: "webrtc-data-plane",
+    family: "infra",
+    runtime: "webrtc",
     title: "Plasma WebRTC data plane",
     status: "experimental",
     authority: "advisory",
@@ -102,6 +132,7 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
   },
   {
     id: "device-witness-profiles",
+    family: "device-witness",
     title: "Device Witness profiles",
     status: "implemented",
     authority: "advisory",
@@ -111,6 +142,8 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
   },
   {
     id: "exploit-search",
+    family: "m3t4",
+    runtime: "cpu",
     title: "Exploit search",
     status: "implemented",
     workload: "m3t4.exploit_search.v0",
@@ -121,6 +154,8 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
   },
   {
     id: "asset-processing",
+    family: "m3t4",
+    runtime: "cpu",
     title: "Asset processing",
     status: "implemented",
     workload: "asset.tile_audit.v0",
@@ -131,6 +166,8 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
   },
   {
     id: "embedding-batches",
+    family: "ml",
+    runtime: "webgpu",
     title: "Embedding and rerank batches",
     status: "experimental",
     workload: "ml.embedding_tile.v0",
@@ -141,6 +178,8 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
   },
   {
     id: "prefill-topk-probes",
+    family: "ml",
+    runtime: "webgpu",
     title: "Prompt prefill top-k probes",
     status: "experimental",
     workload: "ml.prefill_topk_probe.v0",
@@ -151,16 +190,20 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
   },
   {
     id: "logit-divergence",
-    title: "Cross-hardware logit divergence measurement",
+    family: "ml",
+    runtime: "webgpu",
+    title: "Cross-hardware LLM divergence",
     status: "experimental",
     workload: "ml.logit_divergence.v0",
     authority: "advisory",
     inputBoundary: "public prompt text only, capped to a bounded short prompt length",
     validation: "tolerance-bounded measurement receipts carrying quantized top-k logit buckets plus delta-from-top; receipts are signed and persisted regardless of inter-hardware agreement",
-    notes: "Extension of ml.prefill_topk_probe.v0 intended as a cross-vendor WebGPU measurement instrument. Each receipt captures a quantized logit fingerprint for one (prompt, hardware) pair; outliers are kept rather than rejected because the divergence across vendors is the artifact.",
+    notes: "Runs a fixed prompt through a small browser LLM and records the top-K tokens plus their quantized log-odds. The receipt pins a token distribution to this exact prompt, model, and GPU-driver path. Hardware disagreement is the signal — outliers are kept, not rejected, because divergence across vendors is the point.",
   },
   {
     id: "image-tile-inference",
+    family: "ml",
+    runtime: "cpu",
     title: "Image tile inference",
     status: "implemented",
     workload: "ml.image_tile_infer.v0",
@@ -171,6 +214,8 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
   },
   {
     id: "microscopy-tiles",
+    family: "science",
+    runtime: "cpu",
     title: "Microscopy tile scoring",
     status: "implemented",
     workload: "science.microscopy_tile_score.v0",
@@ -181,23 +226,27 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
   },
   {
     id: "contact-map-tiles",
-    title: "Protein contact-map tiles",
+    family: "science",
+    runtime: "webgpu",
+    title: "Protein contact maps",
     status: "experimental",
     workload: "science.contact_map_tile.v0",
     authority: "advisory",
     inputBoundary: "public residue windows from published proteins only; no private sequences or hidden labels",
     validation: "assignment-bound expected-hash receipts against a server-held integer contact-score tile reference",
-    notes: "Low-bandwidth protein-shaped workload. Browser WebGPU workers score bounded residue-window tiles with a deterministic heuristic contact function, which is honest enough to ship now without claiming learned folding or hidden science truth. A public aggregate of accepted receipts is served at /compute/public/contact-map/aggregate.",
+    notes: "Scores contact likelihood for every residue pair in a bounded window of a published protein. The receipt proves your browser computed the same score tile as the server reference, cell-for-cell. Aggregated tiles are served at /compute/public/contact-map/aggregate as a citable reproducibility artifact.",
     publicEndpoint: "/compute/public/contact-map/aggregate",
   },
   {
     id: "genome-kmer",
-    title: "Reference genome k-mer histograms",
+    family: "science",
+    runtime: "cpu",
+    title: "Genome k-mer histograms",
     status: "implemented",
     workload: "science.genome_kmer.v0",
     authority: "advisory",
     inputBoundary: "public ACGT-only reference-genome windows up to 256 bases; no private or unpublished sequences",
     validation: "assignment-bound expected-hash receipts against a server-held CPU reference k-mer histogram",
-    notes: "Low-bandwidth bioinformatics lane. Deterministic CPU kernel producing a u32 k-mer count histogram for k in 2..6 over a bounded DNA window. Useful as a receipt-backed reproducibility primitive for taxonomy, contamination, and composition-based public-genome studies.",
+    notes: "Counts how often every k-length sub-sequence appears in a public DNA window (k = 2–6). The receipt proves your browser's counts match the server's CPU implementation. A receipt-backed building block for taxonomy, contamination detection, and composition analysis.",
   },
 ];

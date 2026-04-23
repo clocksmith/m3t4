@@ -168,6 +168,8 @@ export interface WorkerRecord {
   capability: WorkerCapability;
   registeredAt: number;
   lastSeenAt: number;
+  clientId?: string;
+  accountUid?: string;
 }
 
 export interface WorkerSession {
@@ -368,6 +370,8 @@ export interface ExecutionReceipt {
   signatureStatus?: "unsigned" | "verified" | "missing" | "invalid" | "key-unavailable";
   decision: ReceiptDecision;
   reason?: string;
+  clientId?: string;
+  accountUid?: string;
 }
 
 export interface ReceiptVerification {
@@ -536,6 +540,30 @@ export interface ContactMapPublicAggregate {
   tiles: ContactMapPublicAggregateTile[];
 }
 
+export interface PersonalReceiptsResult {
+  scope: "session" | "browser" | "account";
+  clientId: string | null;
+  accountUid: string | null;
+  receipts: PersonalReceipt[];
+}
+
+export interface PersonalReceipt {
+  receiptId: string;
+  taskId: string;
+  chunkId: string;
+  kernelId: string;
+  kernelHash: ContentHash;
+  taskKind: string;
+  decision: ReceiptDecision;
+  reason?: string;
+  receivedAt: number;
+  computeMs: number;
+  executionMode: ExecutionMode;
+  transport: TransportKind;
+  outputHash: ContentHash;
+  signatureStatus: "unsigned" | "verified" | "missing" | "invalid" | "key-unavailable";
+}
+
 export interface StoreOptions {
   now?: () => number;
   assignmentTimeoutMs?: number;
@@ -664,7 +692,7 @@ export class ComputeLabStore {
     for (const obs of snapshot.connectivityObservations ?? []) this.connectivityObservations.set(obs.observationId, obs);
   }
 
-  registerWorker(input: { label?: string; capability: WorkerCapability; signingPublicKey?: JsonWebKey }): {
+  registerWorker(input: { label?: string; capability: WorkerCapability; signingPublicKey?: JsonWebKey; clientId?: string; accountUid?: string }): {
     worker: WorkerRecord;
     session: WorkerSession;
     acceptedKernels: string[];
@@ -672,12 +700,16 @@ export class ComputeLabStore {
     const now = this.now();
     const acceptedKernels = input.capability.kernels.filter((kernel) => KNOWN_KERNELS.includes(kernel));
     const workerId = randomId("cw");
+    const clientId = normalizeIdentityToken(input.clientId);
+    const accountUid = normalizeIdentityToken(input.accountUid);
     const worker: WorkerRecord = {
       workerId,
       label: input.label,
       capability: { ...input.capability, kernels: acceptedKernels },
       registeredAt: now,
       lastSeenAt: now,
+      clientId,
+      accountUid,
     };
     this.workers.set(workerId, worker);
     const session = this.createSession(workerId, input.signingPublicKey);
@@ -2514,6 +2546,58 @@ export class ComputeLabStore {
     return this.replayBadges().find((badge) => badge.matchId === matchId) ?? null;
   }
 
+  listReceiptsForIdentity(input: {
+    workerId: string;
+    workerSessionId: string;
+    workerSessionToken: string;
+    limit?: number;
+  }): PersonalReceiptsResult {
+    this.requireSession(input.workerId, input.workerSessionId, input.workerSessionToken);
+    const worker = this.requireWorker(input.workerId);
+    const limit = Math.max(1, Math.min(200, input.limit ?? 50));
+    const clientId = worker.clientId;
+    const accountUid = worker.accountUid;
+    const scope: "session" | "browser" | "account" = accountUid
+      ? "account"
+      : clientId
+        ? "browser"
+        : "session";
+    const matches = (receipt: ExecutionReceipt) => {
+      if (accountUid && receipt.accountUid === accountUid) return true;
+      if (clientId && receipt.clientId === clientId) return true;
+      return receipt.workerId === input.workerId;
+    };
+    const receipts = Array.from(this.receipts.values())
+      .filter(matches)
+      .sort((a, b) => b.receivedAt - a.receivedAt)
+      .slice(0, limit)
+      .map((receipt) => {
+        const task = this.tasks.get(receipt.taskId);
+        return {
+          receiptId: receipt.receiptId,
+          taskId: receipt.taskId,
+          chunkId: receipt.chunkId,
+          kernelId: receipt.kernelId,
+          kernelHash: receipt.kernelHash,
+          taskKind: task?.kind ?? receipt.kernelId,
+          decision: receipt.decision,
+          reason: receipt.reason,
+          receivedAt: receipt.receivedAt,
+          computeMs: receipt.computeMs,
+          executionMode: receipt.executionMode,
+          transport: receipt.transport,
+          outputHash: receipt.outputHash,
+          signatureStatus: receipt.signatureStatus ?? "unsigned",
+        };
+      });
+    return {
+      scope,
+      clientId: clientId ?? null,
+      accountUid: accountUid ?? null,
+      receipts,
+    };
+  }
+
   publicContactMapAggregate(): ContactMapPublicAggregate {
     const tiles: ContactMapPublicAggregateTile[] = [];
     let totalTasks = 0;
@@ -2742,8 +2826,11 @@ export class ComputeLabStore {
   ): ExecutionReceipt {
     const safeInput = stripReceiptAuthSecrets(input);
     const receiptHash = computeReceiptHash(safeInput);
+    const worker = this.workers.get(input.workerId);
     return {
       ...safeInput,
+      clientId: safeInput.clientId ?? worker?.clientId,
+      accountUid: safeInput.accountUid ?? worker?.accountUid,
       receiptHash,
       receiptId: randomId("rcpt"),
       receivedAt: this.now(),
@@ -3455,6 +3542,13 @@ function hashParam(value: unknown): ContentHash {
 
 function stringParam(value: unknown): string {
   return typeof value === "string" ? value : String(value ?? "");
+}
+
+function normalizeIdentityToken(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim().slice(0, 128);
+  if (!/^[A-Za-z0-9._:\-]{1,128}$/.test(trimmed)) return undefined;
+  return trimmed;
 }
 
 function hashesEqual(a: ContentHash | undefined, b: ContentHash | undefined): boolean {

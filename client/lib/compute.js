@@ -15,7 +15,10 @@
 // The `after-match` mode gate is unchanged — it is a mode choice, not a guard.
 
 const OPT_IN_KEY = "m3t4.compute.optIn";
+const CLIENT_ID_KEY = "m3t4.compute.clientId";
 const POLICY_KEY = "m3t4.compute.policy";
+const RECEIPTS_CACHE_KEY = "m3t4.compute.receipts";
+const RECEIPTS_CACHE_LIMIT = 50;
 const DEFAULT_POLICY = Object.freeze({
   pauseWhenHidden: false,
   pauseOnLowBattery: false,
@@ -51,6 +54,8 @@ class ComputeClient {
     this.workerId = null;
     this.workerSessionId = null;
     this.workerSessionToken = null;
+    this.clientId = null;
+    this.accountUid = null;
     this.receiptSigningKey = null;
     this.receiptSigningPublicKey = null;
     this.receiptSigningPublicKeyHash = null;
@@ -114,6 +119,8 @@ class ComputeClient {
       state: this.state,
       workerId: this.workerId,
       workerSessionId: this.workerSessionId,
+      clientId: this.clientId ?? null,
+      accountUid: this.accountUid ?? null,
       current: this.current ? { ...this.current } : null,
       totals: { ...this.totals },
       gate: this.currentGate(),
@@ -243,6 +250,8 @@ class ComputeClient {
     try {
       await this.ensureReceiptSigningKey();
       this.capability = await buildCapability(runtimeInfoBucket(this), { benchmark: true });
+      this.clientId = getOrCreateClientId();
+      this.accountUid = readAccountUid();
       const res = await fetch(computeLabOrigin() + "/compute/workers/register", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -250,6 +259,8 @@ class ComputeClient {
           label: "browser-spectator",
           capability: this.capability,
           signingPublicKey: this.receiptSigningPublicKey,
+          clientId: this.clientId,
+          accountUid: this.accountUid || undefined,
         }),
       });
       if (!res.ok) throw new Error(`register failed: ${res.status}`);
@@ -333,6 +344,41 @@ class ComputeClient {
     });
     if (!res.ok) throw new Error(`receipt failed: ${res.status}`);
     return res.json();
+  }
+
+  async fetchMyReceipts(limit = 50) {
+    const fallback = () => ({
+      scope: this.accountUid ? "account" : this.clientId ? "browser" : "session",
+      clientId: this.clientId ?? null,
+      accountUid: this.accountUid ?? null,
+      receipts: loadReceiptCache(),
+    });
+    if (!this.workerId || !this.workerSessionId || !this.workerSessionToken) {
+      return fallback();
+    }
+    const origin = computeLabOrigin();
+    if (!origin) return fallback();
+    try {
+      const url = new URL("/compute/workers/receipts", origin);
+      url.searchParams.set("workerId", this.workerId);
+      url.searchParams.set("workerSessionId", this.workerSessionId);
+      url.searchParams.set("limit", String(Math.max(1, Math.min(200, limit))));
+      const res = await fetch(url, {
+        headers: { [SESSION_TOKEN_HEADER]: this.workerSessionToken },
+      });
+      if (!res.ok) throw new Error(`receipts fetch ${res.status}`);
+      const body = await res.json();
+      const receipts = Array.isArray(body.receipts) ? body.receipts : [];
+      saveReceiptCache(receipts);
+      return {
+        scope: body.scope ?? (this.accountUid ? "account" : this.clientId ? "browser" : "session"),
+        clientId: body.clientId ?? this.clientId ?? null,
+        accountUid: body.accountUid ?? this.accountUid ?? null,
+        receipts,
+      };
+    } catch {
+      return fallback();
+    }
   }
 
   reevaluate() {
@@ -839,6 +885,60 @@ function loadPolicy() {
 function savePolicy(policy) {
   try {
     localStorage.setItem(POLICY_KEY, JSON.stringify(policy));
+  } catch {
+    // localStorage can be unavailable in private contexts.
+  }
+}
+
+function getOrCreateClientId() {
+  try {
+    const existing = localStorage.getItem(CLIENT_ID_KEY);
+    if (existing && /^[A-Za-z0-9._:\-]{1,128}$/.test(existing)) return existing;
+  } catch {
+    // fall through to generate
+  }
+  let candidate;
+  try {
+    candidate = (globalThis.crypto?.randomUUID?.() ?? "")
+      .replace(/[^A-Za-z0-9._:\-]/g, "")
+      .slice(0, 128);
+  } catch {
+    candidate = "";
+  }
+  if (!candidate) {
+    candidate = `cid-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+  try {
+    localStorage.setItem(CLIENT_ID_KEY, candidate);
+  } catch {
+    // localStorage can be unavailable in private contexts.
+  }
+  return candidate;
+}
+
+function readAccountUid() {
+  const raw = globalThis.__M3T4_COMPUTE_ACCOUNT_UID__;
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed || !/^[A-Za-z0-9._:\-]{1,128}$/.test(trimmed)) return null;
+  return trimmed;
+}
+
+function loadReceiptCache() {
+  try {
+    const raw = localStorage.getItem(RECEIPTS_CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.slice(0, RECEIPTS_CACHE_LIMIT) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveReceiptCache(receipts) {
+  try {
+    const list = Array.isArray(receipts) ? receipts.slice(0, RECEIPTS_CACHE_LIMIT) : [];
+    localStorage.setItem(RECEIPTS_CACHE_KEY, JSON.stringify(list));
   } catch {
     // localStorage can be unavailable in private contexts.
   }

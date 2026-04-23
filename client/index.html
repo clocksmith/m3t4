@@ -13,16 +13,17 @@
 <body>
   <header id="topnav">
     <div class="brand">
-      <a href="#intro" class="logo">m3t4<span class="logo-caret">.ai</span></a>
+      <a href="/" class="logo" title="Go home">m3t4<span class="logo-caret">.ai</span></a>
     </div>
     <nav>
-      <a href="#intro" data-route="intro">start</a>
-      <a href="#build" data-route="build">tune</a>
-      <a href="#spectate" data-route="spectate">live</a>
-      <a href="#profile" data-route="profile">roster</a>
-      <a href="#compute" data-route="compute">compute</a>
-      <a href="#duel" data-route="duel" data-feature="p2pDuel" hidden>duel</a>
-      <a href="#about" data-route="about">about</a>
+      <a href="/build" data-route="build" data-nav="primary" title="Tune a bot in the sandbox before sending it to your ranked roster">tune</a>
+      <a href="/spectate" data-route="spectate" data-nav="primary" title="Watch ranked matches streaming live from the server">live</a>
+      <a href="/profile" data-route="profile" data-nav="primary" title="Your handle, ranked seats, and installed bots">roster</a>
+      <a href="/compute" data-route="compute" data-nav="primary" title="Donate idle browser cycles to receipt-backed public compute">compute</a>
+      <a href="/duel" data-route="duel" data-feature="p2pDuel" hidden data-nav="overflow" title="Challenge another handle to a peer-to-peer duel (coming soon)">duel</a>
+      <a href="/about" data-route="about" data-nav="primary" title="What m3t4.ai is, how it runs, and the compute pitch">about</a>
+      <button id="nav-more" type="button" class="nav-more" aria-expanded="false" aria-haspopup="menu" aria-controls="nav-more-popover" title="More navigation">more</button>
+      <div id="nav-more-popover" class="nav-more-popover" role="menu" aria-labelledby="nav-more" hidden></div>
     </nav>
     <div id="whoami" class="whoami"></div>
   </header>

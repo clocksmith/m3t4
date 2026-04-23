@@ -282,6 +282,7 @@ function onEvent(m) {
     renderState.labels = {
       p1: `@${handleA} [${mt.a?.name ?? "slot"}]`,
       p2: `@${handleB} [${mt.b?.name ?? "slot"}]`,
+      nameplates: [`@${handleA}`, `@${handleB}`],
       cosmetics: [presentationCosmeticsForCompetitor(mt.a, 0), presentationCosmeticsForCompetitor(mt.b, 1)],
     };
     renderState.stage = STAGES[mt.stageId] ?? STAGES.datacenter;
@@ -374,10 +375,7 @@ function liveBriefingSideHtml(side) {
   const binding = SIDE_BINDINGS[side];
   return `
     <article class="live-briefing-side is-p${side + 1}">
-      <div class="live-briefing-head">
-        <strong id="brief-p${side + 1}-identity">P${side + 1} · @${side === 0 ? "p1" : "p2"} · slot · ?</strong>
-      </div>
-      <div class="live-briefing-binding" id="brief-p${side + 1}-binding">${liveBindingHtml(binding)}</div>
+      <div class="live-briefing-binding" id="brief-p${side + 1}-binding">${liveBindingHtml(binding, side, `P${side + 1} · @${side === 0 ? "p1" : "p2"} · slot · ?`)}</div>
     </article>`;
 }
 
@@ -387,15 +385,12 @@ function updateLiveBriefing(match) {
 }
 
 function updateBriefingSide(side, data) {
-  const identityEl = document.getElementById(`brief-p${side + 1}-identity`);
-  if (!identityEl) return;
   const handle = data?.handle ?? (side === 0 ? "p1" : "p2");
   const name = data?.name ?? "slot";
   const elo = data?.elo ?? "?";
-  identityEl.textContent = `P${side + 1} · @${handle} · ${name} · ${elo}`;
   const binding = bindingForCompetitor(data, side);
   const bindingEl = document.getElementById(`brief-p${side + 1}-binding`);
-  if (bindingEl) bindingEl.innerHTML = liveBindingHtml(binding);
+  if (bindingEl) bindingEl.innerHTML = liveBindingHtml(binding, side, `P${side + 1} · @${handle} · ${name} · ${elo}`);
 }
 
 function bindingForCompetitor(data, side) {
@@ -403,14 +398,15 @@ function bindingForCompetitor(data, side) {
   return bindingInfo(cosmetics.body, BODY_VARIANTS[cosmetics.body] ?? cosmetics.body, cosmetics.weapon);
 }
 
-function liveBindingHtml(binding) {
+function liveBindingHtml(binding, side = 0, identity = `P${side + 1}`) {
   return `
-    <span class="live-briefing-portrait${binding.portraitStyle ? "" : " is-missing"}"${binding.portraitStyle ? ` style="${binding.portraitStyle}"` : ""} aria-hidden="true"></span>
+    <span class="live-briefing-weapon-tile${binding.weaponStyle ? "" : " is-missing"}"${binding.weaponStyle ? ` style="${binding.weaponStyle}"` : ""} aria-hidden="true"></span>
     <span class="live-briefing-copy">
+      <strong class="live-briefing-identity" id="brief-p${side + 1}-identity">${escapeHtml(identity)}</strong>
       <span class="live-briefing-character">${escapeHtml(binding.characterName)} · ${escapeHtml(binding.characterLabel)}</span>
       <span class="live-briefing-weapon-name">${escapeHtml(binding.weaponName)}</span>
     </span>
-    <span class="live-briefing-weapon-tile${binding.weaponStyle ? "" : " is-missing"}"${binding.weaponStyle ? ` style="${binding.weaponStyle}"` : ""} aria-hidden="true"></span>`;
+    <span class="live-briefing-portrait${binding.portraitStyle ? "" : " is-missing"}"${binding.portraitStyle ? ` style="${binding.portraitStyle}"` : ""} aria-hidden="true"></span>`;
 }
 
 function briefingPortraitStyle(body) {

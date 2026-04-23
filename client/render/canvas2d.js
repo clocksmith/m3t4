@@ -287,6 +287,7 @@ export function drawFrame(ctx, stage, frame, labels) {
   drawFighter(ctx, frame.p0, p1.body, p1.trim, p1.shadow, 0, frame);
   drawFighter(ctx, frame.p1, p2.body, p2.trim, p2.shadow, 1, frame);
   drawClashFx(ctx, frame);
+  drawFighterNameplates(ctx, frame, labels);
   drawHUD(ctx, frame, labels, p1.body, p2.body);
 }
 
@@ -774,6 +775,54 @@ function drawClashFx(ctx, frame) {
   ctx.arc(0, 0, 5 + (1 - fade) * 4, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
+}
+
+function drawFighterNameplates(ctx, frame, labels) {
+  drawFighterNameplate(ctx, frame?.p0, 0, frame, labels);
+  drawFighterNameplate(ctx, frame?.p1, 1, frame, labels);
+}
+
+function drawFighterNameplate(ctx, fighter, side, frame, labels) {
+  if (!fighter) return;
+  const text = fighterNameplateText(labels, side);
+  if (!text) return;
+
+  const carrying = frame?.token?.carrier === side;
+  const accent = side === 0 ? cssColor("--ui-blue", "#3b82f6") : cssColor("--ui-purple", "#a855f7");
+  const x = Math.round(fighter.x + (carrying ? (side === 0 ? -62 : 62) : 0));
+  const y = Math.max(72, Math.round(fighter.y - STATS.bodyH * 0.9 - (carrying ? 6 : 0)));
+
+  ctx.save();
+  ctx.font = "700 12px ui-monospace, Menlo, monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const maxWidth = 160;
+  const rawWidth = ctx.measureText(text).width;
+  const width = Math.min(maxWidth, Math.ceil(rawWidth + 16));
+  const height = 20;
+
+  ctx.fillStyle = "rgba(3, 7, 18, 0.78)";
+  ctx.fillRect(x - width / 2, y - height / 2, width, height);
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x - width / 2 + 0.5, y - height / 2 + 0.5, width - 1, height - 1);
+  ctx.fillStyle = cssColor("--ui-text", "#f4f4ff");
+  ctx.fillText(text, x, y + 0.5);
+  ctx.restore();
+}
+
+function fighterNameplateText(labels, side) {
+  const explicit = labels?.nameplates?.[side];
+  const fallback = labels?.[`p${side + 1}`];
+  return normalizeNameplateText(explicit || fallback || `P${side + 1}`);
+}
+
+function normalizeNameplateText(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const withoutBracket = raw.replace(/\s*\[[^\]]*\]\s*$/u, "");
+  const trimmed = withoutBracket.replace(/\s*·.*$/u, "");
+  return trimmed.length > 18 ? `${trimmed.slice(0, 17)}…` : trimmed;
 }
 
 function drawWeaponSprite(ctx, side, bx, by, tx, ty, active) {

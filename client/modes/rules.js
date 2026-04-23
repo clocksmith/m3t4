@@ -3,13 +3,9 @@
 // to understand the arena and the trust boundary, not the source.
 
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
-import { getComputeClient } from "../lib/compute.js";
 import { escapeHtml } from "../ui/html.js";
-import { buttonHtml, linkButtonHtml } from "../ui/actions.js";
+import { linkButtonHtml } from "../ui/actions.js";
 import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
-
-let computeWitnessOff = null;
-let computeScoreTimer = null;
 
 function sectionHtml(section) {
   const body = Array.isArray(section.body) ? section.body : [];
@@ -44,57 +40,24 @@ function aboutDetailHtml(about) {
     </section>`;
 }
 
-function computeWitnessEnabled() {
-  return window.__M3T4_FEATURES__?.computeSlackWorker === true ||
-    window.__M3T4_COMPUTE_SLACK_WORKER__ === true;
-}
-
-function computeLabOrigin() {
-  return String(window.__M3T4_COMPUTE_LAB_ORIGIN__ || "").replace(/\/+$/, "");
-}
-
-function computeScoreEnabled() {
-  return !!computeLabOrigin();
-}
-
-function computeScoreHtml() {
-  if (!computeScoreEnabled()) return "";
-  return `
-    <section class="panel compute-score-panel" aria-label="Compute score">
-      <div class="compute-score-title">
-        <h3>Compute Score</h3>
-        <span id="compute-score-privacy">loading</span>
+function computeLinkCardHtml() {
+  return contextCardHtml({
+    className: "rules-card-compute-link",
+    body: `
+      <div class="context-card-kicker">opt-in compute</div>
+      <div class="context-card-copy">
+        <strong>Compute controls and public receipt stats live on the Compute page.</strong>
+        <span>Opt in, set pause policy, and watch accepted receipts accumulate.</span>
       </div>
-      <div id="compute-score-value" class="compute-score-value">0</div>
-      <div class="compute-score-grid">
-        <div><span>contact cells</span><strong id="compute-score-contact">0</strong></div>
-        <div><span>tensor cells</span><strong id="compute-score-tensor">0</strong></div>
-        <div><span>seed tiles</span><strong id="compute-score-seeds">0</strong></div>
-        <div><span>replay checks</span><strong id="compute-score-replays">0</strong></div>
-        <div><span>WebRTC receipts</span><strong id="compute-score-webrtc">0</strong></div>
-        <div><span>accepted receipts</span><strong id="compute-score-receipts">0</strong></div>
-      </div>
-    </section>`;
-}
-
-function computeWitnessHtml() {
-  if (!computeWitnessEnabled()) return "";
-  return `
-    <section class="panel compute-witness-panel" aria-label="Device Witness">
-      <div class="compute-witness-title">
-        <h3>Device Witness</h3>
-        <span id="compute-witness-status" class="tight">off</span>
-      </div>
-      <div class="compute-witness-controls" role="group" aria-label="Device Witness mode">
-        ${buttonHtml({ className: "compute-witness-mode", attrs: { "data-mode": "quiet" }, text: "quiet" })}
-        ${buttonHtml({ className: "compute-witness-mode", attrs: { "data-mode": "after-match" }, text: "after-match" })}
-        ${buttonHtml({ className: "compute-witness-mode", attrs: { "data-mode": "standard" }, text: "standard" })}
-      </div>
-      <div class="compute-witness-actions">
-        ${buttonHtml({ id: "compute-witness-start", variant: "primary", text: "start" })}
-        ${buttonHtml({ id: "compute-witness-stop", text: "stop" })}
-      </div>
-    </section>`;
+      <div class="rules-card-compute-action">
+        ${linkButtonHtml({
+          href: "/compute",
+          variant: "primary",
+          text: "open Compute",
+          attrs: { title: "Go to the Compute page to opt in and see receipts" },
+        })}
+      </div>`,
+  });
 }
 
 export function mount(root, { setStatus }) {
@@ -108,13 +71,12 @@ export function mount(root, { setStatus }) {
         title: rules.title ?? "Rules",
         subtitle: rules.subtitle ?? "",
         className: "rules-hero",
-        action: linkButtonHtml({ href: "#spectate", variant: "danger", text: "watch live" }),
+        action: linkButtonHtml({ href: "/spectate", variant: "danger", text: "watch live", attrs: { title: "Leave this page and watch live matches" } }),
       })}
 
       ${aboutCardHtml(rules.about)}
       ${aboutDetailHtml(rules.about)}
-      ${computeScoreHtml()}
-      ${computeWitnessHtml()}
+      ${computeLinkCardHtml()}
 
       <div class="rules-rules-column">
         <div class="rules-section-label">Rules</div>
@@ -123,96 +85,6 @@ export function mount(root, { setStatus }) {
         </section>
       </div>
     </div>`;
-
-  wireComputeWitness(root);
-  wireComputeScore(root);
 }
 
-function wireComputeWitness(root) {
-  if (!computeWitnessEnabled()) return;
-  const panel = root.querySelector(".compute-witness-panel");
-  if (!panel) return;
-  computeWitnessOff?.();
-  computeWitnessOff = null;
-  const client = getComputeClient();
-  const statusEl = panel.querySelector("#compute-witness-status");
-  const startBtn = panel.querySelector("#compute-witness-start");
-  const stopBtn = panel.querySelector("#compute-witness-stop");
-  const modeButtons = Array.from(panel.querySelectorAll(".compute-witness-mode"));
-
-  function paint(snapshot) {
-    const gate = snapshot.gate ? ` · ${snapshot.gate}` : "";
-    statusEl.textContent = snapshot.enabled ? `${snapshot.mode} · ${snapshot.state}${gate}` : "off";
-    startBtn.disabled = !snapshot.available || !snapshot.configured || snapshot.enabled;
-    stopBtn.disabled = !snapshot.enabled;
-    modeButtons.forEach((btn) => {
-      btn.classList.toggle("is-active", btn.dataset.mode === snapshot.mode);
-    });
-  }
-
-  modeButtons.forEach((btn) => {
-    btn.addEventListener("click", () => client.setMode(btn.dataset.mode));
-  });
-  startBtn.addEventListener("click", () => {
-    const active = modeButtons.find((btn) => btn.classList.contains("is-active"));
-    void client.start({ mode: active?.dataset.mode ?? "quiet", persist: true });
-  });
-  stopBtn.addEventListener("click", () => {
-    void client.stop({ persist: true });
-  });
-
-  computeWitnessOff = client.subscribe(paint);
-}
-
-function wireComputeScore(root) {
-  if (!computeScoreEnabled()) return;
-  const panel = root.querySelector(".compute-score-panel");
-  if (!panel) return;
-  if (computeScoreTimer) clearInterval(computeScoreTimer);
-  computeScoreTimer = null;
-  const valueEl = panel.querySelector("#compute-score-value");
-  const privacyEl = panel.querySelector("#compute-score-privacy");
-  const contactEl = panel.querySelector("#compute-score-contact");
-  const tensorEl = panel.querySelector("#compute-score-tensor");
-  const seedsEl = panel.querySelector("#compute-score-seeds");
-  const replaysEl = panel.querySelector("#compute-score-replays");
-  const webrtcEl = panel.querySelector("#compute-score-webrtc");
-  const receiptsEl = panel.querySelector("#compute-score-receipts");
-
-  async function refresh() {
-    try {
-      const res = await fetch(`${computeLabOrigin()}/compute/public/stats`, { cache: "no-store" });
-      if (!res.ok) throw new Error(`stats ${res.status}`);
-      const stats = await res.json();
-      const breakdown = stats.scoreBreakdown || {};
-      valueEl.textContent = formatInt(stats.computeScore);
-      privacyEl.textContent = stats.privacy === "suppressed" ? "aggregate" : "live aggregate";
-      contactEl.textContent = formatInt(breakdown.acceptedContactMapTileCells);
-      tensorEl.textContent = formatInt(breakdown.acceptedTensorTileCells);
-      seedsEl.textContent = formatInt(breakdown.acceptedSeedSweepSeeds);
-      replaysEl.textContent = formatInt(
-        Number(breakdown.acceptedReplayVerifyChunks || 0) +
-        Number(breakdown.acceptedPublicArtifactChunks || 0),
-      );
-      webrtcEl.textContent = formatInt(breakdown.acceptedWebRtcReceipts);
-      receiptsEl.textContent = formatInt(breakdown.acceptedReceipts);
-    } catch {
-      privacyEl.textContent = "offline";
-    }
-  }
-
-  void refresh();
-  computeScoreTimer = setInterval(refresh, 30000);
-}
-
-function formatInt(value) {
-  const n = Number(value || 0);
-  return Number.isFinite(n) ? Math.round(n).toLocaleString() : "0";
-}
-
-export function unmount() {
-  computeWitnessOff?.();
-  computeWitnessOff = null;
-  if (computeScoreTimer) clearInterval(computeScoreTimer);
-  computeScoreTimer = null;
-}
+export function unmount() {}

@@ -58,7 +58,13 @@ export async function handleComputeLabRequest(
   }
 
   if (req.method === "POST" && url.pathname === "/compute/workers/register") {
-    const body = await readJson<{ label?: string; capability?: WorkerCapability; signingPublicKey?: JsonWebKey }>(req);
+    const body = await readJson<{
+      label?: string;
+      capability?: WorkerCapability;
+      signingPublicKey?: JsonWebKey;
+      clientId?: string;
+      accountUid?: string;
+    }>(req);
     if (!body?.capability || !Array.isArray(body.capability.kernels)) {
       json(res, 400, { error: "capability.kernels required" });
       return true;
@@ -71,6 +77,8 @@ export async function handleComputeLabRequest(
       label: body.label,
       capability: sanitizePublicWorkerCapability(body.capability, adminAllowed(req, deps.config)),
       signingPublicKey: body.signingPublicKey,
+      clientId: body.clientId,
+      accountUid: body.accountUid,
     });
     await flushStore(deps.store);
     json(res, 200, {
@@ -180,6 +188,23 @@ export async function handleComputeLabRequest(
       }));
       await flushStore(deps.store);
       json(res, 200, { ok: true, observationId: observation.observationId });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/compute/workers/receipts") {
+    try {
+      const limitParam = url.searchParams.get("limit");
+      const limit = limitParam ? Number(limitParam) : undefined;
+      const result = deps.store.listReceiptsForIdentity({
+        workerId: url.searchParams.get("workerId") ?? "",
+        workerSessionId: url.searchParams.get("workerSessionId") ?? "",
+        workerSessionToken: header(req, "x-worker-session-token"),
+        limit: Number.isFinite(limit) ? limit : undefined,
+      });
+      json(res, 200, result);
     } catch (e) {
       json(res, 400, { error: message(e) });
     }

@@ -3196,6 +3196,108 @@ test("HTTP public stats suppress detailed aggregates until enough workers exist"
   assert.equal(resp.body.webgpuSupportedPct, null);
 });
 
+test("HTTP worker receipts endpoint returns only the authenticated worker's receipts", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  store.seedPrimeTask({ start: 200, endExclusive: 220, chunkSize: 20 });
+  const w1 = store.registerWorker({ capability });
+  const w2 = store.registerWorker({ capability });
+  const a1 = store.assignNext(auth(w1))!;
+  store.acceptAssignment({ ...auth(w1), assignmentId: a1.assignment.assignmentId, assignmentToken: a1.assignment.assignmentToken });
+  store.submitReceipt({
+    ...auth(w1),
+    assignmentId: a1.assignment.assignmentId,
+    assignmentToken: a1.assignment.assignmentToken,
+    taskId: a1.task.taskId,
+    chunkId: a1.chunk.chunkId,
+    ...referencePrimeReceiptFields(a1.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 4,
+  });
+  const a2 = store.assignNext(auth(w2))!;
+  store.acceptAssignment({ ...auth(w2), assignmentId: a2.assignment.assignmentId, assignmentToken: a2.assignment.assignmentToken });
+  store.submitReceipt({
+    ...auth(w2),
+    assignmentId: a2.assignment.assignmentId,
+    assignmentToken: a2.assignment.assignmentToken,
+    taskId: a2.task.taskId,
+    chunkId: a2.chunk.chunkId,
+    ...referencePrimeReceiptFields(a2.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 4,
+  });
+  const srv = await boot(store, baseConfig);
+  t.after(() => srv.close());
+
+  const creds = auth(w1);
+  const resp = await req(srv.port, "GET",
+    `/compute/workers/receipts?workerId=${encodeURIComponent(creds.workerId)}&workerSessionId=${encodeURIComponent(creds.workerSessionId)}&limit=10`,
+    undefined,
+    { "x-worker-session-token": creds.workerSessionToken },
+  );
+  assert.equal(resp.status, 200);
+  assert.equal(resp.body.scope, "session");
+  assert.equal(resp.body.clientId, null);
+  assert.equal(resp.body.accountUid, null);
+  assert.ok(Array.isArray(resp.body.receipts));
+  assert.ok(resp.body.receipts.length >= 1);
+  for (const r of resp.body.receipts) {
+    assert.equal(r.decision === "accepted" || r.decision === "pending" || r.decision === "rejected", true);
+    assert.ok(r.kernelId);
+    assert.ok(r.taskKind);
+    assert.ok(r.outputHash);
+  }
+
+  const wrongToken = await req(srv.port, "GET",
+    `/compute/workers/receipts?workerId=${encodeURIComponent(creds.workerId)}&workerSessionId=${encodeURIComponent(creds.workerSessionId)}`,
+    undefined,
+    { "x-worker-session-token": "bogus" },
+  );
+  assert.equal(wrongToken.status, 400);
+});
+
+test("receipts list merges across sessions that share a clientId", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  store.seedPrimeTask({ start: 300, endExclusive: 340, chunkSize: 40 });
+  const shared = "browser-1234";
+  const sessionA = store.registerWorker({ capability, clientId: shared });
+  const sessionB = store.registerWorker({ capability, clientId: shared });
+  const sessionOther = store.registerWorker({ capability, clientId: "browser-other" });
+  const submit = (reg: ReturnType<ComputeLabStore["registerWorker"]>) => {
+    const next = store.assignNext(auth(reg));
+    if (!next) return;
+    store.acceptAssignment({
+      ...auth(reg),
+      assignmentId: next.assignment.assignmentId,
+      assignmentToken: next.assignment.assignmentToken,
+    });
+    store.submitReceipt({
+      ...auth(reg),
+      assignmentId: next.assignment.assignmentId,
+      assignmentToken: next.assignment.assignmentToken,
+      taskId: next.task.taskId,
+      chunkId: next.chunk.chunkId,
+      ...referencePrimeReceiptFields(next.chunk),
+      executionMode: "cpu",
+      transport: "http",
+      computeMs: 2,
+    });
+  };
+  submit(sessionA);
+  submit(sessionB);
+  submit(sessionOther);
+  const view = store.listReceiptsForIdentity({ ...auth(sessionA), limit: 10 });
+  assert.equal(view.scope, "browser");
+  assert.equal(view.clientId, shared);
+  assert.ok(view.receipts.every((r) => r.kernelId === "prime-search.v0"));
+  assert.ok(view.receipts.length >= 2, "expected both shared-clientId receipts");
+  for (const receipt of view.receipts) {
+    const matches = receipt.taskKind === "prime-search.v0";
+    assert.equal(matches, true);
+  }
+});
+
 test("HTTP public contact map aggregate exposes accepted receipts", async (t) => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const worker = store.registerWorker({ capability: webgpuCapability });

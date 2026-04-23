@@ -1,27 +1,28 @@
 import { defineMode } from "./modes/define-mode.js";
+import { pathToRoute, routeToPath } from "./navigate.js";
 
-export function createHashRouter({
+export function createPathRouter({
   appEl,
   navLinks,
   statusEl,
   modes,
   optionalModeLoaders = {},
-  legacyHash = {},
+  legacyPaths = {},
   defaultMode = "intro",
   features = {},
   featureForRoute = () => null,
   onPageView = () => {},
-  preserveSameHashRoutes = [],
+  preserveSameRoutes = [],
 }) {
   const routeModes = {};
   for (const [route, mode] of Object.entries(modes)) {
     routeModes[route] = defineMode(mode);
   }
 
-  const preserveSameHash = new Set(preserveSameHashRoutes);
+  const preserveSame = new Set(preserveSameRoutes);
   let current = null;
   let currentRoute = null;
-  let currentHash = null;
+  let currentPath = null;
 
   function setStatus(text) {
     if (statusEl) statusEl.textContent = text;
@@ -45,11 +46,11 @@ export function createHashRouter({
     });
   }
 
-  function parseHash() {
-    const hash = (window.location.hash || "#" + defaultMode).slice(1);
-    const [rawName] = hash.split("?");
-    const name = legacyHash[rawName] ?? rawName;
-    return { hash, rawName, name };
+  function parseLocation() {
+    const rawRoute = pathToRoute(window.location.pathname);
+    const mapped = legacyPaths[rawRoute] ?? rawRoute;
+    const name = mapped || defaultMode;
+    return { rawRoute, name, path: window.location.pathname };
   }
 
   async function loadOptionalModes() {
@@ -64,10 +65,13 @@ export function createHashRouter({
   }
 
   function render() {
-    const { hash, rawName, name } = parseHash();
-    if (legacyHash[rawName]) {
-      location.hash = "#" + name;
-      return;
+    const { rawRoute, name, path } = parseLocation();
+    const hasLegacyPath = Object.hasOwn(legacyPaths, rawRoute);
+    const canonicalPath = hasLegacyPath && legacyPaths[rawRoute] !== rawRoute
+      ? routeToPath(legacyPaths[rawRoute])
+      : path;
+    if (canonicalPath !== path) {
+      window.history.replaceState(null, "", canonicalPath + window.location.search);
     }
 
     const activeName = activeRouteFor(name);
@@ -76,9 +80,9 @@ export function createHashRouter({
 
     if (
       current &&
-      preserveSameHash.has(activeName) &&
+      preserveSame.has(activeName) &&
       currentRoute === activeName &&
-      currentHash === hash
+      currentPath === canonicalPath
     ) {
       return;
     }
@@ -87,7 +91,7 @@ export function createHashRouter({
     appEl.innerHTML = "";
     current = mode;
     currentRoute = activeName;
-    currentHash = hash;
+    currentPath = canonicalPath;
     mode.mount(appEl, { setStatus, route: activeName, features });
     onPageView(activeName);
   }
@@ -95,9 +99,10 @@ export function createHashRouter({
   async function refreshRoutes() {
     syncNavVisibility();
     await loadOptionalModes();
-    const { name } = parseHash();
+    const { name } = parseLocation();
     if (!routeEnabled(name)) {
-      window.location.hash = "#" + defaultMode;
+      window.history.replaceState(null, "", routeToPath(defaultMode));
+      render();
     } else {
       render();
     }

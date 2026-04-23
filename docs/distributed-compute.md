@@ -17,6 +17,9 @@ The rule of thumb: if it changes the protocol, put it in Plasma. If it changes
 how m3t4 spectators participate, put it here. If it changes the company/product
 claim, put it in Ouroboros.
 
+For concrete migration sequencing from sidecar compute toward a mesh-first
+public data plane, see `docs/p2p-migration-plan.md`.
+
 ## Current Shape
 
 The repo has a Plasma-lite scaffold running through the isolated `plasma-lab`

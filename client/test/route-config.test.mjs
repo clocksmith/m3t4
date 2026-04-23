@@ -11,6 +11,8 @@ import { MODES } from "../routes.js";
 
 test("route config keeps browser feature gates centralized", () => {
   assert.equal(DEFAULT_ROUTE, "intro");
+  assert.equal(LEGACY_HASH.start, "");
+  assert.equal(LEGACY_HASH.intro, "");
   assert.equal(LEGACY_HASH.practice, "build");
   assert.equal(LEGACY_HASH.rules, "about");
   assert.equal(DEFAULT_FEATURES.p2pDuel, false);

@@ -586,6 +586,174 @@ fields, checks it against the stored hash, and verifies the session signature
 when the worker registered a signing key. This proves receipt integrity and
 session binding; it does not prove the browser, OS, or GPU was honest.
 
+## Durable Receipt Log And Independent Verifier
+
+The single-receipt verifier above is necessary but not sufficient for migration
+away from a coordinator-centric trust story. Public acceptance outcomes must be
+replayable from an immutable log by a second verifier.
+
+The goal is not "publish every database row." The goal is:
+
+- stable ordering for accepted public-compute decisions
+- stable refs for the public bytes and policies used in those decisions
+- enough persisted data for an external verifier to recompute receipt integrity
+  and acceptance outcomes without private control-plane state
+
+### Log Unit
+
+Use immutable receipt-log segments, not mutable timestamp-only tables.
+
+Segment shape:
+
+```text
+segmentSeq
+prevSegmentHash
+publishedAt
+entries[]
+segmentHash
+```
+
+Entry ordering inside a segment must be stable and explicit:
+
+```text
+entrySeq
+entryType
+entryBody
+entryHash
+```
+
+`segmentHash` is computed over:
+
+```text
+segmentSeq
+prevSegmentHash
+publishedAt
+ordered entry hashes
+```
+
+This creates a hash-linked append chain without pretending Firestore write time
+is a durable trust anchor.
+
+### Entry Types
+
+Minimum public replayable entry types:
+
+```text
+receipt-submitted
+receipt-accepted
+receipt-rejected
+chunk-accepted
+task-completed
+```
+
+Only accepted-path entries need to be public for the first migration stage, but
+their ordering must still be explicit.
+
+### What A Replayable Accepted Entry Must Carry
+
+For a second verifier to replay acceptance, each accepted receipt or accepted
+chunk record must include stable refs and hashes for:
+
+```text
+receiptId
+receiptHash
+receipt fields required to recompute the hash
+kernelId
+kernelHash
+inputHash
+artifactHash (when applicable)
+outputHash
+validationMode
+determinismClass
+validationPolicyHash
+validationPolicyRef
+inputRef
+kernelManifestRef
+accepted peer-subassignment refs for strict WebRTC work
+```
+
+Assignment/session tokens remain validation secrets and must never appear in
+the durable public log.
+
+### Stable Refs
+
+"Independent verifier" only means something if the verifier can reach the same
+inputs the coordinator used. Every accepted entry must therefore point to:
+
+```text
+content-addressed input artifact
+content-addressed kernel manifest or kernel bundle
+content-addressed validation-policy bundle
+```
+
+If any of those refs are mutable or implicit, verification is not independent;
+it is just another coordinator read.
+
+### Publication Host
+
+The first implementation may publish segments from `plasma-lab`, but the
+segment store must be outside the in-memory request path. Acceptable first
+shapes:
+
+```text
+object storage with immutable segment objects
+generation-locked append publication
+portable equivalent on another object store
+```
+
+Do not make "same Cloud Run instance wrote JSON" the long-term trust anchor.
+The writer may stay centralized; the published segments must still be durable
+and replayable elsewhere.
+
+### Independent Verifier
+
+Run the independent verifier as a separate process or service. It should:
+
+1. read published receipt-log segments in order
+2. recompute `receiptHash` for each accepted receipt entry
+3. verify signatures when `signatureRequired=true`
+4. fetch `inputRef`, `kernelManifestRef`, and `validationPolicyRef`
+5. recompute acceptance outcomes for accepted receipts and chunks
+6. publish verifier results keyed by `segmentHash`
+
+Minimum verifier result shape:
+
+```text
+segmentHash
+verifierVersion
+checkedEntries
+receiptHashMismatches
+signatureMismatches
+acceptanceMismatches
+checkedAt
+```
+
+### Privacy And Public Surface
+
+Durable public receipt logs should still avoid raw fingerprinting values. Keep
+the public log bucketed or hashed where possible:
+
+```text
+gpuVendorBucket
+browserFamily
+capabilityHash
+maxBufferBucket
+```
+
+Public receipt logs are not a license to publish stable device fingerprints.
+
+### Exit Condition For This Phase
+
+Do not claim independent verification until:
+
+- accepted public outcomes can be replayed from published refs alone
+- the second verifier no longer needs private database reads
+- verifier/coordinator mismatch rate is measured and acceptably low
+- segment-hash divergence is zero
+
+That is the threshold for moving public badge and stats derivation off mutable
+coordinator state and onto log-derived views.
+
 ## Determinism
 
 Use Plasma determinism classes as the protocol field:

@@ -19,6 +19,8 @@ export const DEFAULT_FEATURES = {
 };
 
 export const LEGACY_HASH = {
+  start: "",
+  intro: "",
   practice: "build",
   lore: "intro",
   rules: "about",

@@ -47,6 +47,9 @@ Current controlled-production status as of 2026-04-22:
   accepted public chunks and receipts, not per-user credit.
 - `plasma.tensor_tile.v0` is implemented as the first bounded WebGPU
   useful-work fixture, gated to workers with accepted WebGPU witness evidence.
+- repo head also supports `plasma.tensor_tile.v0` over strict WebRTC
+  `plasma-data` with task-required transport and peer subassignments; the next
+  hosted smoke is still pending deploy auth recovery.
 
 The first demo kernel was `prime-search.v0`. It is intentionally boring: it
 proved assignment, execution, hashing, receipt submission, and quorum without
@@ -126,6 +129,9 @@ Current WebRTC claim:
 - strict WebRTC proof tasks can require `requiredTransport: "webrtc"` and
   `requiredPeerSubreceipt: true`, so a proof task cannot silently fall back to
   HTTP and still count as WebRTC evidence.
+- that strict WebRTC path now covers public-artifact verify, replay verify,
+  public-preset seed sweeps, and bounded tensor tiles; tensor tiles additionally
+  require WebGPU-witnessed `webgpu-light` peers.
 - each strict WebRTC parent receipt must link to an accepted server-issued peer
   subassignment from the remote worker, with a signed subreceipt bound to pair,
   parent assignment, chunk, input hash, and output hash.

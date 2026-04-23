@@ -32,6 +32,9 @@ Current production status as of 2026-04-22:
 - controlled two-browser WebRTC seed-sweep smokes have passed with
   task-required WebRTC, accepted server-issued peer subassignments,
   peer-signed subreceipts, and public receipt verifier success.
+- repo head now also supports `plasma.tensor_tile.v0` over the same strict
+  WebRTC peer-subassignment path; the next hosted smoke should validate that
+  end to end after deploy auth is restored.
 
 Do not describe the current implementation as fused-kernel, zero-copy,
 shared-buffer, or "every game frame is a science frame." The browser worker
@@ -753,6 +756,7 @@ WebRTC client public-artifact transfer:
   repeat: set PLASMA_LAB_SMOKE_REPEAT=5 or pass --repeat=5 for a hosted soak
   replay verify: set PLASMA_LAB_SMOKE_KERNEL=replay-verify or pass --kernel=replay-verify
   seed sweep: set PLASMA_LAB_SMOKE_KERNEL=seed-sweep or pass --kernel=seed-sweep
+  tensor tile: set PLASMA_LAB_SMOKE_KERNEL=tensor-tile or pass --kernel=tensor-tile
   use: launches two real browser clients, first accepts Device Witness render receipts to promote them out of observe-only, sets the staff-only WebRTC artifact flag, opens intake only during the controlled window, and requires two accepted transport=webrtc receipts with linked peer subassignments and peer-signed subreceipts
 
 Hardened WebRTC seed-sweep production smoke:
@@ -971,9 +975,9 @@ inputs: public seed, rows, cols, depth
 outputs: little-endian u32 tensor tile bytes
 limits: rows/cols 1..64, depth 1..256, max 4096 output cells
 route: POST /compute/admin/tasks/tensor-tile
-browser: advertised only by WebGPU-capable opted-in browser workers
+browser: advertised only by WebGPU-capable opted-in browser workers; executable over HTTP or strict WebRTC data channels
 scheduler: requires webgpu-light, which requires accepted Device Witness WebGPU evidence
-validation: assignment-bound expected-hash receipts against server-held CPU reference output
+validation: assignment-bound expected-hash receipts against server-held CPU reference output; strict WebRTC mode also requires accepted peer subassignments and peer-signed subreceipts
 ```
 
 This is not yet protein folding or distributed ML eval. It is the first

@@ -17,7 +17,9 @@ import { GOAL_DWELL_RADIUS, GOAL_DWELL_S, KILL_RESPAWN_S, GRAVITY, RESPAWN_INVUL
 // reachable steps prefer goal progress without ignoring landing danger.
 // v21: direct delivery plans cancel into a feint or kill-first answer when
 // the carrier has stopped making goal progress behind a live blocker.
-export const BEHAVIOR_VERSION = 21;
+// v22: high-foresight defenders block the carrier's approach lane instead
+// of always camping the final goal line.
+export const BEHAVIOR_VERSION = 22;
 // ---------- Opp-model buffer sizing ----------
 //
 // Bounded ring: max 16 entries per stream, hard decay at 240 ticks (2 s).
@@ -1090,6 +1092,27 @@ function deliveryStallTicks(params) {
         Math.round(unit(params.discipline) * 72) +
         Math.round(unit(params.shipRate, 0.5) * 36);
 }
+function foresightUnit(params) {
+    return clamp((params.foresight ?? 0) / 0.25, 0, 1);
+}
+function defenderBlockTarget(obs, params, targetY, denyBias, oppToGoal) {
+    const sideFromGoalToCarrier = Math.sign(obs.opp.x - obs.goal.x) || 1;
+    const nearGoalOffset = Math.max(60, Math.min(140, oppToGoal * 0.5));
+    const absDxGoal = Math.abs(obs.goal.x - obs.opp.x);
+    const foresight = foresightUnit(params);
+    const foresightRead = clamp((foresight - 0.35) / 0.65, 0, 1);
+    const cunningRead = clamp((unit(params.cunning) - 0.25) / 0.75, 0, 1);
+    const routeSkill = foresightRead * 0.7 + cunningRead * 0.3;
+    const denyIntent = clamp((denyBias - 0.55) / 0.45, 0, 1);
+    const routeRead = clamp(routeSkill * denyIntent, 0, 1);
+    const farEnough = clamp((absDxGoal - 220) / 420, 0, 1);
+    const laneWeight = routeRead * farEnough;
+    const laneOffset = clamp(absDxGoal * (0.28 + foresight * 0.12), 120, 320);
+    const offset = nearGoalOffset * (1 - laneWeight) + laneOffset * laneWeight;
+    const x = clamp(obs.goal.x + sideFromGoalToCarrier * offset, obs.arena.left + 40, obs.arena.right - 40);
+    const y = targetY * (1 - laneWeight * 0.35) + obs.opp.y * laneWeight * 0.35;
+    return { x, y };
+}
 function deliveryGoalKey(obs) {
     return `${obs.goal.label}:${Math.round(obs.goal.x)}:${Math.round(obs.goal.y)}`;
 }
@@ -1252,11 +1275,13 @@ function runObjectiveMode(obs, params, state, sig) {
             return { left: move < 0, right: move > 0, action: commit };
         }
         state.substate = "intercept-block";
-        // Block the goal. Position between opp and goal.
-        // Target: a point closer to the goal than opp is.
-        const blockX = obs.goal.x + Math.sign(obs.opp.x - obs.goal.x) * Math.max(60, Math.min(140, oppToGoal * 0.5));
-        const tx = blockX;
-        const ty = targetY;
+        // Block the goal or, for route-reading defenders, the carrier's
+        // approach lane. Low-foresight defenders retain the old goal-line
+        // guard; high-foresight/deny defenders step farther out when the
+        // carrier is still far enough for an intercept to matter.
+        const block = defenderBlockTarget(obs, params, targetY, denyBias, oppToGoal);
+        const tx = block.x;
+        const ty = block.y;
         if (goalTimerUrgent) {
             // Urgent: commit to swipe opp if close.
             if (sig.absDist < 120)

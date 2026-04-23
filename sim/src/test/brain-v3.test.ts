@@ -55,8 +55,8 @@ function defaultParams(overrides: Partial<Params> = {}): Params {
 
 // --- Tests ---
 
-test("BEHAVIOR_VERSION is 21", () => {
-  assert.equal(BEHAVIOR_VERSION, 21);
+test("BEHAVIOR_VERSION is 22", () => {
+  assert.equal(BEHAVIOR_VERSION, 22);
 });
 
 test("createBrainState initializes neutral with empty buffers", () => {
@@ -616,6 +616,23 @@ test("high-shipRate config prefers direct tactic", () => {
   runParamBrain(obs, params, state);
   assert.equal(state.deliveryPlan!.tactic, "direct",
     "shipRate-dominant config with far opp should pick direct");
+});
+
+test("foresight defender blocks carrier approach lane instead of camping goal line", () => {
+  const obs = baseObs({
+    tick: 200,
+    self: { ...baseObs().self, hasToken: false, x: 900, y: 600, onGround: true },
+    opp: { ...baseObs().opp, hasToken: true, x: 300, y: 600 },
+    token: { exists: true, x: 300, y: 548, carrier: 1, dwellT: 0 },
+    goal: { exists: true, x: 1100, y: 500, label: "g1", timer: 8 },
+    dx: -600, absDx: 600, dy: 0,
+  });
+  const cautious = runParamBrain(obs, defaultParams({ foresight: 0, cunning: 0, spite: 0 }), createBrainState(0));
+  const reader = runParamBrain(obs, defaultParams({ foresight: 0.25, cunning: 1, spite: -1 }), createBrainState(0));
+
+  assert.equal(cautious.right, true, "low-foresight defender keeps guarding near the goal line");
+  assert.equal(reader.left, true, "route-reading defender steps out to cut the approach lane");
+  assert.notEqual(reader.right, true);
 });
 
 // ---- v5.1 anti-stalemate regression ----

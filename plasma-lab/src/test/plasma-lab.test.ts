@@ -977,6 +977,72 @@ test("tensor tile receipts require webgpu-light workers and accept CPU reference
   assert.ok(stats.computeScore > 0);
 });
 
+test("embedding tile receipts accept replicated quorum from webgpu-light workers", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const embeddingCapability = {
+    ...webgpuCapability,
+    kernels: [...webgpuCapability.kernels, "ml.embedding_tile.v0"],
+  };
+  const workerA = store.registerWorker({ capability: embeddingCapability });
+  const workerB = store.registerWorker({ capability: embeddingCapability });
+  acceptWebGpuWitness(store, workerA);
+  acceptWebGpuWitness(store, workerB);
+  const task = store.seedEmbeddingTileTask({
+    queryText: "browser webgpu embedding retrieval",
+    documents: [
+      "public replay verification receipts",
+      "protein contact map tile scoring",
+      "quantized embedding rerank batch",
+    ],
+    topK: 2,
+    minExecutions: 2,
+    minAgreeing: 2,
+  });
+
+  const first = store.assignNext(auth(workerA))!;
+  assert.equal(first.task.taskId, task.taskId);
+  store.acceptAssignment({
+    ...auth(workerA),
+    assignmentId: first.assignment.assignmentId,
+    assignmentToken: first.assignment.assignmentToken,
+  });
+  const firstReceipt = store.submitReceipt({
+    ...auth(workerA),
+    assignmentId: first.assignment.assignmentId,
+    assignmentToken: first.assignment.assignmentToken,
+    taskId: first.task.taskId,
+    chunkId: first.chunk.chunkId,
+    ...referenceReceiptFields(first.chunk),
+    executionMode: "webgpu",
+    transport: "http",
+    computeMs: 17,
+  });
+  assert.equal(firstReceipt.receipt.decision, "pending");
+
+  const second = store.assignNext(auth(workerB))!;
+  store.acceptAssignment({
+    ...auth(workerB),
+    assignmentId: second.assignment.assignmentId,
+    assignmentToken: second.assignment.assignmentToken,
+  });
+  const secondReceipt = store.submitReceipt({
+    ...auth(workerB),
+    assignmentId: second.assignment.assignmentId,
+    assignmentToken: second.assignment.assignmentToken,
+    taskId: second.task.taskId,
+    chunkId: second.chunk.chunkId,
+    ...referenceReceiptFields(second.chunk),
+    executionMode: "webgpu",
+    transport: "http",
+    computeMs: 15,
+  });
+  assert.equal(secondReceipt.receipt.decision, "accepted");
+  assert.equal(secondReceipt.validation?.status, "accepted");
+  const stats = store.publicStats({ suppressSmall: false });
+  assert.equal(stats.scoreBreakdown.acceptedEmbeddingTileChunks, 1);
+  assert.ok(stats.computeScore > 0);
+});
+
 test("WebRTC tensor tile peer subassignments require webgpu-light peers", () => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const requesterSigning = signingKeyPair();
@@ -2139,6 +2205,44 @@ test("HTTP admin can seed WebGPU tensor tiles", async (t) => {
   assert.equal(first.task.kind, "device_witness.webgpu.v0");
 });
 
+test("HTTP admin can seed embedding tiles", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const srv = await boot(store, { ...baseConfig, adminToken: "secret" });
+  t.after(() => srv.close());
+
+  const seeded = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/embedding-tile",
+    {
+      queryText: "browser webgpu embedding retrieval",
+      documents: [
+        "public replay verification receipts",
+        "protein contact map tile scoring",
+        "quantized embedding rerank batch",
+      ],
+      topK: 2,
+      minExecutions: 2,
+      minAgreeing: 2,
+    },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(seeded.status, 200);
+  assert.equal(seeded.body.chunks, 1);
+
+  const worker = await register(srv.port, webgpuCapability, "secret");
+  const witness = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/device-witness-webgpu",
+    { seed: 5, count: 16, minExecutions: 1, minAgreeing: 1 },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(witness.status, 200);
+  const first = await next(srv.port, worker);
+  assert.equal(first.task.kind, "device_witness.webgpu.v0");
+});
+
 test("HTTP admin can seed Device Witness receipt workloads", async (t) => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const srv = await boot(store, { ...baseConfig, adminToken: "secret" });
@@ -2350,6 +2454,11 @@ test("HTTP use case registry reports implemented advisory workloads", async (t) 
   assert.ok(resp.body.useCases.some((useCase: any) =>
     useCase.id === "seed-sweeps" &&
     useCase.workload === "m3t4.seed_sweep.v0"
+  ));
+  assert.ok(resp.body.useCases.some((useCase: any) =>
+    useCase.id === "embedding-batches" &&
+    useCase.workload === "ml.embedding_tile.v0" &&
+    useCase.status === "experimental"
   ));
   assert.ok(resp.body.useCases.some((useCase: any) => useCase.id === "device-witness-webgpu"));
   assert.ok(resp.body.useCases.some((useCase: any) => useCase.id === "device-witness-webrtc"));

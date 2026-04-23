@@ -129,12 +129,12 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
   {
     id: "embedding-batches",
     title: "Embedding and rerank batches",
-    status: "planned",
+    status: "experimental",
     workload: "ml.embedding_tile.v0",
     authority: "advisory",
     inputBoundary: "public text, image, or published corpus shards only",
-    validation: "start with server-held reference outputs for quantized tiles; later add tolerance-bounded cosine/top-k checks",
-    notes: "Best next real ML workload. It matches browser WebGPU inference stacks such as ONNX Runtime Web and Transformers.js while keeping outputs compact and shardable.",
+    validation: "replicated quorum on quantized top-k hashes for public retrieval tiles; later add tolerance-bounded vector checks",
+    notes: "First Doppler-backed ML workload. Browser WebGPU workers run EmbeddingGemma retrieval tiles and agree on quantized rerank outputs without giving ranked authority to the sidecar.",
   },
   {
     id: "image-tile-inference",

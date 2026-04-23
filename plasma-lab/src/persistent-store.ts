@@ -225,6 +225,21 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     return out;
   }
 
+  seedEmbeddingTileTask(input: {
+    modelId?: string;
+    queryText: string;
+    documents: string[];
+    topK?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const out = super.seedEmbeddingTileTask(input);
+    this.persist(() => ({ tasks: [out] }));
+    return out;
+  }
+
   assignNext(input: {
     workerId: string;
     workerSessionId: string;

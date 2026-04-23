@@ -23,6 +23,13 @@ import {
   type PrimeParams,
 } from "./kernels/prime-search.js";
 import {
+  EMBEDDING_TILE_KERNEL_HASH,
+  EMBEDDING_TILE_KERNEL_ID,
+  EMBEDDING_TILE_MODEL_ID,
+  embeddingTilePlaceholderOutputHash,
+  normalizeEmbeddingTileParams,
+} from "./kernels/embedding-tile.js";
+import {
   PUBLIC_ARTIFACT_VERIFY_KERNEL_HASH,
   PUBLIC_ARTIFACT_VERIFY_KERNEL_ID,
   runPublicArtifactVerify,
@@ -88,6 +95,7 @@ const KNOWN_KERNELS = [
   DEVICE_WITNESS_RENDER_KERNEL_ID,
   DEVICE_WITNESS_WEBRTC_KERNEL_ID,
   DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID,
+  EMBEDDING_TILE_KERNEL_ID,
   PUBLIC_ARTIFACT_VERIFY_KERNEL_ID,
   SEED_SWEEP_KERNEL_ID,
   REPLAY_VERIFY_KERNEL_ID,
@@ -397,6 +405,7 @@ export interface PublicComputeStats {
 export interface ComputeScoreBreakdown {
   acceptedReceipts: number;
   rejectedReceipts: number;
+  acceptedEmbeddingTileChunks: number;
   acceptedPublicArtifactChunks: number;
   acceptedReplayVerifyChunks: number;
   acceptedSeedSweepChunks: number;
@@ -1161,6 +1170,62 @@ export class ComputeLabStore {
     return task;
   }
 
+  seedEmbeddingTileTask(input: {
+    modelId?: string;
+    queryText: string;
+    documents: string[];
+    topK?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const normalized = normalizeEmbeddingTileParams({
+      modelId: input.modelId ?? EMBEDDING_TILE_MODEL_ID,
+      queryText: input.queryText,
+      documentsJson: JSON.stringify(input.documents ?? []),
+      topK: input.topK ?? 4,
+    });
+    const params = {
+      modelId: normalized.modelId,
+      queryText: normalized.queryText,
+      documentsJson: normalized.documentsJson,
+      topK: normalized.topK,
+    };
+    const taskId = randomId("task");
+    const minExecutions = Math.max(2, input.minExecutions ?? 2);
+    const minAgreeing = Math.min(minExecutions, Math.max(2, input.minAgreeing ?? 2));
+    const chunk: ComputeChunk = {
+      chunkId: `${taskId}-chunk-0`,
+      taskId,
+      ordinal: 0,
+      kind: EMBEDDING_TILE_KERNEL_ID,
+      params,
+      kernelId: EMBEDDING_TILE_KERNEL_ID,
+      kernelHash: EMBEDDING_TILE_KERNEL_HASH,
+      inputHash: hashCanonical({ kind: EMBEDDING_TILE_KERNEL_ID, params }),
+      expectedOutputHash: embeddingTilePlaceholderOutputHash(normalized),
+      status: "pending",
+    };
+    const task: ComputeTask = {
+      taskId,
+      kind: EMBEDDING_TILE_KERNEL_ID,
+      status: "running",
+      createdAt: this.now(),
+      validationPolicy: {
+        determinismClass: "replicated-quorum",
+        validationMode: "quorum",
+        minExecutions,
+        minAgreeing,
+        requiredTransport: input.requiredTransport,
+        requiredPeerSubreceipt: input.requiredPeerSubreceipt,
+      },
+      chunks: [chunk],
+    };
+    this.tasks.set(taskId, task);
+    return task;
+  }
+
   assignNext(input: {
     workerId: string;
     workerSessionId: string;
@@ -1325,6 +1390,14 @@ export class ComputeLabStore {
         return { receipt };
       }
       const validation = this.evaluateMeasurementChunk(task, chunk);
+      return { receipt: this.receipts.get(receipt.receiptId) ?? receipt, validation };
+    }
+
+    if (task.validationPolicy.validationMode === "quorum") {
+      const receipt = this.makeReceipt(input, "pending");
+      this.receipts.set(receipt.receiptId, receipt);
+      assignment.status = "receipted";
+      const validation = this.evaluateQuorumChunk(task, chunk);
       return { receipt: this.receipts.get(receipt.receiptId) ?? receipt, validation };
     }
 
@@ -2131,6 +2204,50 @@ export class ComputeLabStore {
     return undefined;
   }
 
+  private evaluateQuorumChunk(task: ComputeTask, chunk: ComputeChunk): ValidationRecord | undefined {
+    if (chunk.status !== "pending") return undefined;
+    const receipts = this.validationReceiptsFor(chunk.chunkId);
+    const pending = receipts.filter((receipt) => receipt.decision === "pending");
+    const groups = new Map<string, ExecutionReceipt[]>();
+    for (const receipt of pending) {
+      const key = `${receipt.outputHash.algorithm}:${receipt.outputHash.value}`;
+      const group = groups.get(key) ?? [];
+      group.push(receipt);
+      groups.set(key, group);
+    }
+    const winning = Array.from(groups.values()).sort((a, b) =>
+      b.length - a.length ||
+      a[0].receivedAt - b[0].receivedAt
+    )[0] ?? [];
+    if (winning.length >= task.validationPolicy.minAgreeing && receipts.length >= task.validationPolicy.minExecutions) {
+      const winningIds = new Set(winning.map((receipt) => receipt.receiptId));
+      for (const receipt of receipts) {
+        if (winningIds.has(receipt.receiptId)) {
+          receipt.decision = "accepted";
+          this.bumpReputation(receipt.workerId, "accepted");
+        } else if (receipt.decision === "pending") {
+          receipt.decision = "disagreement";
+          this.bumpReputation(receipt.workerId, "disagreement");
+        }
+      }
+      chunk.status = "accepted";
+      const validation = this.recordValidation(task, chunk, "accepted", receipts, winning, "replicated quorum accepted");
+      this.maybeCompleteTask(task);
+      return validation;
+    }
+    if (receipts.length >= task.validationPolicy.minExecutions * 2 && winning.length < task.validationPolicy.minAgreeing) {
+      for (const receipt of pending) {
+        receipt.decision = "disagreement";
+        this.bumpReputation(receipt.workerId, "disagreement");
+      }
+      chunk.status = "disagreement";
+      const validation = this.recordValidation(task, chunk, "disagreement", receipts, winning, "quorum could not agree on output hash");
+      this.maybeCompleteTask(task);
+      return validation;
+    }
+    return undefined;
+  }
+
   private evaluateMeasurementChunk(task: ComputeTask, chunk: ComputeChunk): ValidationRecord | undefined {
     if (chunk.status !== "pending") return undefined;
     const receipts = this.validationReceiptsFor(chunk.chunkId);
@@ -2551,6 +2668,7 @@ function peerSubreceiptPayload(input: Omit<PeerSubreceipt, "peerReceiptHash" | "
 
 function isWebRtcDataTask(kind: TaskKind): boolean {
   return (
+    kind === EMBEDDING_TILE_KERNEL_ID ||
     kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID ||
     kind === REPLAY_VERIFY_KERNEL_ID ||
     kind === SEED_SWEEP_KERNEL_ID ||
@@ -3130,6 +3248,7 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
       if (chunk.status === "accepted") acceptedChunkIds.add(chunk.chunkId);
     }
   }
+  let acceptedEmbeddingTileChunks = 0;
   let acceptedPublicArtifactChunks = 0;
   let acceptedReplayVerifyChunks = 0;
   let acceptedSeedSweepChunks = 0;
@@ -3139,7 +3258,8 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
   for (const task of tasks) {
     for (const chunk of task.chunks) {
       if (!acceptedChunkIds.has(chunk.chunkId)) continue;
-      if (task.kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID) acceptedPublicArtifactChunks++;
+      if (task.kind === EMBEDDING_TILE_KERNEL_ID) acceptedEmbeddingTileChunks++;
+      else if (task.kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID) acceptedPublicArtifactChunks++;
       else if (task.kind === REPLAY_VERIFY_KERNEL_ID) acceptedReplayVerifyChunks++;
       else if (task.kind === SEED_SWEEP_KERNEL_ID) {
         acceptedSeedSweepChunks++;
@@ -3159,6 +3279,7 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
   return {
     acceptedReceipts: receipts.filter((receipt) => receipt.decision === "accepted").length,
     rejectedReceipts: receipts.filter((receipt) => isRejectedDecision(receipt.decision)).length,
+    acceptedEmbeddingTileChunks,
     acceptedPublicArtifactChunks,
     acceptedReplayVerifyChunks,
     acceptedSeedSweepChunks,
@@ -3177,6 +3298,7 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
 function computeScore(breakdown: ComputeScoreBreakdown): number {
   return Math.max(0, Math.round(
     breakdown.acceptedReceipts * 10 +
+    breakdown.acceptedEmbeddingTileChunks * 140 +
     breakdown.acceptedPublicArtifactChunks * 80 +
     breakdown.acceptedReplayVerifyChunks * 120 +
     breakdown.acceptedSeedSweepChunks * 60 +
@@ -3298,7 +3420,7 @@ function taskRequiredWorkloadTier(task: ComputeTask): WorkloadTier {
   ) {
     return "cpu-light";
   }
-  if (task.kind === TENSOR_TILE_KERNEL_ID) return "webgpu-light";
+  if (task.kind === TENSOR_TILE_KERNEL_ID || task.kind === EMBEDDING_TILE_KERNEL_ID) return "webgpu-light";
   return "observe-only";
 }
 
@@ -3530,6 +3652,7 @@ export function referenceReceiptFields(chunk: Omit<ComputeChunk, "expectedOutput
   "kernelId" | "kernelHash" | "inputHash" | "artifactHash" | "outputHash" | "derived" | "determinismClass" | "validationMode"
 > {
   const outputHash = chunk.expectedOutputHash ?? referenceOutputHash(chunk);
+  const quorumTask = chunk.kind === EMBEDDING_TILE_KERNEL_ID;
   const derived = chunk.kind === DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID
     ? {
       contractVersion: "derived-compute-extension.v0" as const,
@@ -3547,8 +3670,8 @@ export function referenceReceiptFields(chunk: Omit<ComputeChunk, "expectedOutput
     artifactHash: chunk.artifactHash,
     outputHash,
     derived,
-    determinismClass: "bit-exact",
-    validationMode: "expected-hash",
+    determinismClass: quorumTask ? "replicated-quorum" : "bit-exact",
+    validationMode: quorumTask ? "quorum" : "expected-hash",
   };
 }
 
@@ -3573,6 +3696,13 @@ function referenceOutputHash(chunk: Omit<ComputeChunk, "expectedOutputHash">): C
       }).outputHash;
     case SEED_SWEEP_KERNEL_ID:
       return runSeedSweep(chunk.params as unknown as Parameters<typeof runSeedSweep>[0]).outputHash;
+    case EMBEDDING_TILE_KERNEL_ID:
+      return embeddingTilePlaceholderOutputHash(normalizeEmbeddingTileParams({
+        modelId: stringParam(chunk.params.modelId),
+        queryText: stringParam(chunk.params.queryText),
+        documentsJson: stringParam(chunk.params.documentsJson),
+        topK: asInt(chunk.params.topK, "topK"),
+      }));
     default:
       throw new Error(`unsupported reference chunk kind: ${chunk.kind}`);
   }

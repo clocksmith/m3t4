@@ -13,6 +13,17 @@ import { BEHAVIOR_VERSION, REPLAY_CONSTANTS_HASH, replayArtifactToResultV1, simu
 // All kernels produce little-endian byte outputs and the worker hashes
 // them with Web Crypto so the server can verify bit-for-bit.
 
+const EMBEDDING_TILE_KERNEL = "ml.embedding_tile.v0";
+const EMBEDDING_TILE_MODEL = "google-embeddinggemma-300m-q4k-ehf16-af32";
+const EMBEDDING_TILE_SCORE_SCALE = 1000;
+const DOPPLER_GENERATION_URL = new URL("../vendor/doppler/src/generation/index.js", import.meta.url).href;
+const DOPPLER_REGISTRY_URL = new URL("../vendor/doppler/src/client/doppler-registry.js", import.meta.url).href;
+const DOPPLER_MODEL_SOURCE_URL = new URL("../vendor/doppler/src/client/runtime/model-source.js", import.meta.url).href;
+const DOPPLER_STORAGE_URL = new URL("../vendor/doppler/src/storage/artifact-storage-context.js", import.meta.url).href;
+
+let dopplerModulesPromise = null;
+const dopplerPipelineCache = new Map();
+
 const KERNELS = {
   "prime-search.v0": (params) => {
     const start = asInt(params.start);
@@ -33,6 +44,7 @@ const KERNELS = {
   },
   "m3t4.replay_verify.v1": runReplayVerify,
   "m3t4.seed_sweep.v0": runSeedSweep,
+  [EMBEDDING_TILE_KERNEL]: runEmbeddingTile,
   "plasma.tensor_tile.v0": runTensorTile,
   "device_witness.webgpu.v0": runDeviceWitnessWebGpu,
   "device_witness.render_fixture.v0": () => canvas2dFixtureBytes(),
@@ -137,6 +149,111 @@ function canvas2dFixtureBytes() {
     ...pixel(data, 1, 5),
     ...pixel(data, 5, 5),
   ]);
+}
+
+async function runEmbeddingTile(params) {
+  if (!navigator.gpu?.requestAdapter) throw new Error("WebGPU unavailable");
+  const spec = normalizeEmbeddingTileParams(params);
+  const pipeline = await getDopplerEmbeddingPipeline(spec.modelId);
+  const queryEmbedding = await embedText(pipeline, spec.queryText, "query", spec.modelId);
+  const docs = [];
+  for (let docIndex = 0; docIndex < spec.documents.length; docIndex++) {
+    const embedding = await embedText(pipeline, spec.documents[docIndex], "document", spec.modelId);
+    const score = cosineSimilarity(queryEmbedding, embedding);
+    docs.push({
+      docIndex,
+      scoreQ: quantizeEmbeddingScore(score),
+    });
+  }
+  docs.sort((a, b) => b.scoreQ - a.scoreQ || a.docIndex - b.docIndex);
+  const topHits = docs.slice(0, spec.topK);
+  const bytes = new TextEncoder().encode(stableJson({
+    kind: EMBEDDING_TILE_KERNEL,
+    modelId: spec.modelId,
+    queryHash: await hashText(spec.queryText),
+    documentsHash: await hashText(stableJson(spec.documents)),
+    documentCount: spec.documents.length,
+    topK: spec.topK,
+    scoreScale: EMBEDDING_TILE_SCORE_SCALE,
+    hits: topHits,
+  }));
+  return { bytes, executionMode: "webgpu" };
+}
+
+async function getDopplerEmbeddingPipeline(modelId) {
+  const key = String(modelId || "").trim();
+  if (!key) throw new Error("embedding modelId required");
+  if (!dopplerPipelineCache.has(key)) {
+    dopplerPipelineCache.set(key, (async () => {
+      const modules = await loadDopplerModules();
+      const entry = await modules.resolveQuickstartModel(key);
+      const baseUrl = modules.buildQuickstartModelBaseUrl(entry);
+      const manifestPayload = await modules.fetchManifestPayloadFromBaseUrl(baseUrl);
+      const resolved = await modules.resolveManifestArtifactSource({
+        modelId: key,
+        baseUrl,
+        manifest: null,
+        trace: [],
+      }, manifestPayload);
+      const storage = modules.createHttpArtifactStorageContext(
+        resolved.storageBaseUrl ?? resolved.baseUrl,
+        resolved.storageManifest ?? resolved.manifest,
+      );
+      await storage.preflight?.();
+      return modules.createPipeline(resolved.manifest, {
+        baseUrl: resolved.storageBaseUrl ?? resolved.baseUrl,
+        storage,
+      });
+    })().catch((error) => {
+      dopplerPipelineCache.delete(key);
+      throw error;
+    }));
+  }
+  return dopplerPipelineCache.get(key);
+}
+
+async function loadDopplerModules() {
+  if (!dopplerModulesPromise) {
+    dopplerModulesPromise = Promise.all([
+      import(DOPPLER_GENERATION_URL),
+      import(DOPPLER_REGISTRY_URL),
+      import(DOPPLER_MODEL_SOURCE_URL),
+      import(DOPPLER_STORAGE_URL),
+    ]).then(([generation, registry, modelSource, storage]) => ({
+      createPipeline: generation.createPipeline,
+      resolveQuickstartModel: registry.resolveQuickstartModel,
+      buildQuickstartModelBaseUrl: registry.buildQuickstartModelBaseUrl,
+      fetchManifestPayloadFromBaseUrl: modelSource.fetchManifestPayloadFromBaseUrl,
+      resolveManifestArtifactSource: modelSource.resolveManifestArtifactSource,
+      createHttpArtifactStorageContext: storage.createHttpArtifactStorageContext,
+    })).catch((error) => {
+      dopplerModulesPromise = null;
+      throw new Error(
+        `Doppler vendor runtime unavailable: ${error?.message || error}. ` +
+        "Run `npm run sync:doppler:client` before enabling embedding tiles."
+      );
+    });
+  }
+  return dopplerModulesPromise;
+}
+
+async function embedText(pipeline, text, kind, modelId) {
+  pipeline.reset?.();
+  const formatted = formatEmbeddingText(text, kind, modelId);
+  const result = await pipeline.embed(formatted);
+  const embedding = result?.embedding;
+  if (!embedding || !Number.isFinite(embedding.length) || embedding.length <= 0) {
+    throw new Error("embedding output missing");
+  }
+  return embedding;
+}
+
+function formatEmbeddingText(text, kind, modelId) {
+  if (String(modelId || "").includes("embeddinggemma")) {
+    if (kind === "query") return `task: search result | query: ${text}`;
+    if (kind === "document") return `title: None | text: ${text}`;
+  }
+  return text;
 }
 
 function runReplayVerify(params) {
@@ -492,6 +609,79 @@ function bucketMs(ms) {
   if (ms < 20) return "10-20ms";
   if (ms < 50) return "20-50ms";
   return "50ms+";
+}
+
+function normalizeEmbeddingTileParams(params) {
+  const modelId = String(params.modelId || EMBEDDING_TILE_MODEL).trim();
+  if (modelId !== EMBEDDING_TILE_MODEL) {
+    throw new Error(`unsupported embedding model: ${modelId}`);
+  }
+  const queryText = normalizeTextParam(params.queryText, "queryText", 1, 2048);
+  if (typeof params.documentsJson !== "string" || params.documentsJson.length === 0 || params.documentsJson.length > 16 * 1024) {
+    throw new Error("documentsJson required");
+  }
+  let documents = null;
+  try { documents = JSON.parse(params.documentsJson); } catch {}
+  if (!Array.isArray(documents) || documents.length < 1 || documents.length > 16) {
+    throw new Error("embedding tile requires 1..16 documents");
+  }
+  documents = documents.map((value) => normalizeTextParam(value, "document", 1, 2048));
+  const topK = asInt(params.topK);
+  if (topK < 1 || topK > Math.min(8, documents.length)) {
+    throw new Error("topK must be 1..min(8, documents.length)");
+  }
+  return { modelId, queryText, documents, topK };
+}
+
+function normalizeTextParam(value, label, min, max) {
+  const text = String(value ?? "").trim();
+  if (text.length < min || text.length > max) {
+    throw new Error(`${label} must be ${min}..${max} chars`);
+  }
+  return text;
+}
+
+function quantizeEmbeddingScore(value) {
+  if (!Number.isFinite(value)) throw new Error("non-finite embedding score");
+  return Math.max(-EMBEDDING_TILE_SCORE_SCALE, Math.min(
+    EMBEDDING_TILE_SCORE_SCALE,
+    Math.round(value * EMBEDDING_TILE_SCORE_SCALE),
+  ));
+}
+
+function cosineSimilarity(a, b) {
+  if (!a || !b || !Number.isFinite(a.length) || !Number.isFinite(b.length) || a.length !== b.length || a.length === 0) {
+    throw new Error("embedding vectors incompatible");
+  }
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    const av = Number(a[i]);
+    const bv = Number(b[i]);
+    if (!Number.isFinite(av) || !Number.isFinite(bv)) throw new Error("embedding vector contained non-finite values");
+    dot += av * bv;
+    normA += av * av;
+    normB += bv * bv;
+  }
+  if (normA <= 0 || normB <= 0) throw new Error("embedding norm invalid");
+  return dot / Math.sqrt(normA * normB);
+}
+
+function stableJson(value) {
+  return JSON.stringify(sortJsonValue(value));
+}
+
+function sortJsonValue(value) {
+  if (Array.isArray(value)) return value.map(sortJsonValue);
+  if (!value || typeof value !== "object") return value;
+  const out = {};
+  for (const key of Object.keys(value).sort()) out[key] = sortJsonValue(value[key]);
+  return out;
+}
+
+async function hashText(value) {
+  return hashHex(new TextEncoder().encode(String(value ?? "")));
 }
 
 function asInt(v) {

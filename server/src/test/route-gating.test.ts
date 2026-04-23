@@ -129,6 +129,7 @@ function registerCore(routes: RouteList, store: MemoryStableStore): void {
       distributedCompute: false,
       computeSlackWorker: false,
       computeWebRtcArtifacts: false,
+      computeEmbedTile: false,
       computeTaskAdmin: false,
       computeReceiptDashboard: false,
       computeLiveBadges: false,
@@ -137,6 +138,7 @@ function registerCore(routes: RouteList, store: MemoryStableStore): void {
       activePoolMs: 1,
       authProviders: ["google", "github"],
       cycleMs: 1500,
+      computeEmbedModelId: "",
       maxSlots: 5,
     },
   });
@@ -182,6 +184,7 @@ test("centralized route graph hides P2P routes by default", async (t) => {
   assert.equal(status.body.features.p2pDuel, false);
   assert.equal(status.body.features.computeSlackWorker, false);
   assert.equal(status.body.features.computeWebRtcArtifacts, false);
+  assert.equal(status.body.features.computeEmbedTile, false);
   assert.equal(status.body.matchmaker.rankedMode, "normal");
   assert.equal(status.body.matchmaker.activeStableCount, 0);
   assert.equal(status.body.matchmaker.effectiveCycleMs, 1500);

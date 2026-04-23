@@ -12,6 +12,7 @@ import { PersistentComputeLabStore } from "../persistent-store.js";
 import { retainLoadWebRtcPair } from "../firestore-persistence.js";
 import { runReplayVerify } from "../kernels/replay-verify.js";
 import { runSeedSweep } from "../kernels/seed-sweep.js";
+import { runTensorTileReference } from "../kernels/tensor-tile.js";
 import {
   createReplayArtifactV1,
   DEFAULT_CHARS,
@@ -56,6 +57,7 @@ const webgpuCapability: WorkerCapability = {
     "device_witness.render_fixture.v0",
     "device_witness.webrtc.v0",
     "device_witness.derived_buffer.v0",
+    "plasma.tensor_tile.v0",
   ],
   runtimeSurfaces: ["browser-js", "browser-webgpu"],
   deviceClass: "desktop-high",
@@ -622,6 +624,12 @@ test("public artifact verification receipts accept exported artifact hashes", ()
   });
   assert.equal(second.receipt.decision, "accepted");
   assert.equal(second.validation?.status, "accepted");
+  const stats = store.publicStats({ suppressSmall: false });
+  assert.equal(stats.scoreVersion, "compute-score-v1");
+  assert.equal(stats.scoreBreakdown.acceptedPublicArtifactChunks, 1);
+  assert.equal(stats.scoreBreakdown.acceptedSeedSweepChunks, 0);
+  assert.equal(stats.scoreBreakdown.acceptedReceipts, 2);
+  assert.ok(stats.computeScore > 0);
 });
 
 test("replay verify receipts accept public action-log replay artifacts", () => {
@@ -898,6 +906,75 @@ test("seed sweep receipts accept deterministic public preset batches", () => {
   });
   assert.equal(second.receipt.decision, "accepted");
   assert.equal(second.validation?.status, "accepted");
+  const stats = store.publicStats({ suppressSmall: false });
+  assert.equal(stats.scoreVersion, "compute-score-v1");
+  assert.equal(stats.scoreBreakdown.acceptedSeedSweepChunks, 1);
+  assert.equal(stats.scoreBreakdown.acceptedSeedSweepSeeds, 4);
+  assert.equal(stats.scoreBreakdown.acceptedReceipts, 2);
+  assert.ok(stats.computeScore > 0);
+});
+
+test("tensor tile receipts require webgpu-light workers and accept CPU reference hashes", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const worker = store.registerWorker({ capability: webgpuCapability });
+  const task = store.seedTensorTileTask({
+    seed: 9,
+    rows: 4,
+    cols: 5,
+    depth: 6,
+    minExecutions: 1,
+    minAgreeing: 1,
+  });
+  assert.equal(store.workerProfiles().find((profile) => profile.workerId === worker.worker.workerId)?.allowedWorkloadTier, "observe-only");
+  assert.equal(store.assignNext(auth(worker)), null);
+
+  const witnessTask = store.seedDeviceWitnessWebGpuTask({ seed: 7, count: 16, minExecutions: 1, minAgreeing: 1 });
+  const witness = store.assignNext(auth(worker))!;
+  assert.equal(witness.task.taskId, witnessTask.taskId);
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: witness.assignment.assignmentId,
+    assignmentToken: witness.assignment.assignmentToken,
+  });
+  const witnessReceipt = store.submitReceipt({
+    ...auth(worker),
+    assignmentId: witness.assignment.assignmentId,
+    assignmentToken: witness.assignment.assignmentToken,
+    taskId: witness.task.taskId,
+    chunkId: witness.chunk.chunkId,
+    ...referenceReceiptFields(witness.chunk),
+    executionMode: "webgpu",
+    transport: "http",
+    computeMs: 4,
+  });
+  assert.equal(witnessReceipt.receipt.decision, "accepted");
+
+  const next = store.assignNext(auth(worker))!;
+  assert.equal(next.task.taskId, task.taskId);
+  assert.equal(next.task.kind, "plasma.tensor_tile.v0");
+  assert.equal(runTensorTileReference(next.chunk.params as any).outputHash.value, next.chunk.expectedOutputHash.value);
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: next.assignment.assignmentId,
+    assignmentToken: next.assignment.assignmentToken,
+  });
+  const result = store.submitReceipt({
+    ...auth(worker),
+    assignmentId: next.assignment.assignmentId,
+    assignmentToken: next.assignment.assignmentToken,
+    taskId: next.task.taskId,
+    chunkId: next.chunk.chunkId,
+    ...referenceReceiptFields(next.chunk),
+    executionMode: "webgpu",
+    transport: "http",
+    computeMs: 6,
+  });
+  assert.equal(result.receipt.decision, "accepted");
+  assert.equal(result.validation?.status, "accepted");
+  const stats = store.publicStats({ suppressSmall: false });
+  assert.equal(stats.scoreBreakdown.acceptedTensorTileChunks, 1);
+  assert.equal(stats.scoreBreakdown.acceptedTensorTileCells, 20);
+  assert.ok(stats.computeScore > 0);
 });
 
 test("WebRTC data receipts require peer-signed subreceipts bound to the pair", () => {
@@ -1913,6 +1990,34 @@ test("HTTP admin can seed public preset seed sweeps", async (t) => {
   assert.equal(n.task.kind, "m3t4.seed_sweep.v0");
 });
 
+test("HTTP admin can seed WebGPU tensor tiles", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const srv = await boot(store, { ...baseConfig, adminToken: "secret" });
+  t.after(() => srv.close());
+
+  const seeded = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/tensor-tile",
+    { seed: 3, rows: 4, cols: 4, depth: 8, minExecutions: 1, minAgreeing: 1 },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(seeded.status, 200);
+  assert.equal(seeded.body.chunks, 1);
+
+  const worker = await register(srv.port, webgpuCapability, "secret");
+  const witness = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/device-witness-webgpu",
+    { seed: 5, count: 16, minExecutions: 1, minAgreeing: 1 },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(witness.status, 200);
+  const first = await next(srv.port, worker);
+  assert.equal(first.task.kind, "device_witness.webgpu.v0");
+});
+
 test("HTTP admin can seed Device Witness receipt workloads", async (t) => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const srv = await boot(store, { ...baseConfig, adminToken: "secret" });
@@ -2179,6 +2284,8 @@ test("HTTP public stats suppress detailed aggregates until enough workers exist"
   assert.equal(resp.status, 200);
   assert.equal(resp.body.privacy, "suppressed");
   assert.equal(resp.body.totalWorkers, 1);
+  assert.equal(resp.body.scoreVersion, "compute-score-v1");
+  assert.equal(typeof resp.body.computeScore, "number");
   assert.equal(resp.body.webgpuSupportedPct, null);
 });
 

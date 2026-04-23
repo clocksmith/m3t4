@@ -210,6 +210,21 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     return out;
   }
 
+  seedTensorTileTask(input: {
+    seed?: number;
+    rows?: number;
+    cols?: number;
+    depth?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  } = {}): ComputeTask {
+    const out = super.seedTensorTileTask(input);
+    this.persist(() => ({ tasks: [out] }));
+    return out;
+  }
+
   assignNext(input: {
     workerId: string;
     workerSessionId: string;

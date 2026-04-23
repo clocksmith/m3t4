@@ -40,6 +40,13 @@ Current controlled-production status as of 2026-04-22:
   server-issued peer subassignments, and peer-signed subreceipts.
 - two hosted browser clients have completed `m3t4.seed_sweep.v0` over
   `plasma-data` with 2-of-2 accepted signed strict receipts.
+- replay archive can optionally seed advisory public-artifact, replay-verify,
+  public-preset seed-sweep, and WebGPU tensor-tile work without opening
+  assignment intake.
+- `/compute/public/stats` now carries a global compute score derived from
+  accepted public chunks and receipts, not per-user credit.
+- `plasma.tensor_tile.v0` is implemented as the first bounded WebGPU
+  useful-work fixture, gated to workers with accepted WebGPU witness evidence.
 
 The first demo kernel was `prime-search.v0`. It is intentionally boring: it
 proved assignment, execution, hashing, receipt submission, and quorum without
@@ -80,7 +87,7 @@ Recommended workload ladder:
 | 7 | `science.drug_combo_sweep.v0` | Large parameter grids with independent seeds | statistical quorum and confidence intervals | Useful research shape with manageable validation |
 | 8 | `science.contact_map_tile.v0` | Folding-adjacent but smaller than full folding | tolerance-bounded tile scores | Bridge toward protein workloads |
 | 9 | `science.conformer_search_mini.v0` | Many short stochastic trajectories | replicated seeds plus energy sanity checks | Realistic but validation is harder |
-| 10 | `plasma.tensor_tile.v0` | Direct WebGPU/tensor contract fit | tolerance-bounded tensor comparison | Strong substrate proof, less visible to m3t4 users |
+| 10 | `plasma.tensor_tile.v0` | Direct WebGPU/tensor contract fit | server-held CPU reference hash for deterministic u32 tiles | Strong substrate proof, less visible to m3t4 users |
 
 The first useful m3t4 class is public replay/artifact verification: public
 artifact hashes, public replay action logs, and public preset seed sweeps.

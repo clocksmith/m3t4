@@ -41,7 +41,8 @@ export type TaskKind =
   | "device_witness.derived_buffer.v0"
   | "m3t4.public_artifact_verify.v0"
   | "m3t4.seed_sweep.v0"
-  | "m3t4.replay_verify.v1";
+  | "m3t4.replay_verify.v1"
+  | "plasma.tensor_tile.v0";
 
 export interface ValidationPolicy {
   determinismClass: DeterminismClass;

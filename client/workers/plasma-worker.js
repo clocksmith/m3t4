@@ -33,6 +33,7 @@ const KERNELS = {
   },
   "m3t4.replay_verify.v1": runReplayVerify,
   "m3t4.seed_sweep.v0": runSeedSweep,
+  "plasma.tensor_tile.v0": runTensorTile,
   "device_witness.webgpu.v0": runDeviceWitnessWebGpu,
   "device_witness.render_fixture.v0": () => canvas2dFixtureBytes(),
   "device_witness.derived_buffer.v0": runDeviceWitnessDerivedBuffer,
@@ -74,7 +75,7 @@ self.onmessage = async (ev) => {
       outputHash,
       derived: result?.derived,
       computeMs,
-      executionMode: chunk.kind === "device_witness.webgpu.v0" ? "webgpu" : "cpu",
+      executionMode: result?.executionMode || (chunk.kind === "device_witness.webgpu.v0" ? "webgpu" : "cpu"),
     });
   } catch (e) {
     self.postMessage({ type: "error", assignmentId, chunkId: chunk.chunkId, message: String(e?.message ?? e) });
@@ -286,6 +287,107 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   }
 }
 
+async function runTensorTile(params) {
+  if (!navigator.gpu?.requestAdapter) throw new Error("WebGPU unavailable");
+  const spec = normalizeTensorTileParams(params);
+  let device = null;
+  let aBuffer = null;
+  let bBuffer = null;
+  let outBuffer = null;
+  let readBuffer = null;
+  try {
+    const adapter = await withTimeout(navigator.gpu.requestAdapter({ powerPreference: "low-power" }), 1000);
+    if (!adapter) throw new Error("WebGPU adapter unavailable");
+    device = await withTimeout(adapter.requestDevice(), 1200);
+    if (!device) throw new Error("WebGPU device unavailable");
+
+    const a = new Uint32Array(spec.rows * spec.depth);
+    const b = new Uint32Array(spec.depth * spec.cols);
+    for (let row = 0; row < spec.rows; row++) {
+      for (let d = 0; d < spec.depth; d++) a[row * spec.depth + d] = tensorInputA(spec.seed, row, d);
+    }
+    for (let d = 0; d < spec.depth; d++) {
+      for (let col = 0; col < spec.cols; col++) b[d * spec.cols + col] = tensorInputB(spec.seed, d, col);
+    }
+
+    const outputBytes = spec.rows * spec.cols * 4;
+    aBuffer = device.createBuffer({
+      size: a.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    bBuffer = device.createBuffer({
+      size: b.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    outBuffer = device.createBuffer({
+      size: outputBytes,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    readBuffer = device.createBuffer({
+      size: outputBytes,
+      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(aBuffer, 0, a);
+    device.queue.writeBuffer(bBuffer, 0, b);
+
+    const module = device.createShaderModule({
+      code: `
+const ROWS: u32 = ${spec.rows}u;
+const COLS: u32 = ${spec.cols}u;
+const DEPTH: u32 = ${spec.depth}u;
+
+@group(0) @binding(0) var<storage, read> a: array<u32>;
+@group(0) @binding(1) var<storage, read> b: array<u32>;
+@group(0) @binding(2) var<storage, read_write> out: array<u32>;
+
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+  let col = id.x;
+  let row = id.y;
+  if (row >= ROWS || col >= COLS) { return; }
+  var acc: u32 = 0u;
+  var d: u32 = 0u;
+  loop {
+    if (d >= DEPTH) { break; }
+    let av = a[row * DEPTH + d] & 255u;
+    let bv = b[d * COLS + col] & 255u;
+    acc = acc + (av * bv) + ((row + 1u) * 17u) + ((col + 1u) * 31u) + d;
+    d = d + 1u;
+  }
+  out[row * COLS + col] = acc;
+}`,
+    });
+    const pipeline = device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: "main" } });
+    const bindGroup = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: aBuffer } },
+        { binding: 1, resource: { buffer: bBuffer } },
+        { binding: 2, resource: { buffer: outBuffer } },
+      ],
+    });
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.dispatchWorkgroups(Math.ceil(spec.cols / 8), Math.ceil(spec.rows / 8));
+    pass.end();
+    encoder.copyBufferToBuffer(outBuffer, 0, readBuffer, 0, outputBytes);
+    device.queue.submit([encoder.finish()]);
+    await withTimeout(device.queue.onSubmittedWorkDone(), 1500);
+    await withTimeout(readBuffer.mapAsync(GPUMapMode.READ), 800);
+    const bytes = new Uint8Array(readBuffer.getMappedRange().slice(0));
+    readBuffer.unmap();
+    return { bytes, executionMode: "webgpu" };
+  } finally {
+    try { aBuffer?.destroy?.(); } catch {}
+    try { bBuffer?.destroy?.(); } catch {}
+    try { outBuffer?.destroy?.(); } catch {}
+    try { readBuffer?.destroy?.(); } catch {}
+    try { device?.destroy?.(); } catch {}
+  }
+}
+
 function runDeviceWitnessDerivedBuffer(params) {
   const seed = asInt(params.seed);
   const count = asInt(params.count);
@@ -319,6 +421,37 @@ function runDeviceWitnessDerivedBuffer(params) {
 
 function witnessInput(seed, index) {
   return (Math.imul(seed >>> 0, 747796405) + Math.imul(index >>> 0, 2891336453) + 1013904223) >>> 0;
+}
+
+function normalizeTensorTileParams(params) {
+  const seed = asInt(params.seed);
+  const rows = asInt(params.rows);
+  const cols = asInt(params.cols);
+  const depth = asInt(params.depth);
+  if (rows <= 0 || rows > 64) throw new Error("rows must be 1..64");
+  if (cols <= 0 || cols > 64) throw new Error("cols must be 1..64");
+  if (depth <= 0 || depth > 256) throw new Error("depth must be 1..256");
+  if (rows * cols > 4096) throw new Error("tensor tile output is capped at 4096 cells");
+  if (rows * depth > 16384 || depth * cols > 16384) throw new Error("tensor tile input is capped at 16384 cells per side");
+  return { seed, rows, cols, depth };
+}
+
+function tensorInputA(seed, row, depthIndex) {
+  return mix32((seed ^ Math.imul(row + 1, 0x9e3779b1) ^ Math.imul(depthIndex + 1, 0x85ebca77)) >>> 0);
+}
+
+function tensorInputB(seed, depthIndex, col) {
+  return mix32(((seed + 0x6d2b79f5) ^ Math.imul(depthIndex + 1, 0xc2b2ae3d) ^ Math.imul(col + 1, 0x27d4eb2f)) >>> 0);
+}
+
+function mix32(value) {
+  let x = value >>> 0;
+  x ^= x >>> 16;
+  x = Math.imul(x, 0x7feb352d) >>> 0;
+  x ^= x >>> 15;
+  x = Math.imul(x, 0x846ca68b) >>> 0;
+  x ^= x >>> 16;
+  return x >>> 0;
 }
 
 function witnessTransform(x, index) {

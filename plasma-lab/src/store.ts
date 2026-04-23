@@ -38,6 +38,12 @@ import {
   SEED_SWEEP_KERNEL_ID,
   runSeedSweep,
 } from "./kernels/seed-sweep.js";
+import {
+  TENSOR_TILE_KERNEL_HASH,
+  TENSOR_TILE_KERNEL_ID,
+  normalizeTensorTileParams,
+  runTensorTileReference,
+} from "./kernels/tensor-tile.js";
 import { hashCanonical, randomId, randomToken } from "./plasma/hash.js";
 import type {
   ContentHash,
@@ -85,6 +91,7 @@ const KNOWN_KERNELS = [
   PUBLIC_ARTIFACT_VERIFY_KERNEL_ID,
   SEED_SWEEP_KERNEL_ID,
   REPLAY_VERIFY_KERNEL_ID,
+  TENSOR_TILE_KERNEL_ID,
 ];
 
 export interface WorkerRecord {
@@ -368,6 +375,9 @@ export interface PublicComputeStats {
   generatedAt: number;
   privacy: "full" | "suppressed";
   minWorkers: number;
+  scoreVersion: "compute-score-v1";
+  computeScore: number;
+  scoreBreakdown: ComputeScoreBreakdown;
   totalWorkers: number;
   activeWorkers: number;
   totalReceipts: number;
@@ -382,6 +392,19 @@ export interface PublicComputeStats {
   allowedTierBuckets: Record<string, number>;
   adapterBuckets: Record<string, number>;
   failureBuckets: Record<string, number>;
+}
+
+export interface ComputeScoreBreakdown {
+  acceptedReceipts: number;
+  rejectedReceipts: number;
+  acceptedPublicArtifactChunks: number;
+  acceptedReplayVerifyChunks: number;
+  acceptedSeedSweepChunks: number;
+  acceptedSeedSweepSeeds: number;
+  acceptedTensorTileChunks: number;
+  acceptedTensorTileCells: number;
+  acceptedWebGpuWitnessReceipts: number;
+  acceptedWebRtcReceipts: number;
 }
 
 export interface ReplayVerificationBadge {
@@ -1080,6 +1103,64 @@ export class ComputeLabStore {
     return task;
   }
 
+  seedTensorTileTask(input: {
+    seed?: number;
+    rows?: number;
+    cols?: number;
+    depth?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  } = {}): ComputeTask {
+    const normalized = normalizeTensorTileParams({
+      seed: input.seed ?? 1,
+      rows: input.rows ?? 16,
+      cols: input.cols ?? 16,
+      depth: input.depth ?? 32,
+    });
+    const params = {
+      seed: normalized.seed,
+      rows: normalized.rows,
+      cols: normalized.cols,
+      depth: normalized.depth,
+    };
+    const expectedOutputHash = runTensorTileReference(params).outputHash;
+    const taskId = randomId("task");
+    const minExecutions = Math.max(1, input.minExecutions ?? 2);
+    const minAgreeing = Math.min(minExecutions, Math.max(1, input.minAgreeing ?? 2));
+    const chunk: ComputeChunk = {
+      chunkId: `${taskId}-chunk-0`,
+      taskId,
+      ordinal: 0,
+      kind: TENSOR_TILE_KERNEL_ID,
+      params,
+      kernelId: TENSOR_TILE_KERNEL_ID,
+      kernelHash: TENSOR_TILE_KERNEL_HASH,
+      inputHash: hashCanonical({ kind: TENSOR_TILE_KERNEL_ID, params }),
+      expectedOutputHash,
+      status: "pending",
+    };
+    const task: ComputeTask = {
+      taskId,
+      kind: TENSOR_TILE_KERNEL_ID,
+      status: "running",
+      createdAt: this.now(),
+      validationPolicy: {
+        determinismClass: "bit-exact",
+        validationMode: "expected-hash",
+        minExecutions,
+        minAgreeing,
+        expectedOutputHash,
+        requiredTransport: input.requiredTransport,
+        requiredPeerSubreceipt: input.requiredPeerSubreceipt,
+      },
+      chunks: [chunk],
+    };
+    this.tasks.set(taskId, task);
+    return task;
+  }
+
   assignNext(input: {
     workerId: string;
     workerSessionId: string;
@@ -1723,6 +1804,7 @@ export class ComputeLabStore {
       suppressed,
       profiles,
       receipts: Array.from(this.receipts.values()),
+      tasks: Array.from(this.tasks.values()),
     });
   }
 
@@ -2976,10 +3058,12 @@ function summarizePublicStats(input: {
   suppressed: boolean;
   profiles: WorkerProfile[];
   receipts: ExecutionReceipt[];
+  tasks: ComputeTask[];
 }): PublicComputeStats {
   const profiles = input.suppressed ? [] : input.profiles;
   const kernelTimes = profiles.map((profile) => profile.p95KernelMs).filter(isNumber);
   const accepted = input.receipts.filter((receipt) => receipt.decision === "accepted").length;
+  const scoreBreakdown = computeScoreBreakdown(input.tasks, input.receipts);
   const adapterBuckets: Record<string, number> = {};
   const allowedTierBuckets: Record<string, number> = {};
   const failureBuckets: Record<string, number> = {};
@@ -2994,6 +3078,9 @@ function summarizePublicStats(input: {
     generatedAt: input.generatedAt,
     privacy: input.suppressed ? "suppressed" : "full",
     minWorkers: input.minWorkers,
+    scoreVersion: "compute-score-v1",
+    computeScore: computeScore(scoreBreakdown),
+    scoreBreakdown,
     totalWorkers: input.profiles.length,
     activeWorkers: profiles.filter((profile) => input.generatedAt - profile.lastSeenAt < 10 * 60 * 1000).length,
     totalReceipts: input.suppressed ? 0 : input.receipts.length,
@@ -3021,6 +3108,72 @@ function summarizePublicStats(input: {
     adapterBuckets,
     failureBuckets,
   };
+}
+
+function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[]): ComputeScoreBreakdown {
+  const acceptedChunkIds = new Set<string>();
+  for (const task of tasks) {
+    for (const chunk of task.chunks) {
+      if (chunk.status === "accepted") acceptedChunkIds.add(chunk.chunkId);
+    }
+  }
+  let acceptedPublicArtifactChunks = 0;
+  let acceptedReplayVerifyChunks = 0;
+  let acceptedSeedSweepChunks = 0;
+  let acceptedSeedSweepSeeds = 0;
+  let acceptedTensorTileChunks = 0;
+  let acceptedTensorTileCells = 0;
+  for (const task of tasks) {
+    for (const chunk of task.chunks) {
+      if (!acceptedChunkIds.has(chunk.chunkId)) continue;
+      if (task.kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID) acceptedPublicArtifactChunks++;
+      else if (task.kind === REPLAY_VERIFY_KERNEL_ID) acceptedReplayVerifyChunks++;
+      else if (task.kind === SEED_SWEEP_KERNEL_ID) {
+        acceptedSeedSweepChunks++;
+        acceptedSeedSweepSeeds += Math.max(
+          0,
+          asInt(chunk.params.seedEndExclusive, "seedEndExclusive") - asInt(chunk.params.seedStart, "seedStart"),
+        );
+      } else if (task.kind === TENSOR_TILE_KERNEL_ID) {
+        acceptedTensorTileChunks++;
+        acceptedTensorTileCells += Math.max(
+          0,
+          asInt(chunk.params.rows, "rows") * asInt(chunk.params.cols, "cols"),
+        );
+      }
+    }
+  }
+  return {
+    acceptedReceipts: receipts.filter((receipt) => receipt.decision === "accepted").length,
+    rejectedReceipts: receipts.filter((receipt) => isRejectedDecision(receipt.decision)).length,
+    acceptedPublicArtifactChunks,
+    acceptedReplayVerifyChunks,
+    acceptedSeedSweepChunks,
+    acceptedSeedSweepSeeds,
+    acceptedTensorTileChunks,
+    acceptedTensorTileCells,
+    acceptedWebGpuWitnessReceipts: receipts.filter((receipt) =>
+      receipt.kernelId === DEVICE_WITNESS_WEBGPU_KERNEL_ID && receipt.decision === "accepted"
+    ).length,
+    acceptedWebRtcReceipts: receipts.filter((receipt) =>
+      receipt.transport === "webrtc" && receipt.decision === "accepted"
+    ).length,
+  };
+}
+
+function computeScore(breakdown: ComputeScoreBreakdown): number {
+  return Math.max(0, Math.round(
+    breakdown.acceptedReceipts * 10 +
+    breakdown.acceptedPublicArtifactChunks * 80 +
+    breakdown.acceptedReplayVerifyChunks * 120 +
+    breakdown.acceptedSeedSweepChunks * 60 +
+    breakdown.acceptedSeedSweepSeeds * 3 +
+    breakdown.acceptedTensorTileChunks * 100 +
+    breakdown.acceptedTensorTileCells * 2 +
+    breakdown.acceptedWebGpuWitnessReceipts * 50 +
+    breakdown.acceptedWebRtcReceipts * 25 -
+    breakdown.rejectedReceipts * 40
+  ));
 }
 
 function publicArtifactSummary(raw: unknown): {
@@ -3115,6 +3268,10 @@ function schedulerCandidateScore(profile: WorkerProfile, task: ComputeTask, live
     score += (profile.webgpuCorrectnessScore ?? 0) * 6;
     if (profile.p95KernelMs !== null) score -= Math.min(20, profile.p95KernelMs / 50);
   }
+  if (task.kind === TENSOR_TILE_KERNEL_ID) {
+    score += (profile.webgpuCorrectnessScore ?? 0) * 14;
+    if (profile.p95KernelMs !== null) score -= Math.min(20, profile.p95KernelMs / 40);
+  }
   if (isDeviceWitnessTask(task.kind) && profile.acceptedReceipts === 0) score += 15;
   if (profile.recentFailureRate !== null) score -= profile.recentFailureRate * 30;
   return score;
@@ -3128,6 +3285,7 @@ function taskRequiredWorkloadTier(task: ComputeTask): WorkloadTier {
   ) {
     return "cpu-light";
   }
+  if (task.kind === TENSOR_TILE_KERNEL_ID) return "webgpu-light";
   return "observe-only";
 }
 

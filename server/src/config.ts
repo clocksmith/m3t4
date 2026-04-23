@@ -31,6 +31,21 @@ export const CONFIG = {
   computeLabOrigin: process.env.COMPUTE_LAB_ORIGIN ?? "",
   computeLabAdminToken: process.env.PLASMA_LAB_ADMIN_TOKEN,
   computeStunUrls: envList("COMPUTE_STUN_URLS", []),
+  computeAutoSeedSweep: {
+    stageId: process.env.COMPUTE_AUTO_SEED_SWEEP_STAGE_ID ?? "",
+    brainA: process.env.COMPUTE_AUTO_SEED_SWEEP_BRAIN_A ?? "unicorn",
+    brainB: process.env.COMPUTE_AUTO_SEED_SWEEP_BRAIN_B ?? "disruptor",
+    seedCount: parseInt(process.env.COMPUTE_AUTO_SEED_SWEEP_SEED_COUNT ?? "32", 10),
+    seedChunkSize: parseInt(process.env.COMPUTE_AUTO_SEED_SWEEP_CHUNK_SIZE ?? "8", 10),
+    maxTicks: process.env.COMPUTE_AUTO_SEED_SWEEP_MAX_TICKS
+      ? parseInt(process.env.COMPUTE_AUTO_SEED_SWEEP_MAX_TICKS, 10)
+      : undefined,
+  },
+  computeAutoSeedTensorTile: {
+    rows: parseInt(process.env.COMPUTE_AUTO_SEED_TENSOR_TILE_ROWS ?? "16", 10),
+    cols: parseInt(process.env.COMPUTE_AUTO_SEED_TENSOR_TILE_COLS ?? "16", 10),
+    depth: parseInt(process.env.COMPUTE_AUTO_SEED_TENSOR_TILE_DEPTH ?? "32", 10),
+  },
   serverRole: SERVER_ROLE as "combined" | "api" | "worker",
   wsClientSoftLimit: parseInt(process.env.WS_CLIENT_SOFT_LIMIT ?? "0", 10),
   isProd: IS_PROD,
@@ -88,6 +103,8 @@ export const CONFIG = {
     computeSlackWorker: envFlag("FEATURE_COMPUTE_SLACK_WORKER", false),
     computeWebRtcArtifacts: envFlag("FEATURE_COMPUTE_WEBRTC_ARTIFACTS", false),
     computeAutoSeedReplayTasks: envFlag("FEATURE_COMPUTE_AUTO_SEED_REPLAY_TASKS", false),
+    computeAutoSeedSeedSweepTasks: envFlag("FEATURE_COMPUTE_AUTO_SEED_SEED_SWEEP_TASKS", false),
+    computeAutoSeedTensorTileTasks: envFlag("FEATURE_COMPUTE_AUTO_SEED_TENSOR_TILE_TASKS", false),
     computeTaskAdmin: envFlag("FEATURE_COMPUTE_TASK_ADMIN", false),
     computeReceiptDashboard: envFlag("FEATURE_COMPUTE_RECEIPT_DASHBOARD", false),
     computeLiveBadges: envFlag("FEATURE_COMPUTE_LIVE_BADGES", false),

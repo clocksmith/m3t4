@@ -19,7 +19,9 @@ import { GOAL_DWELL_RADIUS, GOAL_DWELL_S, KILL_RESPAWN_S, GRAVITY, RESPAWN_INVUL
 // the carrier has stopped making goal progress behind a live blocker.
 // v22: high-foresight defenders block the carrier's approach lane instead
 // of always camping the final goal line.
-export const BEHAVIOR_VERSION = 22;
+// v23: carriers briefly remember same-goal direct delivery failures, so a
+// failed route cannot be re-picked immediately after a bait/fight cancel.
+export const BEHAVIOR_VERSION = 23;
 // ---------- Opp-model buffer sizing ----------
 //
 // Bounded ring: max 16 entries per stream, hard decay at 240 ticks (2 s).
@@ -989,6 +991,7 @@ const FEINT_PLAN_HORIZON_TICKS = FEINT_DURATION_TICKS + PLAN_HORIZON_TICKS;
 const KILL_SETUP_TICKS = 20; // swipe commit + one recovery cycle
 const DELIVERY_PROGRESS_EPS = 14;
 const DELIVERY_STALL_BASE_TICKS = 72;
+const DIRECT_RETRY_COOLDOWN_BASE_TICKS = 72;
 function estimateTicksToGoal(obs) {
     const dx = obs.goal.x - obs.self.x;
     const dy = goalBodyY(obs) - obs.self.y;
@@ -1066,14 +1069,36 @@ function deliveryPlanHorizon(kind, params) {
         return FEINT_PLAN_HORIZON_TICKS;
     return PLAN_HORIZON_TICKS + Math.round(discipline * 8);
 }
-function planDeliveryTactic(obs, params, sig) {
+function directRetryMultiplier(obs, params, state) {
+    if (!state.lastDeliveryCancelTactic)
+        return 1;
+    if (state.lastDeliveryCancelTactic !== "feint")
+        return 1;
+    if (state.deliveryProgressGoalKey !== deliveryGoalKey(obs))
+        return 1;
+    const age = obs.tick - state.lastDeliveryCancelTick;
+    if (age < 0)
+        return 1;
+    const shipRate = unit(params.shipRate, 0.5);
+    const discipline = unit(params.discipline);
+    const cooldown = Math.round(DIRECT_RETRY_COOLDOWN_BASE_TICKS * (1.15 - shipRate * 0.35 - discipline * 0.25));
+    if (age >= cooldown)
+        return 1;
+    const floor = clamp(0.12 + shipRate * 0.18 + discipline * 0.2, 0.12, 0.65);
+    const fade = cooldown <= 0 ? 1 : Math.pow(age / cooldown, 2);
+    return floor + (1 - floor) * fade;
+}
+function planDeliveryTactic(obs, params, state, sig) {
     const directTicks = estimateTicksToGoal(obs);
     const oppInterceptTicks = estimateOppInterceptTicks(obs);
+    const retryMultiplier = directRetryMultiplier(obs, params, state);
     const kinds = ["direct", "kill-first", "feint"];
     let best = "direct";
     let bestScore = -Infinity;
     for (const k of kinds) {
-        const s = scoreTactic(k, params, directTicks, oppInterceptTicks, sig);
+        let s = scoreTactic(k, params, directTicks, oppInterceptTicks, sig);
+        if (k === "direct")
+            s *= retryMultiplier;
         if (s > bestScore) {
             bestScore = s;
             best = k;
@@ -1201,11 +1226,11 @@ function runObjectiveMode(obs, params, state, sig) {
         // choice every tick → no temporal commitment → stall." The plan
         // stays active across frames; each tick we only translate the
         // active plan into an action.
+        const absDxGoal = updateDeliveryProgress(state, obs);
         if (!state.deliveryPlan || state.deliveryPlan.expiresAt <= obs.tick) {
-            state.deliveryPlan = planDeliveryTactic(obs, params, sig);
+            state.deliveryPlan = planDeliveryTactic(obs, params, state, sig);
         }
         let plan = state.deliveryPlan;
-        const absDxGoal = updateDeliveryProgress(state, obs);
         const fallbackTactic = stalledDeliveryTactic(plan, obs, params, state, sig, oppInPath, goalTimerUrgent, absDxGoal);
         if (fallbackTactic) {
             state.deliveryPlan = replaceDeliveryPlan(obs, params, fallbackTactic, plan.score);

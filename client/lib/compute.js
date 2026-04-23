@@ -549,11 +549,10 @@ class ComputeClient {
         workerId: this.workerId,
         workerSessionId: this.workerSessionId,
       });
-      const res = await fetch(computeLabOrigin() + `/compute/tasks/next?${params}`, {
+      const body = await fetchJsonWithRetry(computeLabOrigin() + `/compute/tasks/next?${params}`, {
         headers: { [SESSION_TOKEN_HEADER]: this.workerSessionToken },
-      });
-      if (!res.ok) throw new Error(`next failed: ${res.status}`);
-      const body = await res.json();
+        cache: "no-store",
+      }, { label: "next", attempts: 6 });
       if (body.idle) {
         this.state = body.reason ?? "no-work";
         this.maybeReportConnectivity();

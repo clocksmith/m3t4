@@ -88,7 +88,7 @@ Recommended workload ladder:
 | 5 | `science.docking_pose_toy.v0` | Independent ligand/pose chunks without full wet-lab claims | replicated quorum plus known controls | First science-looking adapter without overclaiming |
 | 6 | `science.microscopy_tile_score.v0` | Image tiles parallelize naturally on browser GPUs | ensemble agreement plus reference tiles | Cancer-adjacent and more browser-realistic than folding |
 | 7 | `science.drug_combo_sweep.v0` | Large parameter grids with independent seeds | statistical quorum and confidence intervals | Useful research shape with manageable validation |
-| 8 | `science.contact_map_tile.v0` | Folding-adjacent but smaller than full folding | tolerance-bounded tile scores | Bridge toward protein workloads |
+| 8 | `science.contact_map_tile.v0` | Folding-adjacent, low-bandwidth, and easy to shard by residue window | exact-hash integer contact-score tiles first; later tolerance-bounded learned scores | Bridge toward protein workloads without model downloads |
 | 9 | `science.conformer_search_mini.v0` | Many short stochastic trajectories | replicated seeds plus energy sanity checks | Realistic but validation is harder |
 | 10 | `plasma.tensor_tile.v0` | Direct WebGPU/tensor contract fit | server-held CPU reference hash for deterministic u32 tiles | Strong substrate proof, less visible to m3t4 users |
 
@@ -99,21 +99,21 @@ public, or a later attested/proof-carrying runtime exists.
 
 Near-term real workloads should be added in this order:
 
-1. `ml.embedding_tile.v0`: public embedding and rerank batches over published
-   corpora. This is the cleanest next step because the local Doppler WebGPU
-   stack already supports embedding models and quantized execution, and the
-   outputs can be reduced to compact rerank tiles for replicated quorum.
-2. `ml.image_tile_infer.v0`: public image-tile classification, segmentation,
+1. `science.contact_map_tile.v0`: public residue-window contact-score tiles.
+   This is now the low-bandwidth protein-shaped path: bounded integer tiles on
+   published sequences, validated by exact hash against a server-held
+   heuristic reference.
+2. `ml.embedding_tile.v0`: public embedding and rerank batches over published
+   corpora. This is still useful, but the model artifact cost is much higher
+   than the contact-tile path.
+3. `ml.image_tile_infer.v0`: public image-tile classification, segmentation,
    background removal, or depth-style inference. This reuses the same browser
    ML path as embeddings while producing more obviously useful outputs for asset
    processing and public research imagery.
-3. `science.microscopy_tile_score.v0`: public microscopy/pathology tile
+4. `science.microscopy_tile_score.v0`: public microscopy/pathology tile
    scoring. Same tile/inference shape as the vision adapter above, but aimed at
    public research datasets and validated with reference tiles plus replicated
    agreement.
-4. `science.contact_map_tile.v0`: protein-adjacent score tiles on public
-   sequences. This is the right way to approach "protein-folding-style" work:
-   start with bounded pairwise/contact tiles, not full folding claims.
 
 Do not jump straight from `plasma.tensor_tile.v0` to full training, private
 inference, or full protein folding. The honest next constraint is validator

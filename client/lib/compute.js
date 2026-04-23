@@ -17,6 +17,7 @@ const PUBLIC_ARTIFACT_KERNEL = "m3t4.public_artifact_verify.v0";
 const REPLAY_VERIFY_KERNEL = "m3t4.replay_verify.v1";
 const SEED_SWEEP_KERNEL = "m3t4.seed_sweep.v0";
 const EMBEDDING_TILE_KERNEL = "ml.embedding_tile.v0";
+const CONTACT_MAP_TILE_KERNEL = "science.contact_map_tile.v0";
 const TENSOR_TILE_KERNEL = "plasma.tensor_tile.v0";
 
 const MODE_PROFILE = {
@@ -809,6 +810,7 @@ async function buildCapability(runtimeInfo = {}, opts = {}) {
   }
   if (webgpu.webgpu === "available") {
     kernels.push("device_witness.webgpu.v0");
+    kernels.push(CONTACT_MAP_TILE_KERNEL);
     kernels.push(TENSOR_TILE_KERNEL);
     if (embeddingTileEnabled()) kernels.push(EMBEDDING_TILE_KERNEL);
   }
@@ -1631,6 +1633,32 @@ function safeWebRtcDataChunk(chunk) {
       throw new Error("embedding tile documents invalid");
     }
   }
+  if (chunk.kind === CONTACT_MAP_TILE_KERNEL) {
+    const rowStart = Number(chunk.params?.rowStart);
+    const colStart = Number(chunk.params?.colStart);
+    const minSeparation = Number(chunk.params?.minSeparation);
+    if (!Number.isSafeInteger(rowStart) || rowStart < 0) throw new Error("contact map rowStart invalid");
+    if (!Number.isSafeInteger(colStart) || colStart < 0) throw new Error("contact map colStart invalid");
+    if (!Number.isSafeInteger(minSeparation) || minSeparation < 0 || minSeparation > 256) {
+      throw new Error("contact map minSeparation invalid");
+    }
+    if (
+      typeof chunk.params?.rowResidues !== "string" ||
+      chunk.params.rowResidues.length === 0 ||
+      chunk.params.rowResidues.length > 64 ||
+      !/^[ACDEFGHIKLMNPQRSTVWYXacdefghiklmnpqrstvwyx]+$/.test(chunk.params.rowResidues)
+    ) {
+      throw new Error("contact map rowResidues invalid");
+    }
+    if (
+      typeof chunk.params?.colResidues !== "string" ||
+      chunk.params.colResidues.length === 0 ||
+      chunk.params.colResidues.length > 64 ||
+      !/^[ACDEFGHIKLMNPQRSTVWYXacdefghiklmnpqrstvwyx]+$/.test(chunk.params.colResidues)
+    ) {
+      throw new Error("contact map colResidues invalid");
+    }
+  }
   if (chunk.kind === TENSOR_TILE_KERNEL) {
     const seed = Number(chunk.params?.seed);
     const rows = Number(chunk.params?.rows);
@@ -1665,7 +1693,7 @@ function safeWebRtcDataChunk(chunk) {
 }
 
 function webRtcDataKernel(kind) {
-  return kind === PUBLIC_ARTIFACT_KERNEL || kind === REPLAY_VERIFY_KERNEL || kind === SEED_SWEEP_KERNEL || kind === EMBEDDING_TILE_KERNEL || kind === TENSOR_TILE_KERNEL;
+  return kind === PUBLIC_ARTIFACT_KERNEL || kind === REPLAY_VERIFY_KERNEL || kind === SEED_SWEEP_KERNEL || kind === EMBEDDING_TILE_KERNEL || kind === CONTACT_MAP_TILE_KERNEL || kind === TENSOR_TILE_KERNEL;
 }
 
 const PEER_WORK_PARAMS = Object.freeze({ start: 1009, endExclusive: 1033 });

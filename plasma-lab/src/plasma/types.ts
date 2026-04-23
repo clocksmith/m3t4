@@ -40,6 +40,7 @@ export type TaskKind =
   | "device_witness.webrtc.v0"
   | "device_witness.derived_buffer.v0"
   | "ml.embedding_tile.v0"
+  | "science.contact_map_tile.v0"
   | "m3t4.public_artifact_verify.v0"
   | "m3t4.seed_sweep.v0"
   | "m3t4.replay_verify.v1"

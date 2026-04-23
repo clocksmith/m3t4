@@ -749,6 +749,37 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     }
     return true;
   }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/contact-map-tile") {
+    const body = await readJson<{
+      rowResidues?: string;
+      colResidues?: string;
+      rowStart?: number;
+      colStart?: number;
+      minSeparation?: number;
+      minExecutions?: number;
+      minAgreeing?: number;
+      requiredTransport?: TransportKind;
+      requiredPeerSubreceipt?: boolean;
+    }>(req);
+    try {
+      const task = deps.store.seedContactMapTileTask({
+        rowResidues: String(body?.rowResidues ?? ""),
+        colResidues: String(body?.colResidues ?? ""),
+        rowStart: body?.rowStart,
+        colStart: body?.colStart,
+        minSeparation: body?.minSeparation,
+        minExecutions: body?.minExecutions,
+        minAgreeing: body?.minAgreeing,
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+      });
+      await flushStore(deps.store);
+      json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/public-artifact") {
     const body = await readJson<{
       artifact?: {
@@ -1201,6 +1232,18 @@ td,th{border-bottom:1px solid #252b3a;padding:7px;text-align:left;vertical-align
     <div class="row"><button id="seedEmbeddingTile">seed embedding tile</button></div>
   </div>
   <div class="card">
+    <div>contact map tile</div>
+    <div class="muted">Low-bandwidth heuristic protein contact-score tile; public residue windows only, no model download</div>
+    <textarea id="contactRows" placeholder="row residue window">MKTAYIAKQRQISFVK</textarea>
+    <textarea id="contactCols" placeholder="column residue window">SHFSRQDILDLIPTSS</textarea>
+    <div class="row">
+      <input id="contactRowStart" value="0" aria-label="contact row start">
+      <input id="contactColStart" value="24" aria-label="contact col start">
+      <input id="contactMinSeparation" value="8" aria-label="contact min separation">
+    </div>
+    <div class="row"><button id="seedContactMapTile">seed contact map tile</button></div>
+  </div>
+  <div class="card">
     <div>seed sweep</div>
     <div class="row">
       <input id="sweepStage" value="boardroom" aria-label="stage id">
@@ -1285,6 +1328,13 @@ document.getElementById("seedEmbeddingTile").onclick = () => adminPost("/compute
   documents: JSON.parse(val("embeddingDocs") || "[]"),
   topK: asNum("embeddingTopK"),
 });
+document.getElementById("seedContactMapTile").onclick = () => adminPost("/compute/admin/tasks/contact-map-tile", {
+  rowResidues: val("contactRows"),
+  colResidues: val("contactCols"),
+  rowStart: asNum("contactRowStart"),
+  colStart: asNum("contactColStart"),
+  minSeparation: asNum("contactMinSeparation"),
+});
 document.getElementById("seedSweep").onclick = () => adminPost("/compute/admin/tasks/seed-sweep", {
   stageId: val("sweepStage"),
   brainA: val("sweepA"),
@@ -1352,7 +1402,7 @@ function render(data, useCases) {
     .map((k) => '<div class="card"><div>'+k+'</div><div class="n">'+(data[k] ?? 0)+'</div></div>').join("");
   document.getElementById("useCases").innerHTML = table(["id","status","workload","inputBoundary","validation"], useCases);
   document.getElementById("publicStats").innerHTML = table(["generatedAt","privacy","computeScore","totalWorkers","activeWorkers","totalReceipts","acceptedReceiptPct","webgpuSupportedPct","webgpuCorrectnessPct","renderFixturePct","webrtcDirectSuccessPct","turnRequiredPct","medianKernelMs","p95KernelMs"], [data.publicStats || {}]) +
-    table(["acceptedReceipts","rejectedReceipts","acceptedPublicArtifactChunks","acceptedReplayVerifyChunks","acceptedSeedSweepChunks","acceptedSeedSweepSeeds","acceptedTensorTileChunks","acceptedTensorTileCells","acceptedWebGpuWitnessReceipts","acceptedWebRtcReceipts"], [data.publicStats?.scoreBreakdown || {}]);
+    table(["acceptedReceipts","rejectedReceipts","acceptedContactMapTileChunks","acceptedContactMapTileCells","acceptedPublicArtifactChunks","acceptedReplayVerifyChunks","acceptedSeedSweepChunks","acceptedSeedSweepSeeds","acceptedTensorTileChunks","acceptedTensorTileCells","acceptedWebGpuWitnessReceipts","acceptedWebRtcReceipts"], [data.publicStats?.scoreBreakdown || {}]);
   document.getElementById("workerProfiles").innerHTML = table(["workerId","browserFamily","deviceClass","adapterClass","webgpuAvailable","webgpuCorrectnessScore","renderFixtureScore","webrtcDirectSuccessRate","turnRequiredRate","p95KernelMs","allowedWorkloadTier","acceptedReceipts","rejectedReceipts"], data.workerProfiles || []);
   document.getElementById("deviceClasses").innerHTML = table(["classId","workers","activeWorkers","webgpuCorrectnessScore","renderFixtureScore","webrtcDirectSuccessRate","turnRequiredRate","p95KernelMs"], data.deviceClassProfiles || []);
   document.getElementById("networkClasses").innerHTML = table(["classId","workers","activeWorkers","webrtcDirectSuccessRate","turnRequiredRate","p95KernelMs"], data.networkClassProfiles || []);

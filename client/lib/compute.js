@@ -16,6 +16,7 @@ const SESSION_TOKEN_HEADER = "x-worker-session-token";
 const PUBLIC_ARTIFACT_KERNEL = "m3t4.public_artifact_verify.v0";
 const REPLAY_VERIFY_KERNEL = "m3t4.replay_verify.v1";
 const SEED_SWEEP_KERNEL = "m3t4.seed_sweep.v0";
+const TENSOR_TILE_KERNEL = "plasma.tensor_tile.v0";
 
 const MODE_PROFILE = {
   quiet: { pollMs: 5000, cooldownMs: 2000, maxRenderMs: 10 },
@@ -791,7 +792,10 @@ async function buildCapability(runtimeInfo = {}, opts = {}) {
     kernels.push("device_witness.render_fixture.v0");
     kernels.push("device_witness.derived_buffer.v0");
   }
-  if (webgpu.webgpu === "available") kernels.push("device_witness.webgpu.v0");
+  if (webgpu.webgpu === "available") {
+    kernels.push("device_witness.webgpu.v0");
+    kernels.push(TENSOR_TILE_KERNEL);
+  }
   if (typeof RTCPeerConnection !== "undefined") kernels.push("device_witness.webrtc.v0");
   const adapterInfo = {
     ...adapterInfoBucket(),

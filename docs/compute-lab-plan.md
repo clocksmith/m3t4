@@ -26,6 +26,9 @@ Current production status as of 2026-04-22:
   windows.
 - `COMPUTE_REQUIRE_RECEIPT_SIGNATURES=true` is active for production
   validation work.
+- arena-server can optionally auto-seed public-artifact, replay-verify, and
+  public-preset seed-sweep advisory tasks after replay archive; all auto-seed
+  switches default off.
 - controlled two-browser WebRTC seed-sweep smokes have passed with
   task-required WebRTC, accepted server-issued peer subassignments,
   peer-signed subreceipts, and public receipt verifier success.
@@ -224,6 +227,11 @@ FEATURE_COMPUTE_WEBRTC_TURN=false
 FEATURE_COMPUTE_RECEIPT_DASHBOARD=false
 FEATURE_COMPUTE_LIVE_BADGES=false
 FEATURE_COMPUTE_AUTO_SEED_REPLAY_TASKS=false
+FEATURE_COMPUTE_AUTO_SEED_SEED_SWEEP_TASKS=false
+COMPUTE_AUTO_SEED_SWEEP_BRAIN_A=unicorn
+COMPUTE_AUTO_SEED_SWEEP_BRAIN_B=disruptor
+COMPUTE_AUTO_SEED_SWEEP_SEED_COUNT=32
+COMPUTE_AUTO_SEED_SWEEP_CHUNK_SIZE=8
 ```
 
 Operational kill switch:
@@ -289,6 +297,7 @@ POST /compute/admin/tasks/device-witness-derived-buffer
 POST /compute/admin/tasks/device-witness-webrtc
 POST /compute/admin/tasks/public-artifact
 POST /compute/admin/tasks/seed-sweep
+POST /compute/admin/tasks/tensor-tile
 POST /compute/admin/tasks/:taskId/cancel
 GET  /compute/admin/tasks/:taskId
 GET  /compute/admin/receipts/:receiptId
@@ -845,6 +854,10 @@ m3t4.public_artifact_verify.v0
 m3t4.seed_sweep.v0
   runs deterministic public-preset seed batches for meta-health diagnostics
 
+plasma.tensor_tile.v0
+  runs a deterministic u32 tensor/matmul tile in browser WebGPU
+  validates against a server-held CPU reference hash
+
 m3t4.replay_verify.v1
   verifies public replay/action/checkpoint data reproduces expected result
 ```
@@ -935,8 +948,37 @@ browser: advertised by opted-in hidden spectator workers and executable as CPU b
 production proof: two hosted browser clients completed a 2-of-2 strict WebRTC plasma-data seed sweep with server-held expected output, required transport=webrtc, verified top-level signatures, accepted server-issued peer subassignments, and verified peer-signed subreceipts.
 ```
 
+Arena-server can auto-seed small public-preset seed sweeps after a replay is
+archived when `FEATURE_COMPUTE_AUTO_SEED_SEED_SWEEP_TASKS=true`. The default
+auto-seed body uses the archived match stage, public presets
+`unicorn`/`disruptor`, a deterministic seed window derived from the match id,
+32 seeds, and 8-seed chunks. This does not use private player configs and does
+not open assignment intake.
+
 This targets use cases 2 and 8 from the ladder: seed sweeps and balance
 diagnostics. It intentionally excludes private roster configs.
+
+Arena-server can also auto-seed one bounded tensor tile per archived replay
+when `FEATURE_COMPUTE_AUTO_SEED_TENSOR_TILE_TASKS=true`. The default tile is
+16x16x32 with a deterministic seed derived from the archived match id. This
+produces WebGPU-only useful substrate work without using private match state
+and without opening assignment intake.
+
+`plasma.tensor_tile.v0` is the first useful WebGPU substrate workload:
+
+```text
+inputs: public seed, rows, cols, depth
+outputs: little-endian u32 tensor tile bytes
+limits: rows/cols 1..64, depth 1..256, max 4096 output cells
+route: POST /compute/admin/tasks/tensor-tile
+browser: advertised only by WebGPU-capable opted-in browser workers
+scheduler: requires webgpu-light, which requires accepted Device Witness WebGPU evidence
+validation: assignment-bound expected-hash receipts against server-held CPU reference output
+```
+
+This is not yet protein folding or distributed ML eval. It is the first
+bounded, deterministic WebGPU useful-work fixture that exercises the same
+queue/receipt/score path those later workloads need.
 
 ## Public Artifact Export
 

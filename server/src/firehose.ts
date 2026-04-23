@@ -352,9 +352,27 @@ export class Firehose {
     }
     await this.store.archiveReplay(replay);
     void seedReplayComputeTasks({
-      enabled: CONFIG.features.computeAutoSeedReplayTasks,
+      enabled: CONFIG.features.computeAutoSeedReplayTasks
+        || CONFIG.features.computeAutoSeedSeedSweepTasks
+        || CONFIG.features.computeAutoSeedTensorTileTasks,
+      replayTasksEnabled: CONFIG.features.computeAutoSeedReplayTasks,
       computeLabOrigin: CONFIG.computeLabOrigin,
       adminToken: CONFIG.computeLabAdminToken,
+      seedSweep: {
+        enabled: CONFIG.features.computeAutoSeedSeedSweepTasks,
+        stageId: CONFIG.computeAutoSeedSweep.stageId || undefined,
+        brainA: CONFIG.computeAutoSeedSweep.brainA,
+        brainB: CONFIG.computeAutoSeedSweep.brainB,
+        seedCount: CONFIG.computeAutoSeedSweep.seedCount,
+        seedChunkSize: CONFIG.computeAutoSeedSweep.seedChunkSize,
+        maxTicks: CONFIG.computeAutoSeedSweep.maxTicks,
+      },
+      tensorTile: {
+        enabled: CONFIG.features.computeAutoSeedTensorTileTasks,
+        rows: CONFIG.computeAutoSeedTensorTile.rows,
+        cols: CONFIG.computeAutoSeedTensorTile.cols,
+        depth: CONFIG.computeAutoSeedTensorTile.depth,
+      },
     }, replay).then((results) => {
       if (results.some((result) => !result.ok)) {
         console.warn("[compute-auto-seed]", JSON.stringify({ matchId, results }));

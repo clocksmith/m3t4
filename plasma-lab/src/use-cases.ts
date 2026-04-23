@@ -51,6 +51,16 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
     notes: "Reports coarse WebGPU availability, correctness, and runtime buckets after opt-in; no raw adapter strings.",
   },
   {
+    id: "tensor-tiles",
+    title: "WebGPU tensor tiles",
+    status: "implemented",
+    workload: "plasma.tensor_tile.v0",
+    authority: "advisory",
+    inputBoundary: "public deterministic u32 tensor tile params only",
+    validation: "assignment-bound expected-hash receipts against a server-held CPU reference output",
+    notes: "First real WebGPU useful-work fixture beyond Device Witness. It runs a bounded integer matrix/tensor tile in browser WebGPU and only schedules to workers promoted to webgpu-light.",
+  },
+  {
     id: "device-witness-webrtc",
     title: "Device Witness: WebRTC connectivity",
     status: "implemented",

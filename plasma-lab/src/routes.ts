@@ -691,6 +691,35 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     }
     return true;
   }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/tensor-tile") {
+    const body = await readJson<{
+      seed?: number;
+      rows?: number;
+      cols?: number;
+      depth?: number;
+      minExecutions?: number;
+      minAgreeing?: number;
+      requiredTransport?: TransportKind;
+      requiredPeerSubreceipt?: boolean;
+    }>(req);
+    try {
+      const task = deps.store.seedTensorTileTask({
+        seed: body?.seed,
+        rows: body?.rows,
+        cols: body?.cols,
+        depth: body?.depth,
+        minExecutions: body?.minExecutions,
+        minAgreeing: body?.minAgreeing,
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+      });
+      await flushStore(deps.store);
+      json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/public-artifact") {
     const body = await readJson<{
       artifact?: {
@@ -1122,6 +1151,17 @@ td,th{border-bottom:1px solid #252b3a;padding:7px;text-align:left;vertical-align
     </div>
   </div>
   <div class="card">
+    <div>tensor tile</div>
+    <div class="muted">WebGPU u32 matmul fixture; requires webgpu-light workers</div>
+    <div class="row">
+      <input id="tensorSeed" value="1" aria-label="tensor seed">
+      <input id="tensorRows" value="16" aria-label="tensor rows">
+      <input id="tensorCols" value="16" aria-label="tensor cols">
+      <input id="tensorDepth" value="32" aria-label="tensor depth">
+    </div>
+    <div class="row"><button id="seedTensorTile">seed tensor tile</button></div>
+  </div>
+  <div class="card">
     <div>seed sweep</div>
     <div class="row">
       <input id="sweepStage" value="boardroom" aria-label="stage id">
@@ -1195,6 +1235,12 @@ document.getElementById("seedWitnessDerived").onclick = () => adminPost("/comput
   seed: asNum("witnessSeed"),
   count: asNum("witnessCount"),
 });
+document.getElementById("seedTensorTile").onclick = () => adminPost("/compute/admin/tasks/tensor-tile", {
+  seed: asNum("tensorSeed"),
+  rows: asNum("tensorRows"),
+  cols: asNum("tensorCols"),
+  depth: asNum("tensorDepth"),
+});
 document.getElementById("seedSweep").onclick = () => adminPost("/compute/admin/tasks/seed-sweep", {
   stageId: val("sweepStage"),
   brainA: val("sweepA"),
@@ -1261,7 +1307,8 @@ function render(data, useCases) {
   document.getElementById("summary").innerHTML = ["acceptAssignments","assignmentIntakeClosesAt","workers","activeSessions","tasks","assignments","receipts","validations","capabilityObservations","connectivityObservations","webrtcSessions","webrtcPairs","peerSubassignments"]
     .map((k) => '<div class="card"><div>'+k+'</div><div class="n">'+(data[k] ?? 0)+'</div></div>').join("");
   document.getElementById("useCases").innerHTML = table(["id","status","workload","inputBoundary","validation"], useCases);
-  document.getElementById("publicStats").innerHTML = table(["generatedAt","privacy","totalWorkers","activeWorkers","totalReceipts","acceptedReceiptPct","webgpuSupportedPct","webgpuCorrectnessPct","renderFixturePct","webrtcDirectSuccessPct","turnRequiredPct","medianKernelMs","p95KernelMs"], [data.publicStats || {}]);
+  document.getElementById("publicStats").innerHTML = table(["generatedAt","privacy","computeScore","totalWorkers","activeWorkers","totalReceipts","acceptedReceiptPct","webgpuSupportedPct","webgpuCorrectnessPct","renderFixturePct","webrtcDirectSuccessPct","turnRequiredPct","medianKernelMs","p95KernelMs"], [data.publicStats || {}]) +
+    table(["acceptedReceipts","rejectedReceipts","acceptedPublicArtifactChunks","acceptedReplayVerifyChunks","acceptedSeedSweepChunks","acceptedSeedSweepSeeds","acceptedTensorTileChunks","acceptedTensorTileCells","acceptedWebGpuWitnessReceipts","acceptedWebRtcReceipts"], [data.publicStats?.scoreBreakdown || {}]);
   document.getElementById("workerProfiles").innerHTML = table(["workerId","browserFamily","deviceClass","adapterClass","webgpuAvailable","webgpuCorrectnessScore","renderFixtureScore","webrtcDirectSuccessRate","turnRequiredRate","p95KernelMs","allowedWorkloadTier","acceptedReceipts","rejectedReceipts"], data.workerProfiles || []);
   document.getElementById("deviceClasses").innerHTML = table(["classId","workers","activeWorkers","webgpuCorrectnessScore","renderFixtureScore","webrtcDirectSuccessRate","turnRequiredRate","p95KernelMs"], data.deviceClassProfiles || []);
   document.getElementById("networkClasses").innerHTML = table(["classId","workers","activeWorkers","webrtcDirectSuccessRate","turnRequiredRate","p95KernelMs"], data.networkClassProfiles || []);

@@ -53,6 +53,84 @@ test("compute auto-seed posts public artifact and replay verify tasks", async ()
   assert.equal(calls[1].body.replayArtifact.actions.hash, replay.actions.hash);
 });
 
+test("compute auto-seed can enqueue public preset seed sweeps independently", async () => {
+  const replay = fixtureReplay();
+  const calls: { url: string; body: any }[] = [];
+  const results = await seedReplayComputeTasks({
+    enabled: true,
+    replayTasksEnabled: false,
+    computeLabOrigin: "https://plasma-lab.example/",
+    adminToken: "secret",
+    timeoutMs: 1000,
+    seedSweep: {
+      enabled: true,
+      brainA: "blitz",
+      brainB: "shipper",
+      seedCount: 16,
+      seedChunkSize: 4,
+      maxTicks: 480,
+    },
+  }, replay, async (url, init) => {
+    calls.push({ url, body: JSON.parse(String(init.body)) });
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ taskId: "task-seed-sweep" }),
+      text: async () => "",
+    };
+  });
+
+  assert.deepEqual(results.map((result) => result.taskId), ["task-seed-sweep"]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://plasma-lab.example/compute/admin/tasks/seed-sweep");
+  assert.equal(calls[0].body.stageId, replay.match.stageId);
+  assert.equal(calls[0].body.brainA, "blitz");
+  assert.equal(calls[0].body.brainB, "shipper");
+  assert.equal(calls[0].body.seedEndExclusive - calls[0].body.seedStart, 16);
+  assert.equal(calls[0].body.seedChunkSize, 4);
+  assert.equal(calls[0].body.maxTicks, 480);
+  assert.equal(calls[0].body.minExecutions, 2);
+  assert.equal(calls[0].body.minAgreeing, 2);
+});
+
+test("compute auto-seed can enqueue WebGPU tensor tiles independently", async () => {
+  const replay = fixtureReplay();
+  const calls: { url: string; body: any }[] = [];
+  const results = await seedReplayComputeTasks({
+    enabled: true,
+    replayTasksEnabled: false,
+    computeLabOrigin: "https://plasma-lab.example/",
+    adminToken: "secret",
+    timeoutMs: 1000,
+    tensorTile: {
+      enabled: true,
+      rows: 12,
+      cols: 10,
+      depth: 24,
+      minExecutions: 3,
+      minAgreeing: 2,
+    },
+  }, replay, async (url, init) => {
+    calls.push({ url, body: JSON.parse(String(init.body)) });
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ taskId: "task-tensor-tile" }),
+      text: async () => "",
+    };
+  });
+
+  assert.deepEqual(results.map((result) => result.taskId), ["task-tensor-tile"]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://plasma-lab.example/compute/admin/tasks/tensor-tile");
+  assert.equal(typeof calls[0].body.seed, "number");
+  assert.equal(calls[0].body.rows, 12);
+  assert.equal(calls[0].body.cols, 10);
+  assert.equal(calls[0].body.depth, 24);
+  assert.equal(calls[0].body.minExecutions, 3);
+  assert.equal(calls[0].body.minAgreeing, 2);
+});
+
 test("compute auto-seed stays inert unless enabled and authenticated", async () => {
   const replay = fixtureReplay();
   const called = async () => {

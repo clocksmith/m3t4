@@ -9,6 +9,7 @@ import { buttonHtml, linkButtonHtml } from "../ui/actions.js";
 import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
 
 let computeWitnessOff = null;
+let computeScoreTimer = null;
 
 function sectionHtml(section) {
   const body = Array.isArray(section.body) ? section.body : [];
@@ -48,6 +49,33 @@ function computeWitnessEnabled() {
     window.__M3T4_COMPUTE_SLACK_WORKER__ === true;
 }
 
+function computeLabOrigin() {
+  return String(window.__M3T4_COMPUTE_LAB_ORIGIN__ || "").replace(/\/+$/, "");
+}
+
+function computeScoreEnabled() {
+  return !!computeLabOrigin();
+}
+
+function computeScoreHtml() {
+  if (!computeScoreEnabled()) return "";
+  return `
+    <section class="panel compute-score-panel" aria-label="Compute score">
+      <div class="compute-score-title">
+        <h3>Compute Score</h3>
+        <span id="compute-score-privacy">loading</span>
+      </div>
+      <div id="compute-score-value" class="compute-score-value">0</div>
+      <div class="compute-score-grid">
+        <div><span>tensor cells</span><strong id="compute-score-tensor">0</strong></div>
+        <div><span>seed tiles</span><strong id="compute-score-seeds">0</strong></div>
+        <div><span>replay checks</span><strong id="compute-score-replays">0</strong></div>
+        <div><span>WebRTC receipts</span><strong id="compute-score-webrtc">0</strong></div>
+        <div><span>accepted receipts</span><strong id="compute-score-receipts">0</strong></div>
+      </div>
+    </section>`;
+}
+
 function computeWitnessHtml() {
   if (!computeWitnessEnabled()) return "";
   return `
@@ -84,6 +112,7 @@ export function mount(root, { setStatus }) {
 
       ${aboutCardHtml(rules.about)}
       ${aboutDetailHtml(rules.about)}
+      ${computeScoreHtml()}
       ${computeWitnessHtml()}
 
       <div class="rules-rules-column">
@@ -95,6 +124,7 @@ export function mount(root, { setStatus }) {
     </div>`;
 
   wireComputeWitness(root);
+  wireComputeScore(root);
 }
 
 function wireComputeWitness(root) {
@@ -133,7 +163,53 @@ function wireComputeWitness(root) {
   computeWitnessOff = client.subscribe(paint);
 }
 
+function wireComputeScore(root) {
+  if (!computeScoreEnabled()) return;
+  const panel = root.querySelector(".compute-score-panel");
+  if (!panel) return;
+  if (computeScoreTimer) clearInterval(computeScoreTimer);
+  computeScoreTimer = null;
+  const valueEl = panel.querySelector("#compute-score-value");
+  const privacyEl = panel.querySelector("#compute-score-privacy");
+  const tensorEl = panel.querySelector("#compute-score-tensor");
+  const seedsEl = panel.querySelector("#compute-score-seeds");
+  const replaysEl = panel.querySelector("#compute-score-replays");
+  const webrtcEl = panel.querySelector("#compute-score-webrtc");
+  const receiptsEl = panel.querySelector("#compute-score-receipts");
+
+  async function refresh() {
+    try {
+      const res = await fetch(`${computeLabOrigin()}/compute/public/stats`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`stats ${res.status}`);
+      const stats = await res.json();
+      const breakdown = stats.scoreBreakdown || {};
+      valueEl.textContent = formatInt(stats.computeScore);
+      privacyEl.textContent = stats.privacy === "suppressed" ? "aggregate" : "live aggregate";
+      tensorEl.textContent = formatInt(breakdown.acceptedTensorTileCells);
+      seedsEl.textContent = formatInt(breakdown.acceptedSeedSweepSeeds);
+      replaysEl.textContent = formatInt(
+        Number(breakdown.acceptedReplayVerifyChunks || 0) +
+        Number(breakdown.acceptedPublicArtifactChunks || 0),
+      );
+      webrtcEl.textContent = formatInt(breakdown.acceptedWebRtcReceipts);
+      receiptsEl.textContent = formatInt(breakdown.acceptedReceipts);
+    } catch {
+      privacyEl.textContent = "offline";
+    }
+  }
+
+  void refresh();
+  computeScoreTimer = setInterval(refresh, 30000);
+}
+
+function formatInt(value) {
+  const n = Number(value || 0);
+  return Number.isFinite(n) ? Math.round(n).toLocaleString() : "0";
+}
+
 export function unmount() {
   computeWitnessOff?.();
   computeWitnessOff = null;
+  if (computeScoreTimer) clearInterval(computeScoreTimer);
+  computeScoreTimer = null;
 }

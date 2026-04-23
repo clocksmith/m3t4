@@ -55,6 +55,21 @@ import {
   prefillTopkProbePlaceholderOutputHash,
 } from "./kernels/prefill-topk-probe.js";
 import {
+  LOGIT_DIVERGENCE_KERNEL_HASH,
+  LOGIT_DIVERGENCE_KERNEL_ID,
+  LOGIT_DIVERGENCE_MODEL_ID,
+  logitDivergencePlaceholderOutputHash,
+  logitDivergencePublicOutputHash,
+  normalizeLogitDivergenceParams,
+  normalizeLogitDivergencePublicOutput,
+} from "./kernels/logit-divergence.js";
+import {
+  GENOME_KMER_KERNEL_HASH,
+  GENOME_KMER_KERNEL_ID,
+  normalizeGenomeKmerParams,
+  runGenomeKmerReference,
+} from "./kernels/genome-kmer.js";
+import {
   MICROSCOPY_TILE_SCORE_KERNEL_HASH,
   MICROSCOPY_TILE_SCORE_KERNEL_ID,
   normalizeMicroscopyTileScoreParams,
@@ -88,7 +103,7 @@ import {
   normalizeTensorTileParams,
   runTensorTileReference,
 } from "./kernels/tensor-tile.js";
-import { hashCanonical, randomId, randomToken } from "./plasma/hash.js";
+import { canonicalJson, hashCanonical, randomId, randomToken, sha256 } from "./plasma/hash.js";
 import type {
   ContentHash,
   DerivedExecutionEvidence,
@@ -138,7 +153,9 @@ const KNOWN_KERNELS = [
   IMAGE_TILE_INFER_KERNEL_ID,
   MICROSCOPY_TILE_SCORE_KERNEL_ID,
   PREFILL_TOPK_PROBE_KERNEL_ID,
+  LOGIT_DIVERGENCE_KERNEL_ID,
   CONTACT_MAP_TILE_KERNEL_ID,
+  GENOME_KMER_KERNEL_ID,
   PUBLIC_ARTIFACT_VERIFY_KERNEL_ID,
   SEED_SWEEP_KERNEL_ID,
   REPLAY_VERIFY_KERNEL_ID,
@@ -341,6 +358,7 @@ export interface ExecutionReceipt {
   deviceClass?: string;
   adapterInfo?: Record<string, unknown>;
   derived?: DerivedExecutionEvidence;
+  publicOutput?: Record<string, unknown>;
   computeMs: number;
   receivedAt: number;
   clientVersion?: string;
@@ -455,6 +473,7 @@ export interface ComputeScoreBreakdown {
   acceptedExploitSearchChunks: number;
   acceptedExploitSearchSeeds: number;
   acceptedImageTileInferChunks: number;
+  acceptedLogitDivergenceChunks: number;
   acceptedMicroscopyTileScoreChunks: number;
   acceptedPrefillTopkProbeChunks: number;
   acceptedPublicArtifactChunks: number;
@@ -485,6 +504,36 @@ export interface ReplayVerificationBadge {
   verifiedAt?: number;
   taskId: string;
   chunkId: string;
+}
+
+export interface ContactMapPublicAggregateReceipt {
+  receiptId: string;
+  outputHash: ContentHash;
+  executionMode: ExecutionMode;
+  transport: TransportKind;
+  receivedAt: number;
+  signatureStatus: "unsigned" | "verified" | "missing" | "invalid" | "key-unavailable";
+}
+
+export interface ContactMapPublicAggregateTile {
+  taskId: string;
+  status: ComputeTask["status"];
+  rowStart: number;
+  colStart: number;
+  rowResidues: string;
+  colResidues: string;
+  minSeparation: number;
+  expectedOutputHash: ContentHash | null;
+  receiptCount: number;
+  acceptedCount: number;
+  receipts: ContactMapPublicAggregateReceipt[];
+}
+
+export interface ContactMapPublicAggregate {
+  kernelId: typeof CONTACT_MAP_TILE_KERNEL_ID;
+  totalTasks: number;
+  totalAcceptedReceipts: number;
+  tiles: ContactMapPublicAggregateTile[];
 }
 
 export interface StoreOptions {
@@ -1391,6 +1440,59 @@ export class ComputeLabStore {
     return task;
   }
 
+  seedLogitDivergenceTask(input: {
+    modelId?: string;
+    promptText: string;
+    topK?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const normalized = normalizeLogitDivergenceParams({
+      modelId: input.modelId ?? LOGIT_DIVERGENCE_MODEL_ID,
+      promptText: input.promptText,
+      topK: input.topK ?? 4,
+    });
+    const params = {
+      modelId: normalized.modelId,
+      promptText: normalized.promptText,
+      topK: normalized.topK,
+    };
+    const taskId = randomId("task");
+    const minExecutions = Math.max(2, input.minExecutions ?? 2);
+    const minAgreeing = Math.min(minExecutions, Math.max(2, input.minAgreeing ?? 2));
+    const chunk: ComputeChunk = {
+      chunkId: `${taskId}-chunk-0`,
+      taskId,
+      ordinal: 0,
+      kind: LOGIT_DIVERGENCE_KERNEL_ID,
+      params,
+      kernelId: LOGIT_DIVERGENCE_KERNEL_ID,
+      kernelHash: LOGIT_DIVERGENCE_KERNEL_HASH,
+      inputHash: hashCanonical({ kind: LOGIT_DIVERGENCE_KERNEL_ID, params }),
+      expectedOutputHash: logitDivergencePlaceholderOutputHash(normalized),
+      status: "pending",
+    };
+    const task: ComputeTask = {
+      taskId,
+      kind: LOGIT_DIVERGENCE_KERNEL_ID,
+      status: "running",
+      createdAt: this.now(),
+      validationPolicy: {
+        determinismClass: "tolerance-bounded",
+        validationMode: "measurement",
+        minExecutions,
+        minAgreeing,
+        requiredTransport: input.requiredTransport,
+        requiredPeerSubreceipt: input.requiredPeerSubreceipt,
+      },
+      chunks: [chunk],
+    };
+    this.tasks.set(taskId, task);
+    return task;
+  }
+
   seedContactMapTileTask(input: {
     rowResidues: string;
     colResidues: string;
@@ -1435,6 +1537,61 @@ export class ComputeLabStore {
     const task: ComputeTask = {
       taskId,
       kind: CONTACT_MAP_TILE_KERNEL_ID,
+      status: "running",
+      createdAt: this.now(),
+      validationPolicy: {
+        determinismClass: "bit-exact",
+        validationMode: "expected-hash",
+        minExecutions,
+        minAgreeing,
+        expectedOutputHash,
+        requiredTransport: input.requiredTransport,
+        requiredPeerSubreceipt: input.requiredPeerSubreceipt,
+      },
+      chunks: [chunk],
+    };
+    this.tasks.set(taskId, task);
+    return task;
+  }
+
+  seedGenomeKmerTask(input: {
+    sequenceId?: string;
+    sequence: string;
+    k?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const normalized = normalizeGenomeKmerParams({
+      sequenceId: input.sequenceId ?? "",
+      sequence: input.sequence,
+      k: input.k ?? 3,
+    });
+    const params = {
+      sequenceId: normalized.sequenceId,
+      sequence: normalized.sequence,
+      k: normalized.k,
+    };
+    const expectedOutputHash = runGenomeKmerReference(normalized).outputHash;
+    const taskId = randomId("task");
+    const minExecutions = Math.max(1, input.minExecutions ?? 2);
+    const minAgreeing = Math.min(minExecutions, Math.max(1, input.minAgreeing ?? 2));
+    const chunk: ComputeChunk = {
+      chunkId: `${taskId}-chunk-0`,
+      taskId,
+      ordinal: 0,
+      kind: GENOME_KMER_KERNEL_ID,
+      params,
+      kernelId: GENOME_KMER_KERNEL_ID,
+      kernelHash: GENOME_KMER_KERNEL_HASH,
+      inputHash: hashCanonical({ kind: GENOME_KMER_KERNEL_ID, params }),
+      expectedOutputHash,
+      status: "pending",
+    };
+    const task: ComputeTask = {
+      taskId,
+      kind: GENOME_KMER_KERNEL_ID,
       status: "running",
       createdAt: this.now(),
       validationPolicy: {
@@ -1785,6 +1942,13 @@ export class ComputeLabStore {
     }
 
     if (task.validationPolicy.validationMode === "measurement") {
+      if (chunk.kind !== DEVICE_WITNESS_WEBRTC_KERNEL_ID) {
+        const receipt = this.makeReceipt(input, "pending");
+        this.receipts.set(receipt.receiptId, receipt);
+        assignment.status = "receipted";
+        const validation = this.evaluateMeasurementChunk(task, chunk);
+        return { receipt: this.receipts.get(receipt.receiptId) ?? receipt, validation };
+      }
       const transcript = measurementTranscript(input.adapterInfo);
       const measurementInput = { ...input, adapterInfo: transcript };
       const expected = measurementReceiptHash(chunk, transcript);
@@ -2350,6 +2514,48 @@ export class ComputeLabStore {
     return this.replayBadges().find((badge) => badge.matchId === matchId) ?? null;
   }
 
+  publicContactMapAggregate(): ContactMapPublicAggregate {
+    const tiles: ContactMapPublicAggregateTile[] = [];
+    let totalTasks = 0;
+    let totalAcceptedReceipts = 0;
+    for (const task of this.tasks.values()) {
+      if (task.kind !== CONTACT_MAP_TILE_KERNEL_ID) continue;
+      totalTasks++;
+      const chunk = task.chunks[0];
+      if (!chunk) continue;
+      const receipts = this.receiptsFor(chunk.chunkId);
+      const accepted = receipts.filter((receipt) => receipt.decision === "accepted");
+      totalAcceptedReceipts += accepted.length;
+      tiles.push({
+        taskId: task.taskId,
+        status: task.status,
+        rowStart: Number(chunk.params.rowStart ?? 0),
+        colStart: Number(chunk.params.colStart ?? 0),
+        rowResidues: String(chunk.params.rowResidues ?? ""),
+        colResidues: String(chunk.params.colResidues ?? ""),
+        minSeparation: Number(chunk.params.minSeparation ?? 0),
+        expectedOutputHash: chunk.expectedOutputHash ?? null,
+        receiptCount: receipts.length,
+        acceptedCount: accepted.length,
+        receipts: accepted.map((receipt) => ({
+          receiptId: receipt.receiptId,
+          outputHash: receipt.outputHash,
+          executionMode: receipt.executionMode,
+          transport: receipt.transport,
+          receivedAt: receipt.receivedAt,
+          signatureStatus: receipt.signatureStatus ?? "unsigned",
+        })),
+      });
+    }
+    tiles.sort((a, b) => a.rowStart - b.rowStart || a.colStart - b.colStart);
+    return {
+      kernelId: CONTACT_MAP_TILE_KERNEL_ID,
+      totalTasks,
+      totalAcceptedReceipts,
+      tiles,
+    };
+  }
+
   dashboard() {
     const assignments = Array.from(this.assignments.values());
     const receipts = Array.from(this.receipts.values());
@@ -2667,7 +2873,10 @@ export class ComputeLabStore {
         this.bumpReputation(receipt.workerId, "accepted");
       }
       chunk.status = "accepted";
-      const validation = this.recordValidation(task, chunk, "accepted", receipts, valid, "measurement transcript accepted");
+      const reason = chunk.kind === DEVICE_WITNESS_WEBRTC_KERNEL_ID
+        ? "measurement transcript accepted"
+        : "measurement cohort accepted";
+      const validation = this.recordValidation(task, chunk, "accepted", receipts, valid, reason);
       this.maybeCompleteTask(task);
       return validation;
     }
@@ -3137,7 +3346,7 @@ function receiptPolicyMismatch(
 
 function receiptMismatch(
   chunk: ComputeChunk,
-  input: Pick<ExecutionReceipt, "kernelId" | "kernelHash" | "inputHash" | "artifactHash" | "outputHash" | "derived">,
+  input: Pick<ExecutionReceipt, "kernelId" | "kernelHash" | "inputHash" | "artifactHash" | "outputHash" | "derived" | "publicOutput">,
 ): { decision: ReceiptDecision; reason: string } | null {
   if (input.kernelId !== chunk.kernelId || !hashesEqual(input.kernelHash, chunk.kernelHash)) {
     return { decision: "kernel-mismatch", reason: "kernel did not match assignment" };
@@ -3197,6 +3406,46 @@ function receiptMismatch(
       return { decision: "output-mismatch", reason: "derived output hash mismatch" };
     }
   }
+  if (chunk.kind === LOGIT_DIVERGENCE_KERNEL_ID) {
+    const publicOutputMismatch = logitDivergenceReceiptMismatch(chunk, input);
+    if (publicOutputMismatch) return publicOutputMismatch;
+  }
+  return null;
+}
+
+function logitDivergenceReceiptMismatch(
+  chunk: ComputeChunk,
+  input: Pick<ExecutionReceipt, "outputHash" | "publicOutput">,
+): { decision: ReceiptDecision; reason: string } | null {
+  if (!input.publicOutput) {
+    return { decision: "malformed", reason: "logit divergence publicOutput required" };
+  }
+  let outputSize = 0;
+  try {
+    outputSize = canonicalJson(input.publicOutput).length;
+  } catch {
+    return { decision: "malformed", reason: "logit divergence publicOutput invalid" };
+  }
+  if (outputSize <= 0 || outputSize > 8192) {
+    return { decision: "malformed", reason: "logit divergence publicOutput too large" };
+  }
+  try {
+    const normalized = normalizeLogitDivergencePublicOutput(input.publicOutput, {
+      modelId: stringParam(chunk.params.modelId),
+      promptText: stringParam(chunk.params.promptText),
+      topK: asInt(chunk.params.topK, "topK"),
+    });
+    const expectedPromptHash = sha256(stringParam(chunk.params.promptText)).value;
+    if (normalized.promptHash !== expectedPromptHash) {
+      return { decision: "input-mismatch", reason: "logit divergence prompt hash mismatch" };
+    }
+    const outputHash = logitDivergencePublicOutputHash(normalized);
+    if (!hashesEqual(outputHash, input.outputHash)) {
+      return { decision: "output-mismatch", reason: "logit divergence output hash mismatch" };
+    }
+  } catch (error) {
+    return { decision: "malformed", reason: error instanceof Error ? error.message : "logit divergence publicOutput invalid" };
+  }
   return null;
 }
 
@@ -3245,6 +3494,7 @@ export function receiptHashPayload(
     | "deviceClass"
     | "adapterInfo"
     | "derived"
+    | "publicOutput"
     | "computeMs"
     | "clientVersion"
   >,
@@ -3269,6 +3519,7 @@ export function receiptHashPayload(
     deviceClass: input.deviceClass,
     adapterInfo: input.adapterInfo,
     derived: input.derived,
+    publicOutput: input.publicOutput,
     computeMs: input.computeMs,
     clientVersion: input.clientVersion,
   };
@@ -3670,6 +3921,7 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
   let acceptedExploitSearchChunks = 0;
   let acceptedExploitSearchSeeds = 0;
   let acceptedImageTileInferChunks = 0;
+  let acceptedLogitDivergenceChunks = 0;
   let acceptedMicroscopyTileScoreChunks = 0;
   let acceptedPrefillTopkProbeChunks = 0;
   let acceptedPublicArtifactChunks = 0;
@@ -3696,6 +3948,7 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
           asInt(chunk.params.seedEndExclusive, "seedEndExclusive") - asInt(chunk.params.seedStart, "seedStart"),
         );
       } else if (task.kind === IMAGE_TILE_INFER_KERNEL_ID) acceptedImageTileInferChunks++;
+      else if (task.kind === LOGIT_DIVERGENCE_KERNEL_ID) acceptedLogitDivergenceChunks++;
       else if (task.kind === MICROSCOPY_TILE_SCORE_KERNEL_ID) acceptedMicroscopyTileScoreChunks++;
       else if (task.kind === PREFILL_TOPK_PROBE_KERNEL_ID) acceptedPrefillTopkProbeChunks++;
       else if (task.kind === PUBLIC_ARTIFACT_VERIFY_KERNEL_ID) acceptedPublicArtifactChunks++;
@@ -3725,6 +3978,7 @@ function computeScoreBreakdown(tasks: ComputeTask[], receipts: ExecutionReceipt[
     acceptedExploitSearchChunks,
     acceptedExploitSearchSeeds,
     acceptedImageTileInferChunks,
+    acceptedLogitDivergenceChunks,
     acceptedMicroscopyTileScoreChunks,
     acceptedPrefillTopkProbeChunks,
     acceptedPublicArtifactChunks,
@@ -3752,6 +4006,7 @@ function computeScore(breakdown: ComputeScoreBreakdown): number {
     breakdown.acceptedExploitSearchChunks * 85 +
     breakdown.acceptedExploitSearchSeeds * 2 +
     breakdown.acceptedImageTileInferChunks * 90 +
+    breakdown.acceptedLogitDivergenceChunks * 135 +
     breakdown.acceptedMicroscopyTileScoreChunks * 95 +
     breakdown.acceptedPrefillTopkProbeChunks * 125 +
     breakdown.acceptedPublicArtifactChunks * 80 +
@@ -4205,6 +4460,12 @@ function referenceOutputHash(chunk: Omit<ComputeChunk, "expectedOutputHash">): C
         promptText: stringParam(chunk.params.promptText),
         topK: asInt(chunk.params.topK, "topK"),
       }));
+    case LOGIT_DIVERGENCE_KERNEL_ID:
+      return logitDivergencePlaceholderOutputHash(normalizeLogitDivergenceParams({
+        modelId: stringParam(chunk.params.modelId),
+        promptText: stringParam(chunk.params.promptText),
+        topK: asInt(chunk.params.topK, "topK"),
+      }));
     case CONTACT_MAP_TILE_KERNEL_ID:
       return runContactMapTileReference({
         rowResidues: stringParam(chunk.params.rowResidues),
@@ -4212,6 +4473,12 @@ function referenceOutputHash(chunk: Omit<ComputeChunk, "expectedOutputHash">): C
         rowStart: asInt(chunk.params.rowStart, "rowStart"),
         colStart: asInt(chunk.params.colStart, "colStart"),
         minSeparation: asInt(chunk.params.minSeparation, "minSeparation"),
+      }).outputHash;
+    case GENOME_KMER_KERNEL_ID:
+      return runGenomeKmerReference({
+        sequenceId: stringParam(chunk.params.sequenceId),
+        sequence: stringParam(chunk.params.sequence),
+        k: asInt(chunk.params.k, "k"),
       }).outputHash;
     default:
       throw new Error(`unsupported reference chunk kind: ${chunk.kind}`);

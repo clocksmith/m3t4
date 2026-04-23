@@ -12,12 +12,14 @@ window.__M3T4_WS_ORIGIN__ = isLocalM3t4Config
   : window.__M3T4_API_ORIGIN__.replace(/^http/, "ws");
 window.__M3T4_AUTH_MODE__ = isLocalM3t4Config ? "dev" : "firebase";
 
-// Hidden staff-only volunteer compute. Requires explicit browser opt-in via
-// window.m3t4Compute.start(); leave off for public builds.
+// Opt-in volunteer compute. Requires explicit browser opt-in via
+// window.m3t4Compute.start(); leave off until the compute surface is ready.
 window.__M3T4_COMPUTE_SLACK_WORKER__ = false;
 window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS__ = false;
 window.__M3T4_COMPUTE_EMBED_TILE__ = false;
 window.__M3T4_COMPUTE_PREFILL_TOPK_PROBE__ = false;
+window.__M3T4_COMPUTE_LOGIT_DIVERGENCE__ = false;
+window.__M3T4_COMPUTE_GENOME_KMER__ = false;
 window.__M3T4_COMPUTE_EMBED_MODEL__ = "";
 window.__M3T4_COMPUTE_LAB_ORIGIN__ = "";
 window.__M3T4_COMPUTE_STUN_URLS__ = [];

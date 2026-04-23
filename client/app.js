@@ -75,6 +75,12 @@ async function loadFeatures() {
     if (FEATURES.computePrefillTopkProbe === true) {
       window.__M3T4_COMPUTE_PREFILL_TOPK_PROBE__ = true;
     }
+    if (FEATURES.computeLogitDivergence === true) {
+      window.__M3T4_COMPUTE_LOGIT_DIVERGENCE__ = true;
+    }
+    if (FEATURES.computeGenomeKmer === true) {
+      window.__M3T4_COMPUTE_GENOME_KMER__ = true;
+    }
     if (typeof s.computeEmbedModelId === "string" && s.computeEmbedModelId && !window.__M3T4_COMPUTE_EMBED_MODEL__) {
       window.__M3T4_COMPUTE_EMBED_MODEL__ = s.computeEmbedModelId;
     }

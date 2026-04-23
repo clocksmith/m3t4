@@ -270,6 +270,20 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     return out;
   }
 
+  seedLogitDivergenceTask(input: {
+    modelId?: string;
+    promptText: string;
+    topK?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const out = super.seedLogitDivergenceTask(input);
+    this.persist(() => ({ tasks: [out] }));
+    return out;
+  }
+
   seedContactMapTileTask(input: {
     rowResidues: string;
     colResidues: string;
@@ -282,6 +296,20 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     requiredPeerSubreceipt?: boolean;
   }): ComputeTask {
     const out = super.seedContactMapTileTask(input);
+    this.persist(() => ({ tasks: [out] }));
+    return out;
+  }
+
+  seedGenomeKmerTask(input: {
+    sequenceId?: string;
+    sequence: string;
+    k?: number;
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const out = super.seedGenomeKmerTask(input);
     this.persist(() => ({ tasks: [out] }));
     return out;
   }

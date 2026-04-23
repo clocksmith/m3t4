@@ -14,6 +14,12 @@ import { IMAGE_TILE_SAMPLE_PRESETS, MICROSCOPY_TILE_SAMPLE_PRESETS } from "../im
 import { runReplayVerify } from "../kernels/replay-verify.js";
 import { runSeedSweep } from "../kernels/seed-sweep.js";
 import { runContactMapTileReference } from "../kernels/contact-map-tile.js";
+import {
+  LOGIT_DIVERGENCE_LOGIT_SCALE,
+  LOGIT_DIVERGENCE_MODEL_ID,
+  logitDivergencePublicOutputHash,
+  normalizeLogitDivergencePublicOutput,
+} from "../kernels/logit-divergence.js";
 import { runTensorTileReference } from "../kernels/tensor-tile.js";
 import {
   createReplayArtifactV1,
@@ -1305,6 +1311,184 @@ test("contact map tile receipts require webgpu-light workers and accept CPU refe
   assert.equal(stats.scoreBreakdown.acceptedContactMapTileChunks, 1);
   assert.equal(stats.scoreBreakdown.acceptedContactMapTileCells, 256);
   assert.ok(stats.computeScore > 0);
+});
+
+test("genome kmer receipts accept CPU reference hashes and update compute score", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const kmerCapability: WorkerCapability = {
+    ...capability,
+    kernels: [...capability.kernels, "science.genome_kmer.v0"],
+  };
+  const worker = store.registerWorker({ capability: kmerCapability });
+  const task = store.seedGenomeKmerTask({
+    sequenceId: "test-snippet",
+    sequence: "ACGTACGTACGTACGT",
+    k: 3,
+    minExecutions: 1,
+    minAgreeing: 1,
+  });
+  const next = store.assignNext(auth(worker))!;
+  assert.equal(next.task.kind, "science.genome_kmer.v0");
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: next.assignment.assignmentId,
+    assignmentToken: next.assignment.assignmentToken,
+  });
+  const result = store.submitReceipt({
+    ...auth(worker),
+    assignmentId: next.assignment.assignmentId,
+    assignmentToken: next.assignment.assignmentToken,
+    taskId: next.task.taskId,
+    chunkId: next.chunk.chunkId,
+    ...referenceReceiptFields(next.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 1,
+  });
+  assert.equal(result.receipt.decision, "accepted");
+  assert.equal(result.validation?.status, "accepted");
+});
+
+test("logit divergence receipts accept as measurement cohort from webgpu-light workers", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const probeCapability: WorkerCapability = {
+    ...webgpuCapability,
+    kernels: [...webgpuCapability.kernels, "ml.logit_divergence.v0"],
+  };
+  const workerA = store.registerWorker({ capability: probeCapability });
+  const workerB = store.registerWorker({ capability: probeCapability });
+  acceptWebGpuWitness(store, workerA);
+  acceptWebGpuWitness(store, workerB);
+  const promptText = "The capital of France is";
+  const task = store.seedLogitDivergenceTask({
+    promptText,
+    topK: 4,
+    minExecutions: 2,
+    minAgreeing: 2,
+  });
+  const buildPublicOutput = (shift: number) => normalizeLogitDivergencePublicOutput({
+    kind: "ml.logit_divergence.v0",
+    modelId: LOGIT_DIVERGENCE_MODEL_ID,
+    promptHash: sha256(promptText).value,
+    promptLength: promptText.length,
+    prefillTokenCount: 8,
+    topK: 4,
+    logitScale: LOGIT_DIVERGENCE_LOGIT_SCALE,
+    hits: [
+      { rank: 1, tokenId: 101, logitQ: 512 + shift, deltaTopQ: 0 },
+      { rank: 2, tokenId: 202, logitQ: 256 + shift, deltaTopQ: -256 },
+      { rank: 3, tokenId: 303, logitQ: 128 + shift, deltaTopQ: -384 },
+      { rank: 4, tokenId: 404, logitQ: 64 + shift, deltaTopQ: -448 },
+    ],
+  });
+  const firstOutput = buildPublicOutput(0);
+  const firstOutputHash = logitDivergencePublicOutputHash(firstOutput);
+  const firstOutputRecord = firstOutput as unknown as Record<string, unknown>;
+  const secondOutput = buildPublicOutput(-8);
+  const secondOutputHash = logitDivergencePublicOutputHash(secondOutput);
+  const secondOutputRecord = secondOutput as unknown as Record<string, unknown>;
+
+  const first = store.assignNext(auth(workerA))!;
+  assert.equal(first.task.taskId, task.taskId);
+  store.acceptAssignment({
+    ...auth(workerA),
+    assignmentId: first.assignment.assignmentId,
+    assignmentToken: first.assignment.assignmentToken,
+  });
+  const firstReceipt = store.submitReceipt({
+    ...auth(workerA),
+    assignmentId: first.assignment.assignmentId,
+    assignmentToken: first.assignment.assignmentToken,
+    taskId: first.task.taskId,
+    chunkId: first.chunk.chunkId,
+    kernelId: first.chunk.kernelId,
+    kernelHash: first.chunk.kernelHash,
+    inputHash: first.chunk.inputHash,
+    outputHash: firstOutputHash,
+    publicOutput: firstOutputRecord,
+    determinismClass: "tolerance-bounded",
+    validationMode: "measurement",
+    executionMode: "webgpu",
+    transport: "http",
+    computeMs: 21,
+  });
+  assert.equal(firstReceipt.receipt.decision, "pending");
+  const second = store.assignNext(auth(workerB))!;
+  store.acceptAssignment({
+    ...auth(workerB),
+    assignmentId: second.assignment.assignmentId,
+    assignmentToken: second.assignment.assignmentToken,
+  });
+  const secondReceipt = store.submitReceipt({
+    ...auth(workerB),
+    assignmentId: second.assignment.assignmentId,
+    assignmentToken: second.assignment.assignmentToken,
+    taskId: second.task.taskId,
+    chunkId: second.chunk.chunkId,
+    kernelId: second.chunk.kernelId,
+    kernelHash: second.chunk.kernelHash,
+    inputHash: second.chunk.inputHash,
+    outputHash: secondOutputHash,
+    publicOutput: secondOutputRecord,
+    determinismClass: "tolerance-bounded",
+    validationMode: "measurement",
+    executionMode: "webgpu",
+    transport: "http",
+    computeMs: 22,
+  });
+  assert.equal(secondReceipt.receipt.decision, "accepted");
+  assert.equal(secondReceipt.validation?.status, "accepted");
+  assert.equal(store.publicStats({ suppressSmall: false }).scoreBreakdown.acceptedLogitDivergenceChunks, 1);
+});
+
+test("public contact map aggregate endpoint lists accepted receipts", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const worker = store.registerWorker({ capability: webgpuCapability });
+  acceptWebGpuWitness(store, worker);
+  const task = store.seedContactMapTileTask({
+    rowResidues: "MKTAYIAKQRQISFVK",
+    colResidues: "SHFSRQDILDLIPTSS",
+    rowStart: 0,
+    colStart: 24,
+    minSeparation: 8,
+    minExecutions: 1,
+    minAgreeing: 1,
+  });
+  const next = store.assignNext(auth(worker))!;
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: next.assignment.assignmentId,
+    assignmentToken: next.assignment.assignmentToken,
+  });
+  const expectedOutputHash = runContactMapTileReference({
+    rowResidues: "MKTAYIAKQRQISFVK",
+    colResidues: "SHFSRQDILDLIPTSS",
+    rowStart: 0,
+    colStart: 24,
+    minSeparation: 8,
+  }).outputHash;
+  store.submitReceipt({
+    ...auth(worker),
+    assignmentId: next.assignment.assignmentId,
+    assignmentToken: next.assignment.assignmentToken,
+    taskId: next.task.taskId,
+    chunkId: next.chunk.chunkId,
+    ...referenceReceiptFields(next.chunk),
+    outputHash: expectedOutputHash,
+    executionMode: "webgpu",
+    transport: "http",
+    computeMs: 9,
+  });
+  const aggregate = store.publicContactMapAggregate();
+  assert.equal(aggregate.kernelId, "science.contact_map_tile.v0");
+  assert.equal(aggregate.totalTasks, 1);
+  assert.equal(aggregate.totalAcceptedReceipts, 1);
+  assert.equal(aggregate.tiles.length, 1);
+  assert.equal(aggregate.tiles[0].taskId, task.taskId);
+  assert.equal(aggregate.tiles[0].rowStart, 0);
+  assert.equal(aggregate.tiles[0].colStart, 24);
+  assert.equal(aggregate.tiles[0].receipts.length, 1);
+  assert.equal(aggregate.tiles[0].receipts[0].transport, "http");
 });
 
 test("WebRTC tensor tile peer subassignments require webgpu-light peers", () => {
@@ -2941,6 +3125,11 @@ test("HTTP use case registry reports implemented advisory workloads", async (t) 
   assert.ok(resp.body.useCases.some((useCase: any) =>
     useCase.id === "prefill-topk-probes" &&
     useCase.workload === "ml.prefill_topk_probe.v0" &&
+    useCase.status === "experimental"
+  ));
+  assert.ok(resp.body.useCases.some((useCase: any) =>
+    useCase.id === "logit-divergence" &&
+    useCase.workload === "ml.logit_divergence.v0" &&
     useCase.status === "experimental"
   ));
   assert.ok(resp.body.useCases.some((useCase: any) =>

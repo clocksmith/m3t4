@@ -109,8 +109,12 @@ class ComputeClient {
     return this.available;
   }
 
+  hasOrigin() {
+    return !!computeLabOrigin();
+  }
+
   isConfigured() {
-    return !!computeLabOrigin() && computeFlagEnabled();
+    return this.hasOrigin() && computeFlagEnabled();
   }
 
   subscribe(fn) {
@@ -123,6 +127,8 @@ class ComputeClient {
     return {
       available: this.available,
       configured: this.isConfigured(),
+      originConfigured: this.hasOrigin(),
+      workerFeatureEnabled: computeFlagEnabled(),
       enabled: this.enabled,
       mode: this.mode,
       state: this.state,
@@ -158,8 +164,8 @@ class ComputeClient {
 
   async start(opts = {}) {
     if (!this.available) return;
-    if (!this.isConfigured()) {
-      this.state = "unconfigured";
+    if (!this.hasOrigin() || !computeFlagEnabled()) {
+      this.state = this.hasOrigin() ? "feature-disabled" : "unconfigured";
       this.emit();
       return;
     }
@@ -238,7 +244,8 @@ class ComputeClient {
 
   currentGate() {
     if (!this.enabled) return "user-disabled";
-    if (!this.isConfigured()) return "unconfigured";
+    if (!this.hasOrigin()) return "unconfigured";
+    if (!computeFlagEnabled()) return "feature-disabled";
     if (this.policy.pauseWhenHidden && document.visibilityState !== "visible") return "tab-hidden";
     if (this.policy.pauseOnLowBattery && this.battery && !this.battery.charging && this.battery.level < 0.35) return "low-battery";
     if (this.mode === "after-match" && this.matchPhase === "active") return "not-now";

@@ -3037,7 +3037,7 @@ input[type="range"]::-moz-range-thumb {
     padding: 32px clamp(14px, 4vw, 22px) 14px;
   }
   .intro-fork h1 {
-    font-size: 26px;
+    font-size: 18px;
   }
   .intro-fork-lines {
     flex-direction: column;

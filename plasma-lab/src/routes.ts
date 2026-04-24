@@ -6,6 +6,7 @@ import { canonicalJson, hashCanonical } from "./plasma/hash.js";
 import type { ContentHash, DerivedExecutionEvidence, ExecutionMode, GovernorMode, TransportKind, ValidationPolicy, WorkerCapability, WorkerRefusalReason } from "./plasma/types.js";
 import { ComputeLabStore, type ComputeChunk, type ExecutionReceipt, type PeerSubassignment, type PeerSubreceipt, type ValidationRecord, type WebRtcPairRecord, type WebRtcSessionRecord } from "./store.js";
 import { COMPUTE_USE_CASES } from "./use-cases.js";
+import { canSeed, getWorkloadPolicy, isPublicVisible } from "./workload-policy.js";
 import { CONTACT_MAP_PRESETS, resolveContactMapPreset } from "./contact-map-presets.js";
 import { GENOME_KMER_PRESETS, resolveGenomeKmerPreset } from "./genome-kmer-presets.js";
 import { IMAGE_TILE_SAMPLE_PRESETS, MICROSCOPY_TILE_SAMPLE_PRESETS, resolveTileSamplePreset } from "./image-tile-presets.js";
@@ -376,7 +377,7 @@ export async function handleComputeLabRequest(
   }
 
   if (req.method === "GET" && url.pathname === "/compute/use-cases") {
-    json(res, 200, { useCases: COMPUTE_USE_CASES });
+    json(res, 200, { useCases: publicUseCases() });
     return true;
   }
 
@@ -389,7 +390,7 @@ export async function handleComputeLabRequest(
     const summary = deps.store.summary();
     json(res, 200, {
       stats: deps.store.publicStats(),
-      useCases: COMPUTE_USE_CASES,
+      useCases: publicUseCases(),
       status: {
         acceptAssignments: summary.acceptAssignments,
         assignmentIntakeClosesAt: summary.assignmentIntakeClosesAt,
@@ -760,6 +761,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       json(res, 400, { error: "only prime-search.v0 can be seeded in this slice" });
       return true;
     }
+    if (!guardSeed(res, "prime-search.v0")) return true;
     try {
       const task = deps.store.seedPrimeTask({
         start: body?.start ?? 1_000_000,
@@ -776,6 +778,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     return true;
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/device-witness-webgpu") {
+    if (!guardSeed(res, "device_witness.webgpu.v0")) return true;
     const body = await readJson<{
       seed?: number;
       count?: number;
@@ -799,6 +802,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     return true;
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/device-witness-render") {
+    if (!guardSeed(res, "device_witness.render_fixture.v0")) return true;
     const body = await readJson<{
       minExecutions?: number;
       minAgreeing?: number;
@@ -818,6 +822,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     return true;
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/device-witness-derived-buffer") {
+    if (!guardSeed(res, "device_witness.derived_buffer.v0")) return true;
     const body = await readJson<{
       seed?: number;
       count?: number;
@@ -839,6 +844,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     return true;
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/device-witness-webrtc") {
+    if (!guardSeed(res, "device_witness.webrtc.v0")) return true;
     const body = await readJson<{
       timeoutMs?: number;
       minExecutions?: number;
@@ -858,6 +864,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     return true;
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/tensor-tile") {
+    if (!guardSeed(res, "plasma.tensor_tile.v0")) return true;
     const body = await readJson<{
       seed?: number;
       rows?: number;
@@ -887,6 +894,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     return true;
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/image-tile-infer") {
+    if (!guardSeed(res, "ml.image_tile_infer.v0")) return true;
     const body = await readJson<{
       presetId?: string;
       sourceId?: string;
@@ -925,6 +933,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     return true;
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/genome-kmer") {
+    if (!guardSeed(res, "science.genome_kmer.v0")) return true;
     const body = await readJson<{
       presetId?: string;
       sequenceId?: string;
@@ -959,6 +968,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     return true;
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/microscopy-tile-score") {
+    if (!guardSeed(res, "science.microscopy_tile_score.v0")) return true;
     const body = await readJson<{
       presetId?: string;
       sourceId?: string;
@@ -995,6 +1005,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     return true;
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/exploit-search") {
+    if (!guardSeed(res, "m3t4.exploit_search.v0")) return true;
     const body = await readJson<{
       stageId?: string;
       brainA?: string;
@@ -1030,6 +1041,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     return true;
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/asset-tile-audit") {
+    if (!guardSeed(res, "asset.tile_audit.v0")) return true;
     const body = await readJson<{
       presetId?: string;
       sourceId?: string;
@@ -1066,6 +1078,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     return true;
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/contact-map-tile") {
+    if (!guardSeed(res, "science.contact_map_tile.v0")) return true;
     const body = await readJson<{
       presetId?: string;
       rowResidues?: string;
@@ -1115,8 +1128,14 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       requiredPeerSubreceipt?: boolean;
     }>(req);
     try {
-      const genomePresetIds = sciencePresetIds(body?.genomePresetIds, GENOME_KMER_PRESETS.map((preset) => preset.id).slice(0, 1));
-      const contactPresetIds = sciencePresetIds(body?.contactPresetIds, CONTACT_MAP_PRESETS.map((preset) => preset.id).slice(0, 1));
+      // science-cycle seeds per-workload tasks; skip those whose policy
+      // blocks seeding, instead of failing the whole cycle.
+      const genomePresetIds = canSeed("science.genome_kmer.v0").ok
+        ? sciencePresetIds(body?.genomePresetIds, GENOME_KMER_PRESETS.map((preset) => preset.id).slice(0, 1))
+        : [];
+      const contactPresetIds = canSeed("science.contact_map_tile.v0").ok
+        ? sciencePresetIds(body?.contactPresetIds, CONTACT_MAP_PRESETS.map((preset) => preset.id).slice(0, 1))
+        : [];
       const seeded: Array<{ workload: string; presetId: string; taskId: string; chunks: number }> = [];
       for (const presetId of genomePresetIds) {
         const preset = resolveGenomeKmerPreset(presetId);
@@ -1154,6 +1173,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     return true;
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/public-artifact") {
+    if (!guardSeed(res, "m3t4.public_artifact_verify.v0")) return true;
     const body = await readJson<{
       artifact?: {
         matchId?: string;
@@ -1194,6 +1214,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     return true;
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/replay-verify") {
+    if (!guardSeed(res, "m3t4.replay_verify.v1")) return true;
     const body = await readJson<{
       replayArtifact?: unknown;
       replayArtifactJson?: string;
@@ -1224,6 +1245,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     return true;
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/seed-sweep") {
+    if (!guardSeed(res, "m3t4.seed_sweep.v0")) return true;
     const body = await readJson<{
       stageId?: string;
       brainA?: string;
@@ -1615,6 +1637,45 @@ function routeHashesEqual(a: ContentHash, b: ContentHash): boolean {
 
 function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+// Public-facing use-cases, filtered by the workload policy. Each entry gets
+// its policy annotations appended so the UI can group by release state and
+// show required tier / schedule mode without hard-coding per-workload rules.
+function publicUseCases(): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (const useCase of COMPUTE_USE_CASES) {
+    const workload = useCase.workload;
+    if (!workload) {
+      // Non-workload entries (device-witness meta, infra) — still public by default.
+      out.push({ ...useCase, policy: null });
+      continue;
+    }
+    const policy = getWorkloadPolicy(workload);
+    if (!policy) continue;
+    if (!policy.publicVisible) continue;
+    out.push({
+      ...useCase,
+      policy: {
+        release: policy.release,
+        scheduleMode: policy.scheduleMode,
+        requiredTier: policy.requiredTier,
+      },
+    });
+  }
+  return out;
+}
+
+// Admin seed-endpoint guard. Callers pass the target workload id; this returns
+// a 403 and a reason when the workload is not currently seedable.
+function guardSeed(
+  res: ServerResponse,
+  workload: string,
+): boolean {
+  const verdict = canSeed(workload);
+  if (verdict.ok) return true;
+  json(res, 403, { error: `seed rejected: ${verdict.reason}` });
+  return false;
 }
 
 function dashboardHtml(): string {

@@ -81,6 +81,7 @@ import {
   runTensorTileReference,
 } from "./kernels/tensor-tile.js";
 import { canonicalJson, hashCanonical, randomId, randomToken, sha256 } from "./plasma/hash.js";
+import { canAssign } from "./workload-policy.js";
 import type {
   ContentHash,
   DerivedExecutionEvidence,
@@ -1829,6 +1830,10 @@ export class ComputeLabStore {
     }> = [];
     for (const task of this.tasks.values()) {
       if (task.status !== "running") continue;
+      // Policy gate: tasks whose workload is disabled, retired, or out of
+      // bounded-window eligibility never leave the queue, regardless of
+      // worker tier or capability match.
+      if (!canAssign(task.kind, { intakeOpen: this.acceptAssignmentsFlag }).ok) continue;
       if (!schedulerEligible(worker, profile, task)) continue;
       for (const chunk of task.chunks) {
         if (chunk.status !== "pending") continue;

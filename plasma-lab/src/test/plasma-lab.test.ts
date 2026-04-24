@@ -3027,10 +3027,9 @@ test("HTTP use case registry reports implemented advisory workloads", async (t) 
     useCase.id === "public-artifact-verification" &&
     useCase.workload === "m3t4.public_artifact_verify.v0"
   ));
-  assert.ok(resp.body.useCases.some((useCase: any) =>
-    useCase.id === "seed-sweeps" &&
-    useCase.workload === "m3t4.seed_sweep.v0"
-  ));
+  // seed-sweeps is admin-preview in the workload policy and no longer
+  // public-visible. It must not appear in the public registry.
+  assert.ok(!resp.body.useCases.some((useCase: any) => useCase.id === "seed-sweeps"));
   assert.ok(resp.body.useCases.some((useCase: any) =>
     useCase.id === "contact-map-tiles" &&
     useCase.workload === "science.contact_map_tile.v0" &&

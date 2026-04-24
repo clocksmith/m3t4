@@ -719,7 +719,7 @@ class ComputeClient {
       this.runWebRtcAssignment({ assignment, chunk, task });
       return;
     }
-    if (webRtcDataKernel(chunk.kind) && artifactWebRtcEnabled()) {
+    if (webRtcDataKernel(chunk.kind) && (artifactWebRtcEnabled() || strictWebRtcProofTask(task))) {
       this.runWebRtcDataAssignment({ assignment, chunk, task });
       return;
     }
@@ -876,7 +876,7 @@ class ComputeClient {
         at: Date.now(),
       };
       this.current = null;
-      if (artifactWebRtcStrict()) {
+      if (artifactWebRtcStrict() || strictWebRtcProofTask(task)) {
         this.state = `webrtc artifact failed: ${message(e)}`;
         this.totals.rejected++;
         this.schedule(MODE_PROFILE[this.mode].cooldownMs);
@@ -1012,6 +1012,11 @@ function artifactWebRtcEnabled() {
 
 function artifactWebRtcStrict() {
   return window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__ === true;
+}
+
+function strictWebRtcProofTask(task) {
+  const policy = task?.validationPolicy || {};
+  return policy.requiredTransport === "webrtc" || policy.requiredPeerSubreceipt === true;
 }
 
 function genomeKmerEnabled() {

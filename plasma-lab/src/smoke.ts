@@ -74,6 +74,8 @@ async function main(): Promise<void> {
         artifactSha256,
         payload,
       },
+      requiredTransport: "http",
+      requiredPeerSubreceipt: false,
     }, { "x-plasma-admin-token": ADMIN_TOKEN });
     if (seeded.chunks !== 1) throw new Error(`expected 1 smoke chunk, got ${seeded.chunks}`);
 
@@ -110,6 +112,12 @@ async function startLocalServer(): Promise<SmokeServer> {
     storeBackend: "memory",
     routesEnabled: true,
     taskAdminEnabled: true,
+    publicRegistrationEnabled: true,
+    workerInviteTokens: [],
+    maxWorkersPerIp: 8,
+    maxSessionsPerClient: 4,
+    maxActiveAssignmentsPerIdentity: 2,
+    strictProofTasksDefault: true,
     acceptAssignments: true,
     webrtcSignalingEnabled: false,
     webrtcDataEnabled: false,
@@ -126,6 +134,9 @@ async function startLocalServer(): Promise<SmokeServer> {
     acceptAssignments: config.acceptAssignments,
     assignmentTimeoutMs: config.assignmentTimeoutMs,
     workerSessionTtlMs: config.workerSessionTtlMs,
+    maxWorkersPerIp: config.maxWorkersPerIp,
+    maxSessionsPerClient: config.maxSessionsPerClient,
+    maxActiveAssignmentsPerIdentity: config.maxActiveAssignmentsPerIdentity,
   });
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);

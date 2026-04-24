@@ -450,6 +450,7 @@ function contactMapTileHtml(tile) {
     </div>`;
   const receiptRows = receipts.map((receipt) => `
     <li class="compute-contact-map-receipt">
+      ${tilePreviewHtml(receipt.preview)}
       <code>${escapeHtml(shortId(receipt.receiptId || ""))}</code>
       <span>${escapeHtml(receipt.transport || "—")}</span>
       <span>${escapeHtml(receipt.executionMode || "—")}</span>
@@ -612,6 +613,18 @@ function must(root, selector) {
   const element = root.querySelector(selector);
   if (!element) throw new Error(`missing compute element: ${selector}`);
   return element;
+}
+
+// Advisory preview attached to a receipt. Never affects acceptance — the
+// bytes render here only if the server-persisted preview.sha256 matched
+// the actual bytes when the receipt was submitted.
+function tilePreviewHtml(preview) {
+  if (!preview || preview.encoding !== "png" || !preview.bytesBase64) return "";
+  const src = `data:image/png;base64,${preview.bytesBase64}`;
+  const w = Number(preview.widthPx) || 0;
+  const h = Number(preview.heightPx) || 0;
+  const alt = `output tile preview ${w}x${h}`;
+  return `<img class="compute-tile-preview" src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy">`;
 }
 
 function formatInt(value) {

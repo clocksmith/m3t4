@@ -1,4 +1,5 @@
 import {
+  createHash,
   createPublicKey,
   verify as verifySignature,
   type JsonWebKey,
@@ -355,7 +356,24 @@ export interface ExecutionReceipt {
   reason?: string;
   clientId?: string;
   accountUid?: string;
+  // Optional advisory thumbnail of the output produced by the worker.
+  // Never gates acceptance — that still flows through outputHash. Stored
+  // only when the payload fits the size cap and its self-reported sha256
+  // matches the actual bytes. See validateReceiptPreview() in store.ts.
+  preview?: ExecutionReceiptPreview;
 }
+
+export interface ExecutionReceiptPreview {
+  encoding: "png";
+  widthPx: number;
+  heightPx: number;
+  sha256: string;
+  bytesBase64: string;
+}
+
+export const RECEIPT_PREVIEW_MAX_BYTES = 4096;
+export const RECEIPT_PREVIEW_MAX_WIDTH_PX = 128;
+export const RECEIPT_PREVIEW_MAX_HEIGHT_PX = 128;
 
 export interface ReceiptVerification {
   receiptId: string;
@@ -619,6 +637,7 @@ export interface ContactMapPublicAggregateReceipt {
   transport: TransportKind;
   receivedAt: number;
   signatureStatus: "unsigned" | "verified" | "missing" | "invalid" | "key-unavailable";
+  preview?: ExecutionReceiptPreview;
 }
 
 export interface ContactMapPublicAggregateTile {
@@ -2704,6 +2723,7 @@ export class ComputeLabStore {
           transport: receipt.transport,
           receivedAt: receipt.receivedAt,
           signatureStatus: receipt.signatureStatus ?? "unsigned",
+          preview: receipt.preview,
         })),
       });
     }
@@ -3079,8 +3099,13 @@ export class ComputeLabStore {
     const receiptHash = computeReceiptHash(input);
     const signaturePublicKeyHash = session.signingPublicKeyHash;
     const signatureStatus = receiptSignatureStatus(receiptHash, input.signature, session.signingPublicKey);
+    // Preview is advisory and not part of receiptHash (see receiptHashPayload).
+    // Strip silently if it fails size/shape/magic/sha256 validation.
+    const rawPreview = (input as { preview?: unknown }).preview;
+    const preview = rawPreview === undefined ? undefined : validateReceiptPreview(rawPreview) ?? undefined;
     const receipt = {
       ...input,
+      preview,
       receiptHash,
       signaturePublicKeyHash,
       signatureStatus,
@@ -3846,6 +3871,36 @@ export function receiptHashPayload(
     computeMs: input.computeMs,
     clientVersion: input.clientVersion,
   };
+}
+
+// Validate an optional advisory preview attached to a receipt. Returns a
+// sanitized copy when everything checks out, or null when the preview
+// should be silently dropped. A malformed preview does NOT reject the
+// receipt itself — acceptance still flows through outputHash.
+export function validateReceiptPreview(preview: unknown): ExecutionReceiptPreview | null {
+  if (!preview || typeof preview !== "object") return null;
+  const p = preview as Record<string, unknown>;
+  if (p.encoding !== "png") return null;
+  const width = typeof p.widthPx === "number" ? p.widthPx : NaN;
+  const height = typeof p.heightPx === "number" ? p.heightPx : NaN;
+  if (!Number.isInteger(width) || width <= 0 || width > RECEIPT_PREVIEW_MAX_WIDTH_PX) return null;
+  if (!Number.isInteger(height) || height <= 0 || height > RECEIPT_PREVIEW_MAX_HEIGHT_PX) return null;
+  const sha = typeof p.sha256 === "string" ? p.sha256 : "";
+  if (!/^[0-9a-f]{64}$/.test(sha)) return null;
+  const b64 = typeof p.bytesBase64 === "string" ? p.bytesBase64 : "";
+  if (b64.length === 0 || b64.length > 8192) return null; // base64 caps around 4KB binary
+  let bytes: Buffer;
+  try { bytes = Buffer.from(b64, "base64"); } catch { return null; }
+  if (bytes.length === 0 || bytes.length > RECEIPT_PREVIEW_MAX_BYTES) return null;
+  // PNG magic: 89 50 4E 47 0D 0A 1A 0A
+  if (bytes.length < 8) return null;
+  if (
+    bytes[0] !== 0x89 || bytes[1] !== 0x50 || bytes[2] !== 0x4e || bytes[3] !== 0x47 ||
+    bytes[4] !== 0x0d || bytes[5] !== 0x0a || bytes[6] !== 0x1a || bytes[7] !== 0x0a
+  ) return null;
+  const actualSha = createHash("sha256").update(bytes).digest("hex");
+  if (actualSha !== sha) return null;
+  return { encoding: "png", widthPx: width, heightPx: height, sha256: sha, bytesBase64: b64 };
 }
 
 export function computeReceiptHash(

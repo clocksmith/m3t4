@@ -1,4 +1,5 @@
 import { BEHAVIOR_VERSION, REPLAY_CONSTANTS_HASH, evaluateReciprocalSideBias, replayArtifactToResultV1, simulate, stableReplayJson, STAGES, STRATEGIES } from "../sim/index.js";
+import { buildTilePreview } from "../lib/tile-preview.js";
 
 // Plasma compute worker. Runs deterministic kernels off the main
 // thread so the spectator render loop stays smooth.
@@ -121,6 +122,7 @@ self.onmessage = async (ev) => {
       outputHash,
       derived: result?.derived,
       publicOutput: result?.publicOutput,
+      preview: result?.preview,
       computeMs,
       executionMode: result?.executionMode || (chunk.kind === "device_witness.webgpu.v0" ? "webgpu" : "cpu"),
     });
@@ -331,7 +333,12 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     await withTimeout(readBuffer.mapAsync(GPUMapMode.READ), 800);
     const bytes = new Uint8Array(readBuffer.getMappedRange().slice(0));
     readBuffer.unmap();
-    return { bytes, executionMode: "webgpu" };
+    const preview = await buildTilePreview({
+      outputU32: new Uint32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4),
+      widthPx: spec.colResidues.length,
+      heightPx: spec.rowResidues.length,
+    });
+    return { bytes, executionMode: "webgpu", preview: preview ?? undefined };
   } finally {
     try { rowBuffer?.destroy?.(); } catch {}
     try { colBuffer?.destroy?.(); } catch {}

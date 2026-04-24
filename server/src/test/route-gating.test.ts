@@ -21,6 +21,7 @@ import type { RouteList } from "../routes/types.js";
 import type { SlotCosmeticsInput } from "../stable.js";
 import { VerifyStore } from "../verify-store.js";
 import { publicReplayArtifactFromReplay, type PublicReplayArtifactV1 } from "../public-artifacts.js";
+import { summarizePublicReplayArtifact, type PublicReplayArtifactSummary } from "../stable.js";
 
 class MemoryStableStore {
   private replays = new Map<string, ReplayArtifactV1>();
@@ -37,6 +38,15 @@ class MemoryStableStore {
   }
   async getPublicReplayArtifact(matchId: string): Promise<PublicReplayArtifactV1 | null> {
     return this.publicArtifacts.get(matchId) ?? null;
+  }
+  async listPublicReplayArtifactSummaries(
+    options: { limit?: number } = {},
+  ): Promise<PublicReplayArtifactSummary[]> {
+    const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
+    return Array.from(this.publicArtifacts.values())
+      .sort((a, b) => Date.parse(b.exportedAt) - Date.parse(a.exportedAt))
+      .slice(0, limit)
+      .map(summarizePublicReplayArtifact);
   }
   async getStable(userId: string): Promise<any> { return this.stables.get(userId) ?? null; }
   async listActive(): Promise<any[]> { return []; }

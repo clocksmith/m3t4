@@ -15,7 +15,9 @@ import {
   slotCosmetics,
   slotUnlockElo,
   stablePublic,
+  summarizePublicReplayArtifact,
   type MatchUpdate,
+  type PublicReplayArtifactSummary,
   type Slot,
   type SlotCosmeticsInput,
   type Stable,
@@ -230,6 +232,19 @@ export class FirestoreStableStore implements StableStore {
     if (snap.exists) return snap.data() as PublicReplayArtifactV1;
     const replay = await this.getReplay(matchId);
     return replay ? publicReplayArtifactFromReplay(replay) : null;
+  }
+
+  async listPublicReplayArtifactSummaries(
+    options: { limit?: number } = {},
+  ): Promise<PublicReplayArtifactSummary[]> {
+    await this.ready;
+    const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
+    const snap = await this.db
+      .collection(FIRESTORE_COLLECTIONS.publicReplayArtifacts)
+      .orderBy("exportedAt", "desc")
+      .limit(limit)
+      .get();
+    return snap.docs.map((doc) => summarizePublicReplayArtifact(doc.data() as PublicReplayArtifactV1));
   }
 
   async applyDecay(): Promise<number> {

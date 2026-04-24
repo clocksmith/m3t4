@@ -16,6 +16,8 @@ import {
   type WorkerRecord,
   type WorkerSession,
 } from "./store.js";
+import { PUBLIC_ARTIFACT_VERIFY_KERNEL_ID } from "./kernels/public-artifact-verify.js";
+import { REPLAY_VERIFY_KERNEL_ID } from "./kernels/replay-verify.js";
 import type { ComputeLabPersistence } from "./persistent-store.js";
 
 let configuredDb: Firestore | null = null;
@@ -154,13 +156,29 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
       writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.receiptLogSegments, patch.receiptLogSegments, (segment) => segment.segmentId, mergeReceiptLogSegment));
     }
     if (shouldRefreshDerived(patch)) {
+      // Narrow the per-entity derived collections to only the workers/matches
+      // the patch actually touches. publicStats is a single doc; device/network
+      // class profiles are small-cardinality buckets. Full workerProfiles
+      // rewrite only happens when validations/tasks arrive, where correctness
+      // is worth the cost.
+      const affectedWorkers = affectedWorkerIds(patch, snapshot);
+      const affectedMatches = affectedMatchIds(patch, snapshot);
+      const narrowWorkerProfiles = canNarrowWorkerProfiles(patch);
+      const workerProfiles = narrowWorkerProfiles
+        ? derived.workerProfiles().filter((profile) => affectedWorkers.has(profile.workerId))
+        : derived.workerProfiles();
+      const replayBadges = derived.replayBadges().filter((badge) => affectedMatches.has(badge.matchId));
+      if (workerProfiles.length) {
+        writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.workerProfiles, workerProfiles, (profile) => profile.workerId));
+      }
       writes.push(
-        this.upsertCollection(COMPUTE_COLLECTIONS.workerProfiles, derived.workerProfiles(), (profile) => profile.workerId),
         this.upsertCollection(COMPUTE_COLLECTIONS.deviceClasses, derived.deviceClassProfiles(), (profile) => profile.classId),
         this.upsertCollection(COMPUTE_COLLECTIONS.networkClasses, derived.networkClassProfiles(), (profile) => profile.classId),
         this.upsertCollection(COMPUTE_COLLECTIONS.publicStats, [publicStats], () => "latest"),
-        this.upsertCollection(COMPUTE_COLLECTIONS.replayBadges, derived.replayBadges(), (badge) => badge.matchId, mergeReplayBadge),
       );
+      if (replayBadges.length) {
+        writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.replayBadges, replayBadges, (badge) => badge.matchId, mergeReplayBadge));
+      }
     }
     await Promise.all(writes);
   }
@@ -217,6 +235,73 @@ function shouldRefreshDerived(patch: Partial<ComputeLabSnapshot>): boolean {
     patch.capabilityObservations?.length ||
     patch.connectivityObservations?.length
   );
+}
+
+function canNarrowWorkerProfiles(patch: Partial<ComputeLabSnapshot>): boolean {
+  // Validations flip receipt decisions and can change profiles for workers
+  // not named in the patch. Task patches can introduce new chunks whose
+  // validation state affects many workers. In both cases, fall back to a
+  // full workerProfiles rewrite for correctness. Everything else (heartbeats,
+  // receipts, reputation, observations) carries its own workerId and can
+  // narrow safely.
+  return !patch.validations?.length && !patch.tasks?.length;
+}
+
+function affectedWorkerIds(
+  patch: Partial<ComputeLabSnapshot>,
+  snapshot: ComputeLabSnapshot,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const worker of patch.workers ?? []) ids.add(worker.workerId);
+  for (const session of patch.sessions ?? []) ids.add(session.workerId);
+  for (const assignment of patch.assignments ?? []) ids.add(assignment.workerId);
+  for (const receipt of patch.receipts ?? []) ids.add(receipt.workerId);
+  for (const rep of patch.reputation ?? []) ids.add(rep.workerId);
+  for (const obs of patch.capabilityObservations ?? []) ids.add(obs.workerId);
+  for (const obs of patch.connectivityObservations ?? []) ids.add(obs.workerId);
+  // Validations don't carry workerId directly, but reference receipts.
+  if (patch.validations?.length) {
+    const receiptIds = new Set<string>();
+    for (const validation of patch.validations) {
+      for (const id of validation.comparedReceiptIds ?? []) receiptIds.add(id);
+      for (const id of validation.acceptedReceiptIds ?? []) receiptIds.add(id);
+    }
+    if (receiptIds.size) {
+      for (const receipt of snapshot.receipts) {
+        if (receiptIds.has(receipt.receiptId)) ids.add(receipt.workerId);
+      }
+    }
+  }
+  return ids;
+}
+
+function affectedMatchIds(
+  patch: Partial<ComputeLabSnapshot>,
+  snapshot: ComputeLabSnapshot,
+): Set<string> {
+  const ids = new Set<string>();
+  const addFromTask = (task: ComputeTask) => {
+    if (task.kind !== PUBLIC_ARTIFACT_VERIFY_KERNEL_ID && task.kind !== REPLAY_VERIFY_KERNEL_ID) return;
+    for (const chunk of task.chunks) {
+      const matchId = String(chunk.params?.matchId ?? "");
+      if (matchId) ids.add(matchId);
+    }
+  };
+  for (const task of patch.tasks ?? []) addFromTask(task);
+  const touchedChunks = new Set<string>();
+  for (const receipt of patch.receipts ?? []) touchedChunks.add(receipt.chunkId);
+  for (const validation of patch.validations ?? []) touchedChunks.add(validation.chunkId);
+  if (touchedChunks.size) {
+    for (const task of snapshot.tasks) {
+      if (task.kind !== PUBLIC_ARTIFACT_VERIFY_KERNEL_ID && task.kind !== REPLAY_VERIFY_KERNEL_ID) continue;
+      for (const chunk of task.chunks) {
+        if (!touchedChunks.has(chunk.chunkId)) continue;
+        const matchId = String(chunk.params?.matchId ?? "");
+        if (matchId) ids.add(matchId);
+      }
+    }
+  }
+  return ids;
 }
 
 function mergeWorker(current: WorkerRecord, next: WorkerRecord): WorkerRecord {

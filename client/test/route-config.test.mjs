@@ -25,7 +25,9 @@ test("route config keeps browser feature gates centralized", () => {
   assert.deepEqual(Object.keys(MODES), ["intro", "build", "spectate", "profile", "compute", "rules", "about"]);
 });
 
-test("top navigation keeps the start tab anchored to the intro route", () => {
+test("top navigation keeps home on the logo without a start tab", () => {
   const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  assert.match(html, /<a href="\/" data-route="intro" data-nav="primary" title="Return to the start screen">start<\/a>/);
+  assert.match(html, /<a href="\/" class="logo" title="Go home">/);
+  assert.doesNotMatch(html, /data-route="intro" data-nav="primary"/);
+  assert.doesNotMatch(html, />start<\/a>/);
 });

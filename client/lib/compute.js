@@ -599,7 +599,7 @@ class ComputeClient {
       if (body.idle) {
         this.state = body.reason ?? "no-work";
         this.maybeReportConnectivity();
-        this.schedule(MODE_PROFILE[this.mode].pollMs);
+        this.schedule(retryAfterMs(body) ?? MODE_PROFILE[this.mode].pollMs);
         this.emit();
         return;
       }
@@ -1012,6 +1012,12 @@ function artifactWebRtcEnabled() {
 
 function artifactWebRtcStrict() {
   return window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__ === true;
+}
+
+function retryAfterMs(body) {
+  const retryAfter = Number(body?.retryAfterMs);
+  if (!Number.isFinite(retryAfter) || retryAfter <= 0) return null;
+  return Math.max(1000, Math.min(300000, Math.round(retryAfter)));
 }
 
 function strictWebRtcProofTask(task) {

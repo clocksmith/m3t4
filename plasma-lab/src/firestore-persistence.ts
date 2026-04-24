@@ -210,7 +210,6 @@ function mergeExisting<T>(
 
 function shouldRefreshDerived(patch: Partial<ComputeLabSnapshot>): boolean {
   return Boolean(
-    patch.workers?.length ||
     patch.tasks?.length ||
     patch.receipts?.length ||
     patch.validations?.length ||

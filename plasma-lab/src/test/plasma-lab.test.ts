@@ -370,6 +370,13 @@ test("HTTP receipt log endpoints expose sealed segment verification", async (t) 
   const segments = await req(srv.port, "GET", "/compute/public/receipt-log/segments");
   assert.equal(segments.status, 200);
   assert.equal(segments.body.segments[0].segmentId, sealed.body.segment.segmentId);
+  const manifest = await req(srv.port, "GET", "/compute/public/receipt-log/manifest");
+  assert.equal(manifest.status, 200);
+  assert.deepEqual(manifest.body.sourceOrder, ["cache", "p2p", "http"]);
+  assert.equal(manifest.body.fallback.onMiss, "next");
+  assert.equal(manifest.body.segments[0].segmentId, sealed.body.segment.segmentId);
+  assert.equal(manifest.body.segments[0].cacheKey, `receipt-log-segment:${sealed.body.segment.segmentHash.value}`);
+  assert.equal(manifest.body.manifestHash.algorithm, "sha256");
   const verified = await req(srv.port, "GET", `/compute/public/receipt-log/segments/${sealed.body.segment.segmentId}/verify`);
   assert.equal(verified.status, 200);
   assert.equal(verified.body.ok, true);
@@ -3439,6 +3446,52 @@ test("HTTP task assignment is disabled behind the assignment kill switch", async
   assert.equal(resp.status, 200);
   assert.equal(resp.body.idle, true);
   assert.equal(resp.body.reason, "assignments-disabled");
+  assert.equal(resp.body.retryAfterMs, 60_000);
+});
+
+test("HTTP public reads use cached persistent refreshes", async (t) => {
+  class CountingStore extends ComputeLabStore {
+    refreshCalls = 0;
+    async refresh(): Promise<void> {
+      this.refreshCalls++;
+    }
+  }
+  const store = new CountingStore({ acceptAssignments: false });
+  const srv = await boot(store, { ...baseConfig, acceptAssignments: false });
+  t.after(() => srv.close());
+
+  const firstStatus = await req(srv.port, "GET", "/compute/status");
+  const secondStatus = await req(srv.port, "GET", "/compute/status");
+  const useCases = await req(srv.port, "GET", "/compute/use-cases");
+  assert.equal(firstStatus.status, 200);
+  assert.equal(secondStatus.status, 200);
+  assert.equal(useCases.status, 200);
+  assert.equal(store.refreshCalls, 1);
+});
+
+test("HTTP closed assignment polling uses cached refresh and retry hints", async (t) => {
+  class CountingStore extends ComputeLabStore {
+    refreshCalls = 0;
+    async refresh(): Promise<void> {
+      this.refreshCalls++;
+    }
+  }
+  const store = new CountingStore({ acceptAssignments: false });
+  store.seedPrimeTask({ start: 20, endExclusive: 50, chunkSize: 30 });
+  const srv = await boot(store, { ...baseConfig, acceptAssignments: false });
+  t.after(() => srv.close());
+
+  const worker = await register(srv.port);
+  const path = `/compute/tasks/next?workerId=${worker.workerId}&workerSessionId=${worker.workerSessionId}`;
+  const headers = { "x-worker-session-token": worker.workerSessionToken };
+  const first = await req(srv.port, "GET", path, undefined, headers);
+  const second = await req(srv.port, "GET", path, undefined, headers);
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.equal(first.body.idle, true);
+  assert.equal(first.body.reason, "assignments-disabled");
+  assert.equal(first.body.retryAfterMs, 60_000);
+  assert.equal(store.refreshCalls, 2);
 });
 
 test("HTTP worker flow issues assignment-bound receipts", async (t) => {

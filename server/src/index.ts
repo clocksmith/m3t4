@@ -123,7 +123,16 @@ const server = http.createServer(async (req, res) => {
   json(res, 404, { error: "not found" });
 });
 
-const wss = new WebSocketServer({ server, path: "/ws" });
+const wss = new WebSocketServer({
+  server,
+  path: "/ws",
+  perMessageDeflate: {
+    threshold: 512,
+    concurrencyLimit: 10,
+    serverNoContextTakeover: true,
+    clientNoContextTakeover: true,
+  },
+});
 wss.on("connection", (ws) => {
   if (firehose) {
     if (isWsAtCapacity(firehose.clientCount())) {

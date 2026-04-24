@@ -664,8 +664,12 @@ Current implementation notes:
   entries, because receipt rows can legitimately move from pending to accepted
 - admin can seal pending entries with `POST /compute/admin/receipt-log/seal`
 - public readers can inspect `/compute/public/receipt-log/head`,
+  `/compute/public/receipt-log/manifest`,
   `/compute/public/receipt-log/segments`, and
   `/compute/public/receipt-log/segments/:segmentId/verify`
+- the manifest publishes content-addressed segment refs and the safe
+  `cache -> p2p -> http` source order for future peer distribution; HTTPS
+  remains the fallback and no peer byte is trusted without hash verification
 - the bundled verifier recomputes entry hashes and segment hashes; it is not
   yet the separate no-private-database verifier required for public-open claims
 

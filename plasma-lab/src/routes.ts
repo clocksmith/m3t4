@@ -1077,6 +1077,42 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     }
     return true;
   }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/mandelbrot-tile") {
+    if (!guardSeed(res, "science.mandelbrot_tile.v0")) return true;
+    const body = await readJson<{
+      widthPx?: number;
+      heightPx?: number;
+      minXQ88?: number;
+      maxXQ88?: number;
+      minYQ88?: number;
+      maxYQ88?: number;
+      maxIter?: number;
+      minExecutions?: number;
+      minAgreeing?: number;
+      requiredTransport?: TransportKind;
+      requiredPeerSubreceipt?: boolean;
+    }>(req);
+    try {
+      const task = deps.store.seedMandelbrotTileTask({
+        widthPx: body?.widthPx,
+        heightPx: body?.heightPx,
+        minXQ88: body?.minXQ88,
+        maxXQ88: body?.maxXQ88,
+        minYQ88: body?.minYQ88,
+        maxYQ88: body?.maxYQ88,
+        maxIter: body?.maxIter,
+        minExecutions: body?.minExecutions,
+        minAgreeing: body?.minAgreeing,
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+      });
+      await flushStore(deps.store);
+      json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/contact-map-tile") {
     if (!guardSeed(res, "science.contact_map_tile.v0")) return true;
     const body = await readJson<{

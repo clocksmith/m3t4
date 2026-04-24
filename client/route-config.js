@@ -26,9 +26,7 @@ export const LEGACY_HASH = {
   profile: "roster",
 };
 
-const ROUTE_FEATURES = {
-  duel: "p2pDuel",
-};
+const ROUTE_FEATURES = {};
 
 export function featureForRoute(route) {
   return ROUTE_FEATURES[route] ?? null;

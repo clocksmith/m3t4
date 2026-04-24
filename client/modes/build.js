@@ -623,7 +623,7 @@ function wireSlot(root, slot) {
     const cfg = slotConfig(slot);
     sessionStorage.setItem("m3t4:pendingSubmit", JSON.stringify(cfg));
     trackBuildAction("submit");
-    navigateTo("profile");
+    navigateTo("roster");
   });
 }
 

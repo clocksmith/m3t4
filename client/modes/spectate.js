@@ -85,8 +85,10 @@ function resetPlayback() {
 }
 
 function primePlayback() {
+  // Anchor to the newest frame so (re)mounts and trims jump to live
+  // instead of replaying the back of the jitter buffer at real time.
   baselineWallMs = performance.now();
-  baselineTick = frameBuf[0].tick;
+  baselineTick = frameBuf[frameBuf.length - 1].tick;
   playbackStarted = true;
 }
 

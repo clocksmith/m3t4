@@ -14,9 +14,9 @@ export {
 
 export const MODES = {
   intro,
-  build,
-  spectate,
-  profile,
+  tune: build,
+  live: spectate,
+  roster: profile,
   compute,
   rules,
   about: rules,

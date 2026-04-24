@@ -33,7 +33,7 @@ const router = createPathRouter({
   features: FEATURES,
   featureForRoute,
   onPageView: trackPageView,
-  preserveSameRoutes: ["spectate"],
+  preserveSameRoutes: ["live"],
 });
 
 function migrateLegacyHash() {
@@ -58,7 +58,7 @@ function renderWhoami() {
   } else {
     window.__M3T4_COMPUTE_ACCOUNT_UID__ = null;
     window.__M3T4_COMPUTE_ACCOUNT_HANDLE__ = null;
-    whoamiEl.innerHTML = `<a href="/profile">sign in</a>`;
+    whoamiEl.innerHTML = `<a href="/roster">sign in</a>`;
   }
 }
 

@@ -53,8 +53,8 @@ export function renderDuel(root, { setStatus } = {}) {
     el(
       "div",
       { class: "duel-actions" },
-      el("button", { type: "button", class: "ui-button", onclick: () => go("build"), title: "Open Tune and edit policy settings" }, "author policy"),
-      el("button", { type: "button", class: "ui-button", onclick: () => go("spectate"), title: "Open Live and watch sanitized replay receipts" }, "watch receipts"),
+      el("button", { type: "button", class: "ui-button", onclick: () => go("tune"), title: "Open Tune and edit policy settings" }, "author policy"),
+      el("button", { type: "button", class: "ui-button", onclick: () => go("live"), title: "Open Live and watch sanitized replay receipts" }, "watch receipts"),
       el("button", { type: "button", class: "ui-button", onclick: () => go("rules"), title: "Open About and read the system framing" }, "read about")
     )
   );

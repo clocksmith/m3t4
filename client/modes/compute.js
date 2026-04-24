@@ -92,7 +92,7 @@ function publicStatsPanelHtml() {
           <h3>Network</h3>
           <div id="compute-public-note" class="tight">loading</div>
         </div>
-        ${linkButtonHtml({ href: "/spectate", text: "watch live", attrs: { title: "Leave this page and watch live matches" } })}
+        ${linkButtonHtml({ href: "/live", text: "watch live", attrs: { title: "Leave this page and watch live matches" } })}
       </div>
       <div class="compute-public-grid">
         <div><span>network score</span><strong id="compute-public-score">0</strong></div>
@@ -492,7 +492,7 @@ function wireMyWorkData(root) {
     linkingEl.hidden = false;
     linkingEl.innerHTML = `
       <span>Signed in? Link this browser to your account to merge receipts across devices.</span>
-      <a href="/profile" title="Go to the roster page to sign in or link this browser">sign in</a>`;
+      <a href="/roster" title="Go to the roster page to sign in or link this browser">sign in</a>`;
   }
 
   async function refresh() {

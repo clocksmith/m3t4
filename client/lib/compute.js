@@ -363,10 +363,20 @@ class ComputeClient {
   }
 
   async fetchMyReceipts(limit = 50) {
+    // Read auth + client identity live so the scope reflects the user's
+    // current sign-in state — not just whatever was cached the last time
+    // ensureWorkerRegistered() ran. Opting-in is separate from signing-in:
+    // a signed-in user who hasn't opted in would otherwise see the
+    // anonymous "this browser session" label and the linking nudge.
+    const liveAccountUid = readAccountUid() ?? this.accountUid ?? null;
+    const liveClientId = this.clientId ?? (() => {
+      try { return getOrCreateClientId(); } catch { return null; }
+    })();
+    const localScope = liveAccountUid ? "account" : liveClientId ? "browser" : "session";
     const fallback = () => ({
-      scope: this.accountUid ? "account" : this.clientId ? "browser" : "session",
-      clientId: this.clientId ?? null,
-      accountUid: this.accountUid ?? null,
+      scope: localScope,
+      clientId: liveClientId,
+      accountUid: liveAccountUid,
       receipts: loadReceiptCache(),
     });
     if (!this.workerId || !this.workerSessionId || !this.workerSessionToken) {
@@ -386,10 +396,15 @@ class ComputeClient {
       const body = await res.json();
       const receipts = Array.isArray(body.receipts) ? body.receipts : [];
       saveReceiptCache(receipts);
+      const accountUid = body.accountUid ?? liveAccountUid;
+      const clientId = body.clientId ?? liveClientId;
       return {
-        scope: body.scope ?? (this.accountUid ? "account" : this.clientId ? "browser" : "session"),
-        clientId: body.clientId ?? this.clientId ?? null,
-        accountUid: body.accountUid ?? this.accountUid ?? null,
+        // Server may still report "browser" scope for a worker that registered
+        // before the user signed in. Prefer "account" when the browser now
+        // knows an accountUid, so the nudge and scope label track sign-in.
+        scope: accountUid ? "account" : (body.scope ?? localScope),
+        clientId,
+        accountUid,
         receipts,
       };
     } catch {

@@ -16,13 +16,22 @@ function computeLabOrigin() {
 
 function computeStateNote(snapshot) {
   if (!snapshot.available) return "This browser does not support the required worker APIs.";
-  if (!snapshot.configured) return "Public compute is not configured in this environment.";
+  if (!snapshot.originConfigured) return "Public compute is not configured in this environment.";
+  if (!snapshot.workerFeatureEnabled) return "Browser compute opt-in is disabled by the current deployment flag. Public stats remain visible.";
   if (snapshot.enabled && snapshot.gate) {
     return `Paused by ${snapshot.gate.replace(/-/g, " ")}.`;
   }
   if (snapshot.enabled) return "Donating from this browser.";
   if (snapshot.optIn) return "Opted in, but currently paused.";
   return "Ready to donate from this browser.";
+}
+
+function computeStatusText(snapshot) {
+  if (!snapshot.available) return "browser unsupported";
+  if (!snapshot.originConfigured) return "not configured";
+  if (!snapshot.workerFeatureEnabled) return "opt-in disabled";
+  if (snapshot.enabled) return `${snapshot.state}${snapshot.gate ? ` · ${snapshot.gate}` : ""}`;
+  return snapshot.optIn ? "opted in · paused" : "opted out";
 }
 
 function introCardHtml() {
@@ -242,15 +251,7 @@ function wireControls(root) {
   off?.();
   off = client.subscribe((snapshot) => {
     const gate = snapshot.gate ? snapshot.gate : snapshot.enabled ? "open" : "idle";
-    const statusText = !snapshot.available
-      ? "browser unsupported"
-      : !snapshot.configured
-        ? "not configured"
-        : snapshot.enabled
-          ? `${snapshot.state}${snapshot.gate ? ` · ${snapshot.gate}` : ""}`
-          : snapshot.optIn
-            ? "opted in · paused"
-            : "opted out";
+    const statusText = computeStatusText(snapshot);
     statusEl.textContent = statusText;
     noteEl.textContent = computeStateNote(snapshot);
     gateEl.textContent = gate;
@@ -262,7 +263,15 @@ function wireControls(root) {
     hiddenBox.checked = snapshot.policy.pauseWhenHidden === true;
     batteryBox.checked = snapshot.policy.pauseOnLowBattery === true;
     renderBox.checked = snapshot.policy.pauseOnRenderStruggle === true;
-    optInBtn.disabled = !snapshot.available || !snapshot.configured || snapshot.enabled;
+    const optInDisabledReason = !snapshot.available
+      ? "This browser does not support the required worker APIs"
+      : !snapshot.originConfigured
+        ? "Public compute is not configured in this environment"
+        : !snapshot.workerFeatureEnabled
+          ? "Browser compute opt-in is disabled by the current deployment flag"
+          : "Register this browser as a compute worker and start accepting jobs";
+    optInBtn.disabled = !snapshot.available || !snapshot.originConfigured || !snapshot.workerFeatureEnabled || snapshot.enabled;
+    optInBtn.title = snapshot.enabled ? "This browser is already donating compute" : optInDisabledReason;
     optOutBtn.disabled = !snapshot.enabled;
     modeButtons.forEach((button) => {
       button.classList.toggle("is-active", button.dataset.mode === snapshot.mode);

@@ -51,6 +51,7 @@ class MemoryStableStore {
   async getPublicReplayArtifact(matchId: string): Promise<PublicReplayArtifactV1 | null> {
     return this.publicArtifacts.get(matchId) ?? null;
   }
+  async listPublicReplayArtifactSummaries(): Promise<never[]> { return []; }
   // Other methods not needed for these tests — declared as any to satisfy the type.
   async getStable(): Promise<any> { return null; }
   async listActive(): Promise<any[]> { return []; }

@@ -995,6 +995,16 @@ function installConsoleHelper(client) {
     policy: (patch) => client.setPolicy(patch),
     prewarm: (kind, params) => client.prewarmKernel(kind, params),
     webrtcWitness: () => client.witnessWebRtc(),
+    // Content-addressed manifests fetched through cache → p2p → http.
+    // p2p layer is currently a no-op; HTTPS remains the mandatory fallback.
+    receiptLog: async (options = {}) => {
+      const { loadReceiptLog } = await import("./receipt-log.js");
+      return loadReceiptLog(options);
+    },
+    replayArchive: async (options = {}) => {
+      const { loadRecentReplays } = await import("./replay-archive.js");
+      return loadRecentReplays(options);
+    },
   };
 }
 

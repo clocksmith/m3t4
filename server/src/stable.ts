@@ -286,8 +286,31 @@ export interface StableStore {
   archiveReplay(artifact: ReplayArtifactV1): Promise<void>;
   getReplay(matchId: string): Promise<ReplayArtifactV1 | null>;
   getPublicReplayArtifact(matchId: string): Promise<PublicReplayArtifactV1 | null>;
+  listPublicReplayArtifactSummaries(
+    options?: { limit?: number },
+  ): Promise<PublicReplayArtifactSummary[]>;
   applyDecay(): Promise<number>; // returns number of slots decayed
   handleTaken(handle: string, excludeUid?: string): Promise<boolean>;
+}
+
+export interface PublicReplayArtifactSummary {
+  matchId: string;
+  exportedAt: string;
+  replayCreatedAt: string;
+  artifactHash: string;
+  artifactSha256: string;
+}
+
+export function summarizePublicReplayArtifact(
+  artifact: PublicReplayArtifactV1,
+): PublicReplayArtifactSummary {
+  return {
+    matchId: artifact.matchId,
+    exportedAt: artifact.exportedAt,
+    replayCreatedAt: artifact.payload.replayCreatedAt,
+    artifactHash: artifact.artifactHash,
+    artifactSha256: artifact.artifactSha256,
+  };
 }
 
 export interface MatchUpdate {
@@ -534,6 +557,17 @@ export class FileStableStore implements StableStore {
   async getPublicReplayArtifact(matchId: string): Promise<PublicReplayArtifactV1 | null> {
     return this.data.publicReplayArtifacts[matchId]
       ?? (this.data.replays[matchId] ? publicReplayArtifactFromReplay(this.data.replays[matchId]) : null);
+  }
+
+  async listPublicReplayArtifactSummaries(
+    options: { limit?: number } = {},
+  ): Promise<PublicReplayArtifactSummary[]> {
+    const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
+    const artifacts = Object.values(this.data.publicReplayArtifacts)
+      .slice()
+      .sort((a, b) => Date.parse(b.exportedAt) - Date.parse(a.exportedAt))
+      .slice(0, limit);
+    return artifacts.map(summarizePublicReplayArtifact);
   }
 
   async applyDecay(): Promise<number> {

@@ -25,29 +25,11 @@ function aboutCardHtml(about) {
   const rest = body[0].slice(firstSentence.length).trim();
   return contextCardHtml({
     className: "rules-card-feature",
-    kicker: about.title ?? "about",
-    strong: firstSentence,
-    copy: rest,
-  });
-}
-
-function aboutDetailHtml(about) {
-  const body = Array.isArray(about?.body) ? about.body.slice(1) : [];
-  if (!body.length) return "";
-  return `
-    <section class="rules-about-copy" aria-label="About details">
-      ${body.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}
-    </section>`;
-}
-
-function computeLinkCardHtml() {
-  return contextCardHtml({
-    className: "rules-card-compute-link",
     body: `
-      <div class="context-card-kicker">opt-in compute</div>
+      <div class="context-card-kicker">${escapeHtml(about.title ?? "about")}</div>
       <div class="context-card-copy">
-        <strong>Compute controls and public receipt stats live on the Compute page.</strong>
-        <span>Opt in, set pause policy, and watch accepted receipts accumulate.</span>
+        <strong>${escapeHtml(firstSentence)}</strong>
+        ${rest ? `<span>${escapeHtml(rest)}</span>` : ""}
       </div>
       <div class="rules-card-compute-action">
         ${linkButtonHtml({
@@ -58,6 +40,15 @@ function computeLinkCardHtml() {
         })}
       </div>`,
   });
+}
+
+function aboutDetailHtml(about) {
+  const body = Array.isArray(about?.body) ? about.body.slice(1) : [];
+  if (!body.length) return "";
+  return `
+    <section class="rules-about-copy" aria-label="About details">
+      ${body.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}
+    </section>`;
 }
 
 export function mount(root, { setStatus }) {
@@ -76,7 +67,6 @@ export function mount(root, { setStatus }) {
 
       ${aboutCardHtml(rules.about)}
       ${aboutDetailHtml(rules.about)}
-      ${computeLinkCardHtml()}
 
       <div class="rules-rules-column">
         <div class="rules-section-label">Rules</div>

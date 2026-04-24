@@ -4,7 +4,7 @@ import type { PlasmaLabConfig } from "./config.js";
 import { clientIp, header, html, json, readJson } from "./http.js";
 import { canonicalJson, hashCanonical } from "./plasma/hash.js";
 import type { ContentHash, DerivedExecutionEvidence, ExecutionMode, GovernorMode, TransportKind, ValidationPolicy, WorkerCapability, WorkerRefusalReason } from "./plasma/types.js";
-import { ComputeLabStore, type ComputeChunk, type ExecutionReceipt, type PeerSubassignment, type PeerSubreceipt, type ValidationRecord, type WebRtcPairRecord, type WebRtcSessionRecord } from "./store.js";
+import { bundleManifestHash, ComputeLabStore, type ComputeChunk, type ExecutionReceipt, type PeerSubassignment, type PeerSubreceipt, type ValidationRecord, type WebRtcPairRecord, type WebRtcSessionRecord } from "./store.js";
 import { COMPUTE_USE_CASES } from "./use-cases.js";
 import { canSeed, getWorkloadPolicy, isPublicVisible } from "./workload-policy.js";
 import { CONTACT_MAP_PRESETS, resolveContactMapPreset } from "./contact-map-presets.js";
@@ -449,6 +449,143 @@ export async function handleComputeLabRequest(
     return true;
   }
 
+  if (req.method === "POST" && url.pathname === "/compute/witness") {
+    const body = await readJson<{
+      matchId?: string;
+      tick?: number;
+      stateHash?: ContentHash;
+      workerId?: string;
+      workerSessionId?: string;
+      workerSessionToken?: string;
+      signingPublicKeyHash?: ContentHash;
+      signature?: string;
+    }>(req);
+    try {
+      if (!body?.matchId) throw new Error("matchId required");
+      if (typeof body.tick !== "number") throw new Error("tick required");
+      if (!body.stateHash?.algorithm || !body.stateHash?.value) throw new Error("stateHash required");
+      if (!body.workerId || !body.workerSessionId || !body.workerSessionToken) {
+        throw new Error("workerId, workerSessionId, workerSessionToken required");
+      }
+      const attestation = deps.store.submitWitnessAttestation({
+        matchId: body.matchId,
+        tick: body.tick,
+        stateHash: body.stateHash,
+        workerId: body.workerId,
+        workerSessionId: body.workerSessionId,
+        workerSessionToken: body.workerSessionToken,
+        signingPublicKeyHash: body.signingPublicKeyHash,
+        signature: body.signature,
+      });
+      await flushStore(deps.store);
+      json(res, 200, { attestationId: attestation.attestationId, submittedAt: attestation.submittedAt });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname.startsWith("/compute/public/matches/") && url.pathname.endsWith("/witness-quorum")) {
+    const matchId = url.pathname.slice("/compute/public/matches/".length, -"/witness-quorum".length);
+    if (!matchId) { json(res, 400, { error: "matchId required" }); return true; }
+    json(res, 200, deps.store.witnessQuorumForMatch(matchId));
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/compute/public/bundles") {
+    const limitRaw = url.searchParams.get("limit");
+    const limit = limitRaw ? Number(limitRaw) : undefined;
+    const statusRaw = url.searchParams.get("status");
+    const status = statusRaw === "pending" || statusRaw === "running" || statusRaw === "sealed" || statusRaw === "abandoned"
+      ? statusRaw : undefined;
+    json(res, 200, {
+      bundles: deps.store.listBundles({
+        limit: Number.isFinite(limit) && limit! > 0 ? limit : undefined,
+        status,
+      }),
+    });
+    return true;
+  }
+
+  // Downloadable verifier bundle. Everything needed to independently verify
+  // that the bundleRoot seals the battle receipt + the manifest + each
+  // accepted receipt's signed outputHash. No server cooperation required
+  // to re-derive: bundleRootHash(matchReceiptHash, bundleManifestHash, ...).
+  if (
+    req.method === "GET" &&
+    url.pathname.startsWith("/compute/public/bundles/") &&
+    url.pathname.endsWith("/verifier-bundle")
+  ) {
+    const bundleId = url.pathname.slice(
+      "/compute/public/bundles/".length,
+      -"/verifier-bundle".length,
+    );
+    if (!bundleId) { json(res, 400, { error: "bundleId required" }); return true; }
+    const bundle = deps.store.getBundle(bundleId);
+    if (!bundle) { json(res, 404, { error: "bundle not found" }); return true; }
+    const manifestHash = bundle.bundleManifestHash ?? bundleManifestHash(bundle);
+    const acceptedReceipts: Array<Record<string, unknown>> = [];
+    for (const chunkId of bundle.chunkIds) {
+      const receipts = deps.store.receiptsForChunk(chunkId);
+      const best = receipts.find((r) => r.decision === "accepted");
+      if (!best) continue;
+      acceptedReceipts.push({
+        receiptId: best.receiptId,
+        chunkId: best.chunkId,
+        kernelId: best.kernelId,
+        outputHash: best.outputHash,
+        receiptHash: best.receiptHash,
+        signature: best.signature,
+        signaturePublicKeyHash: best.signaturePublicKeyHash,
+        signatureStatus: best.signatureStatus,
+        executionMode: best.executionMode,
+        transport: best.transport,
+        receivedAt: best.receivedAt,
+        preview: best.preview,
+      });
+    }
+    json(res, 200, {
+      kind: "m3t4.compute-bundle.verifier.v1",
+      generatedAt: Date.now(),
+      bundle: {
+        bundleId: bundle.bundleId,
+        kind: bundle.kind,
+        kernelId: bundle.kernelId,
+        matchId: bundle.matchId,
+        sponsors: bundle.sponsors,
+        chunkIds: bundle.chunkIds,
+        targetChunkCount: bundle.targetChunkCount,
+        quorum: bundle.quorum,
+        deadlineAt: bundle.deadlineAt,
+        createdAt: bundle.createdAt,
+        startedAt: bundle.startedAt,
+        sealedAt: bundle.sealedAt,
+        status: bundle.status,
+        acceptedReceiptCount: bundle.acceptedReceiptCount,
+        rejectedReceiptCount: bundle.rejectedReceiptCount,
+        pendingReceiptCount: bundle.pendingReceiptCount,
+      },
+      bundleManifestHash: manifestHash,
+      matchReceiptHash: bundle.matchReceiptHash ?? null,
+      bundleRoot: bundle.bundleRoot ?? null,
+      acceptedReceipts,
+      rehash: {
+        notes: "Verifiers: recompute bundleRootHash({matchReceiptHash, bundleManifestHash, sortedAcceptedReceiptHashes}) and compare against bundleRoot. Recompute bundleManifestHash from bundle fields.",
+        algorithm: "sha256",
+      },
+    });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname.startsWith("/compute/public/bundles/")) {
+    const bundleId = url.pathname.slice("/compute/public/bundles/".length);
+    if (!bundleId) { json(res, 400, { error: "bundleId required" }); return true; }
+    const aggregate = deps.store.bundleAggregate(bundleId);
+    if (!aggregate) { json(res, 404, { error: "bundle not found" }); return true; }
+    json(res, 200, aggregate);
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/compute/public/receipt-log/manifest") {
     const limit = Number(url.searchParams.get("limit") ?? "");
     const segments = deps.store.listReceiptLogSegments({ limit: Number.isFinite(limit) && limit > 0 ? limit : undefined });
@@ -806,6 +943,216 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     const limit = limitRaw ? Number(limitRaw) : undefined;
     const tiles = deps.store.listPublicTiles({ limit: Number.isFinite(limit) && limit! > 0 ? limit : undefined });
     json(res, 200, { tiles });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/compute/admin/bundles") {
+    const body = await readJson<{
+      bundleId?: string;
+      kind?: "science" | "proof";
+      kernelId?: string;
+      matchId?: string | null;
+      sponsors?: string[];
+      chunkIds?: string[];
+      quorum?: { minExecutions?: number; minAgreeing?: number };
+      deadlineAt?: number | null;
+      notes?: string;
+    }>(req);
+    try {
+      const bundle = deps.store.createBundle({
+        bundleId: body?.bundleId,
+        kind: body?.kind ?? "science",
+        kernelId: String(body?.kernelId ?? ""),
+        matchId: body?.matchId ?? null,
+        sponsors: body?.sponsors ?? [],
+        chunkIds: Array.isArray(body?.chunkIds) ? body!.chunkIds : [],
+        quorum: body?.quorum
+          ? { minExecutions: Math.max(1, Number(body.quorum.minExecutions ?? 2)), minAgreeing: Math.max(1, Number(body.quorum.minAgreeing ?? 2)) }
+          : undefined,
+        deadlineAt: body?.deadlineAt ?? null,
+        notes: body?.notes,
+      });
+      await flushStore(deps.store);
+      json(res, 200, { bundle });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
+
+  // Convenience: materialize a science bundle for contact-map-tile over one
+  // preset. Seeds tasks AND records the bundle in a single admin call.
+  if (req.method === "POST" && url.pathname === "/compute/admin/bundles/materialize-contact-map") {
+    if (!guardSeed(res, "science.contact_map_tile.v0")) return true;
+    const body = await readJson<{
+      presetId?: string;
+      matchId?: string | null;
+      sponsors?: string[];
+      tileRows?: number;
+      tileCols?: number;
+      expectedMatchSec?: number;
+      quorum?: { minExecutions?: number; minAgreeing?: number };
+      deadlineAt?: number | null;
+      requiredTransport?: TransportKind;
+      requiredPeerSubreceipt?: boolean;
+    }>(req);
+    try {
+      const preset = resolveContactMapPreset(body?.presetId ?? CONTACT_MAP_PRESETS[0]?.id ?? "");
+      // Adaptive sizing when tileRows/tileCols aren't pinned by the caller:
+      //   targetChunks = activeWorkers × expectedMatchSec × utilization / avgChunkSec
+      // clamped to a sane square. Falls back to a 4x4 grid if the network
+      // signal is too weak to estimate (first few matches after deploy).
+      const summary = deps.store.summary();
+      const adaptive = computeAdaptiveTileGrid({
+        activeWorkers: Math.max(1, summary.activeSessions || summary.workers),
+        expectedMatchSec: Math.max(30, Number(body?.expectedMatchSec ?? 180)),
+        avgChunkSec: 1.5,
+        utilization: 0.5,
+        minRows: 2, maxRows: 10,
+        minCols: 2, maxCols: 10,
+      });
+      const tileRows = Math.max(1, Math.min(10, body?.tileRows ?? adaptive.rows));
+      const tileCols = Math.max(1, Math.min(10, body?.tileCols ?? adaptive.cols));
+      const rowLen = preset.rowResidues.length;
+      const colLen = preset.colResidues.length;
+      const rowsPerTile = Math.max(1, Math.floor(rowLen / tileRows));
+      const colsPerTile = Math.max(1, Math.floor(colLen / tileCols));
+      const minExecutions = Math.max(1, Number(body?.quorum?.minExecutions ?? 3));
+      const minAgreeing = Math.max(1, Math.min(minExecutions, Number(body?.quorum?.minAgreeing ?? 2)));
+      const chunkIds: string[] = [];
+      for (let r = 0; r < tileRows; r++) {
+        for (let c = 0; c < tileCols; c++) {
+          const rowStart = preset.rowStart + r * rowsPerTile;
+          const colStart = preset.colStart + c * colsPerTile;
+          const rowResidues = preset.rowResidues.slice(r * rowsPerTile, (r + 1) * rowsPerTile);
+          const colResidues = preset.colResidues.slice(c * colsPerTile, (c + 1) * colsPerTile);
+          if (rowResidues.length === 0 || colResidues.length === 0) continue;
+          const task = deps.store.seedContactMapTileTask({
+            rowResidues,
+            colResidues,
+            rowStart,
+            colStart,
+            minSeparation: preset.minSeparation,
+            minExecutions,
+            minAgreeing,
+            requiredTransport: transportPolicy(body?.requiredTransport),
+            requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+          });
+          chunkIds.push(task.chunks[0].chunkId);
+        }
+      }
+      if (chunkIds.length === 0) {
+        json(res, 400, { error: "no chunks materialized (check preset window size)" });
+        return true;
+      }
+      const bundle = deps.store.createBundle({
+        kind: "science",
+        kernelId: "science.contact_map_tile.v0",
+        matchId: body?.matchId ?? null,
+        sponsors: body?.sponsors ?? [],
+        chunkIds,
+        quorum: { minExecutions, minAgreeing },
+        deadlineAt: body?.deadlineAt ?? null,
+        notes: `contact-map preset ${preset.id} tiled ${tileRows}x${tileCols}`,
+      });
+      deps.store.markBundleRunning(bundle.bundleId);
+      await flushStore(deps.store);
+      json(res, 200, {
+        bundle,
+        preset: preset.id,
+        tileRows,
+        tileCols,
+        chunkCount: chunkIds.length,
+      });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
+
+  // Convenience: materialize a proof bundle for a completed match. Takes the
+  // canonical public-replay-artifact JSON, seeds N replay_verify tasks
+  // (each one re-executes the full match; N == minExecutions on the first
+  // task so quorum is genuinely independent), records the bundle.
+  if (req.method === "POST" && url.pathname === "/compute/admin/bundles/materialize-replay-verify") {
+    if (!guardSeed(res, "m3t4.replay_verify.v1")) return true;
+    const body = await readJson<{
+      matchId?: string;
+      replayArtifactJson?: string;
+      artifactSha256?: string;
+      sponsors?: string[];
+      minExecutions?: number;
+      minAgreeing?: number;
+      deadlineAt?: number | null;
+      requiredTransport?: TransportKind;
+      requiredPeerSubreceipt?: boolean;
+    }>(req);
+    try {
+      if (!body?.replayArtifactJson) throw new Error("replayArtifactJson required");
+      const minExecutions = Math.max(1, Number(body?.minExecutions ?? 5));
+      const minAgreeing = Math.max(1, Math.min(minExecutions, Number(body?.minAgreeing ?? 3)));
+      const task = deps.store.seedReplayVerifyTask({
+        replayArtifactJson: body.replayArtifactJson,
+        artifactSha256: body.artifactSha256,
+        minExecutions,
+        minAgreeing,
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+      });
+      const bundle = deps.store.createBundle({
+        kind: "proof",
+        kernelId: "m3t4.replay_verify.v1",
+        matchId: body?.matchId ?? null,
+        sponsors: body?.sponsors ?? [],
+        chunkIds: [task.chunks[0].chunkId],
+        quorum: { minExecutions, minAgreeing },
+        deadlineAt: body?.deadlineAt ?? null,
+        notes: `proof bundle: replay_verify quorum ${minAgreeing}-of-${minExecutions}`,
+      });
+      deps.store.markBundleRunning(bundle.bundleId);
+      await flushStore(deps.store);
+      json(res, 200, { bundle, taskId: task.taskId, quorum: { minExecutions, minAgreeing } });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname.startsWith("/compute/admin/bundles/") && url.pathname.endsWith("/seal")) {
+    const bundleId = url.pathname.slice("/compute/admin/bundles/".length, -"/seal".length);
+    const body = await readJson<{
+      matchReceiptHash?: ContentHash;
+      matchId?: string;
+    }>(req);
+    try {
+      if (!body?.matchReceiptHash?.algorithm || !body?.matchReceiptHash?.value) {
+        throw new Error("matchReceiptHash { algorithm, value } required");
+      }
+      const bundle = deps.store.sealBundle({
+        bundleId,
+        matchReceiptHash: body.matchReceiptHash,
+        matchId: body.matchId,
+      });
+      await flushStore(deps.store);
+      json(res, 200, { bundle });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/compute/admin/bundles") {
+    const limitRaw = url.searchParams.get("limit");
+    const limit = limitRaw ? Number(limitRaw) : undefined;
+    const statusRaw = url.searchParams.get("status");
+    const status = statusRaw === "pending" || statusRaw === "running" || statusRaw === "sealed" || statusRaw === "abandoned"
+      ? statusRaw : undefined;
+    json(res, 200, {
+      bundles: deps.store.listBundles({
+        limit: Number.isFinite(limit) && limit! > 0 ? limit : undefined,
+        status,
+      }),
+    });
     return true;
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/assignments") {
@@ -1562,7 +1909,10 @@ function isCachedPublicRead(pathname: string): boolean {
     pathname.startsWith("/compute/public/receipt-log/segments/") ||
     pathname.startsWith("/compute/public/replay-badges/") ||
     pathname === "/compute/public/tiles/manifest" ||
-    pathname.startsWith("/compute/public/tiles/")
+    pathname.startsWith("/compute/public/tiles/") ||
+    pathname === "/compute/public/bundles" ||
+    pathname.startsWith("/compute/public/bundles/") ||
+    (pathname.startsWith("/compute/public/matches/") && pathname.endsWith("/witness-quorum"))
   );
 }
 
@@ -1823,6 +2173,31 @@ function publicUseCases(): Array<Record<string, unknown>> {
     });
   }
   return out;
+}
+
+// Adaptive bundle sizing. Target chunk count scales with the network's
+// current capacity; falls back to a safe square grid when signals are weak.
+//   targetChunks ≈ activeWorkers × expectedMatchSec × utilization / avgChunkSec
+// Result is decomposed into the closest square-ish tile grid (rows × cols)
+// that fits the supplied bounds.
+export function computeAdaptiveTileGrid(input: {
+  activeWorkers: number;
+  expectedMatchSec: number;
+  avgChunkSec: number;
+  utilization: number;
+  minRows: number; maxRows: number;
+  minCols: number; maxCols: number;
+}): { rows: number; cols: number; targetChunks: number } {
+  const target = Math.max(1, Math.round(
+    (input.activeWorkers * input.expectedMatchSec * input.utilization) / Math.max(0.1, input.avgChunkSec),
+  ));
+  const maxTotal = input.maxRows * input.maxCols;
+  const minTotal = input.minRows * input.minCols;
+  const clamped = Math.max(minTotal, Math.min(maxTotal, target));
+  const side = Math.max(1, Math.round(Math.sqrt(clamped)));
+  const rows = Math.max(input.minRows, Math.min(input.maxRows, side));
+  const cols = Math.max(input.minCols, Math.min(input.maxCols, Math.ceil(clamped / rows)));
+  return { rows, cols, targetChunks: rows * cols };
 }
 
 // Admin seed-endpoint guard. Callers pass the target workload id; this returns

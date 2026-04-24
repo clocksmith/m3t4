@@ -14,12 +14,15 @@ import { WS_ORIGIN, leaderboard } from "../lib/api.js";
 import { STAGES } from "../lib/public-sim.js";
 import { createFrameRenderer, W, H } from "../render/index.js";
 import { getComputeClient } from "../lib/compute.js";
+import { getAudio, audioEnabledStored } from "../lib/audio.js";
 import { escapeHtml } from "../ui/html.js";
 import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
 import { statListHtml } from "../ui/stats.js";
+import { toggleSwitchHtml } from "../ui/actions.js";
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
 import rosterCatalog from "../content/roster-catalog.v1.json" with { type: "json" };
 import { BODY_VARIANTS, BODY_PORTRAIT_SHEETS } from "../content/character-presentation.js";
+import { createSpectateComputeDash } from "./spectate-compute-dash.js";
 
 const SIM_HZ = 120;                // canonical sim rate
 const JITTER_BUFFER_FRAMES = 24;   // ~8 chunks at STRIDE=3 -> ~200ms
@@ -61,6 +64,26 @@ let running = false;
 let lbTimer = null;
 let leaderboardEl = null;
 let canvas = null;
+
+// Four-state cycle for the compute dash PIP. Each state is a single
+// number stored in localStorage so the user's preference sticks.
+//   1 = battle only (dash unmounted)
+//   2 = compute only (canvas suppressed, WS kept)
+//   3 = battle primary, compute PIP bottom-right
+//   4 = compute primary, battle PIP bottom-right
+const DASH_STATE_KEY = "m3t4:spectateComputePip";
+const DASH_STATES = [1, 2, 3, 4];
+let dashState = 1;
+let computeDash = null;
+let dashWrapper = null;
+let pipWrapper = null;
+let stageWrapper = null;
+let canvasParked = false;
+// Remember bundle info from the most recent matchStart so state flips to
+// 2/3/4 after the event still seed the dash correctly.
+let pendingMatchStart = null;
+let pendingMatchEnd = null;
+let dashKeyHandler = null;
 let ctx = null;
 let renderer = null;
 let rendererMountId = 0;
@@ -76,11 +99,20 @@ let baselineWallMs = 0;
 let baselineTick = 0;
 let playbackStarted = false;
 
+// Audio edge-detection state. Reset on primePlayback/trim so we don't fire
+// cued-up events when jumping to live.
+let prevAudioFrame = null;
+let audioCharKeys = [null, null];
+let audioWeaponKeys = [null, null];
+let lastGruntMs = [0, 0];
+const GRUNT_THROTTLE_MS = 400;
+
 function resetPlayback() {
   frameBuf = [];
   baselineWallMs = 0;
   baselineTick = 0;
   playbackStarted = false;
+  prevAudioFrame = null;
   updateBufferStat("idle");
 }
 
@@ -90,6 +122,7 @@ function primePlayback() {
   baselineWallMs = performance.now();
   baselineTick = frameBuf[frameBuf.length - 1].tick;
   playbackStarted = true;
+  prevAudioFrame = null;
 }
 
 function pausePlayback() {
@@ -103,6 +136,7 @@ function trimPlaybackToLiveWindow() {
   // Jump back near live once, then rebuild a normal playback baseline.
   frameBuf = frameBuf.slice(-LIVE_BUFFER_FRAMES);
   if (playbackStarted && frameBuf.length > 0) primePlayback();
+  prevAudioFrame = null;
 }
 
 export function mount(root, { setStatus }) {
@@ -125,10 +159,21 @@ export function mount(root, { setStatus }) {
           <div id="leaderboard">loading…</div>
         </aside>
         <div class="spectate-center">
-          <canvas id="stage-canvas" width="${W}" height="${H}" tabindex="0"></canvas>
+          <div id="spectate-stage" class="spectate-stage" data-dash-state="1">
+            <div id="spectate-stage-canvas-wrap" class="spectate-stage-canvas-wrap">
+              <canvas id="stage-canvas" width="${W}" height="${H}" tabindex="0"></canvas>
+            </div>
+            <div id="spectate-stage-dash-wrap" class="spectate-stage-dash-wrap" hidden></div>
+          </div>
         </div>
         <aside class="panel spectate-stats spectate-side">
-          <h3>Live</h3>
+          <div class="spectate-stats-head">
+            <h3>Live</h3>
+            <button id="spectate-dash-cycle" type="button" class="spectate-dash-cycle" title="Cycle: battle / compute / both">
+              <span class="spectate-dash-cycle-label">view</span>
+              <span id="spectate-dash-cycle-state" class="spectate-dash-cycle-state">1</span>
+            </button>
+          </div>
           ${statListHtml([
             { label: "P1", id: "stat-p1", className: "p1-accent" },
             { label: "P2", id: "stat-p2", className: "p2-accent" },
@@ -139,6 +184,7 @@ export function mount(root, { setStatus }) {
             { label: "last result", id: "stat-result" },
             { label: "receipt", id: "stat-verify" },
           ])}
+          ${toggleSwitchHtml({ id: "spectate-audio", label: "Audio", title: "Play sound effects and stage music", checked: audioEnabledStored() })}
         </aside>
       </div>
       <div class="panel">
@@ -148,6 +194,8 @@ export function mount(root, { setStatus }) {
     </div>`;
   canvas = root.querySelector("#stage-canvas");
   leaderboardEl = root.querySelector("#leaderboard");
+  stageWrapper = root.querySelector("#spectate-stage");
+  dashWrapper = root.querySelector("#spectate-stage-dash-wrap");
   const rendererId = ++rendererMountId;
   void attachRenderer(rendererId, canvas);
   computeClient = getComputeClient();
@@ -155,10 +203,101 @@ export function mount(root, { setStatus }) {
   void computeClient.maybeAutoStart();
 
   running = true;
+  const audioToggle = root.querySelector("#spectate-audio");
+  audioToggle?.addEventListener("change", () => getAudio().setEnabled(audioToggle.checked));
+  const cycleBtn = root.querySelector("#spectate-dash-cycle");
+  cycleBtn?.addEventListener("click", () => setDashState(nextDashState(dashState)));
+  dashKeyHandler = (ev) => {
+    if (ev.key !== "v" && ev.key !== "V") return;
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    const target = ev.target;
+    if (target instanceof HTMLElement) {
+      const tag = target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) return;
+    }
+    ev.preventDefault();
+    setDashState(nextDashState(dashState));
+  };
+  window.addEventListener("keydown", dashKeyHandler);
+  dashState = sanitizeStartupDashState(readStoredDashState());
+  applyDashState(dashState);
   connect();
   refreshLeaderboard();
   lbTimer = setInterval(refreshLeaderboard, 8000);
   loop();
+}
+
+function readStoredDashState() {
+  try {
+    const raw = window.localStorage?.getItem(DASH_STATE_KEY);
+    const n = Number(raw);
+    return DASH_STATES.includes(n) ? n : 1;
+  } catch { return 1; }
+}
+// On first load, we don't yet know whether a bundle will be supplied.
+// If the user persisted state 2 (compute-only) or 4 (compute-primary)
+// but no bundle ever arrives (feature flag off, empty match queue,
+// relay offline), they'd stare at a blank compute panel with no battle.
+// Downgrade those startup states to 3 (battle primary, compute PIP) so
+// the canvas is always visible until a user-initiated cycle. The user
+// still gets the compute view; it just starts as a corner PIP instead
+// of taking the whole stage.
+function sanitizeStartupDashState(state) {
+  if (state === 2 || state === 4) return 3;
+  return state;
+}
+function persistDashState(state) {
+  try { window.localStorage?.setItem(DASH_STATE_KEY, String(state)); } catch {}
+}
+function nextDashState(current) {
+  const idx = DASH_STATES.indexOf(current);
+  return DASH_STATES[(idx + 1) % DASH_STATES.length];
+}
+
+function setDashState(state) {
+  dashState = state;
+  persistDashState(state);
+  applyDashState(state);
+}
+
+function applyDashState(state) {
+  if (!stageWrapper) return;
+  stageWrapper.dataset.dashState = String(state);
+  const cycleStateEl = document.getElementById("spectate-dash-cycle-state");
+  if (cycleStateEl) cycleStateEl.textContent = String(state);
+
+  // Lazy-mount the dash only when it's actually going to be visible.
+  const dashVisible = state === 2 || state === 3 || state === 4;
+  if (dashVisible && !computeDash && dashWrapper) {
+    computeDash = createSpectateComputeDash({
+      root: dashWrapper,
+      computeLabOrigin: window.__M3T4_COMPUTE_LAB_ORIGIN__ ?? "",
+    });
+    computeDash.on((type) => {
+      if (type === "expand-request") {
+        // Clicking the PIP promotes it to primary. From state 3
+        // (compute-as-PIP) go to state 4 (compute-primary). The user can
+        // cycle again to get back to pure battle.
+        if (dashState === 3) setDashState(4);
+      }
+    });
+    if (pendingMatchStart) computeDash.onMatchStart(pendingMatchStart);
+    if (pendingMatchEnd) computeDash.onMatchEnd(pendingMatchEnd);
+  }
+  if (!dashVisible && computeDash) {
+    computeDash.destroy();
+    computeDash = null;
+  }
+
+  if (!dashWrapper) return;
+  if (!dashVisible) {
+    dashWrapper.hidden = true;
+    return;
+  }
+  dashWrapper.hidden = false;
+  // Compact purpose-built layout for PIP, full three-column for primary.
+  const pipMode = state === 3;
+  computeDash?.setDisplay(pipMode ? "pip" : "full");
 }
 
 export function unmount() {
@@ -168,6 +307,12 @@ export function unmount() {
   if (ws) { try { ws.close(); } catch {} ws = null; }
   if (lbTimer) { clearInterval(lbTimer); lbTimer = null; }
   if (rafId) cancelAnimationFrame(rafId);
+  if (computeDash) { computeDash.destroy(); computeDash = null; }
+  if (dashKeyHandler) { window.removeEventListener("keydown", dashKeyHandler); dashKeyHandler = null; }
+  stageWrapper = null;
+  dashWrapper = null;
+  pendingMatchStart = null;
+  pendingMatchEnd = null;
   renderer?.destroy();
   renderer = null;
   ctx = null;
@@ -263,6 +408,13 @@ function onEvent(m) {
     matchActive = true;
     computeClient?.setMatchPhase("active");
     const mt = m.match || m;
+    pendingMatchStart = {
+      matchId: mt.matchId ?? null,
+      bundle: m.bundle ?? null,
+      match: mt,
+    };
+    pendingMatchEnd = null;
+    computeDash?.onMatchStart(pendingMatchStart);
     const handleA = mt.a?.handle ?? "?";
     const handleB = mt.b?.handle ?? "?";
     const eloA = mt.a?.elo ?? "?";
@@ -270,13 +422,20 @@ function onEvent(m) {
     renderState.handles = { a: handleA, b: handleB };
     renderState.elos = { a: eloA, b: eloB };
     renderState.matchLabel = `@${handleA} (${eloA}) vs @${handleB} (${eloB})`;
+    const cosA = presentationCosmeticsForCompetitor(mt.a, 0);
+    const cosB = presentationCosmeticsForCompetitor(mt.b, 1);
+    audioCharKeys = [cosA?.body ?? null, cosB?.body ?? null];
+    audioWeaponKeys = [cosA?.weapon ?? null, cosB?.weapon ?? null];
     renderState.labels = {
       p1: `@${handleA} [${mt.a?.name ?? "slot"}]`,
       p2: `@${handleB} [${mt.b?.name ?? "slot"}]`,
       nameplates: [`@${handleA}`, `@${handleB}`],
-      cosmetics: [presentationCosmeticsForCompetitor(mt.a, 0), presentationCosmeticsForCompetitor(mt.b, 1)],
+      cosmetics: [cosA, cosB],
     };
     renderState.stage = STAGES[mt.stageId] ?? STAGES.datacenter;
+    const audio = getAudio();
+    if (mt.stageId) audio.setStage(mt.stageId);
+    if (m.type === "matchStart") audio.play("match_start");
     const hudEl = document.getElementById("match-hud");
     if (hudEl) hudEl.textContent = renderState.matchLabel;
     setStat("stat-p1", `@${mt.a?.handle ?? "p1"} · ${mt.a?.elo ?? "?"}`);
@@ -296,6 +455,22 @@ function onEvent(m) {
   } else if (m.type === "matchEnd") {
     matchActive = false;
     computeClient?.setMatchPhase("intermission");
+    pendingMatchEnd = {
+      matchId: m.matchId ?? null,
+      winner: m.winner,
+      bundles: m.bundles ?? null,
+      a: renderState.handles?.a ? { handle: renderState.handles.a } : null,
+      b: renderState.handles?.b ? { handle: renderState.handles.b } : null,
+    };
+    computeDash?.onMatchEnd(pendingMatchEnd);
+    const audio = getAudio();
+    if (m.winner === -1) {
+      audio.play("match_end_draw");
+    } else {
+      audio.play("match_end_win");
+      audio.play("win_applause", { when: 0.25 });
+    }
+    prevAudioFrame = null;
     const { a, b } = renderState.handles;
     const eloDelta = m.eloAfter && m.eloBefore
       ? ` · Δ @${a} ${formatDelta(m.eloAfter[0] - m.eloBefore[0])} · @${b} ${formatDelta(m.eloAfter[1] - m.eloBefore[1])}`
@@ -556,6 +731,55 @@ function formatDelta(n) {
   return r > 0 ? `+${r}` : `${r}`;
 }
 
+const WEAPON_CLASS = {
+  worldcoin_orb_flail: "flail", backpack_maul: "maul", gpu_server_blade: "blade", heat_sink_greatsword: "greatsword",
+  rolled_constitution_bat: "bat", alignment_baton: "club", red_team_pike: "pike", guardrail_greatsword: "greatsword",
+  nobel_medal_flail: "flail", folded_chess_axe: "axe", go_board_maul: "maul", alphafold_blade: "blade",
+  sunscreen_bottle_club: "club", controller_nunchucks: "nunchucks", shareholder_sauce_club: "club", quest_flail: "flail",
+};
+
+function detectAudioEdges(frame) {
+  const audio = getAudio();
+  if (!audio.isEnabled() || !audio.ready) { prevAudioFrame = frame; return; }
+  if (!prevAudioFrame) { prevAudioFrame = frame; return; }
+  for (let i = 0; i < 2; i++) {
+    const key = i === 0 ? "p0" : "p1";
+    const prev = prevAudioFrame[key];
+    const curr = frame[key];
+    if (!prev || !curr) continue;
+    if ((prev.swipeT ?? 0) <= 0 && (curr.swipeT ?? 0) > 0) {
+      const weapon = audioWeaponKeys[i];
+      const cls = WEAPON_CLASS[weapon] ?? "blade";
+      audio.play(`swipe_${cls}`);
+      fireGrunt(audio, i, "effort");
+    }
+    if ((prev.diveT ?? 0) <= 0 && (curr.diveT ?? 0) > 0) {
+      audio.play("dive_lunge");
+    }
+    if ((prev.hp ?? curr.hp ?? 0) > (curr.hp ?? 0)) {
+      const attacker = 1 - i;
+      const weapon = audioWeaponKeys[attacker];
+      const char = audioCharKeys[attacker];
+      if (char && weapon) audio.play(`hit_${char}_${weapon}`, { impact: true });
+      fireGrunt(audio, i, "hurt");
+    }
+    if (!prev.dead && curr.dead) {
+      audio.play("ko_flatline");
+      fireGrunt(audio, i, "ko");
+    }
+  }
+  prevAudioFrame = frame;
+}
+
+function fireGrunt(audio, side, kind) {
+  const char = audioCharKeys[side];
+  if (!char) return;
+  const now = performance.now();
+  if (kind !== "ko" && now - lastGruntMs[side] < GRUNT_THROTTLE_MS) return;
+  lastGruntMs[side] = now;
+  audio.play(`grunt_${char}_${kind}`);
+}
+
 function loop() {
   if (!running) return;
   if (!renderer || !ctx) {
@@ -564,6 +788,7 @@ function loop() {
   }
   const frameStart = performance.now();
   const f = signalState ? null : currentFrame();
+  if (f && matchActive) detectAudioEdges(f);
   if (signalState) {
     drawSignalScreen(signalState.title, signalState.subtitle);
     renderer.present2D?.();

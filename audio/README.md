@@ -51,16 +51,29 @@ browsers block autoplay anyway. The toggle lives in the Live sidebar
 and gates a single master `GainNode`, so flipping it on/off is instant
 and does not tear down the audio graph.
 
-## Workflow (planned)
+## Workflow
 
 1. Edit `audio/audio-theme.v1.json`.
-2. `node tools/build-audio-prompts.mjs` expands the SSOT into
-   paste-ready per-entry prompts under `audio/generated-prompts/`.
-3. Generate raw `.wav` output into `generations/raw/audio/...`
-   (gitignored, mirrors the image pipeline convention).
-4. `node tools/postprocess-audio.mjs` trims, normalizes, verifies loop
-   seams, concats the sfx sprite, and promotes the final assets under
-   `client/assets/audio/`.
+2. `node tools/build-audio-prompts.mjs` expands the SSOT into 21
+   paste-ready prompts under `audio/generated-prompts/<timestamp>-launch-audio-files/`
+   (15 sfx batches + 3 stage music + 3 impact IRs).
+3. Generate raw `.wav` output into `generations/raw/audio/…` at the
+   paths printed at the top of each prompt file (gitignored).
+4. `node tools/postprocess-audio.mjs <path>` processes one raw wav;
+   `node tools/postprocess-audio.mjs --all` processes every raw wav
+   that exists and assembles the sprite. Requires `ffmpeg` + `ffprobe`
+   on PATH (macOS: `brew install ffmpeg`).
 
-Neither tool exists yet. The SSOT is the contract they will be built
-against.
+The post-processor:
+- slices batch wavs on 700ms+ silence regions (below -55 dBFS),
+  trims each cue, pads, loudness-normalizes to -14 LUFS, and
+  concatenates everything into `client/assets/audio/sfx/sprite.webm`
+  with a `sprite.manifest.json` of [startMs, endMs] per cue;
+- verifies stage music loop seams (rejects if head/tail RMS diverges
+  >1 dB — does not silently crossfade);
+- unit-normalizes impact-IR energy so `wetSendDb` is the only runtime
+  loudness knob.
+
+Runtime is wired in `client/lib/audio.js` + `client/modes/spectate.js`.
+Missing assets degrade silently — the toggle still flips, cues are
+just no-ops until the sprite and stage files land under `client/assets/audio/`.

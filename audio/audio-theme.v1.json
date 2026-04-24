@@ -1,9 +1,9 @@
 {
   "meta": {
-    "version": "1.1.0",
+    "version": "1.3.0",
     "theme": "Post-Revenue Delivery Ritual",
     "audioTone": "dry boardroom apocalypse, underplayed cruelty, no wink-to-camera jokes. nothing cinematic, nothing anime, nothing triumphant. institutional ambience over music. impact over juice on sfx. vocal grunts are sparse and reluctant — nobody is performing effort for the camera.",
-    "boundary": "Audio assets only: sfx prompts, stage music prompts, sprite-pack layout, and post-process directives. No gameplay rules, runtime selection, or HUD copy.",
+    "boundary": "Audio assets only: batched sfx prompts, stage music prompts, impact-IR prompts, sprite-pack layout, and post-process directives. No gameplay rules, runtime selection, or HUD copy.",
     "format": {
       "container": "webm",
       "codec": "opus",
@@ -11,11 +11,12 @@
       "channels": { "sfx": 1, "music": 2 },
       "targetLUFS": { "sfx": -14, "music": -20 },
       "peakCeilingDb": -1.0
-    }
+    },
+    "generationModel": "57 discrete sfx cues are produced by only 15 text-to-audio generations: each 'batch' prompt asks the model to render several related cues back-to-back in one wav file, separated by a fixed silence gap. The post-processor splits the raw wav on silence boundaries, then re-concats everything into the final single-file sprite in spritePack.order. Fewer model calls, higher tonal coherence across related cues, and a single reusable slice pipeline."
   },
 
   "spritePack": {
-    "description": "Every sfx — weapon swipes, weapon hits, character grunts, objective cues, match-flow cues, win applause — concatenates into a single opus-in-webm sprite and a JSON manifest of [startMs, endMs] regions. The post-processor emits the sprite in the exact order listed under 'order'; the runtime triggers cues by name via the manifest, not by seeking raw offsets. One fetch, one decode, no per-trigger I/O.",
+    "description": "Every sfx cue ships inside one opus-in-webm sprite at assets/audio/sfx/sprite.webm plus a JSON manifest of [startMs, endMs] regions. Cues are generated in batches (see 'batches' below), sliced out of their raw wavs by the post-processor, trimmed/normalized/pad-spliced, then concatenated here in the exact order listed.",
     "out": "assets/audio/sfx/sprite.webm",
     "manifestOut": "assets/audio/sfx/sprite.manifest.json",
     "padTrailingMs": 20,
@@ -34,243 +35,174 @@
       "grunt_mark_effort", "grunt_mark_hurt", "grunt_mark_ko",
 
       "dive_lunge",
+      "spawn_enter",
+      "footstep_a", "footstep_b",
       "ko_flatline",
 
       "proof_spawn", "proof_acquired", "proof_carrying_loop_fragment", "proof_delivered",
       "goal_spawn", "goal_tick", "goal_urgent_tick", "goal_expire",
 
-      "match_start", "round_start", "round_end",
+      "match_start", "round_start", "round_end", "round_taken",
       "match_end_win", "match_end_draw",
       "win_applause"
     ]
   },
 
-  "sfx": {
-    "swipe_flail": {
-      "durationSec": 0.28,
-      "prompt": "a short, heavy rope/chain-whip swipe through office air. the head is a weight on a flexible tether, so you hear a brief leather-creak or chain-shiver followed by the weight passing the mic. ~240ms total, mono, dry. no metallic ring-out, no fantasy whoosh; imagine a keychain lanyard with a battery pack on the end, swung once past a mic in a carpeted room. ends clean, no reverb tail."
-    },
-    "swipe_maul": {
-      "durationSec": 0.34,
-      "prompt": "a slow, mass-heavy swipe. dominant low-mid air displacement, with the texture of something that does not want to be moving fast — a loaded duffel, a server chassis, a box of binders. 300ms, mono, dry, no whoosh stylization. the weight of the object is audible before it completes the arc. ends abruptly with a tiny fabric/strap creak."
-    },
-    "swipe_blade": {
-      "durationSec": 0.20,
-      "prompt": "a tight, thin swipe — something rigid and flat cutting air cleanly. 170ms, mono, dry. specifically NOT a shing, NOT a metal ring, NOT a katana sample. think a stiff plexiglass sheet or a motherboard PCB cut quickly through the air, with the faintest edge-whistle and no tail."
-    },
-    "swipe_greatsword": {
-      "durationSec": 0.40,
-      "prompt": "a committed two-handed arc. heavier than swipe_blade, longer arc, a little more air mass moved. 350ms. the sound communicates 'this was the whole commit, there is no follow-up this second'. mono, dry, no fantasy fanfare, no wind howl. ends with a small settling creak suggestive of whoever swung it rebalancing."
-    },
-    "swipe_bat": {
-      "durationSec": 0.25,
-      "prompt": "a dry, short-stroke club swing. 220ms, mono. the sound of a rolled-up document (a thick bound constitution, a posterboard tube) being swung once — surface friction audible, no resonance. ends clean. not a baseball bat wooosh."
-    },
-    "swipe_club": {
-      "durationSec": 0.22,
-      "prompt": "a stubby one-handed club swing. 190ms, mono. blunt object with no aerodynamic shape — you hear the air tumbling around it more than cutting. subtle. ends clean."
-    },
-    "swipe_pike": {
-      "durationSec": 0.30,
-      "prompt": "a long-reach thrust. 260ms, mono. air parting along a narrow shaft, with a small lead-end whistle and a trailing pole resonance that cuts off sharply. committed, deliberate. not a spear-throw, not a javelin — a thrust that stops cold."
-    },
-    "swipe_axe": {
-      "durationSec": 0.32,
-      "prompt": "a hinge-weighted swing. 280ms, mono. the head travels faster than the haft so there's a slight wobble in the air-texture mid-arc. ends with a tiny wood-grain creak from the handle settling. no metal gleam sfx, no lumberjack cliche."
-    },
-    "swipe_nunchucks": {
-      "durationSec": 0.32,
-      "prompt": "two short connected weights whipping in sequence. 280ms, mono. you hear TWO rapid air-passes about 90ms apart, connected by a faint chain-rattle, then silence. deliberately unstylish — this is an improvised weapon, not a martial-arts showcase. no whoosh-whoosh movie sample."
+  "batches": {
+    "_batchProtocol": {
+      "description": "Every batch prompt asks the generator to produce all of its cues in one wav file, back-to-back, with exactly 1000ms of digital silence between each cue and 500ms of silence after the last. The post-processor slices on any silence region >= 700ms below -55 dBFS. cuesOrder must match the order described inside the prompt body or the slicer will mislabel cues.",
+      "interCueSilenceMs": 1000,
+      "trailingSilenceMs": 500,
+      "sliceFloorDbfs": -55
     },
 
-    "hit_sama_worldcoin_orb_flail": {
-      "durationSec": 0.22,
-      "prompt": "contact: a coin-shaped metal puck on the end of a tether slaps an opponent. 190ms, mono. the front is a hollow metallic tap (not ringing, damped), followed by ~80ms of rattling tether settling. feels expensive and slightly absurd. no arcade ding, no boss-hit boom."
-    },
-    "hit_sama_backpack_maul": {
-      "durationSec": 0.24,
-      "prompt": "contact: a heavy padded-weight impact, like a laptop backpack loaded with hardware hitting a torso. 210ms, mono. muffled thump up front, a fabric-brush trailing texture, no resonance. reads as 'that was a lot of mass, and the target has the wind knocked out'."
-    },
-    "hit_sama_gpu_server_blade": {
-      "durationSec": 0.20,
-      "prompt": "contact: a thin rigid edge strikes target. 170ms, mono. dry plastic-composite crack (PCB snap texture), no metal ring, no blood sfx. reads as 'something expensive just broke against them'. ends clean."
-    },
-    "hit_sama_heat_sink_greatsword": {
-      "durationSec": 0.26,
-      "prompt": "contact: a heavy finned-metal slab lands across an opponent. 230ms, mono. the impact is dominated by ribbed-metal rattle (fin vibration) overlaid on a dull thud. post-impact decay is short — the fins dissipate energy as high-mid chatter, then silence. no sword clang."
+    "swipes": {
+      "cuesOrder": ["swipe_flail", "swipe_maul", "swipe_blade", "swipe_greatsword", "swipe_bat", "swipe_club", "swipe_pike", "swipe_axe", "swipe_nunchucks"],
+      "prompt": "Tone: dry boardroom apocalypse, underplayed cruelty. No wink-to-camera jokes. Nothing cinematic, nothing anime. Render nine distinct weapon-through-air swipes IN ONE WAV, mono, 48 kHz, all in the same dry carpeted-office mic space, each ~0.22-0.40s of actual sound, peaking around -3 dBFS, with EXACTLY 1000ms of digital silence between each, and 500ms of silence after the ninth. Do NOT crossfade. Do NOT ring. No reverb tails. In order:\n\n1) swipe_flail (~240ms) — a heavy rope/chain-whip swipe; brief leather-creak or chain-shiver then a weight passing the mic. Imagine a lanyard with a battery pack on the end, not a medieval flail sample.\n\n2) swipe_maul (~300ms) — a slow, mass-heavy swipe; dominant low-mid air displacement, texture of something that does not want to be moving fast — a loaded duffel or server chassis — ending with a small fabric/strap creak.\n\n3) swipe_blade (~170ms) — a tight, thin swipe; something rigid and flat cutting air cleanly. NOT a shing, NOT a metal ring, NOT a katana. Think stiff plexiglass or a PCB; faintest edge-whistle, no tail.\n\n4) swipe_greatsword (~350ms) — a committed two-handed arc, heavier than swipe_blade, ending with a small settling creak suggestive of rebalancing. No fantasy fanfare, no wind howl.\n\n5) swipe_bat (~220ms) — a dry, short-stroke club swing; a rolled thick bound document swung once, surface friction audible, no resonance. Not a baseball bat whoosh.\n\n6) swipe_club (~190ms) — a stubby one-handed club; blunt object with no aerodynamic shape; air tumbling around it more than cutting.\n\n7) swipe_pike (~260ms) — a long-reach thrust; air parting along a narrow shaft with a small lead-end whistle and a trailing pole resonance that cuts off sharply. Thrust-that-stops, not a javelin throw.\n\n8) swipe_axe (~280ms) — a hinge-weighted swing; head faster than haft, slight mid-arc air-texture wobble, ending with a tiny wood-grain creak from the handle settling. No lumberjack cliche.\n\n9) swipe_nunchucks (~280ms) — TWO rapid air-passes ~90ms apart connected by a faint chain-rattle, then silence. Deliberately unstylish — improvised weapon, not martial-arts showcase.\n\nRemember: 1000ms of pure digital silence between each sound. Mono. No shared reverb."
     },
 
-    "hit_darrius_rolled_constitution_bat": {
-      "durationSec": 0.22,
-      "prompt": "contact: a thick paper document — rolled, dense — whacks a target. 190ms, mono. a flat paper-on-body slap, no resonance, a faint page-edge flutter at the tail. feels bureaucratic and humiliating, not violent in a stylized way."
-    },
-    "hit_darrius_alignment_baton": {
-      "durationSec": 0.20,
-      "prompt": "contact: a rigid short baton strike. 170ms, mono. a single clean tap, slightly higher frequency than bat, very dry. think a conductor's baton landing wrong. no rubber-mallet bounce."
-    },
-    "hit_darrius_red_team_pike": {
-      "durationSec": 0.23,
-      "prompt": "contact: thrust-point lands. 200ms, mono. a sharp front transient (narrow cross-section impacting cloth-over-ribs), a very brief mid-frequency echo from the shaft, then silence. no blood or body-fall sample. feels like a point was made, literally."
-    },
-    "hit_darrius_guardrail_greatsword": {
-      "durationSec": 0.28,
-      "prompt": "contact: a highway-guardrail-shaped slab strikes. 250ms, mono. lower-mid metallic thud with a perceptible flange/ribbed-steel character, followed by a brief industrial shudder as the guardrail profile resonates along its length and is then gripped back to silence."
+    "hits_sama": {
+      "cuesOrder": ["hit_sama_worldcoin_orb_flail", "hit_sama_backpack_maul", "hit_sama_gpu_server_blade", "hit_sama_heat_sink_greatsword"],
+      "prompt": "Tone: dry boardroom apocalypse, underplayed cruelty. Four weapon-CONTACT sounds for character 'Sama' (archetype: quiet founder with a very expensive weather system; fast setup duelist with polished menace). Render all four IN ONE WAV, mono, 48 kHz, same dry carpeted-office space, each ~0.18-0.26s of actual sound, with EXACTLY 1000ms of digital silence between each and 500ms after the last. No arcade dings, no boss-hit booms, no blood sfx. In order:\n\n1) hit_sama_worldcoin_orb_flail (~190ms) — a coin-shaped metal puck on a tether slaps an opponent; hollow metallic tap (damped, not ringing) followed by ~80ms of tether settling. Feels expensive and slightly absurd.\n\n2) hit_sama_backpack_maul (~210ms) — a heavy padded-weight impact (laptop backpack loaded with hardware hitting a torso); muffled thump up front, a fabric-brush trailing texture. No resonance. Wind-knocked-out energy.\n\n3) hit_sama_gpu_server_blade (~170ms) — a thin rigid edge strikes target; dry plastic-composite crack (PCB snap texture). No metal ring. Something expensive just broke against them.\n\n4) hit_sama_heat_sink_greatsword (~230ms) — a heavy finned-metal slab lands; impact dominated by ribbed-metal rattle (fin vibration) over a dull thud. Short post-impact decay — fins dissipate as high-mid chatter then silence. No sword clang.\n\n1000ms pure silence between. Mono."
     },
 
-    "hit_demis_nobel_medal_flail": {
-      "durationSec": 0.22,
-      "prompt": "contact: a heavy gold-weight medallion on a short chain connects. 190ms, mono. a round, short, damped metallic donk — like a solid puck, not a cymbal — followed by the medal spinning on its chain for ~60ms then held. dignified, not clangy."
-    },
-    "hit_demis_folded_chess_axe": {
-      "durationSec": 0.24,
-      "prompt": "contact: the flat of a folded wooden/plastic chessboard, swung on a haft, strikes the target. 210ms, mono. a hollow cardboard-over-wood thud — the folded board gives a faint double-tap because the two halves hit a hair apart. ends clean."
-    },
-    "hit_demis_go_board_maul": {
-      "durationSec": 0.26,
-      "prompt": "contact: a thick slab-wood go board, used as a maul head, lands with substantial mass. 230ms, mono. deep wood-on-body thud, a subtle grid-plate bounce texture suggesting stones shifting in their bowls but held inside the slab. no obvious 'bonk'."
-    },
-    "hit_demis_alphafold_blade": {
-      "durationSec": 0.20,
-      "prompt": "contact: an impossibly thin computational blade connects. 170ms, mono. the impact transient is SHORTER than feels physically possible — an unnatural snap with almost no spectral content below 500 Hz and a very brief 3-5 kHz click, then silence. reads as 'this weapon does not obey the usual rules'."
+    "hits_darrius": {
+      "cuesOrder": ["hit_darrius_rolled_constitution_bat", "hit_darrius_alignment_baton", "hit_darrius_red_team_pike", "hit_darrius_guardrail_greatsword"],
+      "prompt": "Tone: dry boardroom apocalypse, underplayed cruelty. Four weapon-CONTACT sounds for character 'Darrius' (archetype: risk posture with elbows; measured enforcer with long, corrective swings). Render all four IN ONE WAV, mono, 48 kHz, same room, ~0.17-0.28s each, EXACTLY 1000ms silence between, 500ms after last. Bureaucratic humiliation over violence. In order:\n\n1) hit_darrius_rolled_constitution_bat (~190ms) — a thick rolled paper document whacks a target; flat paper-on-body slap, no resonance, faint page-edge flutter at the tail. Bureaucratic and humiliating.\n\n2) hit_darrius_alignment_baton (~170ms) — a rigid short baton strike; one clean tap, slightly higher frequency than bat, very dry. A conductor's baton landing wrong. No rubber-mallet bounce.\n\n3) hit_darrius_red_team_pike (~200ms) — thrust-point lands; sharp front transient (narrow cross-section impacting cloth-over-ribs), brief mid-frequency echo from the shaft, then silence. A point was made, literally.\n\n4) hit_darrius_guardrail_greatsword (~250ms) — a highway-guardrail-profile slab strikes; lower-mid metallic thud with flange/ribbed-steel character, brief industrial shudder as the profile resonates along its length then is gripped back to silence.\n\n1000ms pure silence between. Mono."
     },
 
-    "hit_mark_sunscreen_bottle_club": {
-      "durationSec": 0.21,
-      "prompt": "contact: a plastic bottle full of thick lotion bludgeons the target. 180ms, mono. a wet-thick slap with a subtle liquid-slosh tail. comically, slightly, wrong — but not funny. ends clean after the slosh settles."
-    },
-    "hit_mark_controller_nunchucks": {
-      "durationSec": 0.22,
-      "prompt": "contact: a hollow-plastic controller-shell, tethered, whips into the target. 190ms, mono. a bright plastic crack up front, then ~60ms of the second shell swinging in to tap again, slightly softer. no rumble. reads as cheap and stinging."
-    },
-    "hit_mark_shareholder_sauce_club": {
-      "durationSec": 0.22,
-      "prompt": "contact: a heavy condiment-bottle club strikes. 190ms, mono. similar to sunscreen_bottle_club but thicker, denser, with a lower slosh register. a faint cap-rattle at the tail. unappetizing."
-    },
-    "hit_mark_quest_flail": {
-      "durationSec": 0.23,
-      "prompt": "contact: a VR-headset-shaped weight on a short strap swings into target. 200ms, mono. dense plastic-and-foam impact, a lens-click element audible at the front (hard plastic rim striking), a brief strap-rustle tail. feels like an expensive gadget has been misused."
+    "hits_demis": {
+      "cuesOrder": ["hit_demis_nobel_medal_flail", "hit_demis_folded_chess_axe", "hit_demis_go_board_maul", "hit_demis_alphafold_blade"],
+      "prompt": "Tone: dry boardroom apocalypse, underplayed cruelty. Four weapon-CONTACT sounds for character 'Demis' (archetype: polite recursion with unacceptable hands; precise thinker whose weapon geometry looks unfair). Render all four IN ONE WAV, mono, 48 kHz, same room, ~0.17-0.26s each, EXACTLY 1000ms silence between, 500ms after last. Dignified not clangy; unnaturally precise for the fourth. In order:\n\n1) hit_demis_nobel_medal_flail (~190ms) — a heavy gold-weight medallion on a short chain connects; round, short, damped metallic donk (solid puck, not cymbal), medal spins on its chain for ~60ms then held.\n\n2) hit_demis_folded_chess_axe (~210ms) — flat of a folded wood/plastic chessboard swung on a haft; hollow cardboard-over-wood thud with a faint DOUBLE-tap because the two halves hit a hair apart.\n\n3) hit_demis_go_board_maul (~230ms) — a thick slab-wood go board lands with mass; deep wood-on-body thud with subtle grid-plate bounce texture suggesting stones shifting in their bowls but held inside the slab. No obvious 'bonk'.\n\n4) hit_demis_alphafold_blade (~170ms) — an impossibly thin computational blade; impact transient SHORTER than feels physically possible — unnatural snap, almost no spectral content below 500 Hz, brief 3-5 kHz click, then silence. Reads as 'this weapon does not obey the usual rules'.\n\n1000ms pure silence between. Mono."
     },
 
-    "grunt_sama_effort": {
-      "durationSec": 0.22,
-      "prompt": "a quiet, non-performative exertion from an adult male voice — archetype: a quiet founder with an expensive weather system. 180ms, mono, close-mic, dry. think a half-exhale 'hhh' with a trace of voiced tone, almost whispered. not a fight-shout. delivered as if he's annoyed at having to exert himself at all."
-    },
-    "grunt_sama_hurt": {
-      "durationSec": 0.25,
-      "prompt": "a short pained exhale, adult male, controlled, minimizing itself. 210ms, mono, dry. a clipped 'hnngh' or sharp nasal inhale as he absorbs a hit. no scream, no theatrical 'oof'. he is embarrassed to have been hit."
-    },
-    "grunt_sama_ko": {
-      "durationSec": 0.55,
-      "prompt": "a defeated exhale, adult male, 470ms, mono. a breath leaving him all at once with a trace of vocal fry, ending in silence. no groan, no last-word, no dramatic fall-gasp. sounds like he is already thinking about what to say to the board."
+    "hits_mark": {
+      "cuesOrder": ["hit_mark_sunscreen_bottle_club", "hit_mark_controller_nunchucks", "hit_mark_shareholder_sauce_club", "hit_mark_quest_flail"],
+      "prompt": "Tone: dry boardroom apocalypse, underplayed cruelty. Four weapon-CONTACT sounds for character 'Mark' (archetype: optimized sincerity with blunt instruments; pressure fighter built from wellness jargon and impact). Render all four IN ONE WAV, mono, 48 kHz, same room, ~0.18-0.23s each, EXACTLY 1000ms silence between, 500ms after last. Comically slightly wrong but not funny. In order:\n\n1) hit_mark_sunscreen_bottle_club (~180ms) — a plastic bottle full of thick lotion bludgeons target; wet-thick slap with a subtle liquid-slosh tail.\n\n2) hit_mark_controller_nunchucks (~190ms) — a hollow-plastic controller-shell, tethered, whips into target; bright plastic crack up front, ~60ms of the second shell swinging in to tap again slightly softer. Cheap and stinging.\n\n3) hit_mark_shareholder_sauce_club (~190ms) — a heavy condiment-bottle club; like sunscreen_bottle_club but thicker, denser, lower slosh register, faint cap-rattle at the tail. Unappetizing.\n\n4) hit_mark_quest_flail (~200ms) — a VR-headset-shaped weight on a short strap swings into target; dense plastic-and-foam impact with a lens-click element at the front (hard plastic rim striking) and brief strap-rustle tail. An expensive gadget has been misused.\n\n1000ms pure silence between. Mono."
     },
 
-    "grunt_darrius_effort": {
-      "durationSec": 0.22,
-      "prompt": "an adult male grunt with enforcer heft — archetype: risk posture with elbows. 180ms, mono, dry. a low, chest-voiced 'huh' on each swing, audibly weight-carrying, not theatrical. he sounds committed but bored, like a bouncer doing his job."
-    },
-    "grunt_darrius_hurt": {
-      "durationSec": 0.26,
-      "prompt": "an adult male pained 'nngh', chest-voiced, slightly deeper than grunt_darrius_effort. 220ms, mono, dry. he takes the hit without flinching vocally; the grunt is the minimum his body lets him suppress. no yelp."
-    },
-    "grunt_darrius_ko": {
-      "durationSec": 0.60,
-      "prompt": "a long, resigned exhale from an adult male, chest-voiced, 500ms, mono. the vocal fry is heavier than sama's. he sounds like he's filing an incident report as he falls. no cry, no last-breath drama."
+    "grunts_sama": {
+      "cuesOrder": ["grunt_sama_effort", "grunt_sama_hurt", "grunt_sama_ko"],
+      "prompt": "Three short male-voice grunts for character 'Sama' (quiet founder with an expensive weather system; polished menace). Adult male voice, close-mic, dry, mono, 48 kHz, all from the SAME take in the SAME room. No performative fight-shouting — he is annoyed at having to exert himself. Render IN ONE WAV with EXACTLY 1000ms of silence between each and 500ms after the last. In order:\n\n1) grunt_sama_effort (~180ms) — a half-exhale 'hhh' with a trace of voiced tone, almost whispered.\n\n2) grunt_sama_hurt (~210ms) — a clipped 'hnngh' or sharp nasal inhale as he absorbs a hit. No scream, no theatrical 'oof'. He is embarrassed to have been hit.\n\n3) grunt_sama_ko (~470ms) — a breath leaving him all at once with a trace of vocal fry, ending in silence. No groan, no last-word. Already thinking about what to say to the board.\n\n1000ms pure silence between. Mono."
     },
 
-    "grunt_demis_effort": {
-      "durationSec": 0.20,
-      "prompt": "a short, almost inaudible exhale from an adult male — archetype: polite recursion with unacceptable hands. 170ms, mono, dry. close-mic breath with a trace of voiced tone, politely muted. he sounds embarrassed to be making any sound at all."
-    },
-    "grunt_demis_hurt": {
-      "durationSec": 0.24,
-      "prompt": "a tight, clipped hurt-exhale, adult male, upper register. 200ms, mono, dry. a sharp 'hn' rather than a groan. he is recalculating while being struck."
-    },
-    "grunt_demis_ko": {
-      "durationSec": 0.55,
-      "prompt": "a quiet, collapsing exhale, adult male, 470ms, mono. longer than hurt, softer, trailing into breath-only. no words, no cry. sounds like a polite apology that has run out of air."
+    "grunts_darrius": {
+      "cuesOrder": ["grunt_darrius_effort", "grunt_darrius_hurt", "grunt_darrius_ko"],
+      "prompt": "Three short male-voice grunts for character 'Darrius' (risk posture with elbows; measured enforcer). Adult male voice, chest-voiced, close-mic, dry, mono, 48 kHz, same take, same room. Committed but bored, like a bouncer doing his job. Render IN ONE WAV with EXACTLY 1000ms of silence between each, 500ms after last. In order:\n\n1) grunt_darrius_effort (~180ms) — a low chest-voiced 'huh' on each swing, audibly weight-carrying, not theatrical.\n\n2) grunt_darrius_hurt (~220ms) — a chest-voiced 'nngh', slightly deeper than effort; the grunt is the minimum his body lets him suppress. No yelp.\n\n3) grunt_darrius_ko (~500ms) — a long resigned exhale, heavier vocal fry than sama's. Sounds like he's filing an incident report as he falls.\n\n1000ms pure silence between. Mono."
     },
 
-    "grunt_mark_effort": {
-      "durationSec": 0.22,
-      "prompt": "an adult male grunt with forced sincerity — archetype: optimized sincerity with blunt instruments. 180ms, mono, dry. a mid-register 'hyah'-adjacent effort sound that someone clearly thinks sounds natural and earnest. slightly too loud for the mic. the effort reads as marketed."
-    },
-    "grunt_mark_hurt": {
-      "durationSec": 0.26,
-      "prompt": "an adult male hurt-grunt that still sounds like it was workshopped. 220ms, mono, dry. a slightly performative 'agh' that doesn't quite escape fully, clipped at the end as if he caught himself."
-    },
-    "grunt_mark_ko": {
-      "durationSec": 0.60,
-      "prompt": "an adult male defeat exhale, 500ms, mono. starts as if he's going to say something (small vocal onset), then collapses into unvoiced breath. sincere-sounding, not sincere. no closing word."
+    "grunts_demis": {
+      "cuesOrder": ["grunt_demis_effort", "grunt_demis_hurt", "grunt_demis_ko"],
+      "prompt": "Three short male-voice grunts for character 'Demis' (polite recursion with unacceptable hands; precise thinker). Adult male voice, close-mic, dry, mono, 48 kHz, same take, same room. Embarrassed to be making any sound. Render IN ONE WAV with EXACTLY 1000ms of silence between each, 500ms after last. In order:\n\n1) grunt_demis_effort (~170ms) — a short, almost inaudible exhale with a trace of voiced tone, politely muted.\n\n2) grunt_demis_hurt (~200ms) — a tight clipped 'hn' rather than a groan; he is recalculating while being struck.\n\n3) grunt_demis_ko (~470ms) — a quiet collapsing exhale, softer than hurt, trailing into breath-only. A polite apology that has run out of air.\n\n1000ms pure silence between. Mono."
     },
 
-    "dive_lunge": {
-      "durationSec": 0.32,
-      "prompt": "a short rush of displaced air with a hint of fabric tension — a suit jacket shoved forward quickly. 280ms, mono, dry. mild low-mid whump at the start from body weight, thin trailing hiss that ends abruptly. no anime air-slice, no synth dash. shared across all characters."
-    },
-    "ko_flatline": {
-      "durationSec": 0.55,
-      "prompt": "a non-vocal defeat cue meant to layer UNDER the character's ko grunt. a single low thud against carpeted concrete followed by one flat, unresolved tone decaying in ~400ms — like an HVAC chime that never completes its phrase. mono, dry. administrative, not cinematic."
+    "grunts_mark": {
+      "cuesOrder": ["grunt_mark_effort", "grunt_mark_hurt", "grunt_mark_ko"],
+      "prompt": "Three short male-voice grunts for character 'Mark' (optimized sincerity with blunt instruments). Adult male voice, close-mic, dry, mono, 48 kHz, same take, same room. All three sound like they were workshopped — sincere-sounding, not sincere. Slightly too loud for the mic. Render IN ONE WAV with EXACTLY 1000ms of silence between each, 500ms after last. In order:\n\n1) grunt_mark_effort (~180ms) — a mid-register 'hyah'-adjacent effort sound someone clearly thinks sounds natural; effort reads as marketed.\n\n2) grunt_mark_hurt (~220ms) — a slightly performative 'agh' that doesn't quite escape fully, clipped at the end as if he caught himself.\n\n3) grunt_mark_ko (~500ms) — starts as if he's going to say something (small vocal onset), then collapses into unvoiced breath. No closing word.\n\n1000ms pure silence between. Mono."
     },
 
-    "proof_spawn": {
-      "durationSec": 0.32,
-      "prompt": "the proof core appears in the arena. 280ms, mono. a soft magnetic-click up front (like a hard drive spinning up partway), then a brief held tone at ~440 Hz that decays over 200ms. reads as 'a small official object has just become real'. no chime, no sparkle."
-    },
-    "proof_acquired": {
-      "durationSec": 0.28,
-      "prompt": "a fighter has picked up the proof core. 240ms, mono. a short, crisp mechanical click (the hand closing on the object) layered with a very brief 2-tone rising blip — two semitones, around 700 Hz — that feels like a receipt printer confirming something. understated."
-    },
-    "proof_carrying_loop_fragment": {
-      "durationSec": 0.50,
-      "prompt": "a 500ms seamless-looping fragment meant to be played quietly and continuously while a fighter is carrying the proof. mono. a slow, steady low-amplitude hum at ~60 Hz with a faint crystalline shimmer at ~4 kHz that pulses once per 500ms. barely audible in the mix (-20 dB relative to sfx). the first and last 50ms are spectrally identical so the runtime can loop it as long as the carry lasts."
-    },
-    "proof_delivered": {
-      "durationSec": 0.45,
-      "prompt": "the carrier completed the dwell and scored. 380ms, mono. a two-tone confirmation motif (perfect fourth, rising, 220Hz-to-293Hz) over a faint paper-stamp transient. reads as 'the receipt printed cleanly'. NOT a goal-scored fanfare, NOT a crowd reaction. purely administrative."
+    "movement": {
+      "cuesOrder": ["dive_lunge", "spawn_enter", "footstep_a", "footstep_b", "ko_flatline"],
+      "prompt": "Tone: dry boardroom apocalypse, underplayed cruelty. Five movement/body cues, shared across all characters, recorded in the SAME dry carpeted-office space for tonal coherence. Mono, 48 kHz. Render IN ONE WAV with EXACTLY 1000ms of silence between each, 500ms after last. In order:\n\n1) dive_lunge (~280ms) — a short rush of displaced air with a hint of fabric tension (suit jacket shoved forward quickly); mild low-mid whump at start from body weight, thin trailing hiss that ends abruptly. No anime air-slice, no synth dash.\n\n2) spawn_enter (~300ms) — a fighter steps into the arena at round start; soft floor-contact thud (shoe on carpet over concrete) layered with a brief fabric-rustle of jacket settling. Stepping into a meeting, not dropping from the sky.\n\n3) footstep_a (~80ms) — a single footstep; dull shoe-on-industrial-carpet contact, slight scuff texture, no heel-click, no resonance, MARGINALLY higher mid-frequency center than footstep_b.\n\n4) footstep_b (~80ms) — the counterpart; same carpeted-shoe contact with slightly LOWER mid-frequency center and a faint co-occurring heel-scuff. When alternated with footstep_a at ~250ms cadence the pair sounds like one person walking, not a loop.\n\n5) ko_flatline (~470ms) — non-vocal defeat cue meant to layer under a character's ko grunt; one low thud against carpeted concrete followed by a flat unresolved tone decaying in ~400ms, like an HVAC chime that never completes its phrase.\n\n1000ms pure silence between. Mono."
     },
 
-    "goal_spawn": {
-      "durationSec": 0.30,
-      "prompt": "a demand node has appeared — the target where the proof must be delivered. 260ms, mono. a low pulse (~80 Hz) rises and holds for 200ms, then cuts off. reads as 'a deadline is now running'. no chime, no sparkle. austere."
-    },
-    "goal_tick": {
-      "durationSec": 0.10,
-      "prompt": "non-urgent per-second tick while the goal timer is running and > 3 seconds remain. 70ms of sound. a single dry clock-escapement click with a trace of desk resonance. low-volume in the mix. must tile once per second without fatigue."
-    },
-    "goal_urgent_tick": {
-      "durationSec": 0.14,
-      "prompt": "urgent per-second tick when the goal timer is < 3 seconds. 110ms of sound. a flat, slightly harsh fluorescent-ballast alarm blip around 1 kHz, followed by 40ms of silence. unmistakable against goal_tick without being melodramatic. this is the 'alarm for small remaining time' — institutional, not arcade."
-    },
-    "goal_expire": {
-      "durationSec": 0.40,
-      "prompt": "the goal timer reached zero without a delivery. 350ms, mono. a single short descending unresolved tone (400Hz down to 280Hz over ~120ms) followed by room tone. reads as 'the window closed, nobody got credit'. no buzzer, no failure stinger."
+    "proof_events": {
+      "cuesOrder": ["proof_spawn", "proof_acquired", "proof_delivered"],
+      "prompt": "Three administrative-sounding objective cues for a proof-bundle game mechanic: the proof appears, gets picked up, and is successfully delivered. Tone: receipt-printer bureaucracy, not arcade chime. Mono, 48 kHz, same dry room, render IN ONE WAV with EXACTLY 1000ms of silence between each, 500ms after last. In order:\n\n1) proof_spawn (~280ms) — the proof core appears in the arena; soft magnetic-click up front (hard drive spinning up partway), brief held tone at ~440 Hz decaying over 200ms. Reads as 'a small official object has just become real'. No chime, no sparkle.\n\n2) proof_acquired (~240ms) — a fighter picks up the proof core; crisp mechanical click (hand closing on object) layered with a brief 2-tone rising blip (two semitones around 700 Hz) that feels like a receipt printer confirming something. Understated.\n\n3) proof_delivered (~380ms) — the carrier completed the dwell and scored; two-tone confirmation motif (perfect fourth rising, 220 Hz to 293 Hz) over a faint paper-stamp transient. The receipt printed cleanly. NOT a goal-scored fanfare. Purely administrative.\n\n1000ms pure silence between. Mono."
     },
 
-    "match_start": {
-      "durationSec": 0.45,
-      "prompt": "the match begins. a quiet institutional cue: double-beep from a fluorescent-lit conference phone, both beeps in 350ms, followed by 100ms of room tone. steady pitch, no swell. mono, dry. sounds like a meeting is starting, not a fight. fires on ws 'matchStart' only — NOT on 'matchInProgress' (mid-stream join)."
-    },
-    "round_start": {
-      "durationSec": 0.30,
-      "prompt": "a new round is beginning inside an ongoing match. 260ms, mono. a single short phone-beep (~200ms at steady pitch) followed by 60ms of room tone. quieter than match_start; rounds happen more often."
-    },
-    "round_end": {
-      "durationSec": 0.35,
-      "prompt": "a round has ended. 300ms, mono. a low held tone that decays without resolution (~260 Hz for 240ms, then 60ms of silence). no stinger. sounds like the call-in line has dropped."
-    },
-    "match_end_win": {
-      "durationSec": 0.65,
-      "prompt": "the match is over, someone won. a single low sustained unresolved tone (~450ms) followed by a short exhale of room tone. no fanfare, no chord resolution, no rising interval. stereo tolerated but narrow if used. sounds more like the lights have been turned off than like a victory. win_applause fires AFTER this cue, not simultaneously."
-    },
-    "match_end_draw": {
-      "durationSec": 0.60,
-      "prompt": "draw result. identical texture to match_end_win but two tones detuned a quarter-tone apart, canceling into a faint beat. 500ms. mono. expresses 'nothing was decided' rather than 'both competed well'."
+    "proof_carrying_loop": {
+      "cuesOrder": ["proof_carrying_loop_fragment"],
+      "prompt": "A 500ms SEAMLESS-LOOPING fragment meant to play quietly and continuously while a fighter is carrying the proof. Mono, 48 kHz. A slow steady low-amplitude hum at ~60 Hz with a faint crystalline shimmer at ~4 kHz pulsing once per 500ms. Barely audible in the mix (-20 dB relative to sfx). The FIRST and LAST 50ms MUST be spectrally and phase identical so the runtime can loop it for the duration of a carry with no audible seam. Render as a SINGLE 500ms wav (no silence before or after — the whole wav is the loop). Since this entry is its own batch with a single cue, no inter-cue silence applies."
     },
 
-    "win_applause": {
-      "durationSec": 2.40,
-      "prompt": "audience reaction after a match win, but NOT a stadium crowd. a thin, small-room applause from a handful of people (4-8 claps audible) in a carpeted conference space, lasting ~2.2 seconds, slightly out of sync, a little too sparse to feel like a full room. add one late clap at ~1.9s from the back of the room. no cheers, no whistles, no vocal whoops. the emotional read is 'polite obligation' more than 'celebration'. stereo narrow. fires only on win, never on draw."
+    "goal_timer": {
+      "cuesOrder": ["goal_spawn", "goal_tick", "goal_urgent_tick", "goal_expire"],
+      "prompt": "Four austere objective-timer cues for a demand-node delivery target with a countdown timer. Tone: institutional, not arcade. All four share a consistent fluorescent-lit room sound. Mono, 48 kHz. Render IN ONE WAV with EXACTLY 1000ms of silence between each, 500ms after last. In order:\n\n1) goal_spawn (~260ms) — a demand node has appeared; low pulse (~80 Hz) rises and holds for 200ms then cuts off. A deadline is now running. No chime, no sparkle.\n\n2) goal_tick (~70ms) — non-urgent per-second tick while timer > 3 seconds; one dry clock-escapement click with a trace of desk resonance. Low-volume; must tile once per second without fatigue.\n\n3) goal_urgent_tick (~110ms) — urgent per-second tick when timer ≤ 3 seconds; a flat, slightly harsh fluorescent-ballast alarm blip around 1 kHz, followed by 40ms of silence. Unmistakable against goal_tick without being melodramatic. Institutional, not arcade.\n\n4) goal_expire (~350ms) — timer reached zero without a delivery; one short descending unresolved tone (400 Hz down to 280 Hz over ~120ms) followed by room tone. The window closed, nobody got credit. No buzzer, no failure stinger.\n\n1000ms pure silence between. Mono."
+    },
+
+    "match_flow": {
+      "cuesOrder": ["match_start", "round_start", "round_end", "round_taken"],
+      "prompt": "Four match/round transition cues. Shared palette: a fluorescent-lit conference phone and the room it sits in. Tone: meetings starting and ending, not fights starting and ending. Mono with narrow-stereo allowed for round_taken only, 48 kHz. Render IN ONE WAV with EXACTLY 1000ms of silence between each, 500ms after last. In order:\n\n1) match_start (~350ms) — a double-beep from the conference phone (both beeps in ~350ms total), steady pitch, no swell, followed by 100ms of room tone. A meeting is starting, not a fight.\n\n2) round_start (~260ms) — a single short phone-beep (~200ms steady pitch) followed by 60ms of room tone. Quieter than match_start; rounds happen more often.\n\n3) round_end (~300ms) — a low held tone that decays without resolution (~260 Hz for 240ms, 60ms silence). Sounds like the call-in line has dropped. No stinger. Fires on timeout paths only.\n\n4) round_taken (~480ms) — THE stinger when a fighter takes the round by reaching POINTS_TO_WIN_ROUND deliveries; a first percussive paper-stamp transient (a receipt getting stamped 'APPROVED') followed ~120ms later by a brief held tone at ~392 Hz (G4) decaying over 300ms. Unresolved — it's a round, not the match — but unmistakably a WIN event. More shape than round_end. No chord, no fanfare, no rising interval, no crowd. Institutional satisfaction: a line item was closed.\n\n1000ms pure silence between. Mono (narrow stereo acceptable for cue 4)."
+    },
+
+    "match_end": {
+      "cuesOrder": ["match_end_win", "match_end_draw", "win_applause"],
+      "prompt": "Three match-ending cues. Tone: a meeting concluding, not a championship being decided. Mono except win_applause which may be narrow stereo. 48 kHz. Render IN ONE WAV with EXACTLY 1000ms of silence between each, 500ms after last. In order:\n\n1) match_end_win (~450ms) — a single low sustained unresolved tone (~450ms) followed by a short exhale of room tone. No fanfare, no chord resolution, no rising interval. Sounds more like the lights have been turned off than like a victory. win_applause fires AFTER this cue, not simultaneously.\n\n2) match_end_draw (~500ms) — identical texture to match_end_win but two tones detuned a quarter-tone apart, canceling into a faint beat. Expresses 'nothing was decided' rather than 'both competed well'.\n\n3) win_applause (~2200ms) — audience reaction after a match win, but NOT a stadium crowd. Thin small-room applause from a handful of people (4-8 claps audible) in a carpeted conference space, slightly out of sync, a little too sparse to feel like a full room. Add one late clap at ~1.9s from the back of the room. No cheers, no whistles, no vocal whoops. Emotional read: 'polite obligation' more than 'celebration'. Narrow stereo.\n\n1000ms pure silence between. See per-cue channel notes."
     }
+  },
+
+  "sfx": {
+    "swipe_flail":                         { "durationSec": 0.28, "batch": "swipes" },
+    "swipe_maul":                          { "durationSec": 0.34, "batch": "swipes" },
+    "swipe_blade":                         { "durationSec": 0.20, "batch": "swipes" },
+    "swipe_greatsword":                    { "durationSec": 0.40, "batch": "swipes" },
+    "swipe_bat":                           { "durationSec": 0.25, "batch": "swipes" },
+    "swipe_club":                          { "durationSec": 0.22, "batch": "swipes" },
+    "swipe_pike":                          { "durationSec": 0.30, "batch": "swipes" },
+    "swipe_axe":                           { "durationSec": 0.32, "batch": "swipes" },
+    "swipe_nunchucks":                     { "durationSec": 0.32, "batch": "swipes" },
+
+    "hit_sama_worldcoin_orb_flail":        { "durationSec": 0.22, "batch": "hits_sama" },
+    "hit_sama_backpack_maul":              { "durationSec": 0.24, "batch": "hits_sama" },
+    "hit_sama_gpu_server_blade":           { "durationSec": 0.20, "batch": "hits_sama" },
+    "hit_sama_heat_sink_greatsword":       { "durationSec": 0.26, "batch": "hits_sama" },
+
+    "hit_darrius_rolled_constitution_bat": { "durationSec": 0.22, "batch": "hits_darrius" },
+    "hit_darrius_alignment_baton":         { "durationSec": 0.20, "batch": "hits_darrius" },
+    "hit_darrius_red_team_pike":           { "durationSec": 0.23, "batch": "hits_darrius" },
+    "hit_darrius_guardrail_greatsword":    { "durationSec": 0.28, "batch": "hits_darrius" },
+
+    "hit_demis_nobel_medal_flail":         { "durationSec": 0.22, "batch": "hits_demis" },
+    "hit_demis_folded_chess_axe":          { "durationSec": 0.24, "batch": "hits_demis" },
+    "hit_demis_go_board_maul":             { "durationSec": 0.26, "batch": "hits_demis" },
+    "hit_demis_alphafold_blade":           { "durationSec": 0.20, "batch": "hits_demis" },
+
+    "hit_mark_sunscreen_bottle_club":      { "durationSec": 0.21, "batch": "hits_mark" },
+    "hit_mark_controller_nunchucks":       { "durationSec": 0.22, "batch": "hits_mark" },
+    "hit_mark_shareholder_sauce_club":     { "durationSec": 0.22, "batch": "hits_mark" },
+    "hit_mark_quest_flail":                { "durationSec": 0.23, "batch": "hits_mark" },
+
+    "grunt_sama_effort":                   { "durationSec": 0.22, "batch": "grunts_sama" },
+    "grunt_sama_hurt":                     { "durationSec": 0.25, "batch": "grunts_sama" },
+    "grunt_sama_ko":                       { "durationSec": 0.55, "batch": "grunts_sama" },
+
+    "grunt_darrius_effort":                { "durationSec": 0.22, "batch": "grunts_darrius" },
+    "grunt_darrius_hurt":                  { "durationSec": 0.26, "batch": "grunts_darrius" },
+    "grunt_darrius_ko":                    { "durationSec": 0.60, "batch": "grunts_darrius" },
+
+    "grunt_demis_effort":                  { "durationSec": 0.20, "batch": "grunts_demis" },
+    "grunt_demis_hurt":                    { "durationSec": 0.24, "batch": "grunts_demis" },
+    "grunt_demis_ko":                      { "durationSec": 0.55, "batch": "grunts_demis" },
+
+    "grunt_mark_effort":                   { "durationSec": 0.22, "batch": "grunts_mark" },
+    "grunt_mark_hurt":                     { "durationSec": 0.26, "batch": "grunts_mark" },
+    "grunt_mark_ko":                       { "durationSec": 0.60, "batch": "grunts_mark" },
+
+    "dive_lunge":                          { "durationSec": 0.32, "batch": "movement" },
+    "spawn_enter":                         { "durationSec": 0.35, "batch": "movement" },
+    "footstep_a":                          { "durationSec": 0.10, "batch": "movement" },
+    "footstep_b":                          { "durationSec": 0.10, "batch": "movement" },
+    "ko_flatline":                         { "durationSec": 0.55, "batch": "movement" },
+
+    "proof_spawn":                         { "durationSec": 0.32, "batch": "proof_events" },
+    "proof_acquired":                      { "durationSec": 0.28, "batch": "proof_events" },
+    "proof_carrying_loop_fragment":        { "durationSec": 0.50, "batch": "proof_carrying_loop" },
+    "proof_delivered":                     { "durationSec": 0.45, "batch": "proof_events" },
+
+    "goal_spawn":                          { "durationSec": 0.30, "batch": "goal_timer" },
+    "goal_tick":                           { "durationSec": 0.10, "batch": "goal_timer" },
+    "goal_urgent_tick":                    { "durationSec": 0.14, "batch": "goal_timer" },
+    "goal_expire":                         { "durationSec": 0.40, "batch": "goal_timer" },
+
+    "match_start":                         { "durationSec": 0.45, "batch": "match_flow" },
+    "round_start":                         { "durationSec": 0.30, "batch": "match_flow" },
+    "round_end":                           { "durationSec": 0.35, "batch": "match_flow" },
+    "round_taken":                         { "durationSec": 0.55, "batch": "match_flow" },
+
+    "match_end_win":                       { "durationSec": 0.65, "batch": "match_end" },
+    "match_end_draw":                      { "durationSec": 0.60, "batch": "match_end" },
+    "win_applause":                        { "durationSec": 2.40, "batch": "match_end" }
   },
 
   "stageMusicPacks": {
@@ -300,62 +232,109 @@
     }
   },
 
+  "stageImpactReverb": {
+    "description": "Per-stage impulse response used by a ConvolverNode on the impact bus at runtime. Only hit_* cues are routed through this bus; swipes, grunts, footsteps, and match-flow cues stay dry. Bus is wet/dry-mixed per stage; ambient music and objective cues bypass it entirely. IRs are short (<=800ms) and stored alongside the stage's music file. Crossfade the ConvolverNode's buffer over 1.5s when the stage changes (mirrors the music crossfade duration).",
+    "runtimeBus": {
+      "drySendDb": 0.0,
+      "wetSendDb": "see per-stage wetSendDb below",
+      "maxTailMs": 800
+    },
+    "stages": {
+      "datacenter": {
+        "cold_aisle_chapel": {
+          "out": "assets/audio/stages/datacenter/cold_aisle_chapel/impact_ir.webm",
+          "durationSec": 0.45,
+          "wetSendDb": -9.0,
+          "prompt": "a short impulse response capturing the reflective character of a cold data-center aisle — tall metal rack walls, concrete floor under raised tile, minimal absorbers. starts with a sharp direct pulse at t=0, followed by dense early reflections from 8-25ms (narrow, hard, high-frequency-heavy — the racks reflect cleanly above 2 kHz), then a short bright tail decaying over ~350ms with a slight fluorescent-tuned resonance around 120 Hz. mono-in/stereo-out acceptable but narrow. NOT a cathedral reverb, NOT a warm hall. cold, reflective, surgical. the IR should make a hit sfx feel like it was struck inside a steel cage, not a concert venue."
+        }
+      },
+      "boardroom": {
+        "fiduciary_basement": {
+          "out": "assets/audio/stages/boardroom/fiduciary_basement/impact_ir.webm",
+          "durationSec": 0.55,
+          "wetSendDb": -12.0,
+          "prompt": "a short impulse response capturing a basement-level executive boardroom: low ceiling, heavy carpet, wood paneling, long table absorbing mids. sharp direct pulse at t=0, sparse early reflections 15-40ms (diffuse, mid-heavy, dampened above 4 kHz by the carpet), then a short dry tail decaying over ~450ms with absorbed high end and a faint wood-panel resonance around 250 Hz. the IR should make a hit feel like it happened under fluorescent lights with witnesses who did not react. not plush, not cinematic; officially muffled."
+        }
+      },
+      "demoday": {
+        "demo_day_afterparty": {
+          "out": "assets/audio/stages/demoday/demo_day_afterparty/impact_ir.webm",
+          "durationSec": 0.70,
+          "wetSendDb": -10.5,
+          "prompt": "a short impulse response capturing an empty post-conference demo-day hall — high ceiling, scattered partition walls, flooring half-carpet half-concrete, lingering low-frequency haze from PA gear being powered down. direct pulse at t=0, moderately dense early reflections 10-60ms with slight low-mid emphasis (the empty hall rings just a little), a soft diffuse tail decaying over ~580ms that loses its high end gracefully but holds a faint ~80 Hz body. the IR should make a hit feel like it echoed faintly through a hall that used to be full an hour ago."
+        }
+      }
+    }
+  },
+
   "integrationNotes": {
     "triggerMap": {
-      "swipe_{class}": "fire when any fighter.swipeT transitions 0 -> positive in interpolated frame output. resolve {class} from fighter.loadout.weaponId -> weapon.class in the roster catalog (flail/maul/blade/greatsword/bat/club/pike/axe/nunchucks). fallback: swipe_blade if unknown.",
-      "hit_{char}_{weaponId}": "fire when opp.hp decreases between consecutive frames. resolve {char} from the attacker's characterId and {weaponId} from their loadout. do NOT fire on swipeT alone — swings can miss. if manifest lookup fails, fall back to any hit_{char}_* then to hit_confirm is not in v1.1 so use the char's heaviest-class hit.",
-      "grunt_{char}_effort": "fire together with the swipe cue on the attacker's edge. per-character throttle: suppress if same character emitted effort in the last 400ms (prevents machine-gun grunting during combos).",
-      "grunt_{char}_hurt": "fire together with the hit cue on the victim's edge. same 400ms throttle.",
+      "swipe_{class}": "fire when any fighter.swipeT transitions 0 -> positive in interpolated frame output. resolve {class} from fighter.loadout.weaponId -> weapon.class (flail/maul/blade/greatsword/bat/club/pike/axe/nunchucks). fallback: swipe_blade.",
+      "hit_{char}_{weaponId}": "fire when opp.hp decreases between consecutive frames. resolve {char} from the attacker's characterId and {weaponId} from their loadout. do NOT fire on swipeT alone — swings can miss. if manifest lookup fails, fall back to any hit_{char}_* (pick heaviest class).",
+      "grunt_{char}_effort": "fire with the swipe cue on the attacker's edge. per-character throttle: suppress if same character emitted effort in the last 400ms.",
+      "grunt_{char}_hurt": "fire with the hit cue on the victim's edge. same 400ms throttle.",
       "grunt_{char}_ko": "fire with ko_flatline on fighter.dead false -> true. ko_flatline is the non-vocal layer; the per-character grunt is the vocal layer. play both simultaneously.",
       "dive_lunge": "fire when fighter.diveT transitions 0 -> positive.",
-      "proof_spawn": "fire when the proof core spawns into the arena (observe state transition in frames — a proof entity appearing in the scene).",
-      "proof_acquired": "fire when FighterTelemetry goes from not-carrying to carrying. resolvable via a carry flag on the fighter frame or from proof-entity carrier id.",
-      "proof_carrying_loop_fragment": "start looping on proof_acquired, stop on proof_delivered OR on carrier death (whichever first). runtime plays this as a quiet bed, not a cue.",
+      "spawn_enter": "fire once per fighter at round start. stagger per-fighter firings by 80ms.",
+      "footstep_a / footstep_b": "per-fighter step-phase timer driven by horizontal velocity while grounded. alternate A/B each step. suppress during dead/dive/swipe/hit-stun. target ~4 steps/sec at top walk speed. mix -18 dB vs hits.",
+      "round_taken": "fire when a fighter's delivery count reaches POINTS_TO_WIN_ROUND. suppresses round_end on the same transition.",
+      "round_end": "fire on round-advance that is NOT a decisive delivery win (timer expiry, etc.). round_taken takes precedence.",
+      "proof_spawn": "fire when the proof core spawns into the arena.",
+      "proof_acquired": "fire when FighterTelemetry transitions not-carrying -> carrying.",
+      "proof_carrying_loop_fragment": "start looping on proof_acquired; stop on proof_delivered OR carrier death. played as a quiet bed.",
       "proof_delivered": "fire when FighterTelemetry.deliveries increments.",
-      "goal_spawn": "fire when a demand node appears in frames.",
+      "goal_spawn": "fire when a demand node appears.",
       "goal_tick": "fire once per second while goal timer is running AND timer > 3s.",
       "goal_urgent_tick": "fire once per second while goal timer is running AND timer <= 3s. suppresses goal_tick during the urgent window.",
       "goal_expire": "fire when goal timer reaches 0 without a delivery.",
-      "match_start": "fire on ws message type 'matchStart'. NOT on 'matchInProgress' — that message represents a mid-stream join and should be silent.",
-      "round_start": "fire at the start of rounds 2 and onward (not round 1 — match_start covers that). sim exposes round index per frame; trigger on round delta.",
-      "round_end": "fire when the round index advances (delivery count reaches POINTS_TO_WIN_ROUND, or ROUND_TIMER_MAX_TICKS elapsed).",
+      "match_start": "fire on ws 'matchStart'. NOT on 'matchInProgress'.",
+      "round_start": "fire at the start of rounds 2+ (not round 1 — match_start covers that).",
       "match_end_win": "fire on ws 'matchEnd' when winner !== -1.",
       "match_end_draw": "fire on ws 'matchEnd' when winner === -1.",
-      "win_applause": "schedule with a ~250ms delay AFTER match_end_win's onset. do not fire on draw."
+      "win_applause": "schedule ~250ms after match_end_win's onset. never on draw."
     },
-    "primePlaybackSuppression": "After primePlayback() jumps the client to the newest frame on (re)mount or after trimPlaybackToLiveWindow(), the trigger layer must suppress ALL edge-detection-based cues for the first rendered frame — otherwise a backlog of buffered state differences fires every cue at once. Exception: match_start/matchEnd are driven by ws messages, not frame edges, and are safe.",
+    "primePlaybackSuppression": "After primePlayback() jumps to the newest frame on (re)mount or after trimPlaybackToLiveWindow(), suppress ALL edge-detection-based cues for the first rendered frame — otherwise buffered state differences fire every cue at once. Exception: match_start/matchEnd are ws-driven and safe.",
+    "impactBusRouting": "hit_* cues are the ONLY cues routed through the stage's ConvolverNode. Everything else connects directly to master. On stage change, crossfade the ConvolverNode's buffer over 1.5s (matches music crossfade). If IR not loaded yet at the moment of a hit, route dry for that frame.",
     "playback": {
-      "singleFile": "The ENTIRE sfx set ships as one file — assets/audio/sfx/sprite.webm plus its manifest. No per-cue network I/O. Music tracks are separate per stage because loops are too long to sprite-pack.",
-      "spriteSeeking": "Decode sprite.webm once into a single AudioBuffer at first user gesture. Trigger via AudioBufferSourceNode.start(when, offsetSec, durationSec). Do not use HTMLAudioElement for the sprite — its currentTime seeks are not sample-accurate and will leak adjacent clips.",
-      "voices": "Allocate a small pool (e.g. 8) of AudioBufferSourceNodes. When a new cue arrives and all are busy, steal the oldest non-vocal cue (never steal grunts — they are short and distinctive). proof_carrying_loop_fragment owns its own long-lived node that is not stolen.",
+      "singleFile": "All sfx ship as one file: assets/audio/sfx/sprite.webm + manifest. No per-cue network I/O. Music tracks are separate per stage. Impact IRs are separate per stage.",
+      "spriteSeeking": "Decode sprite.webm once into a single AudioBuffer at first user gesture. Trigger via AudioBufferSourceNode.start(when, offsetSec, durationSec). Do not use HTMLAudioElement for the sprite.",
+      "voices": "8-voice pool for one-shots; steal oldest non-vocal on exhaustion (never steal grunts). proof_carrying_loop_fragment owns a long-lived node. footstep_a/b share a separate 2-voice pool.",
       "music": "one AudioBufferSourceNode per stage, loop=true, loopStart=0, loopEnd=buffer.duration. crossfade on stage change over 1.5s.",
-      "masterToggle": "single boolean in localStorage under 'm3t4:audio:on', default false. expose as a toggleSwitchHtml in the Live sidebar. when off, master GainNode.gain = 0 (do not tear down graph). flipping on for the first time does the one-time decode.",
-      "firstGesture": "AudioContext cannot start before a user gesture; lazy-init the graph on the first toggle-on click, not on page mount."
+      "masterToggle": "localStorage 'm3t4:audio:on', default false. Toggle lives in the Live sidebar. When off, master GainNode.gain = 0 (do not tear down). First toggle-on performs the one-time decode.",
+      "firstGesture": "AudioContext starts on first toggle-on click, not on page mount."
     },
     "postProcess": {
       "tool": "tools/postprocess-audio.mjs (not yet implemented)",
-      "sfxPipeline": [
-        "for each entry in spritePack.order: read raw generation from generations/raw/audio/sfx/<id>.wav",
-        "trim leading silence below -50 dBFS",
-        "hard-cut or (if shorter than target) zero-pad to durationSec",
-        "loudness-normalize to meta.format.targetLUFS.sfx; peak-limit to meta.format.peakCeilingDb",
-        "append spritePack.padTrailingMs of digital silence",
-        "concat in the exact order specified by spritePack.order",
-        "encode to opus @ 96 kbps in webm",
-        "emit manifest { [id]: [startMs, endMs] } alongside the sprite, using the pre-padding end so triggers don't include the pad in playback"
+      "batchSfxPipeline": [
+        "for each entry in 'batches': read raw generation from generations/raw/audio/batches/<batchId>.wav",
+        "detect silence regions: contiguous samples where abs-peak stays below batches._batchProtocol.sliceFloorDbfs (-55 dBFS) for >= 700ms",
+        "the expected slice count is batches[batchId].cuesOrder.length; if detected count differs, REJECT the batch and log — do not guess",
+        "split wav at the midpoint of each detected silence region; label each slice in left-to-right order with cuesOrder[i]",
+        "for each resulting per-cue clip: trim leading silence below -50 dBFS, hard-cut or zero-pad to sfx[cue].durationSec, loudness-normalize to meta.format.targetLUFS.sfx, peak-limit to meta.format.peakCeilingDb, append spritePack.padTrailingMs of digital silence",
+        "assemble final sprite by reading spritePack.order and concatenating the post-processed clips in that exact order",
+        "encode sprite to opus @ 96 kbps in webm",
+        "emit manifest { [id]: [startMs, endMs] } using pre-padding end offsets"
       ],
       "musicPipeline": [
-        "for each stageMusic entry: read raw generation from generations/raw/audio/stages/<stageId>/<variant>/music.wav",
-        "verify loop seam: spectral centroid of first and last 500ms must match within 3%; RMS within 1 dB; for demoday, additionally verify the loop length is an integer number of bars at the declared tempo",
-        "if seam verification fails, REJECT and log — never silently crossfade (crossfades mask on-theme 'administrative' framing and break the 'identical boundaries' prompt contract)",
+        "for each stageMusic entry: read from generations/raw/audio/stages/<stageId>/<variant>/music.wav",
+        "verify loop seam: spectral centroid of first and last 500ms match within 3%; RMS within 1 dB; for demoday also verify integer bar count at declared tempo",
+        "if seam verification fails, REJECT and log — never silently crossfade",
         "loudness-normalize to meta.format.targetLUFS.music",
-        "encode to opus @ 128 kbps stereo in webm",
+        "encode opus @ 128 kbps stereo in webm",
+        "write to the entry's 'out' path under client/"
+      ],
+      "impactIrPipeline": [
+        "for each stageImpactReverb.stages entry: read from generations/raw/audio/stages/<stageId>/<variant>/impact_ir.wav",
+        "enforce maxTailMs (800ms) — hard-cut any tail beyond",
+        "ensure t=0 is the direct pulse (trim leading silence below -60 dBFS)",
+        "normalize IR energy to unit gain; wetSendDb is the only runtime loudness control",
+        "encode opus @ 96 kbps in webm at declared channel count",
         "write to the entry's 'out' path under client/"
       ],
       "promptBuilderHints": [
-        "When tools/build-audio-prompts.mjs is built, include meta.audioTone at the top of every per-entry prompt — it suppresses the default cinematic/anime bias of most text-to-audio models.",
-        "For hit_* and grunt_* entries, also inject the weapon/character persona tag from the roster catalog so the generator has grounded character context.",
-        "For stage music prompts, inject the stage's visualTone fragment from theming/visual-theme.v1.json so the audio matches the visual art direction."
+        "tools/build-audio-prompts.mjs should emit ONE prompt file per batch (plus one per stage music and one per impact IR), not one per cue. Each emitted batch file prepends meta.audioTone so models don't default to cinematic/anime bias.",
+        "For batch prompts, the builder can optionally inject character persona tags from content/game-copy.v1.json into grunt_* and hit_* batches.",
+        "For stage music and impact IR prompts, the builder can inject the stage's visualTone fragment from theming/visual-theme.v1.json so audio matches visual art direction."
       ]
     }
   }

@@ -2,9 +2,9 @@
 // Expand theming/visual-theme.v1.json into one prompt-per-asset,
 // ready to paste into an image generator (Gemini / GPT image / Midjourney).
 //
-// Playable batch (default): 47 prompts. Emits packed character sprite
-// sheets plus all current stage/objective/UI assets and all four character
-// weapon lines.
+// Playable batch (default): 30 prompts. Emits packed character sprite
+// sheets plus consolidated stage atlases, current objective/UI assets, and
+// all four character weapon lines.
 //
 // Usage:
 //   node tools/build-prompts.mjs                       # playable batch, one Gemini .txt per asset
@@ -24,10 +24,11 @@
 //   node tools/build-prompts.mjs --format jsonl        # raw records JSONL to stdout
 //   node tools/build-prompts.mjs --combined-file       # old combined copy/paste .txt batch
 //   node tools/build-prompts.mjs --split-files         # force one paste-ready .txt per asset
+//   node tools/build-prompts.mjs --flat-stages         # old one prompt per stage asset path
 //   node tools/build-prompts.mjs --missing-only        # only assets missing from client/
 //   node tools/build-prompts.mjs --stdout              # print copy/paste formats instead
 //
-// Playable → 47 prompts.
+// Playable → 30 prompts by default, or 47 prompts with --flat-stages.
 //
 // Each emitted record has:
 //   out          — asset path the renderer expects
@@ -61,6 +62,7 @@ const outputDir = arg("--output-dir") ?? path.resolve(__dirname, "../theming/gen
 const forceSplitFiles = args.includes("--split-files") || args.includes("--one-file-per-prompt");
 const combinedFile = args.includes("--combined-file");
 const missingOnly = args.includes("--missing-only");
+const flatStages = args.includes("--flat-stages");
 const records = [];
 if (!only || only === "stages")     records.push(...collectStages());
 if (!only || only === "characters") records.push(...collectCharacterSheets());
@@ -70,7 +72,7 @@ if (!only || only === "objectives") records.push(...collectObjectives());
 if (!only || only === "ui")         records.push(...collectUi());
 
 const scoped = records;
-const filtered = missingOnly ? scoped.filter((r) => !assetExists(r.out)) : scoped;
+const filtered = missingOnly ? scoped.filter((r) => !recordAssetsExist(r)) : scoped;
 const rendered = renderRecords(format, filtered);
 const splitFiles = forceSplitFiles || (!combinedFile && !stdout && !explicitOut && isSplitPromptFormat(format));
 const shouldWriteFile = explicitOut || (rendered.autoFile && !stdout);
@@ -95,23 +97,233 @@ function assetExists(assetPath) {
   return fs.existsSync(path.resolve(__dirname, "../client", assetPath));
 }
 
+function recordAssetsExist(r) {
+  const slices = r.assembly?.type === "stage-atlas" ? r.assembly.slices ?? [] : [];
+  if (slices.length) return slices.every((slice) => assetExists(slice.out));
+  return assetExists(r.out);
+}
+
 function isSplitPromptFormat(value) {
   return value === "gemini-copy" || value === "gpt-copy" || value === "mj";
 }
 
 function collectStages() {
+  const entries = collectStageEntries();
+  return flatStages ? entries.map((entry) => entry.record) : collectStageAtlases(entries);
+}
+
+function collectStageEntries() {
   const stages = doc.prompts.stages;
   const out = [];
   for (const [key, v] of Object.entries(stages)) {
-    out.push(promptRecord({
+    const record = promptRecord({
       out: v.out ?? `assets/stages/${key}`,
       outW: v.outW, outH: v.outH, genW: v.genW, genH: v.genH,
       seed: v.seed,
       basePrompt: v.base,
       kind: v.kind,
+    });
+    out.push({ key, source: v, record });
+  }
+  return out;
+}
+
+function collectStageAtlases(entries) {
+  return [
+    collectStagePreviewAtlas(entries),
+    ...collectStageLayerAtlases(entries),
+    ...collectStageTextureAtlases(entries),
+  ].filter(Boolean);
+}
+
+function collectStagePreviewAtlas(entries) {
+  const previews = entries.filter((entry) => entry.record.out.endsWith("/ui/preview_thumb.png"));
+  if (!previews.length) return null;
+  const rowW = 1024;
+  const rowH = 576;
+  return stageAtlasRecord({
+    out: "assets/stages/_atlases/preview_thumbs.png",
+    seed: previews[0].record.seed,
+    genW: rowW,
+    genH: rowH * previews.length,
+    title: "Stage preview thumbnail atlas",
+    intro: [
+      "Create one vertical atlas of stage preview thumbnails.",
+      "Each row is an independent full-arena preview image. Do not blend art across row boundaries.",
+      "No visible grid lines, separators, labels, captions, filenames, rulers, or frames.",
+    ],
+    rows: previews.map((entry, index) => ({
+      entry,
+      y: index * rowH,
+      w: rowW,
+      h: rowH,
+      activeX: 0,
+      activeY: index * rowH,
+      activeW: rowW,
+      activeH: rowH,
+      label: `preview thumbnail row ${index + 1}`,
+      extraction: "downscale the full row 2x to the promoted preview thumbnail.",
+    })),
+  });
+}
+
+function collectStageLayerAtlases(entries) {
+  const byStage = groupStageEntries(entries);
+  const out = [];
+  const roles = [
+    { suffix: "/layers/sky.png", name: "sky", activeX: 320, activeW: 1280 },
+    { suffix: "/layers/far_parallax.png", name: "far parallax", activeX: 0, activeW: 1920 },
+    { suffix: "/layers/mid_parallax.png", name: "mid parallax", activeX: 0, activeW: 1920 },
+    { suffix: "/layers/near_parallax.png", name: "near parallax", activeX: 0, activeW: 1920 },
+  ];
+  for (const [stageRoot, stageEntries] of byStage) {
+    const rows = roles.map((role, index) => {
+      const entry = stageEntries.find((candidate) => candidate.record.out.endsWith(role.suffix));
+      if (!entry) return null;
+      const y = index * 720;
+      return {
+        entry,
+        y,
+        w: 1920,
+        h: 720,
+        activeX: role.activeX,
+        activeY: y,
+        activeW: role.activeW,
+        activeH: 720,
+        label: role.name,
+        extraction: role.activeW === 1920
+          ? "use the full row as the raw promoted source."
+          : "center-crop the active 1280x720 region from this row for the promoted sky layer.",
+      };
+    }).filter(Boolean);
+    if (!rows.length) continue;
+    out.push(stageAtlasRecord({
+      out: `assets/stages/${stageRoot}/_atlases/layers.png`,
+      seed: rows[0].entry.record.seed,
+      genW: 1920,
+      genH: 720 * rows.length,
+      title: `Stage layer atlas for ${stageRoot}`,
+      intro: [
+        `Create one vertical atlas of background layers for ${stageRoot}.`,
+        "Each row is an independent layer slice. Do not blend art across row boundaries.",
+        "Rows 2-4 are transparent parallax strips on exact #FF00FF where no art exists; row 1 is the opaque sky/backdrop crop.",
+        "No visible grid lines, separators, labels, captions, filenames, rulers, or frames.",
+      ],
+      rows,
     }));
   }
   return out;
+}
+
+function collectStageTextureAtlases(entries) {
+  const byStage = groupStageEntries(entries);
+  const out = [];
+  const roles = [
+    { suffix: "/textures/platform.png", name: "platform surface", y: 0, h: 192, activeX: 0, activeW: 768 },
+    { suffix: "/textures/platform_edge.png", name: "platform edge", y: 192, h: 48, activeX: 0, activeW: 768 },
+    { suffix: "/textures/wall.png", name: "wall/floor fill", y: 240, h: 768, activeX: 192, activeW: 384 },
+  ];
+  for (const [stageRoot, stageEntries] of byStage) {
+    const rows = roles.map((role) => {
+      const entry = stageEntries.find((candidate) => candidate.record.out.endsWith(role.suffix));
+      if (!entry) return null;
+      return {
+        entry,
+        y: role.y,
+        w: 768,
+        h: role.h,
+        activeX: role.activeX,
+        activeY: role.y,
+        activeW: role.activeW,
+        activeH: role.h,
+        label: role.name,
+        extraction: role.activeW === 768
+          ? "downscale the full row 3x to the promoted texture."
+          : "center-crop the active 384x768 region from this row, then downscale 3x to the promoted wall texture.",
+      };
+    }).filter(Boolean);
+    if (!rows.length) continue;
+    out.push(stageAtlasRecord({
+      out: `assets/stages/${stageRoot}/_atlases/textures.png`,
+      seed: rows[0].entry.record.seed,
+      genW: 768,
+      genH: 1008,
+      title: `Stage texture atlas for ${stageRoot}`,
+      intro: [
+        `Create one vertical atlas of tile textures for ${stageRoot}.`,
+        "Each row is an independent material slice. Do not blend art across row boundaries.",
+        "No visible grid lines, separators, labels, captions, filenames, rulers, or frames.",
+      ],
+      rows,
+    }));
+  }
+  return out;
+}
+
+function stageAtlasRecord({ out, seed, genW, genH, title, intro, rows }) {
+  const assembly = {
+    type: "stage-atlas",
+    slices: rows.map((row, index) => ({
+      row: index + 1,
+      label: row.label,
+      out: row.entry.record.out,
+      sourceRect: { x: 0, y: row.y, width: row.w, height: row.h },
+      activeRect: { x: row.activeX, y: row.activeY, width: row.activeW, height: row.activeH },
+      targetSize: { width: row.entry.record.outW, height: row.entry.record.outH },
+      sourceScale: row.entry.record.sourceScale,
+      extraction: row.extraction,
+    })),
+  };
+  const basePrompt = [
+    title,
+    `Exact atlas canvas: ${genW}x${genH}.`,
+    ...intro,
+    ...rows.map((row, index) => stageAtlasRowPrompt(row, index)),
+    "Preserve the exact row order and row dimensions. If the generator adds an outer border, keep all atlas content centered so local post-process can crop only that outer border.",
+  ].join("\n");
+  return promptRecord({
+    out,
+    outW: genW,
+    outH: genH,
+    genW,
+    genH,
+    seed,
+    basePrompt,
+    kind: "stage-atlas",
+    assembly,
+  });
+}
+
+function stageAtlasRowPrompt(row, index) {
+  const r = row.entry.record;
+  const active = row.activeW === row.w && row.activeH === row.h
+    ? `The full row ${row.w}x${row.h} is the active crop.`
+    : `The active crop is x=${row.activeX}, y=${row.activeY}, ${row.activeW}x${row.activeH}; keep essential art inside that crop and treat the discarded gutter as expendable continuation or exact #FF00FF where appropriate.`;
+  return [
+    `Row ${index + 1}: ${row.label}. Source row y=${row.y}, size ${row.w}x${row.h}. Promoted asset: ${r.out}. ${active}`,
+    `Row ${index + 1} prompt: ${row.entry.source.base}`,
+    scaleContractFor(r.out),
+    `Row ${index + 1} extraction: ${row.extraction}`,
+  ].filter(Boolean).join("\n");
+}
+
+function groupStageEntries(entries) {
+  const byStage = new Map();
+  for (const entry of entries) {
+    const stageRoot = stageRootFromOut(entry.record.out);
+    if (!stageRoot) continue;
+    if (!byStage.has(stageRoot)) byStage.set(stageRoot, []);
+    byStage.get(stageRoot).push(entry);
+  }
+  return byStage;
+}
+
+function stageRootFromOut(out) {
+  const prefix = "assets/stages/";
+  if (!String(out).startsWith(prefix)) return null;
+  const parts = String(out).slice(prefix.length).split("/");
+  if (parts.length < 4) return null;
+  return parts.slice(0, 2).join("/");
 }
 
 function collectCharacterSheets() {
@@ -420,6 +632,7 @@ function promptRecord({ out, finalOut, outW, outH, genW, genH, seed, basePrompt,
 }
 
 function scaleContractFor(out) {
+  if (String(out).includes("/_atlases/")) return "";
   if (String(out).startsWith("assets/stages/") && SCALE_CONTRACT.stagePrompt) {
     return [
       `RUNTIME SCALE CONTRACT: ${SCALE_CONTRACT.stagePrompt}`,
@@ -552,11 +765,15 @@ function splitPromptText(provider, r) {
 
 function splitIndex(format, rows) {
   const bucket = only ?? "launch";
+  const hasStageRecords = rows.some((row) => String(row.record.out).startsWith("assets/stages/"));
+  const hasStageAtlases = rows.some((row) => row.record.assembly?.type === "stage-atlas");
+  const stageAtlasLabel = hasStageAtlases ? "yes" : hasStageRecords ? "no" : "not included";
   const lines = [
     "# Generated Prompts",
     "",
     `- Format: ${formatFileSlug(format)}`,
     `- Bucket: ${bucket}`,
+    `- Stage atlases: ${stageAtlasLabel}`,
     `- Missing only: ${missingOnly ? "yes" : "no"}`,
     `- Count: ${rows.length}`,
     "",
@@ -567,7 +784,9 @@ function splitIndex(format, rows) {
   ];
   for (const row of rows) {
     const r = row.record;
-    const final = r.finalOut ? `${r.outW}x${r.outH} -> ${r.finalOut}` : `${r.outW}x${r.outH}`;
+    const final = r.assembly?.type === "stage-atlas"
+      ? `${r.assembly.slices.length} slices`
+      : r.finalOut ? `${r.outW}x${r.outH} -> ${r.finalOut}` : `${r.outW}x${r.outH}`;
     const asset = `${r.out}`;
     lines.push(`| ${row.n} | [${row.file}](./${row.file}) | \`${asset}\` | ${r.genW}x${r.genH} | ${final} | ${r.seed} |`);
   }
@@ -628,10 +847,7 @@ function copyPasteBlock(provider, r) {
   const grid = r.grid
     ? [`GRID METADATA: ${JSON.stringify(r.grid)}`]
     : [];
-  const postProcess = [
-    `POST-PROCESS AFTER GENERATION: nearest-neighbor downscale ${r.genW}x${r.genH} to ${r.outW}x${r.outH}.`,
-    `Then key the near-${doc.artDirection.bgKeyColor} background to alpha with RGB-distance tolerance 24, crop only generator-added outer borders, and preserve exact grid cuts.`,
-  ];
+  const postProcess = postProcessLines(r);
   const assembly = r.assembly
     ? [`ASSEMBLY: ${JSON.stringify(r.assembly)}`]
     : [];
@@ -661,7 +877,7 @@ function copyPasteBlock(provider, r) {
 
 function promptBody(provider, r) {
   return [
-    "Create exactly the game asset sprite sheet or image described below. Output image only; do not add captions, labels, watermarks, UI chrome, contact sheets, filenames, or explanatory text.",
+    "Create exactly the game asset sprite sheet, atlas, or image described below. Output image only; do not add captions, labels, watermarks, UI chrome, contact sheets, filenames, or explanatory text.",
     "",
     ...assetContract(provider, r),
     "",
@@ -679,6 +895,7 @@ function promptBody(provider, r) {
 }
 
 function assetContract(provider, r) {
+  if (r.assembly?.type === "stage-atlas") return stageAtlasAssetContract(provider, r);
   const aspect = reduceAr(r.genW, r.genH);
   const lines = [
     "Asset contract:",
@@ -703,13 +920,70 @@ function assetContract(provider, r) {
     );
   }
   if (r.assembly) {
+    lines.push(...assemblyContractLines(r));
+  }
+  return lines;
+}
+
+function stageAtlasAssetContract(provider, r) {
+  const aspect = reduceAr(r.genW, r.genH);
+  const lines = [
+    "Stage atlas contract:",
+    `- Raw generator canvas target: ${r.genW}x${r.genH}, aspect ${aspect}.`,
+    "- This is an intermediate atlas, not a promoted runtime asset.",
+    "- Local post-process preserves the atlas layout, then slices it into the promoted asset paths listed below.",
+    `- If the generator outputs a larger proportional image, preserve the same ${aspect} aspect ratio and the same internal row proportions.`,
+    "- Each slice must remain independent: no art should cross row boundaries, and no row should depend on visual continuity with another row.",
+    "- Do not draw visible row separators, grid lines, labels, filenames, rulers, margins, or decorative frames.",
+  ];
+  if (provider === "gpt") {
+    lines.push(`- If the image tool forces ${nearestGptSizeLabel(r.genW, r.genH)}, keep the active atlas area in a centered ${aspect} rectangle and fill any extra outer area with ${doc.artDirection.bgKeyColor}.`);
+  }
+  lines.push("Slice contract:");
+  for (const slice of r.assembly.slices) {
+    const src = rectLabel(slice.sourceRect);
+    const active = rectLabel(slice.activeRect);
     lines.push(
-      "Sprite assembly contract:",
-      `- This strip is source rows ${r.assembly.rowStart}-${r.assembly.rowEnd} of a ${r.assembly.finalSheetSize.width}x${r.assembly.finalSheetSize.height} final sprite sheet.`,
-      "- Keep scale, pose registration, and horizontal facing consistent with the other strips for the same character."
+      `- Row ${slice.row} (${slice.label}): source ${src}; active crop ${active}; promoted asset ${slice.out}; final ${slice.targetSize.width}x${slice.targetSize.height}; ${slice.extraction}`
     );
   }
   return lines;
+}
+
+function assemblyContractLines(r) {
+  if (r.assembly?.packed) {
+    return [
+      "Sprite assembly contract:",
+      `- This packed prompt sheet is pack ${r.assembly.packIndex + 1}; local assembly copies populated cells into ${r.assembly.finalOut}.`,
+      `- The final runtime sheet is ${r.assembly.finalSheetSize.width}x${r.assembly.finalSheetSize.height}.`,
+      "- Keep scale, pose registration, and horizontal facing consistent with the other packs for the same character.",
+    ];
+  }
+  if (Number.isInteger(r.assembly?.rowStart) && Number.isInteger(r.assembly?.rowEnd)) {
+    return [
+      "Sprite assembly contract:",
+      `- This strip is source rows ${r.assembly.rowStart}-${r.assembly.rowEnd} of a ${r.assembly.finalSheetSize.width}x${r.assembly.finalSheetSize.height} final sprite sheet.`,
+      "- Keep scale, pose registration, and horizontal facing consistent with the other strips for the same character.",
+    ];
+  }
+  return [];
+}
+
+function postProcessLines(r) {
+  if (r.assembly?.type === "stage-atlas") {
+    return [
+      `POST-PROCESS AFTER GENERATION: preserve the ${r.genW}x${r.genH} atlas layout, center-cropping only generator-added outer borders or slight aspect drift.`,
+      "Then slice rows according to ASSEMBLY metadata, nearest-neighbor downscale each slice to its target size, and key near-#FF00FF parallax/background regions to alpha with RGB-distance tolerance 24.",
+    ];
+  }
+  return [
+    `POST-PROCESS AFTER GENERATION: nearest-neighbor downscale ${r.genW}x${r.genH} to ${r.outW}x${r.outH}.`,
+    `Then key the near-${doc.artDirection.bgKeyColor} background to alpha with RGB-distance tolerance 24, crop only generator-added outer borders, and preserve exact grid cuts.`,
+  ];
+}
+
+function rectLabel(rect) {
+  return `x=${rect.x}, y=${rect.y}, ${rect.width}x${rect.height}`;
 }
 
 function nearestGptSize(genW, genH) {

@@ -135,6 +135,8 @@ export const COMPUTE_COLLECTIONS = {
   publicStats: "compute_public_stats",
   replayBadges: "compute_replay_badges",
   publicTiles: "compute_public_tiles",
+  bundles: "compute_bundles",
+  witnessAttestations: "compute_witness_attestations",
   control: "compute_control",
 } as const;
 
@@ -736,6 +738,95 @@ export interface PublicTile {
 
 export const PUBLIC_TILE_MAX_BYTES = 512 * 1024; // keep under Firestore's 1MB doc limit
 
+// A ComputeBundleManifest is a named collection of compute chunks that a
+// specific ranked match is "sponsoring." It separates authority cleanly:
+//
+//   * The ranked match produces a battle receipt (server-authoritative).
+//   * Plasma-lab materializes bundle chunks before or at match start.
+//   * Workers produce compute receipts per chunk through the usual
+//     expected-hash contract — nothing ranked depends on them.
+//   * At match end, the bundle is sealed: a Merkle root over
+//     { matchReceiptHash, bundleManifestHash, sortedAcceptedReceiptHashes }
+//     is signed by the coordinator and pinned alongside the match.
+export type ComputeBundleKind = "science" | "proof";
+export type ComputeBundleStatus = "pending" | "running" | "sealed" | "abandoned";
+
+export interface ComputeBundleManifest {
+  bundleId: string;
+  kind: ComputeBundleKind;
+  kernelId: string;
+  matchId: string | null;         // populated once the bundle is anchored to a match
+  sponsors: string[];             // handles or anon ids; display-only
+  chunkIds: string[];             // canonical ordering — bundleManifestHash is computed over this
+  targetChunkCount: number;
+  quorum: { minExecutions: number; minAgreeing: number };
+  deadlineAt: number | null;
+  createdAt: number;
+  startedAt: number | null;
+  sealedAt: number | null;
+  status: ComputeBundleStatus;
+  // Populated at seal time.
+  matchReceiptHash?: ContentHash;
+  bundleManifestHash?: ContentHash;
+  bundleRoot?: ContentHash;
+  acceptedReceiptCount?: number;
+  rejectedReceiptCount?: number;
+  pendingReceiptCount?: number;
+  notes?: string;
+}
+
+// A spectator's live attestation that their independent re-simulation of
+// a ranked match reached a given world-state hash at a checkpoint tick.
+// Quorum is built across workers agreeing on the same (matchId, tick) →
+// stateHash. This is the only point where ranked match frames/steps feed
+// directly into compute input.
+export interface WitnessAttestation {
+  attestationId: string;           // hash({matchId, tick, workerId})
+  matchId: string;
+  tick: number;
+  stateHash: ContentHash;
+  workerId: string;
+  workerSessionId: string;
+  signingPublicKeyHash?: ContentHash;
+  signature?: string;
+  submittedAt: number;
+}
+
+export function witnessAttestationId(input: { matchId: string; tick: number; workerId: string }): string {
+  return hashCanonical({ witnessVersion: 1, matchId: input.matchId, tick: input.tick, workerId: input.workerId }).value;
+}
+
+export function bundleManifestHash(input: Pick<ComputeBundleManifest,
+  "bundleId" | "kind" | "kernelId" | "matchId" | "chunkIds" | "targetChunkCount" | "quorum" | "deadlineAt"
+>): ContentHash {
+  return hashCanonical({
+    bundleManifestVersion: 1,
+    bundleId: input.bundleId,
+    kind: input.kind,
+    kernelId: input.kernelId,
+    matchId: input.matchId,
+    chunkIds: input.chunkIds.slice().sort(),
+    targetChunkCount: input.targetChunkCount,
+    quorum: input.quorum,
+    deadlineAt: input.deadlineAt,
+  });
+}
+
+export function bundleRootHash(input: {
+  matchReceiptHash: ContentHash;
+  bundleManifestHash: ContentHash;
+  acceptedReceiptHashes: ContentHash[];
+}): ContentHash {
+  return hashCanonical({
+    bundleRootVersion: 1,
+    matchReceiptHash: input.matchReceiptHash,
+    bundleManifestHash: input.bundleManifestHash,
+    acceptedReceiptHashes: input.acceptedReceiptHashes
+      .slice()
+      .sort((a, b) => (a.value < b.value ? -1 : a.value > b.value ? 1 : 0)),
+  });
+}
+
 export interface ComputeLabSnapshot {
   control: {
     acceptAssignments: boolean;
@@ -756,6 +847,8 @@ export interface ComputeLabSnapshot {
   receiptLogEntries: ReceiptLogEntry[];
   receiptLogSegments: ReceiptLogSegment[];
   publicTiles: PublicTile[];
+  bundles: ComputeBundleManifest[];
+  witnessAttestations: WitnessAttestation[];
 }
 
 export class ComputeLabStore {
@@ -774,6 +867,8 @@ export class ComputeLabStore {
   private readonly receiptLogEntries = new Map<string, ReceiptLogEntry>();
   private readonly receiptLogSegments = new Map<string, ReceiptLogSegment>();
   private readonly publicTiles = new Map<string, PublicTile>();
+  private readonly bundles = new Map<string, ComputeBundleManifest>();
+  private readonly witnessAttestations = new Map<string, WitnessAttestation>();
   private readonly now: () => number;
   private readonly assignmentTimeoutMs: number;
   private readonly workerSessionTtlMs: number;
@@ -836,6 +931,8 @@ export class ComputeLabStore {
       receiptLogEntries: Array.from(this.receiptLogEntries.values()).sort((a, b) => a.sequence - b.sequence),
       receiptLogSegments: Array.from(this.receiptLogSegments.values()).sort((a, b) => a.firstSequence - b.firstSequence),
       publicTiles: Array.from(this.publicTiles.values()).sort((a, b) => b.submittedAt - a.submittedAt),
+      bundles: Array.from(this.bundles.values()).sort((a, b) => b.createdAt - a.createdAt),
+      witnessAttestations: Array.from(this.witnessAttestations.values()).sort((a, b) => b.submittedAt - a.submittedAt),
     };
   }
 
@@ -855,6 +952,8 @@ export class ComputeLabStore {
     this.receiptLogEntries.clear();
     this.receiptLogSegments.clear();
     this.publicTiles.clear();
+    this.bundles.clear();
+    this.witnessAttestations.clear();
     this.nextReceiptLogSequence = 1;
     if (snapshot.control) {
       this.acceptAssignmentsFlag = snapshot.control.acceptAssignments;
@@ -876,6 +975,8 @@ export class ComputeLabStore {
     for (const entry of snapshot.receiptLogEntries ?? []) this.receiptLogEntries.set(entry.entryId, entry);
     for (const segment of snapshot.receiptLogSegments ?? []) this.receiptLogSegments.set(segment.segmentId, segment);
     for (const tile of snapshot.publicTiles ?? []) this.publicTiles.set(tile.sha256, tile);
+    for (const bundle of snapshot.bundles ?? []) this.bundles.set(bundle.bundleId, bundle);
+    for (const attestation of snapshot.witnessAttestations ?? []) this.witnessAttestations.set(attestation.attestationId, attestation);
     this.nextReceiptLogSequence = Math.max(
       1,
       ...Array.from(this.receiptLogEntries.values()).map((entry) => entry.sequence + 1),
@@ -2075,7 +2176,7 @@ export class ComputeLabStore {
         candidates.push({
           task,
           chunk,
-          score: schedulerCandidateScore(profile, task, liveAssignments.length),
+          score: schedulerCandidateScore(profile, task, liveAssignments.length) + this.bundleBoostForTask(task),
         });
       }
     }
@@ -2300,6 +2401,301 @@ export class ComputeLabStore {
     return Array.from(this.publicTiles.values())
       .sort((a, b) => b.submittedAt - a.submittedAt)
       .slice(0, limit);
+  }
+
+  // ----- ComputeBundleManifest API -----
+
+  createBundle(input: {
+    bundleId?: string;
+    kind: ComputeBundleKind;
+    kernelId: string;
+    matchId?: string | null;
+    sponsors?: string[];
+    chunkIds: string[];
+    targetChunkCount?: number;
+    quorum?: { minExecutions: number; minAgreeing: number };
+    deadlineAt?: number | null;
+    notes?: string;
+  }): ComputeBundleManifest {
+    if (!input.chunkIds || input.chunkIds.length < 1) throw new Error("bundle requires at least one chunkId");
+    if (input.chunkIds.length > 4096) throw new Error("bundle chunkIds capped at 4096");
+    const seen = new Set<string>();
+    for (const chunkId of input.chunkIds) {
+      if (!chunkId) throw new Error("bundle chunkIds must be non-empty");
+      if (seen.has(chunkId)) throw new Error(`bundle chunkIds duplicate: ${chunkId}`);
+      seen.add(chunkId);
+      let found = false;
+      for (const task of this.tasks.values()) {
+        if (task.chunks.some((chunk) => chunk.chunkId === chunkId)) { found = true; break; }
+      }
+      if (!found) throw new Error(`bundle references unknown chunk: ${chunkId}`);
+    }
+    const bundleId = input.bundleId || randomId("bundle");
+    if (this.bundles.has(bundleId)) throw new Error(`bundle already exists: ${bundleId}`);
+    const quorum = input.quorum ?? { minExecutions: 2, minAgreeing: 2 };
+    if (quorum.minExecutions < 1 || quorum.minAgreeing < 1) throw new Error("bundle quorum values must be positive");
+    if (quorum.minAgreeing > quorum.minExecutions) throw new Error("bundle minAgreeing cannot exceed minExecutions");
+    const bundle: ComputeBundleManifest = {
+      bundleId,
+      kind: input.kind,
+      kernelId: input.kernelId,
+      matchId: input.matchId ?? null,
+      sponsors: (input.sponsors ?? []).slice(0, 8).map((h) => String(h).slice(0, 64)),
+      chunkIds: input.chunkIds.slice(),
+      targetChunkCount: input.targetChunkCount ?? input.chunkIds.length,
+      quorum,
+      deadlineAt: input.deadlineAt ?? null,
+      createdAt: this.now(),
+      startedAt: null,
+      sealedAt: null,
+      status: "pending",
+      notes: input.notes,
+    };
+    this.bundles.set(bundleId, bundle);
+    for (const chunkId of bundle.chunkIds) {
+      for (const task of this.tasks.values()) {
+        const chunk = task.chunks.find((c) => c.chunkId === chunkId);
+        if (chunk) {
+          (chunk as ComputeChunk & { bundleId?: string }).bundleId = bundleId;
+          (task as ComputeTask & { bundleId?: string }).bundleId = bundleId;
+        }
+      }
+    }
+    return bundle;
+  }
+
+  getBundle(bundleId: string): ComputeBundleManifest | null {
+    return this.bundles.get(bundleId) ?? null;
+  }
+
+  // Public accessor for receipts attached to a chunk. The private
+  // receiptsFor() is the same shape; this exposes it for routes that build
+  // verifier bundles without exposing the whole receipt map.
+  receiptsForChunk(chunkId: string): ExecutionReceipt[] {
+    return this.receiptsFor(chunkId);
+  }
+
+  listBundles(input: { limit?: number; status?: ComputeBundleStatus } = {}): ComputeBundleManifest[] {
+    const limit = Math.max(1, Math.min(200, input.limit ?? 25));
+    return Array.from(this.bundles.values())
+      .filter((bundle) => !input.status || bundle.status === input.status)
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, limit);
+  }
+
+  bundleAggregate(bundleId: string): {
+    bundle: ComputeBundleManifest;
+    chunkStatus: Array<{
+      chunkId: string;
+      accepted: number;
+      pending: number;
+      rejected: number;
+      // First accepted receipt's preview (PNG) if any. The dash renders
+      // this inline to build a spatial mosaic of what was computed.
+      preview?: ExecutionReceiptPreview;
+      // Tile-shaped chunk coordinates (when the kernel is tile-shaped).
+      // Contact-map carries rowStart/colStart; other kernels may
+      // surface different position data later.
+      position?: { rowStart?: number; colStart?: number };
+    }>;
+    acceptedReceiptCount: number;
+    pendingReceiptCount: number;
+    rejectedReceiptCount: number;
+  } | null {
+    const bundle = this.bundles.get(bundleId);
+    if (!bundle) return null;
+    const chunkStatus: Array<{
+      chunkId: string;
+      accepted: number;
+      pending: number;
+      rejected: number;
+      preview?: ExecutionReceiptPreview;
+      position?: { rowStart?: number; colStart?: number };
+    }> = [];
+    let accepted = 0;
+    let pending = 0;
+    let rejected = 0;
+    for (const chunkId of bundle.chunkIds) {
+      const receipts = this.receiptsFor(chunkId);
+      const a = receipts.filter((r) => r.decision === "accepted").length;
+      const p = receipts.filter((r) => r.decision === "pending").length;
+      const rej = receipts.length - a - p;
+      const acceptedReceipt = receipts.find((r) => r.decision === "accepted");
+      const chunk = this.findChunk(chunkId);
+      const position = chunk?.params && (typeof chunk.params.rowStart === "number" || typeof chunk.params.colStart === "number")
+        ? {
+            rowStart: typeof chunk.params.rowStart === "number" ? chunk.params.rowStart : undefined,
+            colStart: typeof chunk.params.colStart === "number" ? chunk.params.colStart : undefined,
+          }
+        : undefined;
+      chunkStatus.push({
+        chunkId,
+        accepted: a,
+        pending: p,
+        rejected: rej,
+        preview: acceptedReceipt?.preview,
+        position,
+      });
+      accepted += a;
+      pending += p;
+      rejected += rej;
+    }
+    return { bundle, chunkStatus, acceptedReceiptCount: accepted, pendingReceiptCount: pending, rejectedReceiptCount: rejected };
+  }
+
+  markBundleRunning(bundleId: string): ComputeBundleManifest {
+    const bundle = this.bundles.get(bundleId);
+    if (!bundle) throw new Error(`bundle not found: ${bundleId}`);
+    if (bundle.status === "pending") {
+      bundle.status = "running";
+      bundle.startedAt = this.now();
+    }
+    return bundle;
+  }
+
+  // ----- sim_witness.v0: spectator attestations -----
+
+  submitWitnessAttestation(input: {
+    matchId: string;
+    tick: number;
+    stateHash: ContentHash;
+    workerId: string;
+    workerSessionId: string;
+    workerSessionToken: string;
+    signingPublicKeyHash?: ContentHash;
+    signature?: string;
+  }): WitnessAttestation {
+    if (!input.matchId || typeof input.matchId !== "string") throw new Error("matchId required");
+    if (!Number.isInteger(input.tick) || input.tick < 0 || input.tick > 2 ** 31 - 1) throw new Error("tick must be non-negative int");
+    if (!input.stateHash?.algorithm || !input.stateHash?.value) throw new Error("stateHash required");
+    // Session token check mirrors assignNext / submitReceipt — attestations
+    // must come from registered workers so we can attribute quorum.
+    this.requireSession(input.workerId, input.workerSessionId, input.workerSessionToken);
+    const attestationId = witnessAttestationId({ matchId: input.matchId, tick: input.tick, workerId: input.workerId });
+    // One attestation per (match, tick, worker). Later submissions overwrite,
+    // which lets workers self-correct on sim re-syncs without creating dupes.
+    const attestation: WitnessAttestation = {
+      attestationId,
+      matchId: input.matchId,
+      tick: input.tick,
+      stateHash: input.stateHash,
+      workerId: input.workerId,
+      workerSessionId: input.workerSessionId,
+      signingPublicKeyHash: input.signingPublicKeyHash,
+      signature: input.signature,
+      submittedAt: this.now(),
+    };
+    this.witnessAttestations.set(attestationId, attestation);
+    return attestation;
+  }
+
+  witnessAttestationsForMatch(matchId: string, input: { tick?: number; limit?: number } = {}): WitnessAttestation[] {
+    const limit = Math.max(1, Math.min(2000, input.limit ?? 500));
+    let list = Array.from(this.witnessAttestations.values()).filter((a) => a.matchId === matchId);
+    if (typeof input.tick === "number") list = list.filter((a) => a.tick === input.tick);
+    return list.sort((a, b) => a.tick - b.tick || a.submittedAt - b.submittedAt).slice(0, limit);
+  }
+
+  // Aggregate attestations into a per-tick quorum summary. Each tick maps
+  // to a list of stateHashes with the count of unique workers agreeing on
+  // them; the winning stateHash is the largest group. Useful for
+  // "47/52 spectators agree at tick 900" live readouts.
+  witnessQuorumForMatch(matchId: string): {
+    matchId: string;
+    totalSubmitters: number;
+    ticks: Array<{
+      tick: number;
+      totalAgreements: number;
+      winner: { stateHash: ContentHash; count: number } | null;
+      agreements: Array<{ stateHash: ContentHash; count: number }>;
+    }>;
+  } {
+    const byTick = new Map<number, Map<string, { stateHash: ContentHash; count: number; workers: Set<string> }>>();
+    const submitters = new Set<string>();
+    for (const attestation of this.witnessAttestations.values()) {
+      if (attestation.matchId !== matchId) continue;
+      submitters.add(attestation.workerId);
+      const key = `${attestation.stateHash.algorithm}:${attestation.stateHash.value}`;
+      let bucket = byTick.get(attestation.tick);
+      if (!bucket) { bucket = new Map(); byTick.set(attestation.tick, bucket); }
+      let entry = bucket.get(key);
+      if (!entry) { entry = { stateHash: attestation.stateHash, count: 0, workers: new Set() }; bucket.set(key, entry); }
+      if (!entry.workers.has(attestation.workerId)) {
+        entry.workers.add(attestation.workerId);
+        entry.count++;
+      }
+    }
+    const ticks = Array.from(byTick.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([tick, bucket]) => {
+        const agreements = Array.from(bucket.values())
+          .map((a) => ({ stateHash: a.stateHash, count: a.count }))
+          .sort((x, y) => y.count - x.count);
+        const total = agreements.reduce((sum, a) => sum + a.count, 0);
+        return {
+          tick,
+          totalAgreements: total,
+          winner: agreements[0] ?? null,
+          agreements,
+        };
+      });
+    return { matchId, totalSubmitters: submitters.size, ticks };
+  }
+
+  // Scheduler priority boost: chunks that belong to a running bundle drain
+  // before free-floating tasks so a match-anchored bundle doesn't starve.
+  private bundleBoostForTask(task: ComputeTask): number {
+    const bundleId = (task as ComputeTask & { bundleId?: string }).bundleId;
+    if (!bundleId) return 0;
+    const bundle = this.bundles.get(bundleId);
+    if (!bundle) return 0;
+    if (bundle.status === "running") return 40;
+    if (bundle.status === "pending") return 15;
+    return 0;
+  }
+
+  sealBundle(input: {
+    bundleId: string;
+    matchReceiptHash: ContentHash;
+    matchId?: string;
+  }): ComputeBundleManifest {
+    const bundle = this.bundles.get(input.bundleId);
+    if (!bundle) throw new Error(`bundle not found: ${input.bundleId}`);
+    if (bundle.status === "sealed") return bundle;
+    if (input.matchId && !bundle.matchId) bundle.matchId = input.matchId;
+    if (input.matchId && bundle.matchId && input.matchId !== bundle.matchId) {
+      throw new Error("matchId mismatch vs bundle.matchId");
+    }
+    // Pick the single best-decided receipt per chunk so each chunk contributes
+    // one hash at most. "Accepted" wins over pending/rejected; otherwise skip
+    // the chunk to keep the root stable against late-arriving receipts.
+    const acceptedReceiptHashes: ContentHash[] = [];
+    let accepted = 0; let pending = 0; let rejected = 0;
+    for (const chunkId of bundle.chunkIds) {
+      const receipts = this.receiptsFor(chunkId);
+      const best = receipts.find((r) => r.decision === "accepted");
+      if (best?.receiptHash) acceptedReceiptHashes.push(best.receiptHash);
+      for (const r of receipts) {
+        if (r.decision === "accepted") accepted++;
+        else if (r.decision === "pending") pending++;
+        else rejected++;
+      }
+    }
+    const manifestHash = bundleManifestHash(bundle);
+    const root = bundleRootHash({
+      matchReceiptHash: input.matchReceiptHash,
+      bundleManifestHash: manifestHash,
+      acceptedReceiptHashes,
+    });
+    bundle.matchReceiptHash = input.matchReceiptHash;
+    bundle.bundleManifestHash = manifestHash;
+    bundle.bundleRoot = root;
+    bundle.acceptedReceiptCount = accepted;
+    bundle.pendingReceiptCount = pending;
+    bundle.rejectedReceiptCount = rejected;
+    bundle.sealedAt = this.now();
+    bundle.status = "sealed";
+    return bundle;
   }
 
   listReceiptLogSegments(input: { limit?: number } = {}): ReceiptLogSegment[] {

@@ -9,6 +9,8 @@ let contactMapTimer = null;
 let myWorkTimer = null;
 const PUBLIC_REFRESH_OPEN_MS = 30_000;
 const PUBLIC_REFRESH_CLOSED_MS = 120_000;
+const CONTACT_MAP_REGION_LIMIT = 6;
+const CONTACT_MAP_ACCEPTED_LIMIT = 4;
 
 function computeLabOrigin() {
   return String(window.__M3T4_COMPUTE_LAB_ORIGIN__ || "").replace(/\/+$/, "");
@@ -37,9 +39,9 @@ function computeStatusText(snapshot) {
 function introCardHtml() {
   return contextCardHtml({
     className: "compute-intro-card",
-    kicker: "opt-in browser compute",
-    strong: "This browser can donate idle cycles to public, receipt-backed workloads.",
-    copy: "Workers run off-thread and sign a receipt for every chunk they complete. You can pause or stop them any time.",
+    kicker: "public browser compute",
+    strong: "The durable view for receipts and workload lanes.",
+    copy: "Live keeps the match-tied bundle mosaic; this page keeps the slower aggregate state.",
   });
 }
 
@@ -92,7 +94,7 @@ function publicStatsPanelHtml() {
           <h3>Network</h3>
           <div id="compute-public-note" class="tight">loading</div>
         </div>
-        ${linkButtonHtml({ href: "/live", text: "watch live", attrs: { title: "Leave this page and watch live matches" } })}
+        ${linkButtonHtml({ href: "/live", text: "live compute view", attrs: { title: "Open the live match compute mosaic" } })}
       </div>
       <div class="compute-public-grid">
         <div><span>network score</span><strong id="compute-public-score">0</strong></div>
@@ -107,10 +109,10 @@ function publicStatsPanelHtml() {
 
 function workloadsPanelHtml() {
   return `
-    <section class="panel compute-workloads-panel" aria-label="Workloads">
+    <section class="panel compute-workloads-panel" aria-label="Available compute lanes">
       <div class="compute-workloads-head">
         <div class="compute-workloads-title">
-          <h3>Workloads</h3>
+          <h3>Available Lanes</h3>
           <div id="compute-workloads-note" class="tight">loading</div>
         </div>
         <div id="compute-workloads-intake" class="compute-workloads-intake" aria-live="polite"></div>
@@ -133,16 +135,21 @@ function workloadsPanelHtml() {
 
 function contactMapPanelHtml() {
   return `
-    <section class="panel compute-contact-map-panel" aria-label="Contact-map receipt trail">
+    <section class="panel compute-contact-map-panel" aria-label="Science workload snapshot">
       <div class="compute-contact-map-head">
-        <h3>Contact-map receipts</h3>
-        <div id="compute-contact-map-note" class="tight">loading</div>
+        <div class="compute-contact-map-title">
+          <h3>Science Queue</h3>
+          <div id="compute-contact-map-note" class="tight">loading</div>
+        </div>
+        ${linkButtonHtml({ href: "/live", text: "live bundle view", attrs: { title: "Watch active bundle chunks on the Live page" } })}
       </div>
       <div class="compute-contact-map-summary">
-        <div><span>tasks</span><strong id="compute-contact-map-tasks">0</strong></div>
+        <div><span>queued tasks</span><strong id="compute-contact-map-tasks">0</strong></div>
+        <div><span>regions</span><strong id="compute-contact-map-regions">0</strong></div>
+        <div><span>regions with receipts</span><strong id="compute-contact-map-active">0</strong></div>
         <div><span>accepted receipts</span><strong id="compute-contact-map-receipts">0</strong></div>
       </div>
-      <div id="compute-contact-map-tiles" class="compute-contact-map-tiles"></div>
+      <div id="compute-contact-map-rollup" class="compute-contact-map-rollup"></div>
     </section>`;
 }
 
@@ -162,47 +169,16 @@ function myWorkPanelHtml() {
     </section>`;
 }
 
-const WORK_FLOW_STEPS = [
-  { label: "Replay archived", note: "Ranked match finishes, server archives a public artifact." },
-  { label: "Public artifact exported", note: "Redacted action log + hash published; no private configs leak." },
-  { label: "Task seeded", note: "Auto-seeded from archive, or admin-seeded for experimental lanes." },
-  { label: "Worker picked", note: "Coordinator matches by capability, trust tier, and intake window." },
-  { label: "Computed in browser", note: "Worker runs the kernel off-thread against bounded inputs." },
-  { label: "Signed receipt", note: "Output is hashed, signed with the session key, and submitted." },
-  { label: "Validator accepts", note: "Expected-hash, quorum, or measurement acceptance per policy." },
-  { label: "Aggregate updates", note: "Public stats, badges, and per-workload aggregates refresh." },
-];
-
-function flowPanelHtml() {
-  return `
-    <section class="panel compute-flow-panel" aria-label="How work enters the network">
-      <h3>How work enters the network</h3>
-      <ol class="compute-flow-steps">
-        ${WORK_FLOW_STEPS.map((step, index) => `
-          <li class="compute-flow-step">
-            <span class="compute-flow-step-number">${index + 1}</span>
-            <div class="compute-flow-step-body">
-              <strong>${escapeHtml(step.label)}</strong>
-              <span class="tight">${escapeHtml(step.note)}</span>
-            </div>
-          </li>
-        `).join("")}
-      </ol>
-    </section>`;
-}
-
 export function mount(root, { setStatus }) {
   setStatus("compute");
   root.innerHTML = `
     <div class="page compute-page">
       ${pageHeaderHtml({
         title: "Compute",
-        subtitle: "Donate spare browser cycles. Every chunk returns a signed receipt.",
-        action: linkButtonHtml({ href: "/about", text: "about", attrs: { title: "Read what m3t4.ai is and the compute pitch" } }),
+        subtitle: "Receipts, lanes, and network health.",
       })}
       ${introCardHtml()}
       ${controlsPanelHtml()}
-      ${flowPanelHtml()}
       ${myWorkPanelHtml()}
       ${publicStatsPanelHtml()}
       ${workloadsPanelHtml()}
@@ -217,6 +193,7 @@ export function mount(root, { setStatus }) {
 function wireControls(root) {
   const client = getComputeClient();
   void client.maybeAutoStart();
+  const panelEl = must(root, ".compute-opt-panel");
   const statusEl = must(root, "#compute-opt-status");
   const noteEl = must(root, "#compute-opt-note");
   const gateEl = must(root, "#compute-local-gate");
@@ -250,6 +227,7 @@ function wireControls(root) {
 
   off?.();
   off = client.subscribe((snapshot) => {
+    panelEl.hidden = !(snapshot.originConfigured && snapshot.workerFeatureEnabled);
     const gate = snapshot.gate ? snapshot.gate : snapshot.enabled ? "open" : "idle";
     const statusText = computeStatusText(snapshot);
     statusEl.textContent = statusText;
@@ -409,14 +387,16 @@ function wirePublicData(root) {
 function wireContactMapData(root) {
   const noteEl = must(root, "#compute-contact-map-note");
   const tasksEl = must(root, "#compute-contact-map-tasks");
+  const regionsEl = must(root, "#compute-contact-map-regions");
+  const activeEl = must(root, "#compute-contact-map-active");
   const receiptsEl = must(root, "#compute-contact-map-receipts");
-  const tilesEl = must(root, "#compute-contact-map-tiles");
+  const rollupEl = must(root, "#compute-contact-map-rollup");
 
   async function refresh() {
     const origin = computeLabOrigin();
     if (!origin) {
       noteEl.textContent = "offline";
-      tilesEl.innerHTML = `<div class="tight">No public compute origin is configured.</div>`;
+      rollupEl.innerHTML = `<div class="tight">No public compute origin is configured.</div>`;
       return;
     }
     try {
@@ -424,18 +404,33 @@ function wireContactMapData(root) {
       if (!res.ok) throw new Error(`aggregate ${res.status}`);
       const body = await res.json();
       const tiles = Array.isArray(body.tiles) ? body.tiles : [];
-      tasksEl.textContent = formatInt(body.totalTasks);
-      receiptsEl.textContent = formatInt(body.totalAcceptedReceipts);
-      if (tiles.length === 0) {
-        noteEl.textContent = "no accepted receipts yet";
-        tilesEl.innerHTML = `<div class="tight">Accepted contact-map receipts will appear here once workers complete tiles.</div>`;
+      const totalTasks = Math.max(0, Number(body.totalTasks ?? tiles.length) || 0);
+      const totalAcceptedReceipts = Math.max(0, Number(body.totalAcceptedReceipts) || 0);
+      const receiptTiles = tiles.filter((tile) => Number(tile.receiptCount) > 0).length;
+      const acceptedTiles = tiles.filter((tile) => Number(tile.acceptedCount) > 0).length;
+      const groups = contactMapRegionGroups(tiles);
+      tasksEl.textContent = formatInt(totalTasks);
+      regionsEl.textContent = formatInt(groups.length);
+      activeEl.textContent = formatInt(receiptTiles);
+      receiptsEl.textContent = formatInt(totalAcceptedReceipts);
+      if (totalTasks === 0) {
+        noteEl.textContent = "empty";
+        rollupEl.innerHTML = `<div class="tight">No contact-map tasks are queued.</div>`;
         return;
       }
-      noteEl.textContent = `${tiles.length} tile${tiles.length === 1 ? "" : "s"}`;
-      tilesEl.innerHTML = tiles.map((tile) => contactMapTileHtml(tile)).join("");
+      noteEl.textContent = totalAcceptedReceipts > 0
+        ? `${formatInt(totalAcceptedReceipts)} accepted across ${formatInt(acceptedTiles)} region${acceptedTiles === 1 ? "" : "s"}`
+        : `${formatInt(totalTasks)} queued · no accepted receipts yet`;
+      rollupEl.innerHTML = contactMapRollupHtml({
+        groups,
+        tiles,
+        totalTasks,
+        receiptTiles,
+        totalAcceptedReceipts,
+      });
     } catch {
       noteEl.textContent = "offline";
-      tilesEl.innerHTML = `<div class="tight">Contact-map aggregate is temporarily unavailable.</div>`;
+      rollupEl.innerHTML = `<div class="tight">Contact-map aggregate is temporarily unavailable.</div>`;
     }
   }
 
@@ -444,7 +439,97 @@ function wireContactMapData(root) {
   contactMapTimer = setInterval(refresh, 30000);
 }
 
-function contactMapTileHtml(tile) {
+function contactMapRollupHtml({ groups, tiles, totalTasks, receiptTiles, totalAcceptedReceipts }) {
+  const acceptedSamples = tiles
+    .filter((tile) => Number(tile.acceptedCount) > 0)
+    .sort((a, b) =>
+      Number(b.acceptedCount) - Number(a.acceptedCount) ||
+      Number(b.receiptCount) - Number(a.receiptCount) ||
+      Number(a.rowStart) - Number(b.rowStart) ||
+      Number(a.colStart) - Number(b.colStart)
+    )
+    .slice(0, CONTACT_MAP_ACCEPTED_LIMIT);
+  const shownGroups = groups.slice(0, CONTACT_MAP_REGION_LIMIT);
+  const hiddenGroups = Math.max(0, groups.length - shownGroups.length);
+  const groupRows = shownGroups.map(contactMapRegionHtml).join("");
+  const acceptedHtml = acceptedSamples.length
+    ? `
+      <div class="compute-contact-map-section">
+        <div class="compute-block-label">Accepted receipt samples</div>
+        <div class="compute-contact-map-samples">
+          ${acceptedSamples.map(contactMapAcceptedTileHtml).join("")}
+        </div>
+      </div>`
+    : `
+      <div class="compute-contact-map-empty">
+        ${receiptTiles > 0
+          ? `${formatInt(receiptTiles)} region${receiptTiles === 1 ? "" : "s"} have receipts waiting on acceptance.`
+          : "Queued contact-map tasks have not produced receipts yet."}
+      </div>`;
+  return `
+    <div class="compute-contact-map-section">
+      <div class="compute-block-label">Coverage rollup</div>
+      <div class="compute-contact-map-regions">${groupRows}</div>
+      ${hiddenGroups > 0 ? `<div class="tight">+${formatInt(hiddenGroups)} more region${hiddenGroups === 1 ? "" : "s"} summarized away from this page.</div>` : ""}
+    </div>
+    ${acceptedHtml}
+    <div class="tight">
+      ${formatInt(totalTasks)} task${totalTasks === 1 ? "" : "s"} · ${formatInt(totalAcceptedReceipts)} accepted receipt${totalAcceptedReceipts === 1 ? "" : "s"}
+    </div>`;
+}
+
+function contactMapRegionGroups(tiles) {
+  const groups = new Map();
+  for (const tile of tiles) {
+    const rowStart = Number(tile.rowStart) || 0;
+    const colStart = Number(tile.colStart) || 0;
+    const rowLen = String(tile.rowResidues ?? "").length;
+    const colLen = String(tile.colResidues ?? "").length;
+    const cells = Math.max(0, rowLen * colLen);
+    const key = `${rowStart}:${rowLen}:${colStart}:${colLen}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        rowStart,
+        rowEnd: rowStart + rowLen,
+        colStart,
+        colEnd: colStart + colLen,
+        cells,
+        tasks: 0,
+        receiptCount: 0,
+        acceptedCount: 0,
+      });
+    }
+    const group = groups.get(key);
+    group.tasks++;
+    group.receiptCount += Math.max(0, Number(tile.receiptCount) || 0);
+    group.acceptedCount += Math.max(0, Number(tile.acceptedCount) || 0);
+  }
+  return Array.from(groups.values()).sort((a, b) =>
+    b.acceptedCount - a.acceptedCount ||
+    b.receiptCount - a.receiptCount ||
+    b.cells - a.cells ||
+    b.tasks - a.tasks ||
+    a.rowStart - b.rowStart ||
+    a.colStart - b.colStart
+  );
+}
+
+function contactMapRegionHtml(group) {
+  return `
+    <article class="compute-contact-map-region">
+      <div>
+        <strong>row ${formatInt(group.rowStart)}..${formatInt(group.rowEnd)} · col ${formatInt(group.colStart)}..${formatInt(group.colEnd)}</strong>
+        <div class="tight">${formatInt(group.cells)} cell${group.cells === 1 ? "" : "s"}</div>
+      </div>
+      <div class="compute-contact-map-region-counts">
+        <span><em>${formatInt(group.tasks)}</em> task${group.tasks === 1 ? "" : "s"}</span>
+        <span><em>${formatInt(group.receiptCount)}</em> receipt${group.receiptCount === 1 ? "" : "s"}</span>
+        <span><em>${formatInt(group.acceptedCount)}</em> accepted</span>
+      </div>
+    </article>`;
+}
+
+function contactMapAcceptedTileHtml(tile) {
   const receipts = Array.isArray(tile.receipts) ? tile.receipts : [];
   const rowLen = String(tile.rowResidues ?? "").length;
   const colLen = String(tile.colResidues ?? "").length;
@@ -452,12 +537,12 @@ function contactMapTileHtml(tile) {
   const header = `
     <div class="compute-contact-map-tile-head">
       <div>
-        <strong>${escapeHtml(String(tile.taskId || ""))}</strong>
-        <div class="tight">row ${formatInt(tile.rowStart)}..${formatInt(tile.rowStart + rowLen)} · col ${formatInt(tile.colStart)}..${formatInt(tile.colStart + colLen)} · ${formatInt(cells)} cells</div>
+        <strong>row ${formatInt(tile.rowStart)}..${formatInt(tile.rowStart + rowLen)} · col ${formatInt(tile.colStart)}..${formatInt(tile.colStart + colLen)}</strong>
+        <div class="tight">${formatInt(cells)} cell${cells === 1 ? "" : "s"}</div>
       </div>
       <div class="tight">accepted ${formatInt(tile.acceptedCount)} / ${formatInt(tile.receiptCount)}</div>
     </div>`;
-  const receiptRows = receipts.map((receipt) => `
+  const receiptRows = receipts.slice(0, 2).map((receipt) => `
     <li class="compute-contact-map-receipt">
       ${tilePreviewHtml(receipt.preview)}
       <code>${escapeHtml(shortId(receipt.receiptId || ""))}</code>
@@ -501,9 +586,12 @@ function wireMyWorkData(root) {
     scopeEl.textContent = scopeLabel(body);
     renderLinking(body);
     if (receipts.length === 0) {
+      const workerControlsEnabled = client.snapshot().originConfigured && client.snapshot().workerFeatureEnabled;
       noteEl.textContent = "no receipts yet";
       kernelsEl.innerHTML = "";
-      recentEl.innerHTML = `<div class="tight">Opt in and accept a job to see your own receipts here.</div>`;
+      recentEl.innerHTML = `<div class="tight">${workerControlsEnabled
+        ? "Opt in and accept a job to see your own receipts here."
+        : "Receipts linked to this browser or account will appear here."}</div>`;
       return;
     }
     noteEl.textContent = `${receipts.length} receipt${receipts.length === 1 ? "" : "s"} · last ${relativeTime(receipts[0].receivedAt)}`;

@@ -67,6 +67,14 @@ import {
   type MandelbrotTileParams,
 } from "./kernels/mandelbrot-tile.js";
 import {
+  HEAT_DIFFUSION_TILE_KERNEL_HASH,
+  HEAT_DIFFUSION_TILE_KERNEL_ID,
+  normalizeHeatDiffusionTileParams,
+  runHeatDiffusionTileReference,
+  type HeatDiffusionHotspot,
+  type HeatDiffusionTileParams,
+} from "./kernels/heat-diffusion-tile.js";
+import {
   PUBLIC_ARTIFACT_VERIFY_KERNEL_HASH,
   PUBLIC_ARTIFACT_VERIFY_KERNEL_ID,
   runPublicArtifactVerify,
@@ -1628,6 +1636,69 @@ export class ComputeLabStore {
     const task: ComputeTask = {
       taskId,
       kind: MANDELBROT_TILE_KERNEL_ID,
+      status: "running",
+      createdAt: this.now(),
+      validationPolicy: {
+        determinismClass: "bit-exact",
+        validationMode: "expected-hash",
+        minExecutions,
+        minAgreeing,
+        expectedOutputHash,
+        requiredTransport: input.requiredTransport,
+        requiredPeerSubreceipt: input.requiredPeerSubreceipt,
+      },
+      chunks: [chunk],
+    };
+    this.tasks.set(taskId, task);
+    return task;
+  }
+
+  seedHeatDiffusionTileTask(input: {
+    widthPx?: number;
+    heightPx?: number;
+    iterations?: number;
+    shift?: number;
+    hotspots?: HeatDiffusionHotspot[];
+    minExecutions?: number;
+    minAgreeing?: number;
+    requiredTransport?: TransportKind;
+    requiredPeerSubreceipt?: boolean;
+  }): ComputeTask {
+    const normalized = normalizeHeatDiffusionTileParams({
+      widthPx: input.widthPx ?? 32,
+      heightPx: input.heightPx ?? 32,
+      iterations: input.iterations ?? 48,
+      shift: input.shift ?? 3,
+      hotspots: input.hotspots ?? [{ xPx: 16, yPx: 16, valueQ88: 0x4000 }],
+    }) satisfies HeatDiffusionTileParams;
+    // ComputeChunk.params only admits primitives, so fold the hotspot array
+    // into a canonical JSON string. Workers parse it back to the same array.
+    const chunkParams = {
+      widthPx: normalized.widthPx,
+      heightPx: normalized.heightPx,
+      iterations: normalized.iterations,
+      shift: normalized.shift,
+      hotspotsJson: JSON.stringify(normalized.hotspots),
+    };
+    const expectedOutputHash = runHeatDiffusionTileReference(normalized).outputHash;
+    const taskId = randomId("task");
+    const minExecutions = Math.max(1, input.minExecutions ?? 2);
+    const minAgreeing = Math.min(minExecutions, Math.max(1, input.minAgreeing ?? 2));
+    const chunk: ComputeChunk = {
+      chunkId: `${taskId}-chunk-0`,
+      taskId,
+      ordinal: 0,
+      kind: HEAT_DIFFUSION_TILE_KERNEL_ID,
+      params: chunkParams,
+      kernelId: HEAT_DIFFUSION_TILE_KERNEL_ID,
+      kernelHash: HEAT_DIFFUSION_TILE_KERNEL_HASH,
+      inputHash: hashCanonical({ kind: HEAT_DIFFUSION_TILE_KERNEL_ID, params: chunkParams }),
+      expectedOutputHash,
+      status: "pending",
+    };
+    const task: ComputeTask = {
+      taskId,
+      kind: HEAT_DIFFUSION_TILE_KERNEL_ID,
       status: "running",
       createdAt: this.now(),
       validationPolicy: {
@@ -4893,7 +4964,8 @@ function taskRequiredWorkloadTier(task: ComputeTask): WorkloadTier {
   if (
     task.kind === TENSOR_TILE_KERNEL_ID ||
     task.kind === CONTACT_MAP_TILE_KERNEL_ID ||
-    task.kind === MANDELBROT_TILE_KERNEL_ID
+    task.kind === MANDELBROT_TILE_KERNEL_ID ||
+    task.kind === HEAT_DIFFUSION_TILE_KERNEL_ID
   ) return "webgpu-light";
   return "observe-only";
 }

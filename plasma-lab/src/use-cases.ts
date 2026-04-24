@@ -225,4 +225,16 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
     validation: "assignment-bound expected-hash receipts against a server-held integer escape-count tile reference",
     notes: "Canonical bit-exact-u32 WebGPU lane. Workers compute the Mandelbrot escape count per pixel over a bounded view rectangle in integer Q8.8 arithmetic; the receipt proves your GPU matched the server's integer reference cell-for-cell. Each accepted receipt ships an advisory PNG preview of the tile.",
   },
+  {
+    id: "heat-diffusion-tile",
+    family: "science",
+    runtime: "webgpu",
+    title: "Heat diffusion tile",
+    status: "experimental",
+    workload: "science.heat_diffusion_tile.v0",
+    authority: "advisory",
+    inputBoundary: "public grid dimensions, iteration count, shift, and up to eight Q8.8 hotspot seeds",
+    validation: "assignment-bound expected-hash receipts against a server-held integer forward-Euler reference",
+    notes: "Textbook 2D heat equation stepped with an integer 5-point Laplacian stencil on a bounded grid with Dirichlet-zero boundaries. The receipt proves your GPU reproduced the server's integer-arithmetic field after N iterations. Each accepted receipt ships an advisory PNG heatmap preview.",
+  },
 ];

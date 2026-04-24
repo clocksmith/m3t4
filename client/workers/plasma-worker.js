@@ -18,6 +18,7 @@ const ASSET_TILE_AUDIT_KERNEL = "asset.tile_audit.v0";
 const IMAGE_TILE_INFER_KERNEL = "ml.image_tile_infer.v0";
 const CONTACT_MAP_TILE_KERNEL = "science.contact_map_tile.v0";
 const MANDELBROT_TILE_KERNEL = "science.mandelbrot_tile.v0";
+const HEAT_DIFFUSION_TILE_KERNEL = "science.heat_diffusion_tile.v0";
 const GENOME_KMER_KERNEL = "science.genome_kmer.v0";
 const GENOME_KMER_ALPHABET = "ACGT";
 const MICROSCOPY_TILE_SCORE_KERNEL = "science.microscopy_tile_score.v0";
@@ -59,6 +60,7 @@ const KERNELS = {
   [IMAGE_TILE_INFER_KERNEL]: runImageTileInfer,
   [CONTACT_MAP_TILE_KERNEL]: runContactMapTile,
   [MANDELBROT_TILE_KERNEL]: runMandelbrotTile,
+  [HEAT_DIFFUSION_TILE_KERNEL]: runHeatDiffusionTile,
   [GENOME_KMER_KERNEL]: runGenomeKmer,
   [MICROSCOPY_TILE_SCORE_KERNEL]: runMicroscopyTileScore,
   [EXPLOIT_SEARCH_KERNEL]: runExploitSearch,
@@ -471,6 +473,136 @@ function assertInt(value, label, lo, hi) {
     throw new Error(`${label} must be integer in [${lo}, ${hi}]`);
   }
   return n;
+}
+
+// Heat-diffusion tile, integer 5-point Laplacian stencil with Dirichlet-zero
+// boundaries. Ping-pongs between two storage buffers per iteration. The
+// arithmetic matches kernels/heat-diffusion-tile.ts cell-for-cell.
+async function runHeatDiffusionTile(params) {
+  if (!navigator.gpu?.requestAdapter) throw new Error("WebGPU unavailable");
+  const spec = normalizeHeatDiffusionTileParams(params);
+  const totalPixels = spec.widthPx * spec.heightPx;
+  let device = null;
+  let bufA = null;
+  let bufB = null;
+  let readBuffer = null;
+  try {
+    const adapter = await withTimeout(navigator.gpu.requestAdapter({ powerPreference: "low-power" }), 1000);
+    if (!adapter) throw new Error("WebGPU adapter unavailable");
+    device = await withTimeout(adapter.requestDevice(), 1200);
+    if (!device) throw new Error("WebGPU device unavailable");
+    const byteLength = totalPixels * 4;
+    // Initial state — all zeros then stamp hotspots.
+    const initial = new Int32Array(totalPixels);
+    for (const hs of spec.hotspots) initial[hs.yPx * spec.widthPx + hs.xPx] = hs.valueQ88 | 0;
+    bufA = device.createBuffer({ size: byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
+    bufB = device.createBuffer({ size: byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
+    readBuffer = device.createBuffer({ size: byteLength, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    device.queue.writeBuffer(bufA, 0, new Uint8Array(initial.buffer));
+    const module = device.createShaderModule({
+      code: `
+const WIDTH: i32 = ${spec.widthPx};
+const HEIGHT: i32 = ${spec.heightPx};
+const SHIFT: u32 = ${spec.shift}u;
+
+@group(0) @binding(0) var<storage, read> src: array<i32>;
+@group(0) @binding(1) var<storage, read_write> dst: array<i32>;
+
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let x = i32(gid.x);
+  let y = i32(gid.y);
+  if (x >= WIDTH || y >= HEIGHT) { return; }
+  let i = y * WIDTH + x;
+  let center = src[i];
+  var north: i32 = 0;
+  var south: i32 = 0;
+  var west: i32 = 0;
+  var east: i32 = 0;
+  if (y > 0) { north = src[i - WIDTH]; }
+  if (y < HEIGHT - 1) { south = src[i + WIDTH]; }
+  if (x > 0) { west = src[i - 1]; }
+  if (x < WIDTH - 1) { east = src[i + 1]; }
+  let laplacian = north + south + east + west - (center << 2u);
+  dst[i] = center + (laplacian >> SHIFT);
+}
+`,
+    });
+    const pipeline = device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: "main" } });
+    const bindAtoB = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: bufA } },
+        { binding: 1, resource: { buffer: bufB } },
+      ],
+    });
+    const bindBtoA = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: bufB } },
+        { binding: 1, resource: { buffer: bufA } },
+      ],
+    });
+    const workgroupsX = Math.ceil(spec.widthPx / 8);
+    const workgroupsY = Math.ceil(spec.heightPx / 8);
+    const encoder = device.createCommandEncoder();
+    for (let step = 0; step < spec.iterations; step++) {
+      const pass = encoder.beginComputePass();
+      pass.setPipeline(pipeline);
+      pass.setBindGroup(0, step % 2 === 0 ? bindAtoB : bindBtoA);
+      pass.dispatchWorkgroups(workgroupsX, workgroupsY);
+      pass.end();
+    }
+    const resultBuffer = spec.iterations % 2 === 1 ? bufB : bufA;
+    encoder.copyBufferToBuffer(resultBuffer, 0, readBuffer, 0, byteLength);
+    device.queue.submit([encoder.finish()]);
+    await withTimeout(device.queue.onSubmittedWorkDone(), 2000);
+    await withTimeout(readBuffer.mapAsync(GPUMapMode.READ), 800);
+    const raw = new Int32Array(readBuffer.getMappedRange().slice(0));
+    readBuffer.unmap();
+    // Match the CPU reference's non-negative clamp for PNG/u32 emission.
+    const out = new Uint8Array(byteLength);
+    const view = new DataView(out.buffer);
+    for (let i = 0; i < totalPixels; i++) {
+      const v = raw[i] < 0 ? 0 : raw[i];
+      view.setUint32(i * 4, v >>> 0, true);
+    }
+    const preview = await buildTilePreview({
+      outputU32: new Uint32Array(out.buffer, out.byteOffset, out.byteLength / 4),
+      widthPx: spec.widthPx,
+      heightPx: spec.heightPx,
+    });
+    return { bytes: out, executionMode: "webgpu", preview: preview ?? undefined };
+  } finally {
+    try { bufA?.destroy?.(); } catch {}
+    try { bufB?.destroy?.(); } catch {}
+    try { readBuffer?.destroy?.(); } catch {}
+    try { device?.destroy?.(); } catch {}
+  }
+}
+
+function normalizeHeatDiffusionTileParams(params) {
+  const widthPx = assertInt(params.widthPx, "widthPx", 4, 64);
+  const heightPx = assertInt(params.heightPx, "heightPx", 4, 64);
+  const iterations = assertInt(params.iterations, "iterations", 1, 256);
+  const shift = assertInt(params.shift, "shift", 2, 6);
+  // Server chunk.params folds hotspots into a JSON string (primitives only).
+  // Accept either the decoded array or the string form.
+  let rawHotspots;
+  if (typeof params.hotspotsJson === "string") {
+    try { rawHotspots = JSON.parse(params.hotspotsJson); } catch { rawHotspots = []; }
+  } else {
+    rawHotspots = Array.isArray(params.hotspots) ? params.hotspots : [];
+  }
+  if (!Array.isArray(rawHotspots) || rawHotspots.length < 1 || rawHotspots.length > 8) {
+    throw new Error("hotspots must have 1..8 entries");
+  }
+  const hotspots = rawHotspots.map((raw, idx) => ({
+    xPx: assertInt(raw?.xPx, `hotspots[${idx}].xPx`, 0, widthPx - 1),
+    yPx: assertInt(raw?.yPx, `hotspots[${idx}].yPx`, 0, heightPx - 1),
+    valueQ88: assertInt(raw?.valueQ88, `hotspots[${idx}].valueQ88`, 1, 0xFFFF),
+  }));
+  return { widthPx, heightPx, iterations, shift, hotspots };
 }
 
 function runReplayVerify(params) {

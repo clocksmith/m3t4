@@ -340,11 +340,11 @@ function drawStageBackdrop(ctx, pack, frame) {
 
   const tick = frame?.tick ?? 0;
   const far = loadImage(pack.farParallax);
-  if (far) drawTiledImage(ctx, far, 0, 0, W, H, parallaxOffset(tick, 0.035), 0);
+  if (far) drawHorizontalCoverImage(ctx, far, 0, 0, W, H, parallaxOffset(tick, 0.035));
   const mid = loadImage(pack.midParallax);
-  if (mid) drawTiledImage(ctx, mid, 0, 0, W, H, parallaxOffset(tick, 0.07), 0);
+  if (mid) drawHorizontalCoverImage(ctx, mid, 0, 0, W, H, parallaxOffset(tick, 0.07));
   const near = loadImage(pack.nearParallax);
-  if (near) drawTiledImage(ctx, near, 0, 0, W, H, parallaxOffset(tick, 0.12), 0);
+  if (near) drawHorizontalCoverImage(ctx, near, 0, 0, W, H, parallaxOffset(tick, 0.12));
 }
 
 function parallaxOffset(tick, pxPerTick) {
@@ -399,6 +399,29 @@ function drawTiledImage(ctx, img, x, y, w, h, offsetX = 0, offsetY = 0) {
     for (let xx = startX; xx < x + w; xx += stepX) {
       ctx.drawImage(img, 0, 0, stepX, stepY, Math.round(xx), Math.round(yy), stepX, stepY);
     }
+  }
+  ctx.restore();
+}
+
+function drawHorizontalCoverImage(ctx, img, x, y, w, h, offsetX = 0) {
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  if (!iw || !ih || w <= 0 || h <= 0) return;
+
+  const scale = h / ih;
+  const drawW = iw * scale;
+  if (!Number.isFinite(drawW) || drawW <= 0) return;
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+
+  let startX = Math.round(x - positiveMod(offsetX, drawW));
+  while (startX > x) startX -= drawW;
+  for (let xx = startX; xx < x + w; xx += drawW) {
+    ctx.drawImage(img, 0, 0, iw, ih, Math.round(xx), y, drawW, h);
   }
   ctx.restore();
 }

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 
 import {
   DEFAULT_FEATURES,
@@ -22,4 +23,9 @@ test("route config keeps browser feature gates centralized", () => {
   assert.equal(featureForRoute("duel"), "p2pDuel");
   assert.equal(featureForRoute("spectate"), null);
   assert.deepEqual(Object.keys(MODES), ["intro", "build", "spectate", "profile", "compute", "rules", "about"]);
+});
+
+test("top navigation keeps the start tab anchored to the intro route", () => {
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(html, /<a href="\/" data-route="intro" data-nav="primary" title="Return to the start screen">start<\/a>/);
 });

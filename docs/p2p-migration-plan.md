@@ -178,6 +178,11 @@ Current repo status:
 - the browser client treats task policy as strict even when the global WebRTC
   artifact flag is off, and fails closed instead of attempting HTTP fallback
   for strict proof tasks
+- accepted strict receipts now publish receipt-log peer evidence: required
+  peer-subreceipt status, server-issued peer assignment ID, and peer receipt
+  hash
+- `npm -w plasma-lab run smoke:webrtc-ladder` runs the six-family strict
+  WebRTC ladder in one controlled sequence
 
 Success metrics before Stage 3:
 
@@ -205,8 +210,9 @@ Concrete shape:
   ordered entry hashes, and `segmentHash`
 - entries contain receipt hashes, public task/chunk refs, validation policy,
   transport, signature status, and validation decision events
-- a pure verifier can recompute segment and entry hashes; a separate verifier
-  service still needs to replay acceptance from published refs independently
+- a pure verifier can recompute segment and entry hashes, replay the published
+  validation/decision events, enforce signed/strict-WebRTC receipt evidence,
+  and summarize accepted receipts without private database reads
 
 Required stable refs:
 
@@ -223,6 +229,14 @@ Host model:
 - storage must support immutable segment publication semantics
 - verifier must run as a separate process or service, not in the same request
   path as the coordinator
+
+Current repo status:
+
+- `/compute/public/receipt-log/verify` verifies the published segment archive
+  available to the sidecar process.
+- `npm -w plasma-lab run verify:receipt-log -- <bundle.json>` verifies a
+  downloaded `{segment, entries}`, `{bundles}`, or exported store snapshot
+  offline.
 
 Success metrics before Stage 4:
 
@@ -249,6 +263,11 @@ Rule:
 
 - these surfaces read from accepted log-derived views, not mutable in-memory
   coordinator state
+
+Current repo status:
+
+- `/compute/public/receipt-log/projection` exposes accepted/rejected receipt
+  counters from receipt-log entries rather than mutable receipt maps.
 
 Success metrics before Stage 5:
 

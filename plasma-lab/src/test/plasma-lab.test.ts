@@ -3,7 +3,7 @@ import { generateKeyPairSync, sign as signData, type JsonWebKey, type KeyObject 
 import http from "node:http";
 import test from "node:test";
 import { handleComputeLabRequest } from "../routes.js";
-import { computeReceiptHash, ComputeLabStore, type ComputeLabSnapshot, referencePrimeReceiptFields, referenceReceiptFields, verifyReceiptLogSegmentBundle } from "../store.js";
+import { computeReceiptHash, ComputeLabStore, type ComputeLabSnapshot, referencePrimeReceiptFields, referenceReceiptFields, verifyReceiptLogArchiveBundle, verifyReceiptLogSegmentBundle } from "../store.js";
 import type { PlasmaLabConfig } from "../config.js";
 import { json } from "../http.js";
 import type { WorkerCapability } from "../plasma/types.js";
@@ -373,6 +373,17 @@ test("HTTP receipt log endpoints expose sealed segment verification", async (t) 
   const verified = await req(srv.port, "GET", `/compute/public/receipt-log/segments/${sealed.body.segment.segmentId}/verify`);
   assert.equal(verified.status, 200);
   assert.equal(verified.body.ok, true);
+
+  const archiveVerified = await req(srv.port, "GET", "/compute/public/receipt-log/verify");
+  assert.equal(archiveVerified.status, 200);
+  assert.equal(archiveVerified.body.ok, true);
+  assert.equal(archiveVerified.body.acceptedReceipts, 1);
+
+  const projection = await req(srv.port, "GET", "/compute/public/receipt-log/projection");
+  assert.equal(projection.status, 200);
+  assert.equal(projection.body.source, "receipt-log");
+  assert.equal(projection.body.acceptedReceipts, 1);
+  assert.equal(projection.body.acceptedKernels["prime-search.v0"], 1);
 });
 
 test("duplicate receipts from one assignment do not satisfy quorum", () => {
@@ -1715,6 +1726,17 @@ test("WebRTC proof tasks require accepted server-issued peer subassignments", ()
   });
   assert.equal(accepted.receipt.decision, "accepted");
   assert.equal(accepted.validation?.status, "accepted");
+
+  const segment = store.sealReceiptLogSegment({ maxEntries: 20 });
+  assert.ok(segment);
+  const archiveVerified = store.verifyReceiptLogArchive();
+  assert.equal(archiveVerified.ok, true);
+  assert.equal(archiveVerified.acceptedReceipts, 1);
+  assert.equal(archiveVerified.acceptedWebRtcReceipts, 1);
+  assert.equal(archiveVerified.acceptedStrictWebRtcReceipts, 1);
+  assert.equal(archiveVerified.acceptedKernels["m3t4.seed_sweep.v0"], 1);
+  const projection = store.publicReceiptLogProjection();
+  assert.equal(projection.acceptedStrictWebRtcReceipts, 1);
 });
 
 test("WebRTC tensor tile proof tasks accept accepted peer subassignments from webgpu-light peers", () => {
@@ -1884,6 +1906,10 @@ test("receipt log records submitted and decision events in verifiable sealed seg
   assert.equal(verified?.ok, true);
   const bundle = store.getReceiptLogSegment(segment.segmentId);
   assert.ok(bundle);
+  const archiveVerified = verifyReceiptLogArchiveBundle([bundle]);
+  assert.equal(archiveVerified.ok, true);
+  assert.equal(archiveVerified.acceptedReceipts, 1);
+  assert.equal(archiveVerified.acceptedKernels["prime-search.v0"], 1);
   const tampered = [
     { ...bundle.entries[0], decision: "rejected" as const },
     ...bundle.entries.slice(1),

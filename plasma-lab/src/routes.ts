@@ -374,6 +374,19 @@ export async function handleComputeLabRequest(
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/compute/public/receipt-log/projection") {
+    json(res, 200, deps.store.publicReceiptLogProjection());
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/compute/public/receipt-log/verify") {
+    const limit = Number(url.searchParams.get("limit") ?? "");
+    json(res, 200, deps.store.verifyReceiptLogArchive({
+      limit: Number.isFinite(limit) && limit > 0 ? limit : undefined,
+    }));
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/compute/public/receipt-log/segments") {
     const limit = Number(url.searchParams.get("limit") ?? "");
     json(res, 200, {

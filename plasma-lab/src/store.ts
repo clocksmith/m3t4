@@ -401,12 +401,14 @@ export interface ReceiptLogEntry {
   artifactHash?: ContentHash;
   outputHash?: ContentHash;
   receiptHash?: ContentHash;
+  signatureRequired?: boolean;
   signatureStatus?: ExecutionReceipt["signatureStatus"];
   signaturePublicKeyHash?: ContentHash;
   decision?: ReceiptDecision;
   reason?: string;
   transport?: TransportKind;
   executionMode?: ExecutionMode;
+  peerEvidence?: ReceiptLogPeerEvidence;
   validationPolicy: Omit<ValidationPolicy, "expectedOutputHash">;
   comparedReceiptIds?: string[];
   acceptedReceiptIds?: string[];
@@ -414,6 +416,14 @@ export interface ReceiptLogEntry {
   workerSessionHash?: ContentHash;
   entryHash: ContentHash;
   segmentId?: string;
+}
+
+export interface ReceiptLogPeerEvidence {
+  required: boolean;
+  present: boolean;
+  peerAssignmentId?: string;
+  peerReceiptHash?: ContentHash;
+  signaturePublicKeyHash?: ContentHash;
 }
 
 export interface ReceiptLogSegment {
@@ -437,6 +447,60 @@ export interface ReceiptLogSegmentVerification {
   expectedSegmentHash: ContentHash;
   previousSegmentHash?: ContentHash;
   errors: string[];
+}
+
+export interface ReceiptLogSegmentBundle {
+  segment: ReceiptLogSegment;
+  entries: ReceiptLogEntry[];
+}
+
+export interface ReceiptLogArchiveVerification {
+  ok: boolean;
+  segments: number;
+  entryCount: number;
+  firstSequence?: number;
+  lastSequence?: number;
+  latestSegmentHash?: ContentHash;
+  errors: string[];
+  warnings: string[];
+  acceptedReceipts: number;
+  rejectedReceipts: number;
+  acceptedWebRtcReceipts: number;
+  acceptedStrictWebRtcReceipts: number;
+  acceptedReceiptIds: string[];
+  acceptedKernels: Record<string, number>;
+  validationRecords: number;
+  decisionRecords: number;
+  segmentVerifications: ReceiptLogSegmentVerification[];
+}
+
+export interface ReceiptLogProjection {
+  generatedAt: number;
+  source: "receipt-log";
+  scoreVersion: "receipt-log-score-v1";
+  computeScore: number;
+  lastSequence: number;
+  latestSegment: ReceiptLogSegment | null;
+  unsealedEntries: number;
+  totalEntries: number;
+  sealedEntries: number;
+  receiptSubmissions: number;
+  validationRecords: number;
+  decisionRecords: number;
+  acceptedReceipts: number;
+  rejectedReceipts: number;
+  acceptedWebRtcReceipts: number;
+  acceptedStrictWebRtcReceipts: number;
+  acceptedKernels: Record<string, number>;
+  rejectedKernels: Record<string, number>;
+  signature: {
+    verified: number;
+    missing: number;
+    invalid: number;
+    keyUnavailable: number;
+    unsigned: number;
+    requiredMissing: number;
+  };
 }
 
 export interface ReputationRecord {
@@ -1960,7 +2024,7 @@ export class ComputeLabStore {
       .slice(0, limit);
   }
 
-  getReceiptLogSegment(segmentId: string): { segment: ReceiptLogSegment; entries: ReceiptLogEntry[] } | null {
+  getReceiptLogSegment(segmentId: string): ReceiptLogSegmentBundle | null {
     const segment = this.receiptLogSegments.get(segmentId);
     if (!segment) return null;
     const entries = this.entriesForSegment(segment);
@@ -2010,6 +2074,22 @@ export class ComputeLabStore {
       .filter((segment) => segment.lastSequence < bundle.segment.firstSequence)
       .sort((a, b) => b.lastSequence - a.lastSequence)[0];
     return verifyReceiptLogSegmentBundle(bundle.segment, bundle.entries, previous);
+  }
+
+  verifyReceiptLogArchive(input: { limit?: number } = {}): ReceiptLogArchiveVerification {
+    const segments = this.listReceiptLogSegments({ limit: input.limit }).slice().sort((a, b) => a.firstSequence - b.firstSequence);
+    return verifyReceiptLogArchiveBundle(segments.map((segment) => ({
+      segment,
+      entries: this.entriesForSegment(segment),
+    })));
+  }
+
+  publicReceiptLogProjection(): ReceiptLogProjection {
+    return receiptLogProjection(
+      Array.from(this.receiptLogEntries.values()).sort((a, b) => a.sequence - b.sequence),
+      this.receiptLogHead(),
+      this.now(),
+    );
   }
 
   verifyReceipt(receiptId: string): ReceiptVerification | null {
@@ -2925,12 +3005,14 @@ export class ComputeLabStore {
       artifactHash: receipt?.artifactHash ?? chunk?.artifactHash,
       outputHash: receipt?.outputHash,
       receiptHash: receipt?.receiptHash,
+      signatureRequired: receipt ? (this.requireReceiptSignatures || !!receipt.signaturePublicKeyHash) : undefined,
       signatureStatus: receipt?.signatureStatus,
       signaturePublicKeyHash: receipt?.signaturePublicKeyHash,
       decision: receipt?.decision ?? validation?.status,
       reason: receipt?.reason ?? validation?.reason,
       transport: receipt?.transport,
       executionMode: receipt?.executionMode,
+      peerEvidence: receipt ? receiptLogPeerEvidence(task?.validationPolicy, receipt) : undefined,
       validationPolicy: publicValidationPolicyForLog(task?.validationPolicy),
       comparedReceiptIds: validation?.comparedReceiptIds,
       acceptedReceiptIds: validation?.acceptedReceiptIds,
@@ -3669,6 +3751,19 @@ function publicValidationPolicyForLog(policy: ValidationPolicy | undefined): Omi
   return publicPolicy;
 }
 
+function receiptLogPeerEvidence(policy: ValidationPolicy | undefined, receipt: ExecutionReceipt): ReceiptLogPeerEvidence | undefined {
+  const subreceipt = peerSubreceiptFromAdapterInfo(receipt.adapterInfo);
+  const required = policy?.requiredPeerSubreceipt === true;
+  if (!required && !subreceipt) return undefined;
+  return {
+    required,
+    present: !!subreceipt,
+    peerAssignmentId: subreceipt?.peerAssignmentId,
+    peerReceiptHash: subreceipt?.peerReceiptHash,
+    signaturePublicKeyHash: subreceipt?.signaturePublicKeyHash,
+  };
+}
+
 function normalizeIdentityToken(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim().slice(0, 128);
@@ -3811,6 +3906,264 @@ export function verifyReceiptLogSegmentBundle(
     previousSegmentHash: previous?.segmentHash,
     errors,
   };
+}
+
+export function verifyReceiptLogArchiveBundle(
+  bundles: ReceiptLogSegmentBundle[],
+): ReceiptLogArchiveVerification {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const orderedBundles = bundles.slice().sort((a, b) => a.segment.firstSequence - b.segment.firstSequence);
+  const segmentVerifications: ReceiptLogSegmentVerification[] = [];
+  const entries: ReceiptLogEntry[] = [];
+  let previous: ReceiptLogSegment | undefined;
+  let expectedNextSequence: number | undefined;
+
+  for (const bundle of orderedBundles) {
+    if (!previous && bundle.segment.prevSegmentHash) {
+      warnings.push(`archive starts after previous segment ${bundle.segment.prevSegmentHash.value}`);
+    }
+    const verificationPrevious = previous ?? (
+      bundle.segment.prevSegmentHash
+        ? { segmentHash: bundle.segment.prevSegmentHash } as ReceiptLogSegment
+        : undefined
+    );
+    const verification = verifyReceiptLogSegmentBundle(bundle.segment, bundle.entries, verificationPrevious);
+    segmentVerifications.push(verification);
+    for (const error of verification.errors) {
+      errors.push(`${bundle.segment.segmentId}: ${error}`);
+    }
+    if (expectedNextSequence !== undefined && bundle.segment.firstSequence !== expectedNextSequence) {
+      errors.push(`archive sequence gap before ${bundle.segment.segmentId}`);
+    }
+    expectedNextSequence = bundle.segment.lastSequence + 1;
+    entries.push(...bundle.entries);
+    previous = bundle.segment;
+  }
+
+  const analysis = analyzeReceiptLogEntries(entries.sort((a, b) => a.sequence - b.sequence), errors, warnings);
+  return {
+    ok: errors.length === 0,
+    segments: orderedBundles.length,
+    entryCount: entries.length,
+    firstSequence: orderedBundles[0]?.segment.firstSequence,
+    lastSequence: orderedBundles[orderedBundles.length - 1]?.segment.lastSequence,
+    latestSegmentHash: orderedBundles[orderedBundles.length - 1]?.segment.segmentHash,
+    errors,
+    warnings,
+    acceptedReceipts: analysis.acceptedReceiptIds.length,
+    rejectedReceipts: analysis.rejectedReceiptIds.length,
+    acceptedWebRtcReceipts: analysis.acceptedWebRtcReceipts,
+    acceptedStrictWebRtcReceipts: analysis.acceptedStrictWebRtcReceipts,
+    acceptedReceiptIds: analysis.acceptedReceiptIds,
+    acceptedKernels: analysis.acceptedKernels,
+    validationRecords: analysis.validationRecords,
+    decisionRecords: analysis.decisionRecords,
+    segmentVerifications,
+  };
+}
+
+function receiptLogProjection(
+  entries: ReceiptLogEntry[],
+  head: ReturnType<ComputeLabStore["receiptLogHead"]>,
+  generatedAt: number,
+): ReceiptLogProjection {
+  const analysis = analyzeReceiptLogEntries(entries);
+  return {
+    generatedAt,
+    source: "receipt-log",
+    scoreVersion: "receipt-log-score-v1",
+    computeScore: receiptLogScore(analysis.acceptedReceiptIds.length, analysis.rejectedReceiptIds.length, analysis.acceptedStrictWebRtcReceipts),
+    lastSequence: head.lastSequence,
+    latestSegment: head.latestSegment,
+    unsealedEntries: head.unsealedEntries,
+    totalEntries: entries.length,
+    sealedEntries: entries.filter((entry) => !!entry.segmentId).length,
+    receiptSubmissions: analysis.receiptSubmissions,
+    validationRecords: analysis.validationRecords,
+    decisionRecords: analysis.decisionRecords,
+    acceptedReceipts: analysis.acceptedReceiptIds.length,
+    rejectedReceipts: analysis.rejectedReceiptIds.length,
+    acceptedWebRtcReceipts: analysis.acceptedWebRtcReceipts,
+    acceptedStrictWebRtcReceipts: analysis.acceptedStrictWebRtcReceipts,
+    acceptedKernels: analysis.acceptedKernels,
+    rejectedKernels: analysis.rejectedKernels,
+    signature: analysis.signature,
+  };
+}
+
+function analyzeReceiptLogEntries(
+  entries: ReceiptLogEntry[],
+  errors: string[] = [],
+  warnings: string[] = [],
+): {
+  receiptSubmissions: number;
+  validationRecords: number;
+  decisionRecords: number;
+  acceptedReceiptIds: string[];
+  rejectedReceiptIds: string[];
+  acceptedWebRtcReceipts: number;
+  acceptedStrictWebRtcReceipts: number;
+  acceptedKernels: Record<string, number>;
+  rejectedKernels: Record<string, number>;
+  signature: ReceiptLogProjection["signature"];
+} {
+  const submitted = new Map<string, ReceiptLogEntry>();
+  const acceptedByValidation = new Set<string>();
+  const acceptedReceiptIds = new Set<string>();
+  const rejectedReceiptIds = new Set<string>();
+  const acceptedKernels: Record<string, number> = {};
+  const rejectedKernels: Record<string, number> = {};
+  const signature: ReceiptLogProjection["signature"] = {
+    verified: 0,
+    missing: 0,
+    invalid: 0,
+    keyUnavailable: 0,
+    unsigned: 0,
+    requiredMissing: 0,
+  };
+  let receiptSubmissions = 0;
+  let validationRecords = 0;
+  let decisionRecords = 0;
+
+  for (const entry of entries) {
+    if (entry.eventKind !== "receipt-submitted") continue;
+    receiptSubmissions++;
+    if (!entry.receiptId) {
+      errors.push(`receipt submission missing receipt id at ${entry.sequence}`);
+      continue;
+    }
+    if (submitted.has(entry.receiptId)) errors.push(`duplicate receipt submission ${entry.receiptId}`);
+    submitted.set(entry.receiptId, entry);
+    if (!entry.receiptHash) errors.push(`receipt submission missing receipt hash at ${entry.sequence}`);
+    if (!entry.outputHash) errors.push(`receipt submission missing output hash at ${entry.sequence}`);
+    if (entry.signatureStatus === "verified") signature.verified++;
+    else if (entry.signatureStatus === "missing") signature.missing++;
+    else if (entry.signatureStatus === "invalid") signature.invalid++;
+    else if (entry.signatureStatus === "key-unavailable") signature.keyUnavailable++;
+    else if (entry.signatureStatus === "unsigned") signature.unsigned++;
+    if (entry.signatureRequired && entry.signatureStatus !== "verified") signature.requiredMissing++;
+    if (entry.decision && isRejectedDecision(entry.decision)) {
+      rejectedReceiptIds.add(entry.receiptId);
+      incFlat(rejectedKernels, entry.kernelId);
+    }
+  }
+
+  for (const entry of entries) {
+    if (entry.eventKind !== "validation-recorded") continue;
+    validationRecords++;
+    if (!entry.validationId) errors.push(`validation record missing validation id at ${entry.sequence}`);
+    const compared = entry.comparedReceiptIds ?? [];
+    const accepted = entry.acceptedReceiptIds ?? [];
+    if (entry.decision === "accepted") {
+      if (compared.length < entry.validationPolicy.minExecutions) {
+        errors.push(`validation ${entry.validationId ?? entry.sequence} accepted with too few compared receipts`);
+      }
+      if (accepted.length < entry.validationPolicy.minAgreeing) {
+        errors.push(`validation ${entry.validationId ?? entry.sequence} accepted with too few agreeing receipts`);
+      }
+    }
+    const comparedSet = new Set(compared);
+    for (const receiptId of compared) {
+      if (!submitted.has(receiptId)) errors.push(`validation ${entry.validationId ?? entry.sequence} compared missing receipt ${receiptId}`);
+    }
+    for (const receiptId of accepted) {
+      if (!comparedSet.has(receiptId)) errors.push(`validation ${entry.validationId ?? entry.sequence} accepted receipt outside compared set ${receiptId}`);
+      const receipt = submitted.get(receiptId);
+      if (!receipt) {
+        errors.push(`validation ${entry.validationId ?? entry.sequence} accepted missing receipt ${receiptId}`);
+        continue;
+      }
+      acceptedByValidation.add(receiptId);
+      acceptReceiptFromLog(receiptId, receipt, acceptedReceiptIds, acceptedKernels, errors, warnings);
+    }
+  }
+
+  for (const entry of entries) {
+    if (entry.eventKind !== "receipt-decision") continue;
+    decisionRecords++;
+    if (!entry.receiptId) {
+      errors.push(`receipt decision missing receipt id at ${entry.sequence}`);
+      continue;
+    }
+    const receipt = submitted.get(entry.receiptId);
+    if (!receipt) errors.push(`receipt decision missing submission ${entry.receiptId}`);
+    if (entry.decision === "accepted") {
+      if (!acceptedByValidation.has(entry.receiptId)) errors.push(`accepted decision lacks validation record for ${entry.receiptId}`);
+      if (receipt) acceptReceiptFromLog(entry.receiptId, receipt, acceptedReceiptIds, acceptedKernels, errors, warnings);
+    } else if (entry.decision && isRejectedDecision(entry.decision)) {
+      rejectedReceiptIds.add(entry.receiptId);
+      incFlat(rejectedKernels, receipt?.kernelId ?? entry.kernelId);
+    }
+  }
+
+  let acceptedWebRtcReceipts = 0;
+  let acceptedStrictWebRtcReceipts = 0;
+  for (const receiptId of acceptedReceiptIds) {
+    const receipt = submitted.get(receiptId);
+    if (!receipt) continue;
+    if (receipt.transport === "webrtc") acceptedWebRtcReceipts++;
+    if (
+      receipt.transport === "webrtc" &&
+      receipt.validationPolicy.requiredTransport === "webrtc" &&
+      receipt.validationPolicy.requiredPeerSubreceipt === true &&
+      receipt.peerEvidence?.present === true
+    ) {
+      acceptedStrictWebRtcReceipts++;
+    }
+  }
+
+  return {
+    receiptSubmissions,
+    validationRecords,
+    decisionRecords,
+    acceptedReceiptIds: Array.from(acceptedReceiptIds).sort(),
+    rejectedReceiptIds: Array.from(rejectedReceiptIds).sort(),
+    acceptedWebRtcReceipts,
+    acceptedStrictWebRtcReceipts,
+    acceptedKernels,
+    rejectedKernels,
+    signature,
+  };
+}
+
+function acceptReceiptFromLog(
+  receiptId: string,
+  receipt: ReceiptLogEntry,
+  acceptedReceiptIds: Set<string>,
+  acceptedKernels: Record<string, number>,
+  errors: string[],
+  warnings: string[],
+): void {
+  if (acceptedReceiptIds.has(receiptId)) return;
+  if (!receipt.receiptHash) errors.push(`accepted receipt missing receipt hash ${receiptId}`);
+  if (!receipt.outputHash) errors.push(`accepted receipt missing output hash ${receiptId}`);
+  if (receipt.signatureRequired === true && receipt.signatureStatus !== "verified") {
+    errors.push(`accepted receipt missing verified signature ${receiptId}`);
+  } else if (receipt.signatureRequired === undefined && receipt.signatureStatus && receipt.signatureStatus !== "verified") {
+    warnings.push(`accepted receipt has non-verified signature status ${receiptId}`);
+  }
+  if (receipt.validationPolicy.requiredTransport && receipt.transport !== receipt.validationPolicy.requiredTransport) {
+    errors.push(`accepted receipt transport mismatch ${receiptId}`);
+  }
+  if (receipt.validationPolicy.requiredPeerSubreceipt === true) {
+    if (receipt.peerEvidence?.present !== true) {
+      errors.push(`accepted strict receipt missing peer evidence ${receiptId}`);
+    } else {
+      if (!receipt.peerEvidence.peerAssignmentId) errors.push(`accepted strict receipt missing peer assignment ${receiptId}`);
+      if (!receipt.peerEvidence.peerReceiptHash) errors.push(`accepted strict receipt missing peer receipt hash ${receiptId}`);
+    }
+  }
+  acceptedReceiptIds.add(receiptId);
+  incFlat(acceptedKernels, receipt.kernelId);
+}
+
+function receiptLogScore(acceptedReceipts: number, rejectedReceipts: number, acceptedStrictWebRtcReceipts: number): number {
+  return Math.max(0, Math.round(
+    acceptedReceipts * 10 +
+    acceptedStrictWebRtcReceipts * 25 -
+    rejectedReceipts * 40
+  ));
 }
 
 function normalizeSigningPublicKey(input: JsonWebKey | undefined): JsonWebKey | undefined {

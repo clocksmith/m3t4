@@ -18,6 +18,11 @@ Move m3t4 toward:
 Do not move ranked truth, Elo writes, roster mutation, private configs, or
 hidden strategy code into the mesh in this plan.
 
+The migration keeps one user-facing browser session, but preserves two
+authority lanes. The game lane remains server-authoritative. The compute lane
+may become more mesh-carried over time, but accepted compute receipts remain
+advisory and never become ranked truth.
+
 ## Current Baseline
 
 The repo is already partway through the migration:
@@ -52,6 +57,9 @@ This plan does not attempt to:
 - hide private inputs inside an untrusted peer mesh
 - remove the need for a signaling or policy service
 - claim Byzantine resistance without admission and attestation
+- turn P2P exhibition duels into ranked authority
+- let receipt badges decorate Elo or roster state without a later
+  derived-compute contract
 
 ## Planes
 
@@ -162,6 +170,15 @@ Requirements:
 - worker cohorts for smoke and staff/friends windows can be isolated from the
   ambient public worker pool
 
+Current repo status:
+
+- admin-seeded public-artifact verify, replay verify, public-preset seed sweep,
+  and bounded tensor tile proof tasks default to
+  `requiredTransport="webrtc"` and `requiredPeerSubreceipt=true`
+- the browser client treats task policy as strict even when the global WebRTC
+  artifact flag is off, and fails closed instead of attempting HTTP fallback
+  for strict proof tasks
+
 Success metrics before Stage 3:
 
 - more than 30% of accepted proof-task receipts are strict WebRTC receipts
@@ -183,11 +200,13 @@ compute outcomes.
 
 Concrete shape:
 
-- coordinator publishes immutable receipt-log segments
-- each segment includes a monotonic `segmentSeq`, `prevSegmentHash`, stable
-  ordered entries, and `segmentHash`
-- entries contain the hashes and public refs needed to replay acceptance
-- a second verifier consumes segments and recomputes acceptance independently
+- coordinator publishes immutable receipt-log entries and sealable segments
+- each segment includes monotonic entry sequences, `prevSegmentHash`, stable
+  ordered entry hashes, and `segmentHash`
+- entries contain receipt hashes, public task/chunk refs, validation policy,
+  transport, signature status, and validation decision events
+- a pure verifier can recompute segment and entry hashes; a separate verifier
+  service still needs to replay acceptance from published refs independently
 
 Required stable refs:
 
@@ -249,11 +268,20 @@ Do not open anonymous public intake first. Minimum honest public-open gate:
 - required receipt signing
 - accepted Device Witness promotion before useful work
 - anti-correlation scheduling across worker cohorts
-- per-IP and per-session caps
+- per-IP, per-client/account, per-invite, signing-key, and per-session caps
 - quarantine path for bad workers
 
 Reputation is not enough by itself. Public-open without admission control is a
 Sybil subsidy.
+
+Current repo status:
+
+- worker registration can be kept admin/invite-only with
+  `COMPUTE_PUBLIC_REGISTRATION=false` and `COMPUTE_WORKER_INVITE_TOKENS`
+- registration stores hashed client IP and invite IDs, not raw tokens
+- scheduler caps active registrations and assignments by admission identity
+- aggregate reputation quarantine follows client/account/invite/IP/signing-key
+  buckets instead of only generated worker IDs
 
 Success metrics before broader public-open:
 

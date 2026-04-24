@@ -3,6 +3,40 @@
 This document is the canonical plan for introducing `plasma-lab` as an
 isolated, opt-in volunteer compute sidecar for m3t4.
 
+## North Star
+
+One browser session carries both the ranked game lane and the advisory compute
+lane:
+
+1. Game lane: ranked-deterministic arena, server-authoritative sim, live
+   spectator stream, hard-to-exploit curated meta.
+2. Compute lane: opt-in receipt-carrying public compute through `plasma-lab`,
+   advisory-only, device-idle-gated, and isolated from ranked authority.
+
+Same handle, same browser session, same opt-in surface. Ranked outcomes are
+decided by the server-side deterministic sim; compute outcomes are decided by
+quorum validation or expected-hash validation against public inputs. There is
+no crossover between ranked authority and compute results.
+
+Business sentence:
+
+> Players can watch, compete, and optionally donate receipt-carrying compute
+> from a single browser session, where ranked authority stays server-side,
+> compute stays advisory, and public receipts are signed and log-verifiable.
+
+Proof order:
+
+1. Meta-health proof: bounded-budget legal bot search finds specific, costly,
+   understandable counters, not universal exploits.
+2. Determinism proof: same config, seed, and roster produce bit-identical
+   replay hashes from the public action log.
+3. Receipt proof: every published compute result carries an ECDSA P-256 signed
+   receipt that can be verified against declared public input.
+4. Non-crossover proof: compute never reaches ranked authority, Elo mutation,
+   roster mutation, match scheduling, private configs, or hidden brain logic.
+5. Scale proof: hosted multi-browser strict WebRTC receipts cover the advisory
+   workload ladder before any broader public-open claim.
+
 ## Current Name And Claim
 
 The current implementation is **Receipt-Carrying Spectator Compute**:
@@ -17,7 +51,7 @@ The current implementation is **Receipt-Carrying Spectator Compute**:
 
 It is also fair to call the current shape **Chaperoned Sidecar Compute**.
 
-Current production status as of 2026-04-22:
+Current production status as of 2026-04-24:
 
 - `plasma-lab` is deployed as an isolated Cloud Run sidecar.
 - public m3t4 compute flags remain off in `/api/status`.
@@ -42,6 +76,10 @@ Current production status as of 2026-04-22:
   - `asset.tile_audit.v0`
   - `ml.image_tile_infer.v0`
   - `science.microscopy_tile_score.v0`
+- admin-only cron seeding exists for `science.genome_kmer.v0` and
+  `science.contact_map_tile.v0` through `/compute/admin/tasks/science-cycle`.
+- public peer proposal remains closed until quotas, duplicate suppression, and
+  public-window operating policy are in place.
 
 Do not describe the current implementation as fused-kernel, zero-copy,
 shared-buffer, or "every game frame is a science frame." The browser worker
@@ -80,6 +118,16 @@ The compute lab must never receive or control:
 - shared render/game buffers unless a Plasma derived-compute contract declares
   public/redacted buffer regions, lifetimes, source hashes, and validation
   policy
+
+Anti-claims:
+
+- not ranked authority for compute, ever
+- not private-input compute
+- not P2P ranked authority
+- not fused-kernel or shared-buffer compute yet
+- not "every game frame is a science frame"
+- not Elo-decorating compute until a derived-compute contract binds the public
+  frame/artifact hashes and receipt policy
 
 ## Planes
 
@@ -551,6 +599,18 @@ browserFamily
 capabilityHash
 maxBufferBucket
 ```
+
+Current implementation notes:
+
+- each submitted receipt emits an immutable `receipt-submitted` log entry
+- validation creates separate `validation-recorded` and `receipt-decision`
+  entries, because receipt rows can legitimately move from pending to accepted
+- admin can seal pending entries with `POST /compute/admin/receipt-log/seal`
+- public readers can inspect `/compute/public/receipt-log/head`,
+  `/compute/public/receipt-log/segments`, and
+  `/compute/public/receipt-log/segments/:segmentId/verify`
+- the bundled verifier recomputes entry hashes and segment hashes; it is not
+  yet the separate no-private-database verifier required for public-open claims
 
 ## Receipt States
 
@@ -1514,12 +1574,28 @@ frame guard: disable intake if staff browsers report repeated render-struggling 
 create tasks, or bypass receipt validation. The client still requires
 plasma-lab `FEATURE_COMPUTE_WEBRTC_SIGNALING=true` and
 `FEATURE_COMPUTE_WEBRTC_DATA=true` from `/compute/status`. Non-proof tasks can
-fall back to the normal HTTP worker path if pairing fails; strict proof tasks
-must be seeded with `requiredTransport="webrtc"` and
-`requiredPeerSubreceipt=true` so fallback receipts are rejected.
-`window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__=true` is a staff smoke flag
-only: it disables that HTTP fallback so a controlled WebRTC transfer failure
-cannot be mistaken for a successful WebRTC receipt.
+fall back to the normal HTTP worker path if pairing fails. Strict proof tasks
+are policy-driven: if a task has `requiredTransport="webrtc"` or
+`requiredPeerSubreceipt=true`, the browser must try the WebRTC data path and
+fail closed instead of attempting HTTP fallback.
+`window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__=true` remains a staff smoke
+flag for non-policy artifact tests; task policy is authoritative for strict
+proof work.
+
+Public intake controls are separate from assignment intake:
+
+```text
+COMPUTE_PUBLIC_REGISTRATION=false      # default: admin or invite required
+COMPUTE_WORKER_INVITE_TOKENS=a,b,c     # raw tokens stay in service env only
+COMPUTE_MAX_WORKERS_PER_IP=8
+COMPUTE_MAX_SESSIONS_PER_CLIENT=4
+COMPUTE_MAX_ACTIVE_ASSIGNMENTS_PER_IDENTITY=2
+COMPUTE_STRICT_PROOF_TASKS_DEFAULT=true
+```
+
+The service stores hashed client IP and hashed invite IDs in worker records so
+the scheduler can apply caps and aggregate quarantine without publishing raw
+tokens or IP addresses.
 
 For the pre-panel staff rehearsal, keep `computeSlackWorker=false` and
 `computeWebRtcArtifacts=false` in `/api/status` and opt in from staff devtools

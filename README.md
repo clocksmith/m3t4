@@ -11,6 +11,18 @@ fight each other in scheduled BO3 matches; spectators watch live.
 m3t4 is a strategy game about bot design, not a search-optimization
 contest.
 
+One browser session carries both lanes:
+
+- **Game lane**: ranked-deterministic arena, server-authoritative matches,
+  live spectator stream, and a hard-to-exploit curated meta.
+- **Compute lane**: opt-in, receipt-carrying public compute through the
+  isolated `plasma-lab` sidecar, advisory-only and device-idle-gated.
+
+Players can watch, compete, and optionally donate receipt-carrying compute from
+a single browser session. Ranked authority stays server-side, compute stays
+advisory, and every published public receipt is independently verifiable
+against its declared public input without becoming ranked authority.
+
 - **Player layer**: spend a fixed budget across strategic knobs to
   build a bot, watch it fight in a deterministic arena. Fun should
   come from understanding tradeoffs — delivery pressure, spacing,
@@ -116,6 +128,13 @@ Key invariants:
 - **Ranked never touches p2p**: even with feature flags on, ranked
   matches always run server-authoritatively. p2p is exhibition-only,
   non-ranked, nav-hidden in beta.
+- **Compute never crosses into ranked authority**: compute receipts may
+  decorate public artifacts after validation, but they never mutate Elo,
+  rosters, match scheduling, private configs, hidden brain logic, or ranked
+  outcomes.
+- **Renderer owns the device**: browser compute only borrows measured slack.
+  It is not "every game frame is a science frame," fused-kernel compute, or
+  shared-buffer compute until a later Plasma derived-compute contract exists.
 - **pareto/ is offline**: evolves and tests locally; only the output
   (`install-roster` writing `sim/src/strategies.ts`) touches prod.
 - **Feature flags are the beta knob**: `CONFIG.features = { p2pDuel,

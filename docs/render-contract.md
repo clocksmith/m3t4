@@ -9,6 +9,10 @@ This file documents the presentation/runtime bridge. It is intentionally outside
 - `config/presentation-selection.v1.json`: selected IDs only.
 - `data/preset-ranking.v1.json`: generated balance/build data, not theme.
 - `client/app.css :root`: UI chrome and fallback canvas tokens only: black/red/blue/purple primitives, semantic UI colors, and temporary arena fallback colors.
+- `plasma-lab` compute work: advisory sidecar work only. It must not block
+  render, own the frame budget, mutate ranked state, or consume private render
+  buffers unless a later Plasma derived-compute contract explicitly declares
+  public/redacted regions and receipt bindings.
 
 ## Notes
 
@@ -44,6 +48,17 @@ The fallback canvas renderer may read `--arena-*` tokens from `client/app.css` u
 - `selection.targetProfile` combines `content/game-copy.v1.json.targetProfiles[id]` with `theming/visual-theme.v1.json.objectiveVisuals.targetProfiles[id]`.
 - `selection.hudTextPack + content/game-copy.v1.json.hudTextPacks` -> objective HUD copy.
 - Weapon animation and hitbox assumptions stay in sim/render code. Do not encode gameplay timing in theming.
+
+## Renderer-First Device Ownership
+
+The renderer has first claim on the browser session. Compute can borrow
+measured slack through the opt-in worker path, but the live spectator stream,
+ranked playback, frame decode, and input responsiveness must not wait on
+compute. A compute failure is never a render failure.
+
+Do not claim "every game frame is a science frame" or fused-kernel/shared-buffer
+compute until a Plasma derived-compute contract binds source frame hashes,
+buffer-region hashes, producer kernels, lifetimes, and validation policy.
 
 ## Migration Notes
 

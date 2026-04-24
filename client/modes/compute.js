@@ -7,6 +7,8 @@ let off = null;
 let refreshTimer = null;
 let contactMapTimer = null;
 let myWorkTimer = null;
+const PUBLIC_REFRESH_OPEN_MS = 30_000;
+const PUBLIC_REFRESH_CLOSED_MS = 120_000;
 
 function computeLabOrigin() {
   return String(window.__M3T4_COMPUTE_LAB_ORIGIN__ || "").replace(/\/+$/, "");
@@ -304,6 +306,43 @@ function wirePublicData(root) {
     intakeEl.innerHTML = chipHtml({ variant, label, title });
   }
 
+  async function fetchPublicSummary(origin) {
+    const summaryRes = await fetch(`${origin}/compute/public/summary`, { cache: "no-store" });
+    if (summaryRes.ok) {
+      const summary = await summaryRes.json();
+      return {
+        stats: summary.stats,
+        useCases: Array.isArray(summary.useCases) ? summary.useCases : [],
+        status: summary.status ?? null,
+      };
+    }
+    if (summaryRes.status !== 404) throw new Error(`summary ${summaryRes.status}`);
+    const [statsRes, useCasesRes, statusRes] = await Promise.all([
+      fetch(`${origin}/compute/public/stats`, { cache: "no-store" }),
+      fetch(`${origin}/compute/use-cases`, { cache: "no-store" }),
+      fetch(`${origin}/compute/status`, { cache: "no-store" }),
+    ]);
+    let status = null;
+    if (statusRes.ok) {
+      try { status = await statusRes.json(); } catch { status = null; }
+    }
+    if (!statsRes.ok) throw new Error(`stats ${statsRes.status}`);
+    if (!useCasesRes.ok) throw new Error(`use-cases ${useCasesRes.status}`);
+    const stats = await statsRes.json();
+    const useCasesPayload = await useCasesRes.json();
+    return {
+      stats,
+      useCases: Array.isArray(useCasesPayload.useCases) ? useCasesPayload.useCases : [],
+      status,
+    };
+  }
+
+  function schedulePublicRefresh(status) {
+    if (refreshTimer) clearTimeout(refreshTimer);
+    const waitMs = status?.acceptAssignments === true ? PUBLIC_REFRESH_OPEN_MS : PUBLIC_REFRESH_CLOSED_MS;
+    refreshTimer = setTimeout(refresh, waitMs);
+  }
+
   async function refresh() {
     const origin = computeLabOrigin();
     if (!origin) {
@@ -311,23 +350,12 @@ function wirePublicData(root) {
       workloadsNoteEl.textContent = "offline";
       renderEmptyRows("No public compute origin is configured.");
       renderIntake(null);
+      schedulePublicRefresh(null);
       return;
     }
     try {
-      const [statsRes, useCasesRes, statusRes] = await Promise.all([
-        fetch(`${origin}/compute/public/stats`, { cache: "no-store" }),
-        fetch(`${origin}/compute/use-cases`, { cache: "no-store" }),
-        fetch(`${origin}/compute/status`, { cache: "no-store" }),
-      ]);
-      if (statusRes.ok) {
-        try { renderIntake(await statusRes.json()); } catch { renderIntake(null); }
-      } else {
-        renderIntake(null);
-      }
-      if (!statsRes.ok) throw new Error(`stats ${statsRes.status}`);
-      if (!useCasesRes.ok) throw new Error(`use-cases ${useCasesRes.status}`);
-      const stats = await statsRes.json();
-      const useCasesPayload = await useCasesRes.json();
+      const { stats, useCases, status } = await fetchPublicSummary(origin);
+      renderIntake(status);
       noteEl.textContent = stats.privacy === "suppressed" ? "aggregate" : "live aggregate";
       scoreEl.textContent = formatInt(stats.computeScore);
       receiptsEl.textContent = formatInt(stats.totalReceipts ?? stats.scoreBreakdown?.acceptedReceipts);
@@ -336,7 +364,6 @@ function wirePublicData(root) {
       webgpuEl.textContent = formatPct(stats.webgpuCorrectnessPct);
       webrtcEl.textContent = formatPct(stats.webrtcDirectSuccessPct);
 
-      const useCases = Array.isArray(useCasesPayload.useCases) ? useCasesPayload.useCases : [];
       const shown = useCases
         .filter((entry) => entry.authority === "advisory")
         .filter((entry) =>
@@ -358,17 +385,18 @@ function wirePublicData(root) {
           <td><span class="compute-workloads-status">${escapeHtml(entry.status || "unknown")}</span></td>
         </tr>
       `).join("");
+      schedulePublicRefresh(status);
     } catch {
       noteEl.textContent = "offline";
       workloadsNoteEl.textContent = "offline";
       renderEmptyRows("Public compute data is temporarily unavailable.");
       renderIntake(null);
+      schedulePublicRefresh(null);
     }
   }
 
-  if (refreshTimer) clearInterval(refreshTimer);
+  if (refreshTimer) clearTimeout(refreshTimer);
   void refresh();
-  refreshTimer = setInterval(refresh, 30000);
 }
 
 function wireContactMapData(root) {

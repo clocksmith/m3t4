@@ -38,6 +38,9 @@ The repo is already partway through the migration:
   them in assignment payloads.
 - `/compute/public/stats` and `/compute/public/contact-map/aggregate` already
   expose public aggregate views derived from accepted receipts.
+- `/compute/public/summary` collapses the hot compute page reads into one
+  cached public response, and clients slow their refresh cadence while
+  assignment intake is closed.
 - assignment intake remains closed by default and is opened only for bounded
   smoke windows.
 

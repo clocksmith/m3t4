@@ -3087,12 +3087,17 @@ test("HTTP public stats suppress detailed aggregates until enough workers exist"
 
   await register(srv.port, webgpuCapability);
   const resp = await req(srv.port, "GET", "/compute/public/stats");
+  const summary = await req(srv.port, "GET", "/compute/public/summary");
   assert.equal(resp.status, 200);
   assert.equal(resp.body.privacy, "suppressed");
   assert.equal(resp.body.totalWorkers, 1);
   assert.equal(resp.body.scoreVersion, "compute-score-v1");
   assert.equal(typeof resp.body.computeScore, "number");
   assert.equal(resp.body.webgpuSupportedPct, null);
+  assert.equal(summary.status, 200);
+  assert.equal(summary.body.stats.scoreVersion, "compute-score-v1");
+  assert.equal(summary.body.status.acceptAssignments, true);
+  assert.ok(summary.body.useCases.some((useCase: any) => useCase.workload === "science.genome_kmer.v0"));
 });
 
 test("HTTP worker receipts endpoint returns only the authenticated worker's receipts", async (t) => {
@@ -3462,10 +3467,14 @@ test("HTTP public reads use cached persistent refreshes", async (t) => {
 
   const firstStatus = await req(srv.port, "GET", "/compute/status");
   const secondStatus = await req(srv.port, "GET", "/compute/status");
+  const summary = await req(srv.port, "GET", "/compute/public/summary");
   const useCases = await req(srv.port, "GET", "/compute/use-cases");
   assert.equal(firstStatus.status, 200);
   assert.equal(secondStatus.status, 200);
+  assert.equal(summary.status, 200);
   assert.equal(useCases.status, 200);
+  assert.equal(summary.body.status.acceptAssignments, false);
+  assert.ok(Array.isArray(summary.body.useCases));
   assert.equal(store.refreshCalls, 1);
 });
 

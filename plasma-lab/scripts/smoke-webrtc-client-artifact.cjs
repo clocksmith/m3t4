@@ -21,7 +21,6 @@ const PLATFORM_WEBGPU_ARGS = Object.freeze({
 const ASSET_TILE_AUDIT_KERNEL = "asset.tile_audit.v0";
 const EXPLOIT_SEARCH_KERNEL = "m3t4.exploit_search.v0";
 const IMAGE_TILE_INFER_KERNEL = "ml.image_tile_infer.v0";
-const LOGIT_DIVERGENCE_KERNEL = "ml.logit_divergence.v0";
 const MICROSCOPY_TILE_SCORE_KERNEL = "science.microscopy_tile_score.v0";
 const PUBLIC_ARTIFACT_KERNEL = "m3t4.public_artifact_verify.v0";
 const REPLAY_VERIFY_KERNEL = "m3t4.replay_verify.v1";
@@ -92,11 +91,7 @@ async function runOnce(chromium, config, pass) {
     ));
 
     witnessTasks = [await seedRenderWitnessTask(config, targetWorkerIds)];
-    if (
-      config.kernel === "tensor-tile" ||
-      config.kernel === "contact-map-tile" ||
-      config.kernel === "logit-divergence"
-    ) {
+    if (config.kernel === "tensor-tile" || config.kernel === "contact-map-tile") {
       witnessTasks.push(await seedWebGpuWitnessTask(config, targetWorkerIds));
     }
     for (const witness of witnessTasks) {
@@ -239,7 +234,6 @@ async function seedTask(config, pass, targetWorkerIds) {
   if (config.kernel === "asset-tile-audit") return seedAssetTileAuditTask(config, pass);
   if (config.kernel === "contact-map-tile") return seedContactMapTileTask(config, pass);
   if (config.kernel === "tensor-tile") return seedTensorTileTask(config, pass);
-  if (config.kernel === "logit-divergence") return seedLogitDivergenceTask(config, pass, targetWorkerIds);
   return seedPublicArtifactTask(config, pass);
 }
 
@@ -333,18 +327,6 @@ async function seedTensorTileTask(config, pass) {
     minAgreeing: 2,
     requiredTransport: "webrtc",
     requiredPeerSubreceipt: true,
-  });
-}
-
-async function seedLogitDivergenceTask(config, pass, targetWorkerIds) {
-  return adminPost(config, "/compute/admin/tasks/logit-divergence", {
-    promptText: `Finish this technical note in one line ${pass}: WebGPU lets browsers run`,
-    topK: 4,
-    minExecutions: 2,
-    minAgreeing: 2,
-    requiredTransport: "webrtc",
-    requiredPeerSubreceipt: true,
-    targetWorkerIds,
   });
 }
 
@@ -463,7 +445,6 @@ async function prepareStaffPage(page, config, label) {
     window.__M3T4_COMPUTE_SLACK_WORKER__ = true;
     window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS__ = true;
     window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__ = true;
-    window.__M3T4_COMPUTE_LOGIT_DIVERGENCE__ = kernel === "logit-divergence";
     const mod = await import(`/lib/compute.js?staff-webrtc-client-artifact=${encodeURIComponent(label)}-${Date.now()}`);
     const client = mod.getComputeClient();
     window.__M3T4_COMPUTE_CLIENT__ = client;
@@ -615,23 +596,11 @@ function assertWebRtcDataReceipts(receipts, task) {
   for (const receipt of receipts) {
     if (receipt.decision !== "accepted") throw new Error(`${receipt.receiptId} was ${receipt.decision}`);
     if (receipt.transport !== "webrtc") throw new Error(`${receipt.receiptId} transport was ${receipt.transport}`);
-    if (task.kind === LOGIT_DIVERGENCE_KERNEL) {
-      if (receipt.validationMode !== "measurement") {
-        throw new Error(`${receipt.receiptId} validation mode was ${receipt.validationMode}`);
-      }
-      if (!receipt.outputHash?.value) {
-        throw new Error(`${receipt.receiptId} missing output hash`);
-      }
-      if (receipt.publicOutput?.kind !== LOGIT_DIVERGENCE_KERNEL) {
-        throw new Error(`${receipt.receiptId} missing logit divergence public output`);
-      }
-    } else {
-      if (receipt.validationMode !== "expected-hash") {
-        throw new Error(`${receipt.receiptId} validation mode was ${receipt.validationMode}`);
-      }
-      if (receipt.outputHash?.value !== chunk?.expectedOutputHash?.value) {
-        throw new Error(`${receipt.receiptId} output hash did not match expected`);
-      }
+    if (receipt.validationMode !== "expected-hash") {
+      throw new Error(`${receipt.receiptId} validation mode was ${receipt.validationMode}`);
+    }
+    if (receipt.outputHash?.value !== chunk?.expectedOutputHash?.value) {
+      throw new Error(`${receipt.receiptId} output hash did not match expected`);
     }
     const transcript = receipt.adapterInfo ?? {};
     if (transcript.status !== "ok") throw new Error(`${receipt.receiptId} status was ${transcript.status}`);
@@ -652,7 +621,7 @@ function assertWebRtcDataReceipts(receipts, task) {
       throw new Error(`${receipt.receiptId} peer subreceipt did not bind peer assignment`);
     }
     if (
-      (task.kind === TENSOR_TILE_KERNEL || task.kind === CONTACT_MAP_TILE_KERNEL || task.kind === LOGIT_DIVERGENCE_KERNEL) &&
+      (task.kind === TENSOR_TILE_KERNEL || task.kind === CONTACT_MAP_TILE_KERNEL) &&
       receipt.executionMode !== "webgpu"
     ) {
       throw new Error(`${receipt.receiptId} execution mode was ${receipt.executionMode}`);
@@ -700,25 +669,15 @@ function taskKindForKernel(kernel) {
   if (kernel === "asset-tile-audit") return ASSET_TILE_AUDIT_KERNEL;
   if (kernel === "tensor-tile") return TENSOR_TILE_KERNEL;
   if (kernel === "contact-map-tile") return CONTACT_MAP_TILE_KERNEL;
-  if (kernel === "logit-divergence") return LOGIT_DIVERGENCE_KERNEL;
   return null;
 }
 
 function expectedTierForKernel(kernel) {
-  if (kernel === "tensor-tile" || kernel === "contact-map-tile" || kernel === "logit-divergence") return "webgpu-light";
+  if (kernel === "tensor-tile" || kernel === "contact-map-tile") return "webgpu-light";
   return "cpu-light";
 }
 
 function prewarmSpecForKernel(kernel) {
-  if (kernel === "logit-divergence") {
-    return {
-      kind: LOGIT_DIVERGENCE_KERNEL,
-      params: {
-        promptText: "Warmup: WebGPU browser inference.",
-        topK: 1,
-      },
-    };
-  }
   return null;
 }
 
@@ -733,11 +692,10 @@ function kernelOption() {
     value !== "exploit-search" &&
     value !== "asset-tile-audit" &&
     value !== "tensor-tile" &&
-    value !== "contact-map-tile" &&
-    value !== "logit-divergence"
+    value !== "contact-map-tile"
   ) {
     throw new Error(
-      "kernel must be public-artifact, replay-verify, seed-sweep, image-tile-infer, microscopy-tile-score, exploit-search, asset-tile-audit, tensor-tile, contact-map-tile, or logit-divergence",
+      "kernel must be public-artifact, replay-verify, seed-sweep, image-tile-infer, microscopy-tile-score, exploit-search, asset-tile-audit, tensor-tile, or contact-map-tile",
     );
   }
   return value;

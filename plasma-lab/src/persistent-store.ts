@@ -227,21 +227,6 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     return out;
   }
 
-  seedEmbeddingTileTask(input: {
-    modelId?: string;
-    queryText: string;
-    documents: string[];
-    topK?: number;
-    minExecutions?: number;
-    minAgreeing?: number;
-    requiredTransport?: TransportKind;
-    requiredPeerSubreceipt?: boolean;
-  }): ComputeTask {
-    const out = super.seedEmbeddingTileTask(input);
-    this.persist(() => ({ tasks: [out] }));
-    return out;
-  }
-
   seedImageTileInferTask(input: {
     sourceId?: string;
     width: number;
@@ -254,35 +239,6 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     requiredPeerSubreceipt?: boolean;
   }): ComputeTask {
     const out = super.seedImageTileInferTask(input);
-    this.persist(() => ({ tasks: [out] }));
-    return out;
-  }
-
-  seedPrefillTopkProbeTask(input: {
-    modelId?: string;
-    promptText: string;
-    topK?: number;
-    minExecutions?: number;
-    minAgreeing?: number;
-    requiredTransport?: TransportKind;
-    requiredPeerSubreceipt?: boolean;
-  }): ComputeTask {
-    const out = super.seedPrefillTopkProbeTask(input);
-    this.persist(() => ({ tasks: [out] }));
-    return out;
-  }
-
-  seedLogitDivergenceTask(input: {
-    modelId?: string;
-    promptText: string;
-    topK?: number;
-    minExecutions?: number;
-    minAgreeing?: number;
-    requiredTransport?: TransportKind;
-    requiredPeerSubreceipt?: boolean;
-    targetWorkerIds?: string[];
-  }): ComputeTask {
-    const out = super.seedLogitDivergenceTask(input);
     this.persist(() => ({ tasks: [out] }));
     return out;
   }

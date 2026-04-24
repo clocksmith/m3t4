@@ -2378,6 +2378,8 @@ export class ComputeLabStore {
     webrtcSessions: number;
     webrtcPairs: number;
     peerSubassignments: number;
+    receiptLogEntries: number;
+    receiptLogSegments: number;
   } {
     this.expireAssignmentIntake();
     const chunks = { pending: 0, accepted: 0, rejected: 0, timeout: 0 };
@@ -2405,6 +2407,8 @@ export class ComputeLabStore {
       webrtcSessions: this.webrtcSessions.size,
       webrtcPairs: this.webrtcPairs.size,
       peerSubassignments: this.peerSubassignments.size,
+      receiptLogEntries: this.receiptLogEntries.size,
+      receiptLogSegments: this.receiptLogSegments.size,
     };
   }
 

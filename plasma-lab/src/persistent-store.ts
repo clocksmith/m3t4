@@ -16,7 +16,7 @@ import {
   type WorkerRecord,
   type WorkerSession,
 } from "./store.js";
-import type { GovernorMode, TransportKind, WorkerCapability, WorkerRefusalReason } from "./plasma/types.js";
+import type { ContentHash, GovernorMode, TransportKind, WorkerCapability, WorkerRefusalReason } from "./plasma/types.js";
 
 export interface ComputeLabPersistence {
   load(): Promise<Partial<ComputeLabSnapshot>>;
@@ -57,7 +57,7 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     this.persist((snapshot) => ({ control: snapshot.control }));
   }
 
-  registerWorker(input: { label?: string; capability: WorkerCapability; signingPublicKey?: JsonWebKey; clientId?: string; accountUid?: string; clientIpHash?: ComputeLabSnapshot["workers"][number]["clientIpHash"]; inviteId?: string }): {
+  registerWorker(input: { label?: string; capability: WorkerCapability; signingPublicKey?: JsonWebKey; clientId?: string; accountUid?: string; clientIpHash?: ContentHash; inviteId?: string }): {
     worker: WorkerRecord;
     session: WorkerSession;
     acceptedKernels: string[];

@@ -336,6 +336,11 @@ export async function handleComputeLabRequest(
       webrtcDataEnabled: deps.config.webrtcDataEnabled,
       webrtcTurnEnabled: deps.config.webrtcTurnEnabled,
       requireReceiptSignatures: deps.config.requireReceiptSignatures,
+      publicRegistrationEnabled: deps.config.publicRegistrationEnabled,
+      maxWorkersPerIp: deps.config.maxWorkersPerIp,
+      maxSessionsPerClient: deps.config.maxSessionsPerClient,
+      maxActiveAssignmentsPerIdentity: deps.config.maxActiveAssignmentsPerIdentity,
+      strictProofTasksDefault: deps.config.strictProofTasksDefault,
       iceServers: publicIceServers(deps.config),
     });
     return true;
@@ -790,8 +795,8 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         topK: body?.topK,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
-        requiredTransport: proofTransportPolicy(body?.requiredTransport, deps.config),
-        requiredPeerSubreceipt: proofPeerSubreceiptPolicy(body?.requiredPeerSubreceipt, deps.config),
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
       });
       await flushStore(deps.store);
       json(res, 200, {
@@ -824,8 +829,8 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         k: body?.k ?? preset?.defaultK,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
-        requiredTransport: proofTransportPolicy(body?.requiredTransport, deps.config),
-        requiredPeerSubreceipt: proofPeerSubreceiptPolicy(body?.requiredPeerSubreceipt, deps.config),
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
       });
       await flushStore(deps.store);
       json(res, 200, {
@@ -860,8 +865,8 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         rgbaBase64: String(body?.rgbaBase64 ?? preset?.rgbaBase64 ?? ""),
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
-        requiredTransport: proofTransportPolicy(body?.requiredTransport, deps.config),
-        requiredPeerSubreceipt: proofPeerSubreceiptPolicy(body?.requiredPeerSubreceipt, deps.config),
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
       });
       await flushStore(deps.store);
       json(res, 200, {
@@ -1064,8 +1069,8 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         artifactJson,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
-        requiredTransport: transportPolicy(body?.requiredTransport),
-        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+        requiredTransport: proofTransportPolicy(body?.requiredTransport, deps.config),
+        requiredPeerSubreceipt: proofPeerSubreceiptPolicy(body?.requiredPeerSubreceipt, deps.config),
       });
       await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
@@ -1094,8 +1099,8 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         allowConstantsMismatch: body?.allowConstantsMismatch,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
-        requiredTransport: transportPolicy(body?.requiredTransport),
-        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+        requiredTransport: proofTransportPolicy(body?.requiredTransport, deps.config),
+        requiredPeerSubreceipt: proofPeerSubreceiptPolicy(body?.requiredPeerSubreceipt, deps.config),
       });
       await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
@@ -1129,8 +1134,8 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         maxTicks: body?.maxTicks,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
-        requiredTransport: transportPolicy(body?.requiredTransport),
-        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+        requiredTransport: proofTransportPolicy(body?.requiredTransport, deps.config),
+        requiredPeerSubreceipt: proofPeerSubreceiptPolicy(body?.requiredPeerSubreceipt, deps.config),
       });
       await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
@@ -1253,6 +1258,39 @@ function transportPolicy(value: unknown): TransportKind | undefined {
   if (value === undefined) return undefined;
   if (value === "http" || value === "webrtc" || value === "local") return value;
   throw new Error("requiredTransport must be http, webrtc, or local");
+}
+
+function proofTransportPolicy(value: unknown, config: PlasmaLabConfig): TransportKind | undefined {
+  const explicit = transportPolicy(value);
+  if (explicit !== undefined) return explicit;
+  return config.strictProofTasksDefault ? "webrtc" : undefined;
+}
+
+function proofPeerSubreceiptPolicy(value: unknown, config: PlasmaLabConfig): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  return config.strictProofTasksDefault ? true : undefined;
+}
+
+function workerRegistrationAdmission(
+  req: IncomingMessage,
+  body: { inviteToken?: string } | null,
+  deps: RouteDeps,
+): { ok: true; clientIpHash: ContentHash; inviteId?: string } | { ok: false; error: string } {
+  const ip = clientIp(req);
+  const clientIpHash = hashCanonical({ kind: "compute-client-ip", ip });
+  if (adminAllowed(req, deps.config)) return { ok: true, clientIpHash };
+  const inviteToken = String(body?.inviteToken ?? header(req, "x-compute-invite-token") ?? "").trim();
+  const inviteId = validInviteId(inviteToken, deps.config.workerInviteTokens);
+  if (inviteId) return { ok: true, clientIpHash, inviteId };
+  if (deps.config.publicRegistrationEnabled) return { ok: true, clientIpHash };
+  return { ok: false, error: "public worker registration disabled" };
+}
+
+function validInviteId(token: string, allowedTokens: string[]): string | undefined {
+  if (!token || allowedTokens.length === 0) return undefined;
+  return allowedTokens.includes(token)
+    ? `invite-${hashCanonical({ kind: "compute-worker-invite", token }).value.slice(0, 16)}`
+    : undefined;
 }
 
 function workerIdTargets(value: unknown): string[] | undefined {

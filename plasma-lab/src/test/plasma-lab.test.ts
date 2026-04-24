@@ -3,7 +3,7 @@ import { generateKeyPairSync, sign as signData, type JsonWebKey, type KeyObject 
 import http from "node:http";
 import test from "node:test";
 import { handleComputeLabRequest } from "../routes.js";
-import { computeReceiptHash, ComputeLabStore, type ComputeLabSnapshot, referencePrimeReceiptFields, referenceReceiptFields } from "../store.js";
+import { computeReceiptHash, ComputeLabStore, type ComputeLabSnapshot, referencePrimeReceiptFields, referenceReceiptFields, verifyReceiptLogSegmentBundle } from "../store.js";
 import type { PlasmaLabConfig } from "../config.js";
 import { json } from "../http.js";
 import type { WorkerCapability } from "../plasma/types.js";
@@ -29,6 +29,12 @@ const baseConfig: PlasmaLabConfig = {
   storeBackend: "memory",
   routesEnabled: true,
   taskAdminEnabled: true,
+  publicRegistrationEnabled: true,
+  workerInviteTokens: [],
+  maxWorkersPerIp: 8,
+  maxSessionsPerClient: 4,
+  maxActiveAssignmentsPerIdentity: 2,
+  strictProofTasksDefault: true,
   acceptAssignments: true,
   webrtcSignalingEnabled: false,
   webrtcDataEnabled: false,
@@ -258,6 +264,39 @@ test("public worker registration strips self-reported cpu-reference", async (t) 
   assert.equal(profile?.allowedWorkloadTier, "observe-only");
 });
 
+test("public worker registration can require invite tokens", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const srv = await boot(store, {
+    ...baseConfig,
+    publicRegistrationEnabled: false,
+    workerInviteTokens: ["invite-a"],
+  });
+  t.after(() => srv.close());
+
+  const blocked = await req(srv.port, "POST", "/compute/workers/register", {
+    capability,
+  });
+  assert.equal(blocked.status, 403);
+
+  const invited = await req(srv.port, "POST", "/compute/workers/register", {
+    capability,
+    clientId: "browser-a",
+  }, { "x-compute-invite-token": "invite-a" });
+  assert.equal(invited.status, 200);
+  const snapshotWorker = store.exportSnapshot().workers.find((entry) => entry.workerId === invited.body.workerId);
+  assert.ok(snapshotWorker?.inviteId?.startsWith("invite-"));
+  assert.equal(snapshotWorker?.clientIpHash?.algorithm, "sha256");
+});
+
+test("worker registration caps apply across active client sessions", () => {
+  const store = new ComputeLabStore({ maxSessionsPerClient: 1 });
+  store.registerWorker({ capability, clientId: "browser-shared" });
+  assert.throws(
+    () => store.registerWorker({ capability, clientId: "browser-shared" }),
+    /identity cap exceeded/,
+  );
+});
+
 test("public receipt verifier only exposes accepted receipts", async (t) => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const task = store.seedPrimeTask({ start: 100, endExclusive: 140, chunkSize: 40, minExecutions: 2, minAgreeing: 2 });
@@ -283,6 +322,57 @@ test("public receipt verifier only exposes accepted receipts", async (t) => {
   const verify = await req(srv.port, "GET", `/compute/receipts/${submitted.body.receipt.receiptId}/verify`);
   assert.equal(verify.status, 404);
   assert.equal(verify.body.error, "accepted receipt not found");
+});
+
+test("HTTP receipt log endpoints expose sealed segment verification", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const task = store.seedPrimeTask({
+    start: 20,
+    endExclusive: 22,
+    chunkSize: 2,
+    minExecutions: 1,
+    minAgreeing: 1,
+  });
+  const worker = store.registerWorker({ capability });
+  const nextBody = store.assignNext(auth(worker))!;
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  store.submitReceipt({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...referencePrimeReceiptFields(nextBody.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 2,
+  });
+  const srv = await boot(store, { ...baseConfig, adminToken: "secret" });
+  t.after(() => srv.close());
+
+  const sealed = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/receipt-log/seal",
+    { maxEntries: 10 },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(sealed.status, 200);
+  assert.ok(sealed.body.segment?.segmentId);
+
+  const head = await req(srv.port, "GET", "/compute/public/receipt-log/head");
+  assert.equal(head.status, 200);
+  assert.equal(head.body.unsealedEntries, 0);
+  const segments = await req(srv.port, "GET", "/compute/public/receipt-log/segments");
+  assert.equal(segments.status, 200);
+  assert.equal(segments.body.segments[0].segmentId, sealed.body.segment.segmentId);
+  const verified = await req(srv.port, "GET", `/compute/public/receipt-log/segments/${sealed.body.segment.segmentId}/verify`);
+  assert.equal(verified.status, 200);
+  assert.equal(verified.body.ok, true);
 });
 
 test("duplicate receipts from one assignment do not satisfy quorum", () => {
@@ -1753,6 +1843,56 @@ test("WebRTC proof tasks reject HTTP receipts even with correct output", () => {
   assert.equal(rejected.receipt.reason, "required transport mismatch");
 });
 
+test("receipt log records submitted and decision events in verifiable sealed segments", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const task = store.seedPrimeTask({
+    start: 10,
+    endExclusive: 12,
+    chunkSize: 2,
+    minExecutions: 1,
+    minAgreeing: 1,
+  });
+  const worker = store.registerWorker({ capability });
+  const nextBody = store.assignNext(auth(worker))!;
+  store.acceptAssignment({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+  });
+  const submitted = store.submitReceipt({
+    ...auth(worker),
+    assignmentId: nextBody.assignment.assignmentId,
+    assignmentToken: nextBody.assignment.assignmentToken,
+    taskId: task.taskId,
+    chunkId: nextBody.chunk.chunkId,
+    ...referencePrimeReceiptFields(nextBody.chunk),
+    executionMode: "cpu",
+    transport: "http",
+    computeMs: 3,
+  });
+
+  assert.equal(submitted.receipt.decision, "accepted");
+  const entries = store.listReceiptLogEntries({ includeSegmented: true, limit: 10 });
+  assert.deepEqual(entries.map((entry) => entry.eventKind), [
+    "receipt-submitted",
+    "validation-recorded",
+    "receipt-decision",
+  ]);
+  const segment = store.sealReceiptLogSegment({ maxEntries: 10 });
+  assert.ok(segment);
+  const verified = store.verifyReceiptLogSegment(segment.segmentId);
+  assert.equal(verified?.ok, true);
+  const bundle = store.getReceiptLogSegment(segment.segmentId);
+  assert.ok(bundle);
+  const tampered = [
+    { ...bundle.entries[0], decision: "rejected" as const },
+    ...bundle.entries.slice(1),
+  ];
+  const tamperedVerification = verifyReceiptLogSegmentBundle(bundle.segment, tampered);
+  assert.equal(tamperedVerification.ok, false);
+  assert.ok(tamperedVerification.errors.some((error) => error.includes("entry hash mismatch")));
+});
+
 test("closed unexpired WebRTC pairs remain loadable as receipt evidence", () => {
   const pair = {
     pairId: "rtcpair-test",
@@ -2393,6 +2533,8 @@ test("HTTP admin can seed public artifact verification from exported artifact", 
   );
   assert.equal(seeded.status, 200);
   assert.equal(seeded.body.chunks, 1);
+  assert.equal(seeded.body.validationPolicy.requiredTransport, "webrtc");
+  assert.equal(seeded.body.validationPolicy.requiredPeerSubreceipt, true);
 
   const worker = await register(srv.port, capability, "secret");
   const n = await next(srv.port, worker);
@@ -2414,6 +2556,8 @@ test("HTTP admin can seed public replay verification artifacts", async (t) => {
   );
   assert.equal(seeded.status, 200);
   assert.equal(seeded.body.chunks, 1);
+  assert.equal(seeded.body.validationPolicy.requiredTransport, "webrtc");
+  assert.equal(seeded.body.validationPolicy.requiredPeerSubreceipt, true);
 
   const worker = await register(srv.port, capability, "secret");
   const n = await next(srv.port, worker);
@@ -2441,6 +2585,8 @@ test("HTTP admin can seed public preset seed sweeps", async (t) => {
   );
   assert.equal(seeded.status, 200);
   assert.equal(seeded.body.chunks, 2);
+  assert.equal(seeded.body.validationPolicy.requiredTransport, "webrtc");
+  assert.equal(seeded.body.validationPolicy.requiredPeerSubreceipt, true);
 
   const worker = await register(srv.port, capability, "secret");
   const n = await next(srv.port, worker);
@@ -2461,6 +2607,8 @@ test("HTTP admin can seed WebGPU tensor tiles", async (t) => {
   );
   assert.equal(seeded.status, 200);
   assert.equal(seeded.body.chunks, 1);
+  assert.equal(seeded.body.validationPolicy.requiredTransport, "webrtc");
+  assert.equal(seeded.body.validationPolicy.requiredPeerSubreceipt, true);
 
   const worker = await register(srv.port, webgpuCapability, "secret");
   const witness = await req(
@@ -3391,6 +3539,8 @@ function mergeSnapshotPatch(
   mergeById(next, patch, "peerSubassignments", "peerAssignmentId");
   mergeById(next, patch, "capabilityObservations", "observationId");
   mergeById(next, patch, "connectivityObservations", "observationId");
+  mergeById(next, patch, "receiptLogEntries", "entryId");
+  mergeById(next, patch, "receiptLogSegments", "segmentId");
   return next;
 }
 

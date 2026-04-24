@@ -58,7 +58,14 @@ export class FanoutRelay {
     )) return;
 
     const url = `${this.upstreamOrigin.replace(/\/$/, "")}/ws`;
-    const upstream = new WebSocket(url);
+    const upstream = new WebSocket(url, {
+      perMessageDeflate: {
+        threshold: 512,
+        concurrencyLimit: 10,
+        serverNoContextTakeover: true,
+        clientNoContextTakeover: true,
+      },
+    });
     this.upstream = upstream;
 
     upstream.on("open", () => {

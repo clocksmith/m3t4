@@ -234,6 +234,9 @@ Current repo status:
 
 - `/compute/public/receipt-log/verify` verifies the published segment archive
   available to the sidecar process.
+- `/compute/public/receipt-log/manifest` publishes hash-addressed segment refs,
+  `cache -> p2p -> http` source order, and HTTPS fallback paths. This is the
+  safe index needed before browsers can fetch receipt-log bytes from peers.
 - `npm -w plasma-lab run verify:receipt-log -- <bundle.json>` verifies a
   downloaded `{segment, entries}`, `{bundles}`, or exported store snapshot
   offline.

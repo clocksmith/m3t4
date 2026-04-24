@@ -24,11 +24,16 @@ interface WorkerAuthBody {
 
 const MIN_ASSIGNMENT_WINDOW_MS = 1_000;
 const MAX_ASSIGNMENT_WINDOW_MS = 600_000;
+const PUBLIC_READ_REFRESH_TTL_MS = 30_000;
+const CLOSED_INTAKE_RETRY_AFTER_MS = 60_000;
+const OPEN_IDLE_RETRY_AFTER_MS = 5_000;
 
 type RefreshableStore = ComputeLabStore & {
   refresh?: () => Promise<void>;
   flush?: () => Promise<void>;
 };
+
+const refreshCache = new WeakMap<ComputeLabStore, { lastRefreshAt: number; inFlight?: Promise<void> }>();
 
 export async function handleComputeLabRequest(
   req: IncomingMessage,
@@ -52,7 +57,9 @@ export async function handleComputeLabRequest(
   }
 
   if (url.pathname.startsWith("/compute/")) {
-    await refreshStore(deps.store);
+    const mode = refreshModeForRequest(req, url);
+    if (mode === "fresh") await refreshStore(deps.store);
+    else if (mode === "cached") await refreshStoreCached(deps.store, PUBLIC_READ_REFRESH_TTL_MS);
   }
 
   if (req.method === "POST" && url.pathname === "/compute/workers/register") {
@@ -219,14 +226,36 @@ export async function handleComputeLabRequest(
 
   if (req.method === "GET" && url.pathname === "/compute/tasks/next") {
     try {
+      if (!deps.store.summary().acceptAssignments) {
+        json(res, 200, {
+          idle: true,
+          reason: "assignments-disabled",
+          retryAfterMs: CLOSED_INTAKE_RETRY_AFTER_MS,
+        });
+        return true;
+      }
+      await refreshStore(deps.store);
+      if (!deps.store.summary().acceptAssignments) {
+        json(res, 200, {
+          idle: true,
+          reason: "assignments-disabled",
+          retryAfterMs: CLOSED_INTAKE_RETRY_AFTER_MS,
+        });
+        return true;
+      }
       const next = deps.store.assignNext({
         workerId: url.searchParams.get("workerId") ?? "",
         workerSessionId: url.searchParams.get("workerSessionId") ?? "",
         workerSessionToken: header(req, "x-worker-session-token"),
       });
       if (!next) {
-        await flushStore(deps.store);
-        json(res, 200, { idle: true, reason: deps.store.summary().acceptAssignments ? "no-work" : "assignments-disabled" });
+        const acceptAssignments = deps.store.summary().acceptAssignments;
+        if (acceptAssignments) await flushStore(deps.store);
+        json(res, 200, {
+          idle: true,
+          reason: acceptAssignments ? "no-work" : "assignments-disabled",
+          retryAfterMs: acceptAssignments ? OPEN_IDLE_RETRY_AFTER_MS : CLOSED_INTAKE_RETRY_AFTER_MS,
+        });
         return true;
       }
       await flushStore(deps.store);
@@ -366,6 +395,35 @@ export async function handleComputeLabRequest(
 
   if (req.method === "GET" && url.pathname === "/compute/public/contact-map/aggregate") {
     json(res, 200, deps.store.publicContactMapAggregate());
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/compute/public/receipt-log/manifest") {
+    const limit = Number(url.searchParams.get("limit") ?? "");
+    const segments = deps.store.listReceiptLogSegments({ limit: Number.isFinite(limit) && limit > 0 ? limit : undefined });
+    const body = {
+      kind: "m3t4.receipt-log.manifest.v0",
+      generatedAt: Date.now(),
+      sourceOrder: ["cache", "p2p", "http"],
+      fallback: {
+        onHit: "return",
+        onMiss: "next",
+        onFailure: "terminal",
+      },
+      head: deps.store.receiptLogHead(),
+      segments: segments.map((segment) => ({
+        segmentId: segment.segmentId,
+        firstSequence: segment.firstSequence,
+        lastSequence: segment.lastSequence,
+        entryCount: segment.entryCount,
+        segmentHash: segment.segmentHash,
+        prevSegmentHash: segment.prevSegmentHash,
+        httpPath: `/compute/public/receipt-log/segments/${encodeURIComponent(segment.segmentId)}`,
+        verifyPath: `/compute/public/receipt-log/segments/${encodeURIComponent(segment.segmentId)}/verify`,
+        cacheKey: `receipt-log-segment:${segment.segmentHash.value}`,
+      })),
+    };
+    json(res, 200, { ...body, manifestHash: hashCanonical(body) });
     return true;
   }
 
@@ -1263,9 +1321,54 @@ async function refreshStore(store: ComputeLabStore): Promise<void> {
   if (typeof refresh === "function") await refresh.call(store);
 }
 
+async function refreshStoreCached(store: ComputeLabStore, ttlMs: number): Promise<void> {
+  const refresh = (store as RefreshableStore).refresh;
+  if (typeof refresh !== "function") return;
+  const now = Date.now();
+  const cache = refreshCache.get(store) ?? { lastRefreshAt: 0 };
+  if (cache.inFlight) {
+    await cache.inFlight;
+    return;
+  }
+  if (now - cache.lastRefreshAt < ttlMs) return;
+  cache.inFlight = refresh.call(store)
+    .then(() => {
+      cache.lastRefreshAt = Date.now();
+    })
+    .finally(() => {
+      cache.inFlight = undefined;
+    });
+  refreshCache.set(store, cache);
+  await cache.inFlight;
+}
+
 async function flushStore(store: ComputeLabStore): Promise<void> {
   const flush = (store as RefreshableStore).flush;
   if (typeof flush === "function") await flush.call(store);
+}
+
+type RefreshMode = "fresh" | "cached" | "none";
+
+function refreshModeForRequest(req: IncomingMessage, url: URL): RefreshMode {
+  if (req.method === "GET" && url.pathname === "/compute/use-cases") return "none";
+  if (req.method === "GET" && url.pathname === "/compute/tasks/next") return "cached";
+  if (req.method === "GET" && isCachedPublicRead(url.pathname)) return "cached";
+  return "fresh";
+}
+
+function isCachedPublicRead(pathname: string): boolean {
+  return (
+    pathname === "/compute/status" ||
+    pathname === "/compute/public/stats" ||
+    pathname === "/compute/public/contact-map/aggregate" ||
+    pathname === "/compute/public/receipt-log/manifest" ||
+    pathname === "/compute/public/receipt-log/head" ||
+    pathname === "/compute/public/receipt-log/projection" ||
+    pathname === "/compute/public/receipt-log/verify" ||
+    pathname === "/compute/public/receipt-log/segments" ||
+    pathname.startsWith("/compute/public/receipt-log/segments/") ||
+    pathname.startsWith("/compute/public/replay-badges/")
+  );
 }
 
 function publicWebRtcSession(session: WebRtcSessionRecord, config: PlasmaLabConfig) {

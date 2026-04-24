@@ -76,14 +76,11 @@ async function loadFeatures() {
     ) {
       window.__M3T4_COMPUTE_STUN_URLS__ = s.computeStunUrls;
     }
-    if (FEATURES.computeSlackWorker === true) {
-      window.__M3T4_COMPUTE_SLACK_WORKER__ = true;
-    }
-    if (FEATURES.computeWebRtcArtifacts === true) {
-      window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS__ = true;
-    }
-    if (FEATURES.computeGenomeKmer === true) {
-      window.__M3T4_COMPUTE_GENOME_KMER__ = true;
+    window.__M3T4_COMPUTE_SLACK_WORKER__ = FEATURES.computeSlackWorker === true;
+    window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS__ = FEATURES.computeWebRtcArtifacts === true;
+    window.__M3T4_COMPUTE_GENOME_KMER__ = FEATURES.computeGenomeKmer === true;
+    if (FEATURES.computeWebRtcArtifacts !== true) {
+      window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__ = false;
     }
   } catch {
     // Static/local client without a reachable API keeps optional surfaces hidden.

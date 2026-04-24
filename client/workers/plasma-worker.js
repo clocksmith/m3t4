@@ -17,6 +17,7 @@ import { buildTilePreview } from "../lib/tile-preview.js";
 const ASSET_TILE_AUDIT_KERNEL = "asset.tile_audit.v0";
 const IMAGE_TILE_INFER_KERNEL = "ml.image_tile_infer.v0";
 const CONTACT_MAP_TILE_KERNEL = "science.contact_map_tile.v0";
+const MANDELBROT_TILE_KERNEL = "science.mandelbrot_tile.v0";
 const GENOME_KMER_KERNEL = "science.genome_kmer.v0";
 const GENOME_KMER_ALPHABET = "ACGT";
 const MICROSCOPY_TILE_SCORE_KERNEL = "science.microscopy_tile_score.v0";
@@ -57,6 +58,7 @@ const KERNELS = {
   [ASSET_TILE_AUDIT_KERNEL]: runAssetTileAudit,
   [IMAGE_TILE_INFER_KERNEL]: runImageTileInfer,
   [CONTACT_MAP_TILE_KERNEL]: runContactMapTile,
+  [MANDELBROT_TILE_KERNEL]: runMandelbrotTile,
   [GENOME_KMER_KERNEL]: runGenomeKmer,
   [MICROSCOPY_TILE_SCORE_KERNEL]: runMicroscopyTileScore,
   [EXPLOIT_SEARCH_KERNEL]: runExploitSearch,
@@ -346,6 +348,129 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     try { readBuffer?.destroy?.(); } catch {}
     try { device?.destroy?.(); } catch {}
   }
+}
+
+// Mandelbrot escape-count tile, Q8.8 fixed-point, bit-exact with the
+// plasma-lab CPU reference. Pixel-center selection, the iteration loop,
+// and all multiplications are integer-only so i32 WGSL arithmetic matches
+// V8 integer arithmetic cell for cell.
+async function runMandelbrotTile(params) {
+  if (!navigator.gpu?.requestAdapter) throw new Error("WebGPU unavailable");
+  const spec = normalizeMandelbrotTileParams(params);
+  const totalPixels = spec.widthPx * spec.heightPx;
+  let device = null;
+  let outBuffer = null;
+  let readBuffer = null;
+  try {
+    const adapter = await withTimeout(navigator.gpu.requestAdapter({ powerPreference: "low-power" }), 1000);
+    if (!adapter) throw new Error("WebGPU adapter unavailable");
+    device = await withTimeout(adapter.requestDevice(), 1200);
+    if (!device) throw new Error("WebGPU device unavailable");
+    const byteLength = totalPixels * 4;
+    outBuffer = device.createBuffer({
+      size: byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    readBuffer = device.createBuffer({
+      size: byteLength,
+      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+    });
+    const module = device.createShaderModule({
+      code: `
+const WIDTH: i32 = ${spec.widthPx};
+const HEIGHT: i32 = ${spec.heightPx};
+const MIN_X: i32 = ${spec.minXQ88};
+const MAX_X: i32 = ${spec.maxXQ88};
+const MIN_Y: i32 = ${spec.minYQ88};
+const MAX_Y: i32 = ${spec.maxYQ88};
+const MAX_ITER: i32 = ${spec.maxIter};
+const Q_SHIFT: u32 = 8u;
+const ESCAPE_SQ_Q88: i32 = 0x400; // 4 << 8
+
+@group(0) @binding(0) var<storage, read_write> out: array<u32>;
+
+fn mul_q(a: i32, b: i32) -> i32 {
+  return (a * b) >> Q_SHIFT;
+}
+
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let px = i32(gid.x);
+  let py = i32(gid.y);
+  if (px >= WIDTH || py >= HEIGHT) { return; }
+  let range_x = MAX_X - MIN_X;
+  let range_y = MAX_Y - MIN_Y;
+  let cx = MIN_X + (range_x * (2 * px + 1)) / (WIDTH * 2);
+  let cy = MIN_Y + (range_y * (2 * py + 1)) / (HEIGHT * 2);
+  var x: i32 = 0;
+  var y: i32 = 0;
+  var escape: i32 = MAX_ITER;
+  for (var i: i32 = 0; i < MAX_ITER; i = i + 1) {
+    let x2 = mul_q(x, x);
+    let y2 = mul_q(y, y);
+    if (x2 + y2 > ESCAPE_SQ_Q88) { escape = i; break; }
+    let xy = mul_q(x, y);
+    y = (xy << 1) + cy;
+    x = x2 - y2 + cx;
+  }
+  out[py * WIDTH + px] = u32(escape);
+}
+`,
+    });
+    const pipeline = device.createComputePipeline({
+      layout: "auto",
+      compute: { module, entryPoint: "main" },
+    });
+    const bindGroup = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [{ binding: 0, resource: { buffer: outBuffer } }],
+    });
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.dispatchWorkgroups(Math.ceil(spec.widthPx / 8), Math.ceil(spec.heightPx / 8));
+    pass.end();
+    encoder.copyBufferToBuffer(outBuffer, 0, readBuffer, 0, byteLength);
+    device.queue.submit([encoder.finish()]);
+    await withTimeout(device.queue.onSubmittedWorkDone(), 1500);
+    await withTimeout(readBuffer.mapAsync(GPUMapMode.READ), 800);
+    const bytes = new Uint8Array(readBuffer.getMappedRange().slice(0));
+    readBuffer.unmap();
+    const preview = await buildTilePreview({
+      outputU32: new Uint32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4),
+      widthPx: spec.widthPx,
+      heightPx: spec.heightPx,
+    });
+    return { bytes, executionMode: "webgpu", preview: preview ?? undefined };
+  } finally {
+    try { outBuffer?.destroy?.(); } catch {}
+    try { readBuffer?.destroy?.(); } catch {}
+    try { device?.destroy?.(); } catch {}
+  }
+}
+
+function normalizeMandelbrotTileParams(params) {
+  const widthPx = assertInt(params.widthPx, "widthPx", 1, 256);
+  const heightPx = assertInt(params.heightPx, "heightPx", 1, 256);
+  if (widthPx * heightPx > 64 * 64) throw new Error("mandelbrot tile capped at 4096 pixels");
+  const coordCap = 2 << 8;
+  const minXQ88 = assertInt(params.minXQ88, "minXQ88", -coordCap, coordCap);
+  const maxXQ88 = assertInt(params.maxXQ88, "maxXQ88", -coordCap, coordCap);
+  const minYQ88 = assertInt(params.minYQ88, "minYQ88", -coordCap, coordCap);
+  const maxYQ88 = assertInt(params.maxYQ88, "maxYQ88", -coordCap, coordCap);
+  if (maxXQ88 <= minXQ88) throw new Error("maxXQ88 must exceed minXQ88");
+  if (maxYQ88 <= minYQ88) throw new Error("maxYQ88 must exceed minYQ88");
+  const maxIter = assertInt(params.maxIter, "maxIter", 1, 255);
+  return { widthPx, heightPx, minXQ88, maxXQ88, minYQ88, maxYQ88, maxIter };
+}
+
+function assertInt(value, label, lo, hi) {
+  const n = typeof value === "number" ? value : parseInt(String(value ?? ""), 10);
+  if (!Number.isInteger(n) || n < lo || n > hi) {
+    throw new Error(`${label} must be integer in [${lo}, ${hi}]`);
+  }
+  return n;
 }
 
 function runReplayVerify(params) {

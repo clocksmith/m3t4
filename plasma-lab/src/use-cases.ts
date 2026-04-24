@@ -213,4 +213,16 @@ export const COMPUTE_USE_CASES: ComputeUseCase[] = [
     validation: "assignment-bound expected-hash receipts against a server-held CPU reference k-mer histogram",
     notes: "Counts how often every k-length sub-sequence appears in a public DNA window (k = 2–6). The receipt proves your browser's counts match the server's CPU implementation. A receipt-backed building block for taxonomy, contamination detection, and composition analysis.",
   },
+  {
+    id: "mandelbrot-tile",
+    family: "science",
+    runtime: "webgpu",
+    title: "Mandelbrot escape-count tile",
+    status: "experimental",
+    workload: "science.mandelbrot_tile.v0",
+    authority: "advisory",
+    inputBoundary: "public view-rectangle + iteration cap; Q8.8 fixed-point integer coordinates only",
+    validation: "assignment-bound expected-hash receipts against a server-held integer escape-count tile reference",
+    notes: "Canonical bit-exact-u32 WebGPU lane. Workers compute the Mandelbrot escape count per pixel over a bounded view rectangle in integer Q8.8 arithmetic; the receipt proves your GPU matched the server's integer reference cell-for-cell. Each accepted receipt ships an advisory PNG preview of the tile.",
+  },
 ];

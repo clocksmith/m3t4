@@ -364,15 +364,13 @@ function wirePublicData(root) {
       webgpuEl.textContent = formatPct(stats.webgpuCorrectnessPct);
       webrtcEl.textContent = formatPct(stats.webrtcDirectSuccessPct);
 
+      // The server applies publicVisible via the workload policy; trust
+      // what it returns instead of hand-rolling a whitelist here. Still
+      // filter to advisory entries that name a workload, since device-witness
+      // "profiles" meta-entries don't describe a schedulable lane.
       const shown = useCases
         .filter((entry) => entry.authority === "advisory")
-        .filter((entry) =>
-          entry.workload === "science.genome_kmer.v0" ||
-          entry.workload === "science.contact_map_tile.v0" ||
-          entry.workload === "m3t4.seed_sweep.v0" ||
-          entry.workload === "m3t4.replay_verify.v1" ||
-          entry.workload === "m3t4.public_artifact_verify.v0"
-        );
+        .filter((entry) => typeof entry.workload === "string" && entry.workload.length > 0);
       workloadsNoteEl.textContent = `${shown.length} lanes`;
       workloadsRowsEl.innerHTML = shown.map((entry) => `
         <tr class="compute-workloads-row">
@@ -382,7 +380,7 @@ function wirePublicData(root) {
           </td>
           <td>${familyChipHtml(entry)}</td>
           <td>${runtimeChipHtml(entry)}</td>
-          <td><span class="compute-workloads-status">${escapeHtml(entry.status || "unknown")}</span></td>
+          <td><span class="compute-workloads-status">${escapeHtml(entry.policy?.release || entry.status || "unknown")}</span></td>
         </tr>
       `).join("");
       schedulePublicRefresh(status);

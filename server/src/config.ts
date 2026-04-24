@@ -104,6 +104,11 @@ export const CONFIG = {
     computeWebRtcArtifacts: envFlag("FEATURE_COMPUTE_WEBRTC_ARTIFACTS", false),
     computeGenomeKmer: envFlag("FEATURE_COMPUTE_GENOME_KMER", false),
     computeAutoSeedReplayTasks: envFlag("FEATURE_COMPUTE_AUTO_SEED_REPLAY_TASKS", false),
+    // Battle-anchored compute bundles. When on, firehose materializes a
+    // contact-map science bundle at match start and a replay-verify proof
+    // bundle at match end, sealing against the public replay artifact's
+    // sha256 as the canonical battle-receipt hash.
+    computeMatchBundles: envFlag("FEATURE_COMPUTE_MATCH_BUNDLES", false),
     computeAutoSeedSeedSweepTasks: envFlag("FEATURE_COMPUTE_AUTO_SEED_SEED_SWEEP_TASKS", false),
     computeAutoSeedTensorTileTasks: envFlag("FEATURE_COMPUTE_AUTO_SEED_TENSOR_TILE_TASKS", false),
     computeTaskAdmin: envFlag("FEATURE_COMPUTE_TASK_ADMIN", false),

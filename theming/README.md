@@ -59,19 +59,22 @@ The current playable art prompt set ships all four character bodies:
 (Demis)**, and **Character D (Mark)**, plus **all three stages**:
 Datacenter, Boardroom, and Demo Day. The default prompt batch includes
 all packed character sheets, combined portrait/full-body sheets, combined
-2x2 weapon sheets, objectives, and UI assets.
+2x2 weapon sheets, objectives, UI assets, and consolidated stage atlases.
+Use `--flat-stages` when a stage asset needs one prompt per promoted file.
 
 ### Batches
 
 | batch | command | count |
 |---|---|---:|
-| Playable, copy/paste (Chars A-D, all 3 stages) | `node tools/build-prompts.mjs` | **47 files** |
+| Playable, copy/paste (Chars A-D, all 3 stages) | `node tools/build-prompts.mjs` | **30 files** |
 | Characters A-D, packed 4x4 copy/paste | `node tools/build-prompts.mjs --only characters` | 12 files |
-| Playable, GPT-sized copy/paste | `node tools/build-prompts.mjs --format gpt` | **47 files** |
-| Playable, Midjourney copy/paste | `node tools/build-prompts.mjs --format mj` | **47 files** |
+| Stage atlases only | `node tools/build-prompts.mjs --only stages` | 7 files |
+| Playable, flat one prompt per stage asset | `node tools/build-prompts.mjs --flat-stages` | **47 files** |
+| Playable, GPT-sized copy/paste | `node tools/build-prompts.mjs --format gpt` | **30 files** |
+| Playable, Midjourney copy/paste | `node tools/build-prompts.mjs --format mj` | **30 files** |
 | Missing assets, one paste-ready `.txt` per asset | `node tools/build-prompts.mjs --missing-only` | varies |
-| Playable, Gemini JSONL | `node tools/build-prompts.mjs --format gemini-jsonl` | **47** |
-| Playable, GPT image JSONL | `node tools/build-prompts.mjs --format gpt-jsonl` | **47** |
+| Playable, Gemini JSONL | `node tools/build-prompts.mjs --format gemini-jsonl` | **30** |
+| Playable, GPT image JSONL | `node tools/build-prompts.mjs --format gpt-jsonl` | **30** |
 
 ### Common commands
 
@@ -85,6 +88,14 @@ node tools/build-prompts.mjs
 node tools/build-prompts.mjs --only weapons
 node tools/build-prompts.mjs --only characters --format gemini
 node tools/build-prompts.mjs --only characters --format chat
+
+# Stage atlas prompts: preview thumbnails are one atlas, each stage has one
+# layer atlas and one texture atlas. Slice metadata in INDEX.md / ASSEMBLY
+# maps each atlas row back to the promoted asset paths.
+node tools/build-prompts.mjs --only stages
+
+# Old flat stage path, useful for regenerating a single stage asset by path.
+node tools/build-prompts.mjs --only stages --flat-stages
 
 # Easiest manual generation mode: writes one .txt per asset, and every
 # .txt file contains only the prompt body you paste into the generator.
@@ -121,14 +132,42 @@ node tools/build-prompts.mjs --combined-file
 - Promoted assets (final, served by client): `client/<asset-path>`
 - The SSOT's `out` field is the authoritative promoted path.
 
+### Importing numbered raw generations
+
+When you paste all 30 prompts into an image generator and download each
+as `001.png`..`030.png` into a single folder, import them in one pass:
+
+```bash
+node tools/import-raws.mjs theming/generated-prompts/<ts>-launch-gemini-files ~/Downloads/new
+```
+
+The tool reads the prompt run's `INDEX.md`, maps each numbered input to
+its declared `generations/raw/assets/...` path, erases the bottom-right
+Gemini sparkle watermark via `tools/lib/erase-watermark.mjs`, and writes
+the result to the raw path. Flags: `--dry-run`, `--only '00[1-7]'`,
+`--no-erase`, `--force`.
+
+Follow with a single end-to-end build:
+
+```bash
+node tools/build-assets.mjs
+```
+
+which walks `generations/raw/assets/` to run postprocess per file, then
+`assemble-character-sheet.mjs` per character variant, then `cwebp` for
+stage layers + preview thumbnails. Install `cwebp` first (macOS:
+`brew install webp`) or the runtime will keep loading stale `.webp` files.
+
 ### Post-process before promoting
 
 Use `tools/postprocess-generation.mjs` after saving the raw PNG under
 `generations/raw/<asset-path>`. The tool infers the final size from the
-visual theme when possible.
+visual theme when possible. Stage atlas paths are inferred as multi-output
+assets and are sliced into the promoted stage files automatically.
 
 ```bash
 node tools/postprocess-generation.mjs generations/raw/assets/chars/sama/monastic_infra/packed/pack-00.png
+node tools/postprocess-generation.mjs generations/raw/assets/stages/datacenter/cold_aisle_chapel/_atlases/layers.png
 ```
 
 The post-processor:
@@ -140,6 +179,11 @@ The post-processor:
 5. Clears unused packed-sheet cells such as the intentional bottom-right blank.
 6. Clears inferred sprite-grid separator lines unless `--keep-grid-lines` is passed.
 7. Writes the promoted asset under `client/<asset-path>`.
+
+For stage atlases, the post-processor first normalizes the atlas canvas, then
+extracts each row/active crop into the existing promoted asset paths. The
+default stage atlas batch contains one preview atlas, one layer atlas per
+stage, and one texture atlas per stage.
 
 Character prompts now use three packed 4x4 sheets per character:
 

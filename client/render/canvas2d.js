@@ -151,30 +151,30 @@ const OBJECTIVE_IMAGES = {
 };
 
 const DATACENTER_PACK = {
-  sky: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/sky.webp"),
-  farParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/far_parallax.webp"),
-  midParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/mid_parallax.webp"),
-  nearParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/near_parallax.webp"),
+  sky: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/sky.png"),
+  farParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/far_parallax.png"),
+  midParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/mid_parallax.png"),
+  nearParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/near_parallax.png"),
   platform: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/platform.png"),
   platformEdge: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/platform_edge.png"),
   wall: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/wall.png"),
 };
 
 const BOARDROOM_PACK = {
-  sky: imageState("assets/stages/boardroom/fiduciary_basement/layers/sky.webp"),
-  farParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/far_parallax.webp"),
-  midParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/mid_parallax.webp"),
-  nearParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/near_parallax.webp"),
+  sky: imageState("assets/stages/boardroom/fiduciary_basement/layers/sky.png"),
+  farParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/far_parallax.png"),
+  midParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/mid_parallax.png"),
+  nearParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/near_parallax.png"),
   platform: imageState("assets/stages/boardroom/fiduciary_basement/textures/platform.png"),
   platformEdge: imageState("assets/stages/boardroom/fiduciary_basement/textures/platform_edge.png"),
   wall: imageState("assets/stages/boardroom/fiduciary_basement/textures/wall.png"),
 };
 
 const DEMODAY_PACK = {
-  sky: imageState("assets/stages/demoday/demo_day_afterparty/layers/sky.webp"),
-  farParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/far_parallax.webp"),
-  midParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/mid_parallax.webp"),
-  nearParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/near_parallax.webp"),
+  sky: imageState("assets/stages/demoday/demo_day_afterparty/layers/sky.png"),
+  farParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/far_parallax.png"),
+  midParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/mid_parallax.png"),
+  nearParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/near_parallax.png"),
   platform: imageState("assets/stages/demoday/demo_day_afterparty/textures/platform.png"),
   platformEdge: imageState("assets/stages/demoday/demo_day_afterparty/textures/platform_edge.png"),
   wall: imageState("assets/stages/demoday/demo_day_afterparty/textures/wall.png"),

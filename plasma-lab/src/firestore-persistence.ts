@@ -56,6 +56,8 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
       receiptLogEntries,
       receiptLogSegments,
       publicTiles,
+      bundles,
+      witnessAttestations,
       control,
     ] = await Promise.all([
       this.readCollection<ComputeLabSnapshot["workers"][number]>(COMPUTE_COLLECTIONS.workers),
@@ -73,6 +75,8 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
       this.readCollection<ComputeLabSnapshot["receiptLogEntries"][number]>(COMPUTE_COLLECTIONS.receiptLogEntries),
       this.readCollection<ComputeLabSnapshot["receiptLogSegments"][number]>(COMPUTE_COLLECTIONS.receiptLogSegments),
       this.readCollection<ComputeLabSnapshot["publicTiles"][number]>(COMPUTE_COLLECTIONS.publicTiles),
+      this.readCollection<ComputeLabSnapshot["bundles"][number]>(COMPUTE_COLLECTIONS.bundles),
+      this.readCollection<ComputeLabSnapshot["witnessAttestations"][number]>(COMPUTE_COLLECTIONS.witnessAttestations),
       this.readCollection<ComputeLabSnapshot["control"]>(COMPUTE_COLLECTIONS.control),
     ]);
     const now = Date.now();
@@ -93,6 +97,8 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
       receiptLogEntries,
       receiptLogSegments,
       publicTiles,
+      bundles,
+      witnessAttestations,
     };
   }
 
@@ -160,6 +166,12 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
     }
     if (patch.publicTiles?.length) {
       writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.publicTiles, patch.publicTiles, (tile) => tile.sha256));
+    }
+    if (patch.bundles?.length) {
+      writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.bundles, patch.bundles, (bundle) => bundle.bundleId));
+    }
+    if (patch.witnessAttestations?.length) {
+      writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.witnessAttestations, patch.witnessAttestations, (a) => a.attestationId));
     }
     if (shouldRefreshDerived(patch)) {
       // Narrow the per-entity derived collections to only the workers/matches

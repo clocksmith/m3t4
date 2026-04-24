@@ -4,7 +4,6 @@
 
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
 import { escapeHtml } from "../ui/html.js";
-import { linkButtonHtml } from "../ui/actions.js";
 import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
 
 function sectionHtml(section) {
@@ -30,14 +29,6 @@ function aboutCardHtml(about) {
       <div class="context-card-copy">
         <strong>${escapeHtml(firstSentence)}</strong>
         ${rest ? `<span>${escapeHtml(rest)}</span>` : ""}
-      </div>
-      <div class="rules-card-compute-action">
-        ${linkButtonHtml({
-          href: "/compute",
-          variant: "primary",
-          text: "open Compute",
-          attrs: { title: "Go to the Compute page to opt in and see receipts" },
-        })}
       </div>`,
   });
 }
@@ -62,7 +53,6 @@ export function mount(root, { setStatus }) {
         title: rules.title ?? "Rules",
         subtitle: rules.subtitle ?? "",
         className: "rules-hero",
-        action: linkButtonHtml({ href: "/live", variant: "danger", text: "watch live", attrs: { title: "Leave this page and watch live matches" } }),
       })}
 
       ${aboutCardHtml(rules.about)}

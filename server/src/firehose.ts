@@ -16,6 +16,11 @@ import { updatePair } from "./elo.js";
 import { shouldLogWatchlist, summarizeWatchlistMatch, watchlistTagsForSlot, type WatchlistTag } from "./watchlist.js";
 import { isHumanStable, matchmakerPressure, type MatchmakerPressure } from "./matchmaker-pressure.js";
 import { seedReplayComputeTasks } from "./compute/auto-seed.js";
+import {
+  materializeProofBundle,
+  materializeScienceBundle,
+  sealBundleAgainstMatch,
+} from "./compute/bundles.js";
 
 export interface Client {
   ws: WebSocket;
@@ -109,6 +114,16 @@ export class Firehose {
   } | null = null;
   private effectiveCycleMs = CONFIG.cycleMs;
   private rankedMode: MatchmakerPressure["rankedMode"] = "normal";
+  private currentBundleId: string | null = null;
+  // Keep the full bundle payload so late joiners can be caught up on the
+  // science mission in progress, not just the current match metadata.
+  private currentBundle: {
+    bundleId: string;
+    kernelId: string;
+    chunkCount: number;
+    presetId?: string;
+    sponsors: string[];
+  } | null = null;
 
   constructor(private store: StableStore) {}
 
@@ -116,7 +131,7 @@ export class Firehose {
     const c: Client = { ws, id: this.nextClientId++ };
     this.clients.add(c);
     if (this.currentMatch) {
-      this.sendTo(c, { type: "matchInProgress", match: this.currentMatch });
+      this.sendTo(c, { type: "matchInProgress", match: this.currentMatch, bundle: this.currentBundle });
     } else if (this.currentWait) {
       this.sendTo(c, { type: "waiting", ...this.currentWait, serverNow: Date.now() });
     }
@@ -281,10 +296,40 @@ export class Firehose {
     };
     this.currentWait = null;
 
+    // Materialize the science bundle before broadcasting matchStart so the
+    // bundleId is on the first event spectators see. Short timeout keeps
+    // the frame loop responsive if plasma-lab is slow or disabled.
+    const scienceBundle = CONFIG.features.computeMatchBundles
+      ? await materializeScienceBundle(
+          {
+            enabled: true,
+            computeLabOrigin: CONFIG.computeLabOrigin,
+            adminToken: CONFIG.computeLabAdminToken,
+            timeoutMs: 2500,
+          },
+          {
+            matchId,
+            sponsors: [sideA.stable.handle, sideB.stable.handle].filter(Boolean),
+            expectedMatchSec: 180,
+          },
+        )
+      : null;
+    this.currentBundleId = scienceBundle?.bundleId ?? null;
+    this.currentBundle = scienceBundle
+      ? {
+          bundleId: scienceBundle.bundleId,
+          kernelId: scienceBundle.kernelId,
+          chunkCount: scienceBundle.chunkCount,
+          presetId: scienceBundle.presetId,
+          sponsors: scienceBundle.sponsors,
+        }
+      : null;
+
     this.broadcast({
       type: "matchStart",
       match: this.currentMatch,
       seed,
+      bundle: this.currentBundle,
     });
 
     // Simulate (server-authoritative)
@@ -387,6 +432,44 @@ export class Firehose {
       playedAt: now,
     });
 
+    // Seal the science bundle against the public-replay sha256 and
+    // materialize the proof bundle. Both run fire-and-forget so frame
+    // streaming never waits on plasma-lab round-trips. Failures are
+    // logged but non-fatal to the ranked pipeline.
+    let sealedBundleRoot: { algorithm: string; value: string } | undefined;
+    let proofBundleId: string | null = null;
+    if (CONFIG.features.computeMatchBundles) {
+      const bundleConfig = {
+        enabled: true,
+        computeLabOrigin: CONFIG.computeLabOrigin,
+        adminToken: CONFIG.computeLabAdminToken,
+        timeoutMs: 3000,
+      };
+      if (this.currentBundleId) {
+        try {
+          const sealed = await sealBundleAgainstMatch(bundleConfig, {
+            bundleId: this.currentBundleId,
+            matchId,
+            replay,
+          });
+          if (sealed.ok) sealedBundleRoot = sealed.bundleRoot;
+          else console.warn("[compute-bundles] science seal failed", JSON.stringify({ matchId, bundleId: this.currentBundleId, status: sealed.status }));
+        } catch (e) {
+          console.warn("[compute-bundles] science seal threw", JSON.stringify({ matchId, error: e instanceof Error ? e.message : String(e) }));
+        }
+      }
+      try {
+        const proof = await materializeProofBundle(bundleConfig, {
+          matchId,
+          sponsors: [sideA.stable.handle, sideB.stable.handle].filter(Boolean),
+          replay,
+        });
+        proofBundleId = proof?.bundleId ?? null;
+      } catch (e) {
+        console.warn("[compute-bundles] proof materialize threw", JSON.stringify({ matchId, error: e instanceof Error ? e.message : String(e) }));
+      }
+    }
+
     this.broadcast({
       type: "matchEnd",
       matchId,
@@ -399,8 +482,17 @@ export class Firehose {
       eloAfter: [newA, newB],
       sideSwap,
       watchlist,
+      bundles: this.currentBundleId || proofBundleId
+        ? {
+            scienceBundleId: this.currentBundleId,
+            proofBundleId,
+            bundleRoot: sealedBundleRoot ?? null,
+          }
+        : null,
     });
     this.currentMatch = null;
+    this.currentBundleId = null;
+    this.currentBundle = null;
   }
 
   private previewPair(p: MatchPair): PublicMatchPreview {

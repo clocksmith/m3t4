@@ -385,6 +385,19 @@ export async function handleComputeLabRequest(
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/compute/public/summary") {
+    const summary = deps.store.summary();
+    json(res, 200, {
+      stats: deps.store.publicStats(),
+      useCases: COMPUTE_USE_CASES,
+      status: {
+        acceptAssignments: summary.acceptAssignments,
+        assignmentIntakeClosesAt: summary.assignmentIntakeClosesAt,
+      },
+    });
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname.startsWith("/compute/public/replay-badges/")) {
     const matchId = url.pathname.slice("/compute/public/replay-badges/".length);
     const badge = deps.store.replayBadge(matchId);
@@ -1360,6 +1373,7 @@ function isCachedPublicRead(pathname: string): boolean {
   return (
     pathname === "/compute/status" ||
     pathname === "/compute/public/stats" ||
+    pathname === "/compute/public/summary" ||
     pathname === "/compute/public/contact-map/aggregate" ||
     pathname === "/compute/public/receipt-log/manifest" ||
     pathname === "/compute/public/receipt-log/head" ||

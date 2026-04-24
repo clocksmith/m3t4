@@ -667,6 +667,9 @@ Current implementation notes:
   `/compute/public/receipt-log/manifest`,
   `/compute/public/receipt-log/segments`, and
   `/compute/public/receipt-log/segments/:segmentId/verify`
+- the compute page should prefer `/compute/public/summary` for public stats,
+  visible workload lanes, and intake state, falling back to the older split
+  endpoints only for deploy compatibility
 - the manifest publishes content-addressed segment refs and the safe
   `cache -> p2p -> http` source order for future peer distribution; HTTPS
   remains the fallback and no peer byte is trusted without hash verification

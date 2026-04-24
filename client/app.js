@@ -113,84 +113,9 @@ function installLinkInterceptor() {
 auth.onChange(renderWhoami);
 renderWhoami();
 router.syncNavVisibility();
-installNavOverflow();
 installLinkInterceptor();
 
 window.addEventListener("popstate", router.render);
 migrateLegacyHash();
 router.render();
 loadFeatures();
-
-function installNavOverflow() {
-  const moreButton = document.getElementById("nav-more");
-  const popover = document.getElementById("nav-more-popover");
-  if (!moreButton || !popover) return;
-  const nav = moreButton.closest("nav");
-  if (!nav) return;
-
-  function visibleOverflowItems() {
-    return Array.from(nav.querySelectorAll('a[data-nav="overflow"]'))
-      .filter((anchor) => !anchor.hasAttribute("hidden"));
-  }
-
-  function populate() {
-    const items = visibleOverflowItems();
-    popover.innerHTML = items
-      .map((anchor) => `
-        <a href="${anchor.getAttribute("href") ?? "/"}" role="menuitem" data-route="${anchor.dataset.route ?? ""}" title="${anchor.getAttribute("title") ?? ""}">
-          ${anchor.textContent}
-        </a>`)
-      .join("");
-    return items.length;
-  }
-
-  function syncButtonVisibility() {
-    const count = visibleOverflowItems().length;
-    const shouldHide = count === 0;
-    // Writing the same value still fires this subtree's MutationObserver,
-    // which re-enters syncButtonVisibility and loops forever.
-    if (moreButton.hidden !== shouldHide) moreButton.hidden = shouldHide;
-    if (count === 0) close();
-    return count;
-  }
-
-  function close() {
-    if (!popover.hidden) popover.hidden = true;
-    if (moreButton.getAttribute("aria-expanded") !== "false") {
-      moreButton.setAttribute("aria-expanded", "false");
-    }
-  }
-
-  function open() {
-    if (populate() === 0) return;
-    if (popover.hidden) popover.hidden = false;
-    if (moreButton.getAttribute("aria-expanded") !== "true") {
-      moreButton.setAttribute("aria-expanded", "true");
-    }
-  }
-
-  moreButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    if (popover.hidden) open();
-    else close();
-  });
-  popover.addEventListener("click", (event) => {
-    if (event.target instanceof HTMLAnchorElement) close();
-  });
-  document.addEventListener("click", (event) => {
-    if (popover.hidden) return;
-    if (event.target === moreButton || popover.contains(event.target)) return;
-    close();
-  });
-  const observer = new MutationObserver(() => {
-    syncButtonVisibility();
-  });
-  observer.observe(nav, { subtree: true, attributes: true, attributeFilter: ["hidden"] });
-  syncButtonVisibility();
-  window.addEventListener("popstate", close);
-  window.addEventListener("popstate", syncButtonVisibility);
-  window.addEventListener("resize", () => {
-    close();
-    syncButtonVisibility();
-  });
-}

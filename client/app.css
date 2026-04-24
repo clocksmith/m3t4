@@ -222,23 +222,6 @@ a:hover {
   border-bottom-color: var(--ui-red);
 }
 
-#topnav nav .nav-more {
-  display: none;
-  background: transparent;
-  border: none;
-  color: var(--ui-text-soft);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  cursor: pointer;
-  padding: 0;
-}
-
-#topnav nav .nav-more-popover {
-  display: none;
-}
-
 .whoami {
   margin-left: auto;
   color: var(--ui-text-subtle);
@@ -331,68 +314,6 @@ a:hover {
 
   #topnav nav a[data-nav="overflow"] {
     display: none !important;
-  }
-
-  #topnav nav .nav-more {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: var(--mobile-nav-h);
-    padding: 8px 2px 7px;
-    border: none;
-    border-top: 2px solid transparent;
-    background: transparent;
-    color: var(--ui-text-soft);
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    line-height: 1;
-    text-transform: uppercase;
-    touch-action: manipulation;
-    cursor: pointer;
-  }
-
-  #topnav nav .nav-more[aria-expanded="true"] {
-    color: var(--ui-red);
-    border-top-color: var(--ui-red);
-  }
-
-  #topnav nav .nav-more-popover {
-    position: fixed;
-    left: 8px;
-    right: 8px;
-    bottom: calc(var(--mobile-nav-h) + env(safe-area-inset-bottom) + 8px);
-    display: grid;
-    gap: 0;
-    padding: 6px 0;
-    background: var(--ui-bg-soft);
-    border: 1px solid var(--ui-border);
-    border-radius: 8px;
-    box-shadow: 0 -12px 28px rgba(0, 0, 0, 0.42);
-    z-index: 101;
-  }
-
-  #topnav nav .nav-more-popover[hidden] {
-    display: none;
-  }
-
-  #topnav nav .nav-more-popover a {
-    padding: 12px 14px;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--ui-text-soft);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  }
-
-  #topnav nav .nav-more-popover a:last-child {
-    border-bottom: none;
-  }
-
-  #topnav nav .nav-more-popover a:hover {
-    color: var(--ui-text);
-    background: rgba(255, 255, 255, 0.03);
   }
 
   #topnav nav a.active {

@@ -69,7 +69,7 @@
     "about": {
       "title": "what m3t4.ai is",
       "body": [
-        "m3t4.ai is a live proof of concept for opt-in browser distributed compute, staged as an autonomous fighter arena. Today, ranked play is server-authoritative: you tune a bot, install it in a five-seat roster, and watch the server stream the fight.",
+        "m3t4.ai is a live proof of concept for opt-in browser distributed compute, staged as an autonomous fighter arena. Compute controls and public receipt stats live on the Compute page. Opt in, set pause policy, and watch accepted receipts accumulate.",
         "The proof of concept is the arena workload: when opt-in compute is enabled, browsers can verify matches and stress-test bots across bounded seed windows over WebRTC, producing receipts that bind the job, input, output, transport, and worker.",
         "That makes every match a useful test artifact, not just a game result. Seed sweeps measure whether a bot is robust across opponents, maps, timing, recovery, denial, and risk without exposing private configs.",
         "The real target is to extend the same verified WebGPU pipeline beyond the arena to tensor-tile compute, distributed ML evaluation, protein-adjacent science tiles, and public research jobs."

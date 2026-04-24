@@ -146,20 +146,27 @@ function installNavOverflow() {
 
   function syncButtonVisibility() {
     const count = visibleOverflowItems().length;
-    moreButton.hidden = count === 0;
+    const shouldHide = count === 0;
+    // Writing the same value still fires this subtree's MutationObserver,
+    // which re-enters syncButtonVisibility and loops forever.
+    if (moreButton.hidden !== shouldHide) moreButton.hidden = shouldHide;
     if (count === 0) close();
     return count;
   }
 
   function close() {
-    popover.hidden = true;
-    moreButton.setAttribute("aria-expanded", "false");
+    if (!popover.hidden) popover.hidden = true;
+    if (moreButton.getAttribute("aria-expanded") !== "false") {
+      moreButton.setAttribute("aria-expanded", "false");
+    }
   }
 
   function open() {
     if (populate() === 0) return;
-    popover.hidden = false;
-    moreButton.setAttribute("aria-expanded", "true");
+    if (popover.hidden) popover.hidden = false;
+    if (moreButton.getAttribute("aria-expanded") !== "true") {
+      moreButton.setAttribute("aria-expanded", "true");
+    }
   }
 
   moreButton.addEventListener("click", (event) => {

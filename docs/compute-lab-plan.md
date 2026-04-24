@@ -1160,6 +1160,19 @@ This is not yet protein folding or distributed ML eval. It is the first
 bounded, deterministic WebGPU useful-work fixture that exercises the same
 queue/receipt/score path those later workloads need.
 
+`science.genome_kmer.v0` is the simplest science-shaped CPU workload:
+
+```text
+inputs: public ACGT-only sequence window, sequenceId, k
+outputs: little-endian u32 k-mer histogram bytes
+limits: sequence windows up to 256 bases, k 2..6
+route: POST /compute/admin/tasks/genome-kmer
+preset seeding: pass presetId from the checked-in public preset catalog
+browser: advertised by opted-in browser workers with the genome-kmer feature enabled
+scheduler: cpu-light
+validation: assignment-bound expected-hash receipts against a server-held CPU reference histogram
+```
+
 `science.contact_map_tile.v0` is the low-bandwidth protein-shaped workload:
 
 ```text
@@ -1179,21 +1192,24 @@ Initial public presets checked into the repo:
 - `human-hemoglobin-alpha-fold-core` (`P69905`)
 - `human-lysozyme-stable-core` (`P61626`)
 
-`ml.prefill_topk_probe.v0` is the first bounded text-generation-shaped probe:
+For cron-safe science seeding, use the bundled cycle endpoint:
 
 ```text
-inputs: public promptText only, fixed small model, topK
-outputs: canonical top-k token-id receipt for the next token after prefill
-limits: promptText 1..1024 chars, topK 1..8
-route: POST /compute/admin/tasks/prefill-topk-probe
-browser: advertised only by WebGPU-capable opted-in browser workers when the prefill-topk feature flag is enabled
-scheduler: requires webgpu-light, which requires accepted Device Witness WebGPU evidence
-validation: replicated quorum on canonical top-k token-id outputs from the fixed Gemma 3 270M browser model
+route: POST /compute/admin/tasks/science-cycle
+body: { genomePresetIds?: string[], contactPresetIds?: string[], minExecutions?: number, minAgreeing?: number }
+default: first genome-kmer preset and first contact-map preset
+auth: x-plasma-admin-token
+rollback: POST /compute/admin/tasks/:taskId/cancel for any seeded task, or close intake with COMPUTE_ACCEPT_ASSIGNMENTS=false
 ```
 
-This is not distributed chat yet. It is the first honest Doppler text probe in
-the same receipt-backed browser pipeline: bounded public prompt in, tiny
-token-level receipt out.
+Public peer proposal remains intentionally closed until quotas and duplicate
+suppression are added. Registered peers should execute assigned preset tasks;
+they should not be able to mint arbitrary public task backlog.
+
+The Doppler-backed browser ML probes are parked out of the active Hosting
+surface. Immediate public work stays on non-ML kernels while the browser
+runtime boundary is redesigned so `m3t4` does not ship the whole Doppler source
+tree for one workload lane.
 
 ## Public Artifact Export
 

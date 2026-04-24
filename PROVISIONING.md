@@ -370,6 +370,18 @@ gcloud scheduler jobs create http elo-decay \
 # Seasonal reset — 12-week trigger, TBD
 ```
 
+Optional plasma-lab science seeding cron:
+
+```bash
+gcloud scheduler jobs create http plasma-lab-science-cycle \
+  --schedule "*/30 * * * *" \
+  --uri "https://plasma-lab-789525635095.us-central1.run.app/compute/admin/tasks/science-cycle" \
+  --http-method POST \
+  --headers "Content-Type=application/json,x-plasma-admin-token=<plasma-lab-admin-token>" \
+  --message-body '{"genomePresetIds":["synthetic-balanced-tetramer"],"contactPresetIds":["human-myoglobin-core-helices"],"minExecutions":2,"minAgreeing":2}' \
+  --oidc-service-account-email m3t4-scheduler@m3ta-ai.iam.gserviceaccount.com
+```
+
 Firestore backup/export policy:
 
 ```bash

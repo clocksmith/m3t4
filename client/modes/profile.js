@@ -22,24 +22,13 @@ import { buttonHtml } from "../ui/actions.js";
 import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
 import rosterCatalog from "../content/roster-catalog.v1.json" with { type: "json" };
+import { BODY_VARIANTS, BODY_PORTRAIT_SHEETS } from "../content/character-presentation.js";
 
 let root = null;
 let setStatus = () => {};
 
 const DEFAULT_ROSTER_SIZE = 4;
 const BODY_IDS = rosterCatalog.bodies;
-const BODY_VARIANTS = {
-  sama: "capacity_mystic",
-  darrius: "policy_undertaker",
-  demis: "quiet_solver",
-  mark: "sunlit_operator",
-};
-const BODY_PORTRAIT_SHEETS = {
-  sama: "assets/chars/sama/monastic_infra/portraits/sheet.png",
-  darrius: "assets/chars/darrius/legal_department_midnight/portraits/sheet.png",
-  demis: "assets/chars/demis/chalk_and_static/portraits/sheet.png",
-  mark: "assets/chars/mark/wellness_berserker/portraits/sheet.png",
-};
 const DEFAULT_SLOT_NAMES = [
   "wingus", "dingus", "hambone", "zapper", "bonk", "dialup", "floppy", "shareware",
   "lanparty", "hotseat", "modem", "megabyte", "joystick", "gamepad", "turbo", "pog",
@@ -68,6 +57,7 @@ function rosterIntroPanelHtml({ needsHandle = false } = {}) {
       </div>` : "";
   return contextCardHtml({
     className: "roster-intro-panel",
+    autoHeight: needsHandle,
     body: `
       <div class="context-card-kicker">ranked roster</div>
       <div class="roster-intro-copy">

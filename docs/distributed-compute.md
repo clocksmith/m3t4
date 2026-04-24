@@ -35,7 +35,8 @@ sidecar:
 Current controlled-production status as of 2026-04-22:
 
 - `plasma-lab` is deployed separately from ranked game authority.
-- public m3t4 compute flags remain off; staff smokes opt in from devtools.
+- public opt-in compute exists, but active public lanes are bounded and
+  assignment intake still defaults to off.
 - assignment intake defaults to off and is opened only for bounded windows.
 - production validation requires ECDSA P-256 receipt signing.
 - workers do not receive server-held expected output hashes.
@@ -50,9 +51,8 @@ Current controlled-production status as of 2026-04-22:
   accepted public chunks and receipts, not per-user credit.
 - `plasma.tensor_tile.v0` is implemented as the first bounded WebGPU
   useful-work fixture, gated to workers with accepted WebGPU witness evidence.
-- repo head also supports `ml.prefill_topk_probe.v0`, a Doppler-backed browser
-  text prefill probe on a fixed small model that returns only next-token top-k
-  receipts under replicated quorum.
+- Doppler-backed browser ML probes are currently parked outside the active
+  public compute surface and Hosting bundle.
 - repo head also supports `plasma.tensor_tile.v0` over strict WebRTC
   `plasma-data` with task-required transport and peer subassignments; the next
   hosted smoke is still pending deploy auth recovery.
@@ -123,13 +123,9 @@ Repo head now supports the following near-term real workloads:
    scoring with deterministic focus, stain-balance, cellularity, artifact, and
    anomaly heuristics. This keeps the science-shaped lane truthful without
    requiring a heavyweight browser model.
-6. `ml.prefill_topk_probe.v0`: public prompt prefill probes on a fixed small
-   browser model. This is the first honest text-generation-shaped workload:
-   small prompt in, tiny top-k token receipt out, replicated by quorum before
-   any attempt at branch decode or KV transport.
-7. `ml.embedding_tile.v0`: public embedding and rerank batches over published
-   corpora. This is still useful, but the model artifact cost is much higher
-   than the contact-tile path.
+6. Doppler-backed browser ML probes are currently parked rather than exposed
+   on the public compute surface. The active public lanes remain non-ML
+   workloads while the browser-runtime boundary is redesigned.
 
 Do not jump straight from `plasma.tensor_tile.v0` to full training, private
 inference, or full protein folding. The honest next constraint is validator

@@ -34,13 +34,14 @@ test("top navigation keeps home on the logo without a start tab", () => {
   assert.doesNotMatch(html, />more<\/button>/);
 });
 
-test("about copy keeps compute CTA merged into the main copy", () => {
+test("about copy excludes stale ranked and compute CTA copy", () => {
   const source = fs.readFileSync(new URL("../../content/game-copy.v1.json", import.meta.url), "utf8");
   const clientCopy = fs.readFileSync(new URL("../content/game-copy.v1.json", import.meta.url), "utf8");
   const mode = fs.readFileSync(new URL("../modes/rules.js", import.meta.url), "utf8");
   for (const text of [source, clientCopy]) {
     assert.doesNotMatch(text, /Today, ranked play is server-authoritative/);
-    assert.match(text, /Compute controls and public receipt stats live on the Compute page/);
+    assert.doesNotMatch(text, /Compute controls and public receipt stats live on the Compute page/);
+    assert.doesNotMatch(text, /Opt in, set pause policy, and watch accepted receipts accumulate/);
   }
   assert.doesNotMatch(mode, /function computeLinkCardHtml/);
 });

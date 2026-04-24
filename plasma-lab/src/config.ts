@@ -10,11 +10,24 @@ function envList(name: string): string[] {
   return raw.split(",").map((value) => value.trim()).filter(Boolean);
 }
 
+function envInt(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 export interface PlasmaLabConfig {
   port: number;
   storeBackend: "memory" | "firestore";
   routesEnabled: boolean;
   taskAdminEnabled: boolean;
+  publicRegistrationEnabled: boolean;
+  workerInviteTokens: string[];
+  maxWorkersPerIp: number;
+  maxSessionsPerClient: number;
+  maxActiveAssignmentsPerIdentity: number;
+  strictProofTasksDefault: boolean;
   acceptAssignments: boolean;
   webrtcSignalingEnabled: boolean;
   webrtcDataEnabled: boolean;
@@ -35,6 +48,12 @@ export const CONFIG: PlasmaLabConfig = {
   storeBackend: storeBackend(),
   routesEnabled: envFlag("FEATURE_COMPUTE_LAB_ROUTES", false),
   taskAdminEnabled: envFlag("FEATURE_COMPUTE_TASK_ADMIN", false),
+  publicRegistrationEnabled: envFlag("COMPUTE_PUBLIC_REGISTRATION", false),
+  workerInviteTokens: envList("COMPUTE_WORKER_INVITE_TOKENS"),
+  maxWorkersPerIp: envInt("COMPUTE_MAX_WORKERS_PER_IP", 8),
+  maxSessionsPerClient: envInt("COMPUTE_MAX_SESSIONS_PER_CLIENT", 4),
+  maxActiveAssignmentsPerIdentity: envInt("COMPUTE_MAX_ACTIVE_ASSIGNMENTS_PER_IDENTITY", 2),
+  strictProofTasksDefault: envFlag("COMPUTE_STRICT_PROOF_TASKS_DEFAULT", true),
   acceptAssignments: envFlag("COMPUTE_ACCEPT_ASSIGNMENTS", false),
   webrtcSignalingEnabled: envFlag("FEATURE_COMPUTE_WEBRTC_SIGNALING", false),
   webrtcDataEnabled: envFlag("FEATURE_COMPUTE_WEBRTC_DATA", false),

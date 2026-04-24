@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { JsonWebKey } from "node:crypto";
 import type { PlasmaLabConfig } from "./config.js";
-import { header, html, json, readJson } from "./http.js";
-import { canonicalJson } from "./plasma/hash.js";
+import { clientIp, header, html, json, readJson } from "./http.js";
+import { canonicalJson, hashCanonical } from "./plasma/hash.js";
 import type { ContentHash, DerivedExecutionEvidence, ExecutionMode, GovernorMode, TransportKind, ValidationPolicy, WorkerCapability, WorkerRefusalReason } from "./plasma/types.js";
 import { ComputeLabStore, type ComputeChunk, type ExecutionReceipt, type PeerSubassignment, type PeerSubreceipt, type ValidationRecord, type WebRtcPairRecord, type WebRtcSessionRecord } from "./store.js";
 import { COMPUTE_USE_CASES } from "./use-cases.js";
@@ -62,6 +62,7 @@ export async function handleComputeLabRequest(
       signingPublicKey?: JsonWebKey;
       clientId?: string;
       accountUid?: string;
+      inviteToken?: string;
     }>(req);
     if (!body?.capability || !Array.isArray(body.capability.kernels)) {
       json(res, 400, { error: "capability.kernels required" });
@@ -71,12 +72,19 @@ export async function handleComputeLabRequest(
       json(res, 400, { error: "signingPublicKey required" });
       return true;
     }
+    const admission = workerRegistrationAdmission(req, body, deps);
+    if (!admission.ok) {
+      json(res, 403, { error: admission.error });
+      return true;
+    }
     const { worker, session, acceptedKernels } = deps.store.registerWorker({
       label: body.label,
       capability: sanitizePublicWorkerCapability(body.capability, adminAllowed(req, deps.config)),
       signingPublicKey: body.signingPublicKey,
       clientId: body.clientId,
       accountUid: body.accountUid,
+      clientIpHash: admission.clientIpHash,
+      inviteId: admission.inviteId,
     });
     await flushStore(deps.store);
     json(res, 200, {
@@ -749,8 +757,8 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         depth: body?.depth,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
-        requiredTransport: transportPolicy(body?.requiredTransport),
-        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+        requiredTransport: proofTransportPolicy(body?.requiredTransport, deps.config),
+        requiredPeerSubreceipt: proofPeerSubreceiptPolicy(body?.requiredPeerSubreceipt, deps.config),
       });
       await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
@@ -782,8 +790,8 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         topK: body?.topK,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
-        requiredTransport: transportPolicy(body?.requiredTransport),
-        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+        requiredTransport: proofTransportPolicy(body?.requiredTransport, deps.config),
+        requiredPeerSubreceipt: proofPeerSubreceiptPolicy(body?.requiredPeerSubreceipt, deps.config),
       });
       await flushStore(deps.store);
       json(res, 200, {
@@ -816,8 +824,8 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         k: body?.k ?? preset?.defaultK,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
-        requiredTransport: transportPolicy(body?.requiredTransport),
-        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+        requiredTransport: proofTransportPolicy(body?.requiredTransport, deps.config),
+        requiredPeerSubreceipt: proofPeerSubreceiptPolicy(body?.requiredPeerSubreceipt, deps.config),
       });
       await flushStore(deps.store);
       json(res, 200, {
@@ -852,8 +860,8 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         rgbaBase64: String(body?.rgbaBase64 ?? preset?.rgbaBase64 ?? ""),
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
-        requiredTransport: transportPolicy(body?.requiredTransport),
-        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+        requiredTransport: proofTransportPolicy(body?.requiredTransport, deps.config),
+        requiredPeerSubreceipt: proofPeerSubreceiptPolicy(body?.requiredPeerSubreceipt, deps.config),
       });
       await flushStore(deps.store);
       json(res, 200, {

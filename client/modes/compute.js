@@ -98,8 +98,11 @@ function workloadsPanelHtml() {
   return `
     <section class="panel compute-workloads-panel" aria-label="Workloads">
       <div class="compute-workloads-head">
-        <h3>Workloads</h3>
-        <div id="compute-workloads-note" class="tight">loading</div>
+        <div class="compute-workloads-title">
+          <h3>Workloads</h3>
+          <div id="compute-workloads-note" class="tight">loading</div>
+        </div>
+        <div id="compute-workloads-intake" class="compute-workloads-intake" aria-live="polite"></div>
       </div>
       <div class="compute-workloads-table-wrap">
         <table class="compute-workloads-table">
@@ -142,6 +145,7 @@ function myWorkPanelHtml() {
         </div>
         <div id="compute-my-work-note" class="tight">loading</div>
       </div>
+      <div id="compute-my-work-linking" class="compute-my-work-linking" hidden></div>
       <div id="compute-my-work-by-kernel" class="compute-my-work-by-kernel"></div>
       <div id="compute-my-work-recent" class="compute-my-work-recent"></div>
     </section>`;
@@ -274,9 +278,30 @@ function wirePublicData(root) {
   const webrtcEl = must(root, "#compute-public-webrtc");
   const workloadsNoteEl = must(root, "#compute-workloads-note");
   const workloadsRowsEl = must(root, "#compute-workloads-rows");
+  const intakeEl = must(root, "#compute-workloads-intake");
 
   function renderEmptyRows(message) {
     workloadsRowsEl.innerHTML = `<tr><td colspan="4" class="tight">${escapeHtml(message)}</td></tr>`;
+  }
+
+  function renderIntake(status) {
+    if (!status) {
+      intakeEl.innerHTML = "";
+      return;
+    }
+    const open = status.acceptAssignments === true;
+    const closesAt = Number(status.assignmentIntakeClosesAt);
+    let tail = "";
+    if (open && Number.isFinite(closesAt) && closesAt > 0) {
+      const remainingMs = Math.max(0, closesAt - Date.now());
+      if (remainingMs > 0) tail = ` · ${formatDuration(remainingMs)} left`;
+    }
+    const variant = open ? "intake-open" : "intake-closed";
+    const label = open ? `Intake open${tail}` : "Intake closed";
+    const title = open
+      ? "Coordinator is currently accepting assignments from opted-in browsers"
+      : "Coordinator is not accepting assignments right now; browsers will stay idle";
+    intakeEl.innerHTML = chipHtml({ variant, label, title });
   }
 
   async function refresh() {
@@ -285,13 +310,20 @@ function wirePublicData(root) {
       noteEl.textContent = "offline";
       workloadsNoteEl.textContent = "offline";
       renderEmptyRows("No public compute origin is configured.");
+      renderIntake(null);
       return;
     }
     try {
-      const [statsRes, useCasesRes] = await Promise.all([
+      const [statsRes, useCasesRes, statusRes] = await Promise.all([
         fetch(`${origin}/compute/public/stats`, { cache: "no-store" }),
         fetch(`${origin}/compute/use-cases`, { cache: "no-store" }),
+        fetch(`${origin}/compute/status`, { cache: "no-store" }),
       ]);
+      if (statusRes.ok) {
+        try { renderIntake(await statusRes.json()); } catch { renderIntake(null); }
+      } else {
+        renderIntake(null);
+      }
       if (!statsRes.ok) throw new Error(`stats ${statsRes.status}`);
       if (!useCasesRes.ok) throw new Error(`use-cases ${useCasesRes.status}`);
       const stats = await statsRes.json();
@@ -330,6 +362,7 @@ function wirePublicData(root) {
       noteEl.textContent = "offline";
       workloadsNoteEl.textContent = "offline";
       renderEmptyRows("Public compute data is temporarily unavailable.");
+      renderIntake(null);
     }
   }
 
@@ -408,14 +441,29 @@ function contactMapTileHtml(tile) {
 function wireMyWorkData(root) {
   const noteEl = must(root, "#compute-my-work-note");
   const scopeEl = must(root, "#compute-my-work-scope");
+  const linkingEl = must(root, "#compute-my-work-linking");
   const kernelsEl = must(root, "#compute-my-work-by-kernel");
   const recentEl = must(root, "#compute-my-work-recent");
   const client = getComputeClient();
+
+  function renderLinking(body) {
+    const signedIn = body?.scope === "account" && body?.accountUid;
+    if (signedIn) {
+      linkingEl.hidden = true;
+      linkingEl.innerHTML = "";
+      return;
+    }
+    linkingEl.hidden = false;
+    linkingEl.innerHTML = `
+      <span>Signed in? Link this browser to your account to merge receipts across devices.</span>
+      <a href="/profile" title="Go to the roster page to sign in or link this browser">sign in</a>`;
+  }
 
   async function refresh() {
     const body = await client.fetchMyReceipts(50);
     const receipts = Array.isArray(body?.receipts) ? body.receipts : [];
     scopeEl.textContent = scopeLabel(body);
+    renderLinking(body);
     if (receipts.length === 0) {
       noteEl.textContent = "no receipts yet";
       kernelsEl.innerHTML = "";
@@ -555,6 +603,14 @@ function formatMs(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return "—";
   return `${Math.round(n)}ms`;
+}
+
+function formatDuration(ms) {
+  const n = Math.max(0, Number(ms) || 0);
+  if (n < 60_000) return `${Math.max(1, Math.round(n / 1000))}s`;
+  if (n < 3_600_000) return `${Math.round(n / 60_000)}m`;
+  if (n < 86_400_000) return `${Math.round(n / 3_600_000)}h`;
+  return `${Math.round(n / 86_400_000)}d`;
 }
 
 function shortId(value) {

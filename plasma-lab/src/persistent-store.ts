@@ -8,6 +8,7 @@ import {
   type ExecutionReceipt,
   type PeerSubassignment,
   type PeerSubreceipt,
+  type ReceiptLogSegment,
   type StoreOptions,
   type ValidationRecord,
   type WebRtcPairRecord,
@@ -56,7 +57,7 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     this.persist((snapshot) => ({ control: snapshot.control }));
   }
 
-  registerWorker(input: { label?: string; capability: WorkerCapability; signingPublicKey?: JsonWebKey; clientId?: string; accountUid?: string }): {
+  registerWorker(input: { label?: string; capability: WorkerCapability; signingPublicKey?: JsonWebKey; clientId?: string; accountUid?: string; clientIpHash?: ComputeLabSnapshot["workers"][number]["clientIpHash"]; inviteId?: string }): {
     worker: WorkerRecord;
     session: WorkerSession;
     acceptedKernels: string[];
@@ -353,6 +354,7 @@ export class PersistentComputeLabStore extends ComputeLabStore {
     workerSessionToken: string;
     assignmentToken: string;
   }): { receipt: ExecutionReceipt; validation?: ValidationRecord } {
+    const before = super.receiptLogHead().lastSequence;
     const out = super.submitReceipt(input);
     this.persist((snapshot) => {
       const receiptIds = new Set([out.receipt.receiptId, ...(out.validation?.comparedReceiptIds ?? [])]);
@@ -364,8 +366,20 @@ export class PersistentComputeLabStore extends ComputeLabStore {
         validations: out.validation ? [out.validation] : [],
         reputation: snapshot.reputation.filter((rep) => workerIds.has(rep.workerId)),
         tasks: snapshot.tasks.filter((task) => task.taskId === input.taskId),
+        receiptLogEntries: snapshot.receiptLogEntries.filter((entry) => entry.sequence > before),
       };
     });
+    return out;
+  }
+
+  sealReceiptLogSegment(input: { maxEntries?: number } = {}): ReceiptLogSegment | null {
+    const out = super.sealReceiptLogSegment(input);
+    if (out) {
+      this.persist((snapshot) => ({
+        receiptLogSegments: [out],
+        receiptLogEntries: snapshot.receiptLogEntries.filter((entry) => entry.segmentId === out.segmentId),
+      }));
+    }
     return out;
   }
 
@@ -505,6 +519,9 @@ export class PersistentComputeLabStore extends ComputeLabStore {
       receipts: snapshot.receipts.filter((receipt) => receiptIds.has(receipt.receiptId)),
       validations,
       reputation: snapshot.reputation.filter((rep) => workerIds.has(rep.workerId)),
+      receiptLogEntries: snapshot.receiptLogEntries.filter((entry) =>
+        entry.validationId !== undefined && validations.some((validation) => validation.validationId === entry.validationId)
+      ),
     };
     this.saveChain = this.saveChain
       .catch(() => undefined)

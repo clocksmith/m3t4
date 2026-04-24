@@ -174,7 +174,7 @@ gcloud run deploy arena-server \
   --max-instances 10 \
   --concurrency 500 \
   --timeout 3600 \
-  --no-cpu-throttling \
+  --cpu-throttling \
   --session-affinity  # required for WebSocket
 ```
 
@@ -525,7 +525,7 @@ Production uses a singleton worker plus horizontally scalable API/fanout:
 
 - `arena-worker`: authoritative matchmaker/firehose, `--max-instances=1`.
 - `arena-server`: REST API + WebSocket fanout, `--max-instances=10`,
-  `--concurrency=500`.
+  `--concurrency=500`, CPU throttled while idle.
 
 This keeps one canonical ranked stream while allowing spectator/API load to
 scale out. Revisit architecture when the fanout service approaches sustained

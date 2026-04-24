@@ -369,6 +369,36 @@ export async function handleComputeLabRequest(
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/compute/public/receipt-log/head") {
+    json(res, 200, deps.store.receiptLogHead());
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/compute/public/receipt-log/segments") {
+    const limit = Number(url.searchParams.get("limit") ?? "");
+    json(res, 200, {
+      segments: deps.store.listReceiptLogSegments({ limit: Number.isFinite(limit) && limit > 0 ? limit : undefined }),
+    });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname.startsWith("/compute/public/receipt-log/segments/")) {
+    const suffix = url.pathname.slice("/compute/public/receipt-log/segments/".length);
+    const [segmentId, action] = suffix.split("/");
+    if (action === "verify") {
+      const verification = deps.store.verifyReceiptLogSegment(segmentId);
+      if (!verification) json(res, 404, { error: "receipt log segment not found" });
+      else json(res, 200, verification);
+      return true;
+    }
+    if (action === undefined || action === "") {
+      const segment = deps.store.getReceiptLogSegment(segmentId);
+      if (!segment) json(res, 404, { error: "receipt log segment not found" });
+      else json(res, 200, segment);
+      return true;
+    }
+  }
+
   if (req.method === "GET" && url.pathname.startsWith("/compute/receipts/") && url.pathname.endsWith("/verify")) {
     const receiptId = url.pathname.slice("/compute/receipts/".length, -"/verify".length);
     const verification = deps.store.verifyReceipt(receiptId);
@@ -1172,6 +1202,15 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "GET" && url.pathname === "/compute/admin/dashboard") {
     json(res, 200, deps.store.dashboard());
+    return true;
+  }
+  if (req.method === "POST" && url.pathname === "/compute/admin/receipt-log/seal") {
+    const body = await readJson<{ maxEntries?: number }>(req);
+    const segment = deps.store.sealReceiptLogSegment({
+      maxEntries: Number.isFinite(body?.maxEntries) ? body?.maxEntries : undefined,
+    });
+    await flushStore(deps.store);
+    json(res, 200, { segment, head: deps.store.receiptLogHead() });
     return true;
   }
   if (req.method === "GET" && url.pathname === "/compute/admin/worker-profiles") {

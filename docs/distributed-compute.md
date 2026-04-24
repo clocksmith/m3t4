@@ -4,6 +4,21 @@ m3t4 should use P2P as an opt-in compute fabric, not as ranked authority.
 Ranked matches remain server-authoritative. Browser peers may contribute only
 public, deterministic, receipt-verifiable work.
 
+## Claim Boundary
+
+The product claim is one browser session with two separate lanes:
+
+- ranked game lane: server-authoritative deterministic arena, Elo and roster
+  authority on the game service, live spectator stream from server traces
+- compute lane: opt-in public/advisory work through `plasma-lab`, signed
+  receipts, quorum or expected-hash validation, and no authority over ranked
+  results
+
+The lanes share a user-facing session and opt-in surface, but not authority.
+Compute can produce accepted public summaries and receipt-linked decorations;
+it cannot decide ranked outcomes, schedule matches, mutate Elo, mutate rosters,
+read private configs, or execute hidden brain logic.
+
 ## Where This Belongs
 
 This plan spans three repos:
@@ -62,6 +77,14 @@ proved assignment, execution, hashing, receipt submission, and quorum without
 shipping any private brain logic to the browser. The useful m3t4 kernels now in
 the safe ladder are public-artifact verification, public replay verification,
 and public-preset seed sweeps.
+
+The current proof ladder should be advanced in this order:
+
+1. meta-health proof for the curated 16-preset ceiling
+2. deterministic replay proof from action logs and versioned constants
+3. signed receipt proof for public compute outputs
+4. non-crossover proof between compute and ranked authority
+5. scale proof across hosted multi-browser strict WebRTC workloads
 
 ## Borrowed Rules
 
@@ -140,6 +163,8 @@ Not safe for browser peers:
 - canonical brain decision-making
 - Elo mutation
 - any work requiring hidden strategy code
+- arbitrary public task proposal without admission controls, quotas, and
+  duplicate suppression
 
 ## WebRTC Path
 
@@ -165,6 +190,12 @@ Current WebRTC claim:
 - strict WebRTC proof tasks can require `requiredTransport: "webrtc"` and
   `requiredPeerSubreceipt: true`, so a proof task cannot silently fall back to
   HTTP and still count as WebRTC evidence.
+- admin-seeded public-artifact verify, replay verify, public-preset seed sweep,
+  and bounded tensor tile proof tasks now default to that strict WebRTC policy;
+  non-proof tasks keep HTTP fallback unless explicitly seeded otherwise.
+- accepted receipt state can now be sealed into hash-chained receipt-log
+  segments and checked through public receipt-log verification endpoints. This
+  is an audit foundation, not yet a full independent verifier service.
 - that strict WebRTC path now covers public-artifact verify, replay verify,
   public-preset seed sweeps, and bounded tensor tiles; tensor tiles additionally
   require WebGPU-witnessed `webgpu-light` peers.
@@ -176,9 +207,12 @@ Current WebRTC claim:
 
 Remaining before public-open use:
 
-- public admission/rate-limit/Sybil controls
+- invite issuance and public-window operating policy for the new registration
+  gate and per-identity caps
 - NAT-diverse TURN policy and metrics
 - retry, timeout, and stale-pair cleanup dashboards
+- independent receipt-log verifier service that replays published refs without
+  private database reads
 - public receipt inspector copy that avoids overstating host trust
 
 ## Product Framing

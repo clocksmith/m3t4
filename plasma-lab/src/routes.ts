@@ -1077,6 +1077,38 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     }
     return true;
   }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/heat-diffusion-tile") {
+    if (!guardSeed(res, "science.heat_diffusion_tile.v0")) return true;
+    const body = await readJson<{
+      widthPx?: number;
+      heightPx?: number;
+      iterations?: number;
+      shift?: number;
+      hotspots?: Array<{ xPx: number; yPx: number; valueQ88: number }>;
+      minExecutions?: number;
+      minAgreeing?: number;
+      requiredTransport?: TransportKind;
+      requiredPeerSubreceipt?: boolean;
+    }>(req);
+    try {
+      const task = deps.store.seedHeatDiffusionTileTask({
+        widthPx: body?.widthPx,
+        heightPx: body?.heightPx,
+        iterations: body?.iterations,
+        shift: body?.shift,
+        hotspots: body?.hotspots,
+        minExecutions: body?.minExecutions,
+        minAgreeing: body?.minAgreeing,
+        requiredTransport: transportPolicy(body?.requiredTransport),
+        requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+      });
+      await flushStore(deps.store);
+      json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/mandelbrot-tile") {
     if (!guardSeed(res, "science.mandelbrot_tile.v0")) return true;
     const body = await readJson<{

@@ -25,6 +25,7 @@ import {
 } from "./kernels/device-witness.js";
 import { EXPLOIT_SEARCH_KERNEL_ID } from "./kernels/exploit-search.js";
 import { GENOME_KMER_KERNEL_ID } from "./kernels/genome-kmer.js";
+import { HEAT_DIFFUSION_TILE_KERNEL_ID } from "./kernels/heat-diffusion-tile.js";
 import { IMAGE_TILE_INFER_KERNEL_ID } from "./kernels/image-tile-infer.js";
 import { MANDELBROT_TILE_KERNEL_ID } from "./kernels/mandelbrot-tile.js";
 import { MICROSCOPY_TILE_SCORE_KERNEL_ID } from "./kernels/microscopy-tile-score.js";
@@ -84,6 +85,9 @@ const POLICIES: WorkloadPolicy[] = [
   // experimental + manual so we can admin-seed first before opening
   // intake to scheduler-driven cron.
   { workload: MANDELBROT_TILE_KERNEL_ID,         release: "experimental", scheduleMode: "manual",        requiredTier: "webgpu-light",  publicVisible: true,  defaultEnabled: true  },
+  // Heat diffusion — textbook PDE, integer explicit Euler stencil on a
+  // bounded grid. Admin-seedable experimental lane, public-visible.
+  { workload: HEAT_DIFFUSION_TILE_KERNEL_ID,     release: "experimental", scheduleMode: "manual",        requiredTier: "webgpu-light",  publicVisible: true,  defaultEnabled: true  },
 
   // ML.
   { workload: IMAGE_TILE_INFER_KERNEL_ID,        release: "released",     scheduleMode: "bounded-window", requiredTier: "cpu-light",     publicVisible: true,  defaultEnabled: true  },

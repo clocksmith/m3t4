@@ -43,6 +43,7 @@ export type TaskKind =
   | "ml.image_tile_infer.v0"
   | "science.contact_map_tile.v0"
   | "science.genome_kmer.v0"
+  | "science.heat_diffusion_tile.v0"
   | "science.mandelbrot_tile.v0"
   | "science.microscopy_tile_score.v0"
   | "m3t4.exploit_search.v0"

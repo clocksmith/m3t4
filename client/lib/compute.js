@@ -33,6 +33,7 @@ const SEED_SWEEP_KERNEL = "m3t4.seed_sweep.v0";
 const IMAGE_TILE_INFER_KERNEL = "ml.image_tile_infer.v0";
 const CONTACT_MAP_TILE_KERNEL = "science.contact_map_tile.v0";
 const MANDELBROT_TILE_KERNEL = "science.mandelbrot_tile.v0";
+const HEAT_DIFFUSION_TILE_KERNEL = "science.heat_diffusion_tile.v0";
 const GENOME_KMER_KERNEL = "science.genome_kmer.v0";
 const MICROSCOPY_TILE_SCORE_KERNEL = "science.microscopy_tile_score.v0";
 const EXPLOIT_SEARCH_KERNEL = "m3t4.exploit_search.v0";
@@ -1199,6 +1200,7 @@ async function buildCapability(runtimeInfo = {}, opts = {}) {
     kernels.push("device_witness.webgpu.v0");
     kernels.push(CONTACT_MAP_TILE_KERNEL);
     kernels.push(MANDELBROT_TILE_KERNEL);
+    kernels.push(HEAT_DIFFUSION_TILE_KERNEL);
     kernels.push(TENSOR_TILE_KERNEL);
   }
   if (genomeKmerEnabled()) kernels.push(GENOME_KMER_KERNEL);
@@ -2117,7 +2119,7 @@ function safeWebRtcDataChunk(chunk) {
 }
 
 function webRtcDataKernel(kind) {
-  return kind === ASSET_TILE_AUDIT_KERNEL || kind === PUBLIC_ARTIFACT_KERNEL || kind === REPLAY_VERIFY_KERNEL || kind === SEED_SWEEP_KERNEL || kind === IMAGE_TILE_INFER_KERNEL || kind === CONTACT_MAP_TILE_KERNEL || kind === MANDELBROT_TILE_KERNEL || kind === GENOME_KMER_KERNEL || kind === MICROSCOPY_TILE_SCORE_KERNEL || kind === EXPLOIT_SEARCH_KERNEL || kind === TENSOR_TILE_KERNEL;
+  return kind === ASSET_TILE_AUDIT_KERNEL || kind === PUBLIC_ARTIFACT_KERNEL || kind === REPLAY_VERIFY_KERNEL || kind === SEED_SWEEP_KERNEL || kind === IMAGE_TILE_INFER_KERNEL || kind === CONTACT_MAP_TILE_KERNEL || kind === MANDELBROT_TILE_KERNEL || kind === HEAT_DIFFUSION_TILE_KERNEL || kind === GENOME_KMER_KERNEL || kind === MICROSCOPY_TILE_SCORE_KERNEL || kind === EXPLOIT_SEARCH_KERNEL || kind === TENSOR_TILE_KERNEL;
 }
 
 const PEER_WORK_PARAMS = Object.freeze({ start: 1009, endExclusive: 1033 });

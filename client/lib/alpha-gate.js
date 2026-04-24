@@ -2,13 +2,18 @@ import { buttonHtml } from "../ui/actions.js";
 
 const KEY = "m3t4:alphaGate";
 export const ALPHA_TOKEN_KEY = "m3t4:alphaToken";
+const OVERLAY_ID = "alpha-overlay";
+const LOCK_CLASS = "alpha-locked";
 
 export async function installAlphaGate() {
   const expected = window.__M3T4_ALPHA_PASSWORD_SHA256__;
   if (!expected) return;
   if (sessionStorage.getItem(KEY) === expected) return;
 
-  document.body.innerHTML = `
+  document.body.classList.add(LOCK_CLASS);
+  const overlay = document.createElement("div");
+  overlay.id = OVERLAY_ID;
+  overlay.innerHTML = `
     <main class="page alpha-shell">
       <div class="page-header">
         <h1>m3t4 <small>closed alpha</small></h1>
@@ -21,11 +26,12 @@ export async function installAlphaGate() {
         <div id="alpha-error" class="error"></div>
       </div>
     </main>`;
+  document.body.appendChild(overlay);
 
   await new Promise((resolve) => {
-    const input = document.getElementById("alpha-password");
-    const button = document.getElementById("alpha-enter");
-    const error = document.getElementById("alpha-error");
+    const input = overlay.querySelector("#alpha-password");
+    const button = overlay.querySelector("#alpha-enter");
+    const error = overlay.querySelector("#alpha-error");
 
     async function submit() {
       const hash = await sha256Hex(input.value);
@@ -37,29 +43,8 @@ export async function installAlphaGate() {
       }
       sessionStorage.setItem(KEY, expected);
       sessionStorage.setItem(ALPHA_TOKEN_KEY, input.value);
-      document.body.innerHTML = `
-        <header id="topnav">
-          <div class="brand">
-            <a href="/" class="logo" title="Go home">m3t4<span class="logo-caret">.ai</span></a>
-          </div>
-          <nav>
-            <a href="/build" data-route="build" data-nav="primary" title="Tune a bot in the sandbox before sending it to your ranked roster">tune</a>
-            <a href="/spectate" data-route="spectate" data-nav="primary" title="Watch ranked matches streaming live from the server">live</a>
-            <a href="/profile" data-route="profile" data-nav="primary" title="Your handle, ranked seats, and installed bots">roster</a>
-            <a href="/compute" data-route="compute" data-nav="primary" title="Donate idle browser cycles to receipt-backed public compute">compute</a>
-            <a href="/duel" data-route="duel" data-feature="p2pDuel" hidden data-nav="overflow" title="Challenge another handle to a peer-to-peer duel (coming soon)">duel</a>
-            <a href="/about" data-route="about" data-nav="primary" title="What m3t4.ai is, how it runs, and the compute pitch">about</a>
-            <button id="nav-more" type="button" class="nav-more" aria-expanded="false" aria-haspopup="menu" aria-controls="nav-more-popover" title="More navigation">more</button>
-            <div id="nav-more-popover" class="nav-more-popover" role="menu" aria-labelledby="nav-more" hidden></div>
-          </nav>
-          <div id="whoami" class="whoami"></div>
-        </header>
-        <main id="app"></main>
-        <footer id="bottom">
-          <span id="status">—</span>
-          <span class="spacer"></span>
-          <a href="https://d4da.com" target="_blank" rel="noreferrer">produced by d4da.com</a>
-        </footer>`;
+      overlay.remove();
+      document.body.classList.remove(LOCK_CLASS);
       resolve();
     }
 

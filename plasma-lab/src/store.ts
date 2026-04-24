@@ -295,6 +295,7 @@ export interface ComputeTask {
   kind: TaskKind;
   status: "running" | "complete" | "cancelled";
   createdAt: number;
+  targetWorkerIds?: string[];
   validationPolicy: ValidationPolicy;
   chunks: ComputeChunk[];
 }
@@ -858,6 +859,7 @@ export class ComputeLabStore {
     count?: number;
     minExecutions?: number;
     minAgreeing?: number;
+    targetWorkerIds?: string[];
   } = {}): ComputeTask {
     const seed = asInt(input.seed ?? 1, "seed");
     const count = asInt(input.count ?? 256, "count");
@@ -884,6 +886,7 @@ export class ComputeLabStore {
       kind: DEVICE_WITNESS_WEBGPU_KERNEL_ID,
       status: "running",
       createdAt: this.now(),
+      targetWorkerIds: normalizeTargetWorkerIds(input.targetWorkerIds),
       validationPolicy: {
         determinismClass: "bit-exact",
         validationMode: "expected-hash",
@@ -900,6 +903,7 @@ export class ComputeLabStore {
   seedDeviceWitnessRenderTask(input: {
     minExecutions?: number;
     minAgreeing?: number;
+    targetWorkerIds?: string[];
   } = {}): ComputeTask {
     const taskId = randomId("task");
     const minExecutions = Math.max(1, input.minExecutions ?? 1);
@@ -923,6 +927,7 @@ export class ComputeLabStore {
       kind: DEVICE_WITNESS_RENDER_KERNEL_ID,
       status: "running",
       createdAt: this.now(),
+      targetWorkerIds: normalizeTargetWorkerIds(input.targetWorkerIds),
       validationPolicy: {
         determinismClass: "bit-exact",
         validationMode: "expected-hash",
@@ -1480,6 +1485,7 @@ export class ComputeLabStore {
     minAgreeing?: number;
     requiredTransport?: TransportKind;
     requiredPeerSubreceipt?: boolean;
+    targetWorkerIds?: string[];
   }): ComputeTask {
     const normalized = normalizeLogitDivergenceParams({
       modelId: input.modelId ?? LOGIT_DIVERGENCE_MODEL_ID,
@@ -1511,6 +1517,7 @@ export class ComputeLabStore {
       kind: LOGIT_DIVERGENCE_KERNEL_ID,
       status: "running",
       createdAt: this.now(),
+      targetWorkerIds: normalizeTargetWorkerIds(input.targetWorkerIds),
       validationPolicy: {
         determinismClass: "tolerance-bounded",
         validationMode: "measurement",
@@ -4182,6 +4189,12 @@ function uniqueStrings(values: unknown[]): string[] {
   return Array.from(new Set(values.map(stringBucket).filter((value): value is string => !!value))).sort();
 }
 
+function normalizeTargetWorkerIds(values: string[] | undefined): string[] | undefined {
+  if (!Array.isArray(values)) return undefined;
+  const normalized = Array.from(new Set(values.map(stringBucket).filter((value): value is string => !!value))).sort();
+  return normalized.length ? normalized : undefined;
+}
+
 type WorkloadTier = WorkerProfile["allowedWorkloadTier"];
 
 const WORKLOAD_TIER_RANK: Record<WorkloadTier, number> = {
@@ -4191,6 +4204,7 @@ const WORKLOAD_TIER_RANK: Record<WorkloadTier, number> = {
 };
 
 function schedulerEligible(worker: WorkerRecord, profile: WorkerProfile, task: ComputeTask): boolean {
+  if (task.targetWorkerIds?.length && !task.targetWorkerIds.includes(worker.workerId)) return false;
   if (!worker.capability.kernels.includes(task.kind)) return false;
   if (!tierSatisfies(profile.allowedWorkloadTier, taskRequiredWorkloadTier(task))) return false;
   return true;

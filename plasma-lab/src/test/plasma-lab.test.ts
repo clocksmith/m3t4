@@ -2905,6 +2905,35 @@ test("HTTP admin can seed contact map tiles from a public preset id", async (t) 
   assert.equal(seeded.body.presetId, "human-myoglobin-core-helices");
 });
 
+test("HTTP admin can cron-seed science preset cycles", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const srv = await boot(store, { ...baseConfig, adminToken: "secret" });
+  t.after(() => srv.close());
+
+  const seeded = await req(
+    srv.port,
+    "POST",
+    "/compute/admin/tasks/science-cycle",
+    {
+      genomePresetIds: ["synthetic-balanced-tetramer", "synthetic-at-rich"],
+      contactPresetIds: ["human-myoglobin-core-helices"],
+      minExecutions: 1,
+      minAgreeing: 1,
+    },
+    { "x-plasma-admin-token": "secret" },
+  );
+  assert.equal(seeded.status, 200);
+  assert.deepEqual(
+    seeded.body.seeded.map((entry: any) => `${entry.workload}:${entry.presetId}`),
+    [
+      "science.genome_kmer.v0:synthetic-balanced-tetramer",
+      "science.genome_kmer.v0:synthetic-at-rich",
+      "science.contact_map_tile.v0:human-myoglobin-core-helices",
+    ],
+  );
+  assert.equal(store.summary().tasks, 3);
+});
+
 test("HTTP admin can seed Device Witness receipt workloads", async (t) => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const srv = await boot(store, { ...baseConfig, adminToken: "secret" });
@@ -3116,21 +3145,6 @@ test("HTTP use case registry reports implemented advisory workloads", async (t) 
   assert.ok(resp.body.useCases.some((useCase: any) =>
     useCase.id === "seed-sweeps" &&
     useCase.workload === "m3t4.seed_sweep.v0"
-  ));
-  assert.ok(resp.body.useCases.some((useCase: any) =>
-    useCase.id === "embedding-batches" &&
-    useCase.workload === "ml.embedding_tile.v0" &&
-    useCase.status === "experimental"
-  ));
-  assert.ok(resp.body.useCases.some((useCase: any) =>
-    useCase.id === "prefill-topk-probes" &&
-    useCase.workload === "ml.prefill_topk_probe.v0" &&
-    useCase.status === "experimental"
-  ));
-  assert.ok(resp.body.useCases.some((useCase: any) =>
-    useCase.id === "logit-divergence" &&
-    useCase.workload === "ml.logit_divergence.v0" &&
-    useCase.status === "experimental"
   ));
   assert.ok(resp.body.useCases.some((useCase: any) =>
     useCase.id === "contact-map-tiles" &&
@@ -3582,6 +3596,30 @@ test("HTTP worker flow issues assignment-bound receipts", async (t) => {
   );
   assert.equal(adminReceipt.status, 200);
   assert.equal(adminReceipt.body.receiptId, r2.receipt.receiptId);
+});
+
+test("targeted witness tasks only assign to the requested smoke workers", () => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const w1 = store.registerWorker({ capability: webgpuCapability });
+  const w2 = store.registerWorker({ capability: webgpuCapability });
+  const stray = store.registerWorker({ capability: webgpuCapability });
+  const task = store.seedDeviceWitnessWebGpuTask({
+    seed: 7,
+    count: 16,
+    minExecutions: 2,
+    minAgreeing: 2,
+    targetWorkerIds: [w1.worker.workerId, w2.worker.workerId],
+  });
+
+  const a1 = store.assignNext(auth(w1));
+  const a2 = store.assignNext(auth(w2));
+  const a3 = store.assignNext(auth(stray));
+
+  assert.ok(a1);
+  assert.ok(a2);
+  assert.equal(a1.task.taskId, task.taskId);
+  assert.equal(a2.task.taskId, task.taskId);
+  assert.equal(a3, null);
 });
 
 function publicReplayArtifactJson(matchId: string, options: { includePrivateConfig?: boolean } = {}): string {

@@ -34,10 +34,10 @@ function introCardHtml() {
 
 function controlsPanelHtml() {
   return `
-    <section class="panel compute-opt-panel" aria-label="Compute controls">
+    <section class="panel compute-opt-panel" aria-label="This browser">
       <div class="compute-opt-head">
         <div class="compute-opt-title">
-          <h3>Compute Worker</h3>
+          <h3>This Browser</h3>
           <div id="compute-opt-status" class="tight">loading</div>
         </div>
         <div class="compute-opt-actions">
@@ -62,12 +62,12 @@ function controlsPanelHtml() {
         </div>
       </div>
       <div class="compute-local-grid">
-        <div><span>gate</span><strong id="compute-local-gate">—</strong></div>
-        <div><span>worker</span><strong id="compute-local-worker">—</strong></div>
-        <div><span>mode</span><strong id="compute-local-mode">—</strong></div>
-        <div><span>accepted</span><strong id="compute-local-accepted">0</strong></div>
-        <div><span>pending</span><strong id="compute-local-pending">0</strong></div>
-        <div><span>rejected</span><strong id="compute-local-rejected">0</strong></div>
+        <div><span>pause reason</span><strong id="compute-local-gate">—</strong></div>
+        <div><span>worker id</span><strong id="compute-local-worker">—</strong></div>
+        <div><span>pace</span><strong id="compute-local-mode">—</strong></div>
+        <div><span>accepted (session)</span><strong id="compute-local-accepted">0</strong></div>
+        <div><span>pending (session)</span><strong id="compute-local-pending">0</strong></div>
+        <div><span>rejected (session)</span><strong id="compute-local-rejected">0</strong></div>
       </div>
       <div id="compute-opt-note" class="tight compute-opt-note"></div>
     </section>`;
@@ -84,24 +84,36 @@ function publicStatsPanelHtml() {
         ${linkButtonHtml({ href: "/spectate", text: "watch live", attrs: { title: "Leave this page and watch live matches" } })}
       </div>
       <div class="compute-public-grid">
-        <div><span>compute score</span><strong id="compute-public-score">0</strong></div>
-        <div><span>accepted receipts</span><strong id="compute-public-receipts">0</strong></div>
+        <div><span>network score</span><strong id="compute-public-score">0</strong></div>
+        <div><span>network accepted receipts</span><strong id="compute-public-receipts">0</strong></div>
         <div><span>active workers</span><strong id="compute-public-workers">0</strong></div>
-        <div><span>median kernel ms</span><strong id="compute-public-median">0</strong></div>
-        <div><span>WebGPU correctness</span><strong id="compute-public-webgpu">0%</strong></div>
-        <div><span>direct WebRTC</span><strong id="compute-public-webrtc">0%</strong></div>
+        <div><span>median job runtime</span><strong id="compute-public-median">0</strong></div>
+        <div><span>witness pass rate</span><strong id="compute-public-webgpu">0%</strong></div>
+        <div><span>direct peer transfer rate</span><strong id="compute-public-webrtc">0%</strong></div>
       </div>
     </section>`;
 }
 
 function workloadsPanelHtml() {
   return `
-    <section class="panel compute-workloads-panel" aria-label="Public workloads">
+    <section class="panel compute-workloads-panel" aria-label="Workloads">
       <div class="compute-workloads-head">
-        <h3>Public Workloads</h3>
+        <h3>Workloads</h3>
         <div id="compute-workloads-note" class="tight">loading</div>
       </div>
-      <div id="compute-workloads-list" class="compute-workloads-list"></div>
+      <div class="compute-workloads-table-wrap">
+        <table class="compute-workloads-table">
+          <thead>
+            <tr>
+              <th scope="col">Lane</th>
+              <th scope="col">Family</th>
+              <th scope="col">Runtime</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody id="compute-workloads-rows"></tbody>
+        </table>
+      </div>
     </section>`;
 }
 
@@ -124,11 +136,43 @@ function myWorkPanelHtml() {
   return `
     <section class="panel compute-my-work-panel" aria-label="Your recent work">
       <div class="compute-my-work-head">
-        <h3>Your recent work</h3>
+        <div>
+          <h3>Your recent work</h3>
+          <div id="compute-my-work-scope" class="tight">this browser</div>
+        </div>
         <div id="compute-my-work-note" class="tight">loading</div>
       </div>
       <div id="compute-my-work-by-kernel" class="compute-my-work-by-kernel"></div>
       <div id="compute-my-work-recent" class="compute-my-work-recent"></div>
+    </section>`;
+}
+
+const WORK_FLOW_STEPS = [
+  { label: "Replay archived", note: "Ranked match finishes, server archives a public artifact." },
+  { label: "Public artifact exported", note: "Redacted action log + hash published; no private configs leak." },
+  { label: "Task seeded", note: "Auto-seeded from archive, or admin-seeded for experimental lanes." },
+  { label: "Worker picked", note: "Coordinator matches by capability, trust tier, and intake window." },
+  { label: "Computed in browser", note: "Worker runs the kernel off-thread against bounded inputs." },
+  { label: "Signed receipt", note: "Output is hashed, signed with the session key, and submitted." },
+  { label: "Validator accepts", note: "Expected-hash, quorum, or measurement acceptance per policy." },
+  { label: "Aggregate updates", note: "Public stats, badges, and per-workload aggregates refresh." },
+];
+
+function flowPanelHtml() {
+  return `
+    <section class="panel compute-flow-panel" aria-label="How work enters the network">
+      <h3>How work enters the network</h3>
+      <ol class="compute-flow-steps">
+        ${WORK_FLOW_STEPS.map((step, index) => `
+          <li class="compute-flow-step">
+            <span class="compute-flow-step-number">${index + 1}</span>
+            <div class="compute-flow-step-body">
+              <strong>${escapeHtml(step.label)}</strong>
+              <span class="tight">${escapeHtml(step.note)}</span>
+            </div>
+          </li>
+        `).join("")}
+      </ol>
     </section>`;
 }
 
@@ -143,9 +187,10 @@ export function mount(root, { setStatus }) {
       })}
       ${introCardHtml()}
       ${controlsPanelHtml()}
+      ${flowPanelHtml()}
+      ${myWorkPanelHtml()}
       ${publicStatsPanelHtml()}
       ${workloadsPanelHtml()}
-      ${myWorkPanelHtml()}
       ${contactMapPanelHtml()}
     </div>`;
   wireControls(root);
@@ -228,14 +273,18 @@ function wirePublicData(root) {
   const webgpuEl = must(root, "#compute-public-webgpu");
   const webrtcEl = must(root, "#compute-public-webrtc");
   const workloadsNoteEl = must(root, "#compute-workloads-note");
-  const workloadsListEl = must(root, "#compute-workloads-list");
+  const workloadsRowsEl = must(root, "#compute-workloads-rows");
+
+  function renderEmptyRows(message) {
+    workloadsRowsEl.innerHTML = `<tr><td colspan="4" class="tight">${escapeHtml(message)}</td></tr>`;
+  }
 
   async function refresh() {
     const origin = computeLabOrigin();
     if (!origin) {
       noteEl.textContent = "offline";
       workloadsNoteEl.textContent = "offline";
-      workloadsListEl.innerHTML = `<div class="tight">No public compute origin is configured.</div>`;
+      renderEmptyRows("No public compute origin is configured.");
       return;
     }
     try {
@@ -259,31 +308,28 @@ function wirePublicData(root) {
       const shown = useCases
         .filter((entry) => entry.authority === "advisory")
         .filter((entry) =>
-          entry.workload === "ml.logit_divergence.v0" ||
           entry.workload === "science.genome_kmer.v0" ||
           entry.workload === "science.contact_map_tile.v0" ||
           entry.workload === "m3t4.seed_sweep.v0" ||
           entry.workload === "m3t4.replay_verify.v1" ||
           entry.workload === "m3t4.public_artifact_verify.v0"
         );
-      workloadsNoteEl.textContent = `${shown.length} public lanes`;
-      workloadsListEl.innerHTML = shown.map((entry) => `
-        <article class="compute-workload-card">
-          <div class="compute-workload-head">
+      workloadsNoteEl.textContent = `${shown.length} lanes`;
+      workloadsRowsEl.innerHTML = shown.map((entry) => `
+        <tr class="compute-workloads-row">
+          <td>
             <strong>${escapeHtml(entry.title || entry.id || entry.workload)}</strong>
-            <span>${escapeHtml(entry.status || "unknown")}</span>
-          </div>
-          <div class="compute-workload-chips">
-            ${workloadChipsHtml(entry)}
-          </div>
-          <div class="tight">${escapeHtml(entry.workload || "")}</div>
-          <p>${escapeHtml(entry.notes || entry.validation || "")}</p>
-        </article>
+            <div class="tight"><code>${escapeHtml(entry.workload || "")}</code></div>
+          </td>
+          <td>${familyChipHtml(entry)}</td>
+          <td>${runtimeChipHtml(entry)}</td>
+          <td><span class="compute-workloads-status">${escapeHtml(entry.status || "unknown")}</span></td>
+        </tr>
       `).join("");
     } catch {
       noteEl.textContent = "offline";
       workloadsNoteEl.textContent = "offline";
-      workloadsListEl.innerHTML = `<div class="tight">Public compute data is temporarily unavailable.</div>`;
+      renderEmptyRows("Public compute data is temporarily unavailable.");
     }
   }
 
@@ -361,13 +407,16 @@ function contactMapTileHtml(tile) {
 
 function wireMyWorkData(root) {
   const noteEl = must(root, "#compute-my-work-note");
+  const scopeEl = must(root, "#compute-my-work-scope");
   const kernelsEl = must(root, "#compute-my-work-by-kernel");
   const recentEl = must(root, "#compute-my-work-recent");
   const client = getComputeClient();
 
   async function refresh() {
-    const receipts = await client.fetchMyReceipts(50);
-    if (!Array.isArray(receipts) || receipts.length === 0) {
+    const body = await client.fetchMyReceipts(50);
+    const receipts = Array.isArray(body?.receipts) ? body.receipts : [];
+    scopeEl.textContent = scopeLabel(body);
+    if (receipts.length === 0) {
       noteEl.textContent = "no receipts yet";
       kernelsEl.innerHTML = "";
       recentEl.innerHTML = `<div class="tight">Opt in and accept a job to see your own receipts here.</div>`;
@@ -381,6 +430,18 @@ function wireMyWorkData(root) {
   if (myWorkTimer) clearInterval(myWorkTimer);
   void refresh();
   myWorkTimer = setInterval(refresh, 30000);
+}
+
+function scopeLabel(body) {
+  if (!body) return "this browser session";
+  if (body.scope === "account" && body.accountUid) {
+    const handle = typeof window.__M3T4_COMPUTE_ACCOUNT_HANDLE__ === "string"
+      ? window.__M3T4_COMPUTE_ACCOUNT_HANDLE__
+      : null;
+    return handle ? `linked to @${handle}` : `linked to account`;
+  }
+  if (body.scope === "browser" && body.clientId) return "this browser, across tabs and reloads";
+  return "this browser session";
 }
 
 const FAMILY_CHIP_LABELS = {
@@ -397,17 +458,22 @@ const RUNTIME_CHIP_LABELS = {
   webrtc: { label: "webrtc", title: "Runs over the WebRTC data plane" },
 };
 
-function workloadChipsHtml(entry) {
-  const chips = [];
+function familyChipHtml(entry) {
   const family = FAMILY_CHIP_LABELS[entry.family];
-  if (family) {
-    chips.push(chipHtml({ variant: `family-${entry.family}`, label: family.label, title: family.title }));
-  }
-  const runtime = entry.runtime && entry.runtime !== "cpu" ? RUNTIME_CHIP_LABELS[entry.runtime] : null;
-  if (runtime) {
-    chips.push(chipHtml({ variant: `runtime-${entry.runtime}`, label: runtime.label, title: runtime.title }));
-  }
-  return chips.join("");
+  if (!family) return "";
+  return chipHtml({ variant: `family-${entry.family}`, label: family.label, title: family.title });
+}
+
+function runtimeChipHtml(entry) {
+  if (!entry.runtime) return "";
+  if (entry.runtime === "cpu") return chipHtml({ variant: `runtime-cpu`, label: "cpu", title: "Runs on CPU; no GPU required" });
+  const runtime = RUNTIME_CHIP_LABELS[entry.runtime];
+  if (!runtime) return "";
+  return chipHtml({ variant: `runtime-${entry.runtime}`, label: runtime.label, title: runtime.title });
+}
+
+function workloadChipsHtml(entry) {
+  return `${familyChipHtml(entry)}${runtimeChipHtml(entry)}`;
 }
 
 function renderByKernel(receipts) {

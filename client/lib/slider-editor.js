@@ -33,6 +33,10 @@ export function paintSliderFills(container, state) {
 export function renderSliderEditor(container, state, options = {}) {
   if (!container) return;
   const disabled = Boolean(options.disabled);
+  const extraAttrs = Object.entries(options.dataAttrs || {})
+    .map(([k, v]) => `data-${escapeHtml(k)}="${escapeHtml(v)}"`)
+    .join(" ");
+  const extra = extraAttrs ? ` ${extraAttrs}` : "";
   container.innerHTML = KNOBS.map(([id, label, desc]) => {
     const value = knobValue(state, id);
     return `
@@ -41,8 +45,8 @@ export function renderSliderEditor(container, state, options = {}) {
           <span class="knob-name">${escapeHtml(label)}</span>
           <span class="knob-desc">${escapeHtml(desc)}</span>
         </div>
-        <input type="range" min="0" max="100" step="1" value="${value}" data-knob="${escapeHtml(id)}" ${disabled ? "disabled" : ""}>
-        <div class="knob-val" data-val="${escapeHtml(id)}">${value}</div>
+        <input type="range" min="0" max="100" step="1" value="${value}" data-knob="${escapeHtml(id)}"${extra} ${disabled ? "disabled" : ""}>
+        <div class="knob-val" data-val="${escapeHtml(id)}"${extra}>${value}</div>
       </label>
     `;
   }).join("");
@@ -58,5 +62,8 @@ export function renderSliderEditor(container, state, options = {}) {
       paintSliderFills(container, state);
       options.onChange?.(id, next, state);
     });
+    if (options.onCommit) {
+      input.addEventListener("change", () => options.onCommit(input.dataset.knob, state));
+    }
   });
 }

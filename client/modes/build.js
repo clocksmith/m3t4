@@ -21,6 +21,7 @@ import {
   stateSpent,
 } from "../lib/build-config.js";
 import { createFrameRenderer, W, H } from "../render/index.js";
+import { renderSliderEditor } from "../lib/slider-editor.js";
 import { escapeHtml } from "../ui/html.js";
 import { buttonHtml } from "../ui/actions.js";
 import { navigateTo } from "../navigate.js";
@@ -483,10 +484,10 @@ function playerPanelHtml(slot) {
           <div class="slot-hallucination" data-slot="${slot}" hidden>
             <div class="metric-row">
               <span class="tight">hallucination</span>
-              <span class="metric-value slot-hall-val" data-slot="${slot}" style="color:var(--ui-red);">0</span>
+              <span class="metric-value slot-hall-val" data-slot="${slot}">0</span>
             </div>
-            <div class="meter-track" style="background:#2a1014;">
-              <div class="meter-bar slot-hall-bar" data-slot="${slot}" style="background:var(--ui-red);"></div>
+            <div class="meter-track meter-track--hallucination">
+              <div class="meter-bar slot-hall-bar" data-slot="${slot}"></div>
             </div>
           </div>
           <div class="toolbar">
@@ -698,39 +699,14 @@ function renderAllKnobs() {
 function renderKnobsForSlot(slot) {
   const container = document.querySelector(`[data-knobs="${slot}"]`);
   if (!container) return;
-  container.innerHTML = "";
-  const s = slotStates[slot];
-  for (const k of KNOBS) {
-    const row = document.createElement("div");
-    row.className = "knob";
-    row.innerHTML = `
-      <div>
-        <span class="knob-name">${k.label}</span>
-        <span class="knob-desc">${k.desc}</span>
-      </div>
-      <input type="range" min="0" max="100" step="1" value="${s[k.id]}" data-knob="${k.id}" data-slot="${slot}">
-      <div class="knob-val" data-val="${k.id}" data-slot="${slot}">${s[k.id]}</div>`;
-    container.appendChild(row);
-  }
-  container.querySelectorAll("input[type=range]").forEach((inp) => {
-    inp.addEventListener("input", (e) => {
-      const id = e.target.dataset.knob;
-      const requested = parseInt(e.target.value, 10);
-      const ceiling = remainingCeilingFor(slot, id);
-      const next = Math.max(0, Math.min(ceiling, requested));
-      if (next !== requested) e.target.value = String(next);
-      e.target.style.setProperty("--fill", `${next}%`);
-      slotStates[slot][id] = next;
-      const display = container.querySelector(`[data-val="${id}"]`);
-      if (display) display.textContent = next;
+  renderSliderEditor(container, slotStates[slot], {
+    dataAttrs: { slot: String(slot) },
+    remainingCeilingFor: (id) => remainingCeilingFor(slot, id),
+    onChange: () => {
       updateSlot(slot);
       markPreviewDirty();
-    });
-    inp.addEventListener("change", () => markPreviewDirty());
-  });
-  // Initial --fill paint
-  container.querySelectorAll("input[type=range]").forEach((inp) => {
-    inp.style.setProperty("--fill", `${inp.value}%`);
+    },
+    onCommit: () => markPreviewDirty(),
   });
 }
 

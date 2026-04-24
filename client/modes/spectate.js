@@ -19,6 +19,7 @@ import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
 import { statListHtml } from "../ui/stats.js";
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
 import rosterCatalog from "../content/roster-catalog.v1.json" with { type: "json" };
+import { BODY_VARIANTS, BODY_PORTRAIT_SHEETS } from "../content/character-presentation.js";
 
 const SIM_HZ = 120;                // canonical sim rate
 const JITTER_BUFFER_FRAMES = 24;   // ~8 chunks at STRIDE=3 -> ~200ms
@@ -29,18 +30,6 @@ const COUNTDOWN_PORTRAIT_ACCENTS = [
   { accentVar: "--arena-p1", fallback: "#6ee7b7" },
   { accentVar: "--arena-p2", fallback: "#fb923c" },
 ];
-const BODY_VARIANTS = {
-  sama: "capacity_mystic",
-  darrius: "policy_undertaker",
-  demis: "quiet_solver",
-  mark: "sunlit_operator",
-};
-const BODY_PORTRAIT_SHEETS = {
-  sama: "assets/chars/sama/monastic_infra/portraits/sheet.png",
-  darrius: "assets/chars/darrius/legal_department_midnight/portraits/sheet.png",
-  demis: "assets/chars/demis/chalk_and_static/portraits/sheet.png",
-  mark: "assets/chars/mark/wellness_berserker/portraits/sheet.png",
-};
 const WEAPON_SHEETS = Object.fromEntries(
   rosterCatalog.bodies.map((body) => [
     body,

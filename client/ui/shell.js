@@ -11,7 +11,7 @@ export function pageHeaderHtml({ title, subtitle = "", action = "", className = 
     </div>`;
 }
 
-export function contextCardHtml({ className = "", kicker = "", strong = "", copy = "", body = "" }) {
+export function contextCardHtml({ className = "", kicker = "", strong = "", copy = "", body = "", autoHeight = false }) {
   const content = body || `
     <div class="context-card-kicker">${escapeHtml(kicker)}</div>
     <div class="context-card-copy">
@@ -19,7 +19,7 @@ export function contextCardHtml({ className = "", kicker = "", strong = "", copy
       ${copy ? `<span>${escapeHtml(copy)}</span>` : ""}
     </div>`;
   return `
-    <section class="${classNames("context-card", className)}">
+    <section class="${classNames("context-card", autoHeight ? "context-card--auto" : "", className)}">
       ${content}
     </section>`;
 }

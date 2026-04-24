@@ -656,6 +656,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       count?: number;
       minExecutions?: number;
       minAgreeing?: number;
+      targetWorkerIds?: string[];
     }>(req);
     try {
       const task = deps.store.seedDeviceWitnessWebGpuTask({
@@ -663,6 +664,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         count: body?.count,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
+        targetWorkerIds: workerIdTargets(body?.targetWorkerIds),
       });
       await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
@@ -675,11 +677,13 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     const body = await readJson<{
       minExecutions?: number;
       minAgreeing?: number;
+      targetWorkerIds?: string[];
     }>(req);
     try {
       const task = deps.store.seedDeviceWitnessRenderTask({
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
+        targetWorkerIds: workerIdTargets(body?.targetWorkerIds),
       });
       await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
@@ -860,6 +864,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       minAgreeing?: number;
       requiredTransport?: TransportKind;
       requiredPeerSubreceipt?: boolean;
+      targetWorkerIds?: string[];
     }>(req);
     try {
       const task = deps.store.seedLogitDivergenceTask({
@@ -870,6 +875,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         minAgreeing: body?.minAgreeing,
         requiredTransport: transportPolicy(body?.requiredTransport),
         requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+        targetWorkerIds: workerIdTargets(body?.targetWorkerIds),
       });
       await flushStore(deps.store);
       json(res, 200, { taskId: task.taskId, chunks: task.chunks.length, validationPolicy: task.validationPolicy });
@@ -1052,6 +1058,56 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
         validationPolicy: task.validationPolicy,
         presetId: preset?.id ?? null,
       });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/science-cycle") {
+    const body = await readJson<{
+      genomePresetIds?: string[];
+      contactPresetIds?: string[];
+      genomeK?: number;
+      contactMinSeparation?: number;
+      minExecutions?: number;
+      minAgreeing?: number;
+      requiredTransport?: TransportKind;
+      requiredPeerSubreceipt?: boolean;
+    }>(req);
+    try {
+      const genomePresetIds = sciencePresetIds(body?.genomePresetIds, GENOME_KMER_PRESETS.map((preset) => preset.id).slice(0, 1));
+      const contactPresetIds = sciencePresetIds(body?.contactPresetIds, CONTACT_MAP_PRESETS.map((preset) => preset.id).slice(0, 1));
+      const seeded: Array<{ workload: string; presetId: string; taskId: string; chunks: number }> = [];
+      for (const presetId of genomePresetIds) {
+        const preset = resolveGenomeKmerPreset(presetId);
+        const task = deps.store.seedGenomeKmerTask({
+          sequenceId: preset.id,
+          sequence: preset.sequence,
+          k: body?.genomeK ?? preset.defaultK,
+          minExecutions: body?.minExecutions,
+          minAgreeing: body?.minAgreeing,
+          requiredTransport: transportPolicy(body?.requiredTransport),
+          requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+        });
+        seeded.push({ workload: "science.genome_kmer.v0", presetId, taskId: task.taskId, chunks: task.chunks.length });
+      }
+      for (const presetId of contactPresetIds) {
+        const preset = resolveContactMapPreset(presetId);
+        const task = deps.store.seedContactMapTileTask({
+          rowResidues: preset.rowResidues,
+          colResidues: preset.colResidues,
+          rowStart: preset.rowStart,
+          colStart: preset.colStart,
+          minSeparation: body?.contactMinSeparation ?? preset.minSeparation,
+          minExecutions: body?.minExecutions,
+          minAgreeing: body?.minAgreeing,
+          requiredTransport: transportPolicy(body?.requiredTransport),
+          requiredPeerSubreceipt: body?.requiredPeerSubreceipt,
+        });
+        seeded.push({ workload: "science.contact_map_tile.v0", presetId, taskId: task.taskId, chunks: task.chunks.length });
+      }
+      await flushStore(deps.store);
+      json(res, 200, { seeded });
     } catch (e) {
       json(res, 400, { error: message(e) });
     }
@@ -1276,6 +1332,18 @@ function transportPolicy(value: unknown): TransportKind | undefined {
   if (value === undefined) return undefined;
   if (value === "http" || value === "webrtc" || value === "local") return value;
   throw new Error("requiredTransport must be http, webrtc, or local");
+}
+
+function workerIdTargets(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const normalized = Array.from(new Set(value.map((entry) => String(entry ?? "").trim()).filter(Boolean))).sort();
+  return normalized.length ? normalized : undefined;
+}
+
+function sciencePresetIds(value: unknown, fallback: string[]): string[] {
+  if (!Array.isArray(value)) return fallback;
+  const normalized = Array.from(new Set(value.map((entry) => String(entry ?? "").trim()).filter(Boolean)));
+  return normalized.length ? normalized.slice(0, 12) : fallback;
 }
 
 function sanitizePublicWorkerCapability(capability: WorkerCapability, trustedReference: boolean): WorkerCapability {

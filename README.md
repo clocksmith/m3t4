@@ -18,10 +18,17 @@ One browser session carries both lanes:
 - **Compute lane**: opt-in, receipt-carrying public compute through the
   isolated `plasma-lab` sidecar, advisory-only and device-idle-gated.
 
-Players can watch, compete, and optionally donate receipt-carrying compute from
-a single browser session. Ranked authority stays server-side, compute stays
-advisory, and every published public receipt is independently verifiable
-against its declared public input without becoming ranked authority.
+North-star business sentence:
+
+> Players can watch, compete, and optionally donate receipt-carrying compute
+> from a single browser session, where ranked authority stays server-side,
+> compute stays advisory, and every public receipt is independently
+> verifiable.
+
+Current implementation is not allowed to overclaim that final clause. Today,
+public compute receipts are signed, validation-bound, and receipt-log
+verifiable; the no-private-database third-party verifier is still a public-open
+gate.
 
 - **Player layer**: spend a fixed budget across strategic knobs to
   build a bot, watch it fight in a deterministic arena. Fun should

@@ -22,7 +22,13 @@ Business sentence:
 
 > Players can watch, compete, and optionally donate receipt-carrying compute
 > from a single browser session, where ranked authority stays server-side,
-> compute stays advisory, and public receipts are signed and log-verifiable.
+> compute stays advisory, and every public receipt is independently
+> verifiable.
+
+Current implementation should not use that sentence as a shipped claim without
+qualification. Today, public compute receipts are signed, validation-bound, and
+receipt-log verifiable; the no-private-database third-party verifier remains a
+public-open gate.
 
 Proof order:
 
@@ -36,6 +42,49 @@ Proof order:
    roster mutation, match scheduling, private configs, or hidden brain logic.
 5. Scale proof: hosted multi-browser strict WebRTC receipts cover the advisory
    workload ladder before any broader public-open claim.
+
+## Completion Checklist
+
+1. Lock the curated 16-preset roster as the meta reference ceiling.
+2. Run the adversarial loop: evolve candidates against Hall of Fame, archive
+   exploits, and change exactly one thing, roster selection or trait-to-brain
+   mapping, when a universal exploit appears.
+3. Keep trait knobs legible and orthogonal; forbid silent correlation that lets
+   one knob win multiple axes.
+4. Maintain server-authoritative ranked: private configs, hidden brain logic,
+   schedule, and Elo authority all stay server-side.
+5. Keep deterministic sim discipline: fixed-tick canonical constants, replay
+   hash per match, and versioned constants archive.
+6. Keep live spectator stream server-traced: the client interpolates but never
+   simulates ranked authority.
+7. Keep P2P exhibition duels non-ranked, voluntary, server-tokened, and
+   action-log verified on submit.
+8. Keep handle claim flow one-per-user, lowercased, with no silent reissuance
+   and an audit trail.
+9. Enforce bot submission budget and hard caps server-side; client renders
+   preview only.
+10. Keep `plasma-lab` isolated as a Cloud Run sidecar with no shared authority
+    over ranked services.
+11. Keep the opt-in browser worker renderer-first: compute runs only in
+    measured slack.
+12. Require ECDSA P-256 receipt signing per assignment/chunk with
+    `COMPUTE_REQUIRE_RECEIPT_SIGNATURES=true` for validation work.
+13. Use quorum validation or expected-hash comparison without shipping
+    server-held expected hashes to workers.
+14. Enforce strict WebRTC proof mode with `transport=webrtc`, server-issued
+    peer subassignments, and peer-signed subreceipts.
+15. Keep assignment intake gated off by default and open only in bounded admin
+    windows.
+16. Production-smoke at least six public workload families with accepted
+    receipts, not just code-complete kernels.
+17. Publish a verifier path where anyone can verify a receipt bundle against
+    declared public input offline.
+18. Derive global compute score from accepted receipts without per-user PII
+    leakage.
+19. Keep replay archive, receipt archive, and exploit archive
+    content-addressed, linkable by hash, and auditable.
+20. Enforce anti-claims in docs and UI: compute is advisory, ranked is
+    authoritative, and the renderer always has first claim.
 
 ## Current Name And Claim
 

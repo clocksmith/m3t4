@@ -23,7 +23,7 @@ test("route config keeps browser feature gates centralized", () => {
   assert.equal(DEFAULT_FEATURES.computeGenomeKmer, false);
   assert.equal(DEFAULT_FEATURES.webgpuRenderer, false);
   assert.equal(DEFAULT_FEATURES.webglRenderer, false);
-  assert.equal(featureForRoute("duel"), "p2pDuel");
+  assert.equal(featureForRoute("duel"), null);
   assert.equal(featureForRoute("live"), null);
   assert.deepEqual(Object.keys(MODES), ["intro", "tune", "live", "roster", "compute", "rules", "about"]);
 });
@@ -32,6 +32,7 @@ test("top navigation keeps home on the logo without a start tab", () => {
   const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.match(html, /<a href="\/" class="logo" title="Go home">/);
   assert.doesNotMatch(html, /data-route="intro" data-nav="primary"/);
+  assert.doesNotMatch(html, /data-route="duel"/);
   assert.doesNotMatch(html, />start<\/a>/);
   assert.doesNotMatch(html, /id="nav-more"/);
   assert.doesNotMatch(html, />more<\/button>/);

@@ -12,6 +12,9 @@ const storeOptions = {
   workerSessionTtlMs: CONFIG.workerSessionTtlMs,
   webrtcSessionTtlMs: CONFIG.webrtcSessionTtlMs,
   requireReceiptSignatures: CONFIG.requireReceiptSignatures,
+  maxWorkersPerIp: CONFIG.maxWorkersPerIp,
+  maxSessionsPerClient: CONFIG.maxSessionsPerClient,
+  maxActiveAssignmentsPerIdentity: CONFIG.maxActiveAssignmentsPerIdentity,
 };
 
 const store = CONFIG.storeBackend === "firestore"

@@ -8,6 +8,8 @@ import {
   type ComputeTask,
   type ExecutionReceipt,
   type ReputationRecord,
+  type ReceiptLogEntry,
+  type ReceiptLogSegment,
   type ReplayVerificationBadge,
   type WebRtcPairRecord,
   type WebRtcSessionRecord,
@@ -49,6 +51,8 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
       peerSubassignments,
       capabilityObservations,
       connectivityObservations,
+      receiptLogEntries,
+      receiptLogSegments,
       control,
     ] = await Promise.all([
       this.readCollection<ComputeLabSnapshot["workers"][number]>(COMPUTE_COLLECTIONS.workers),
@@ -63,6 +67,8 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
       this.readCollection<ComputeLabSnapshot["peerSubassignments"][number]>(COMPUTE_COLLECTIONS.peerSubassignments),
       this.readCollection<ComputeLabSnapshot["capabilityObservations"][number]>(COMPUTE_COLLECTIONS.capabilityObservations),
       this.readCollection<ComputeLabSnapshot["connectivityObservations"][number]>(COMPUTE_COLLECTIONS.connectivityObservations),
+      this.readCollection<ComputeLabSnapshot["receiptLogEntries"][number]>(COMPUTE_COLLECTIONS.receiptLogEntries),
+      this.readCollection<ComputeLabSnapshot["receiptLogSegments"][number]>(COMPUTE_COLLECTIONS.receiptLogSegments),
       this.readCollection<ComputeLabSnapshot["control"]>(COMPUTE_COLLECTIONS.control),
     ]);
     const now = Date.now();
@@ -80,6 +86,8 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
       peerSubassignments: peerSubassignments.filter((subassignment) => subassignment.expiresAt > now || subassignment.status === "accepted"),
       capabilityObservations,
       connectivityObservations,
+      receiptLogEntries,
+      receiptLogSegments,
     };
   }
 
@@ -138,6 +146,12 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
     }
     if (patch.connectivityObservations?.length) {
       writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.connectivityObservations, patch.connectivityObservations, (obs) => obs.observationId));
+    }
+    if (patch.receiptLogEntries?.length) {
+      writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.receiptLogEntries, patch.receiptLogEntries, (entry) => entry.entryId, mergeReceiptLogEntry));
+    }
+    if (patch.receiptLogSegments?.length) {
+      writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.receiptLogSegments, patch.receiptLogSegments, (segment) => segment.segmentId, mergeReceiptLogSegment));
     }
     if (shouldRefreshDerived(patch)) {
       writes.push(
@@ -234,6 +248,19 @@ function mergeAssignment(current: Assignment, next: Assignment): Assignment {
 
 function mergeReceipt(current: ExecutionReceipt, next: ExecutionReceipt): ExecutionReceipt {
   return receiptDecisionRank(next.decision) >= receiptDecisionRank(current.decision) ? next : current;
+}
+
+function mergeReceiptLogEntry(current: ReceiptLogEntry, next: ReceiptLogEntry): ReceiptLogEntry {
+  return {
+    ...current,
+    ...next,
+    entryHash: current.entryHash,
+    segmentId: next.segmentId ?? current.segmentId,
+  };
+}
+
+function mergeReceiptLogSegment(current: ReceiptLogSegment, next: ReceiptLogSegment): ReceiptLogSegment {
+  return current.segmentHash.value === next.segmentHash.value ? current : next;
 }
 
 function mergeReputation(current: ReputationRecord, next: ReputationRecord): ReputationRecord {

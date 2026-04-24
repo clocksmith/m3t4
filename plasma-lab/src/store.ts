@@ -110,6 +110,8 @@ export const COMPUTE_COLLECTIONS = {
   peerSubassignments: "compute_peer_subassignments",
   capabilityObservations: "compute_capability_observations",
   connectivityObservations: "compute_connectivity_observations",
+  receiptLogEntries: "compute_receipt_log_entries",
+  receiptLogSegments: "compute_receipt_log_segments",
   workerProfiles: "compute_worker_profiles",
   deviceClasses: "compute_device_classes",
   networkClasses: "compute_network_classes",
@@ -136,6 +138,8 @@ const KNOWN_KERNELS = [
   TENSOR_TILE_KERNEL_ID,
 ];
 
+const EMPTY_CONTENT_HASH: ContentHash = { algorithm: "sha256", value: "0".repeat(64) };
+
 export interface WorkerRecord {
   workerId: string;
   label?: string;
@@ -144,6 +148,9 @@ export interface WorkerRecord {
   lastSeenAt: number;
   clientId?: string;
   accountUid?: string;
+  clientIpHash?: ContentHash;
+  inviteId?: string;
+  signingPublicKeyHash?: ContentHash;
 }
 
 export interface WorkerSession {
@@ -374,6 +381,64 @@ export interface ValidationRecord {
   recordedAt: number;
 }
 
+export type ReceiptLogEventKind = "receipt-submitted" | "receipt-decision" | "validation-recorded";
+
+export interface ReceiptLogEntry {
+  entryId: string;
+  sequence: number;
+  eventKind: ReceiptLogEventKind;
+  recordedAt: number;
+  receiptId?: string;
+  validationId?: string;
+  taskId: string;
+  chunkId: string;
+  taskKind: string;
+  chunkOrdinal: number;
+  assignmentId?: string;
+  kernelId: string;
+  kernelHash: ContentHash;
+  inputHash: ContentHash;
+  artifactHash?: ContentHash;
+  outputHash?: ContentHash;
+  receiptHash?: ContentHash;
+  signatureStatus?: ExecutionReceipt["signatureStatus"];
+  signaturePublicKeyHash?: ContentHash;
+  decision?: ReceiptDecision;
+  reason?: string;
+  transport?: TransportKind;
+  executionMode?: ExecutionMode;
+  validationPolicy: Omit<ValidationPolicy, "expectedOutputHash">;
+  comparedReceiptIds?: string[];
+  acceptedReceiptIds?: string[];
+  workerHash?: ContentHash;
+  workerSessionHash?: ContentHash;
+  entryHash: ContentHash;
+  segmentId?: string;
+}
+
+export interface ReceiptLogSegment {
+  segmentId: string;
+  firstSequence: number;
+  lastSequence: number;
+  prevSegmentHash?: ContentHash;
+  entryHashes: ContentHash[];
+  entryCount: number;
+  sealedAt: number;
+  segmentHash: ContentHash;
+}
+
+export interface ReceiptLogSegmentVerification {
+  segmentId: string;
+  ok: boolean;
+  entryCount: number;
+  firstSequence: number;
+  lastSequence: number;
+  segmentHash: ContentHash;
+  expectedSegmentHash: ContentHash;
+  previousSegmentHash?: ContentHash;
+  errors: string[];
+}
+
 export interface ReputationRecord {
   workerId: string;
   accepted: number;
@@ -543,6 +608,9 @@ export interface StoreOptions {
   webrtcSessionTtlMs?: number;
   acceptAssignments?: boolean;
   requireReceiptSignatures?: boolean;
+  maxWorkersPerIp?: number;
+  maxSessionsPerClient?: number;
+  maxActiveAssignmentsPerIdentity?: number;
 }
 
 export interface ComputeLabSnapshot {
@@ -562,6 +630,8 @@ export interface ComputeLabSnapshot {
   peerSubassignments: PeerSubassignment[];
   capabilityObservations: CapabilityObservation[];
   connectivityObservations: ConnectivityObservation[];
+  receiptLogEntries: ReceiptLogEntry[];
+  receiptLogSegments: ReceiptLogSegment[];
 }
 
 export class ComputeLabStore {
@@ -577,13 +647,19 @@ export class ComputeLabStore {
   private readonly peerSubassignments = new Map<string, PeerSubassignment>();
   private readonly capabilityObservations = new Map<string, CapabilityObservation>();
   private readonly connectivityObservations = new Map<string, ConnectivityObservation>();
+  private readonly receiptLogEntries = new Map<string, ReceiptLogEntry>();
+  private readonly receiptLogSegments = new Map<string, ReceiptLogSegment>();
   private readonly now: () => number;
   private readonly assignmentTimeoutMs: number;
   private readonly workerSessionTtlMs: number;
   private readonly webrtcSessionTtlMs: number;
   private readonly requireReceiptSignatures: boolean;
+  private readonly maxWorkersPerIp: number;
+  private readonly maxSessionsPerClient: number;
+  private readonly maxActiveAssignmentsPerIdentity: number;
   private acceptAssignmentsFlag: boolean;
   private assignmentIntakeClosesAt: number | null = null;
+  private nextReceiptLogSequence = 1;
 
   constructor(options: StoreOptions = {}) {
     this.now = options.now ?? Date.now;
@@ -591,6 +667,9 @@ export class ComputeLabStore {
     this.workerSessionTtlMs = options.workerSessionTtlMs ?? 3_600_000;
     this.webrtcSessionTtlMs = options.webrtcSessionTtlMs ?? 600_000;
     this.requireReceiptSignatures = options.requireReceiptSignatures ?? false;
+    this.maxWorkersPerIp = Math.max(0, options.maxWorkersPerIp ?? 0);
+    this.maxSessionsPerClient = Math.max(0, options.maxSessionsPerClient ?? 0);
+    this.maxActiveAssignmentsPerIdentity = Math.max(0, options.maxActiveAssignmentsPerIdentity ?? 0);
     this.acceptAssignmentsFlag = options.acceptAssignments ?? false;
   }
 
@@ -629,6 +708,8 @@ export class ComputeLabStore {
       peerSubassignments: Array.from(this.peerSubassignments.values()),
       capabilityObservations: Array.from(this.capabilityObservations.values()),
       connectivityObservations: Array.from(this.connectivityObservations.values()),
+      receiptLogEntries: Array.from(this.receiptLogEntries.values()).sort((a, b) => a.sequence - b.sequence),
+      receiptLogSegments: Array.from(this.receiptLogSegments.values()).sort((a, b) => a.firstSequence - b.firstSequence),
     };
   }
 
@@ -645,6 +726,9 @@ export class ComputeLabStore {
     this.peerSubassignments.clear();
     this.capabilityObservations.clear();
     this.connectivityObservations.clear();
+    this.receiptLogEntries.clear();
+    this.receiptLogSegments.clear();
+    this.nextReceiptLogSequence = 1;
     if (snapshot.control) {
       this.acceptAssignmentsFlag = snapshot.control.acceptAssignments;
       this.assignmentIntakeClosesAt = snapshot.control.assignmentIntakeClosesAt;
@@ -662,9 +746,15 @@ export class ComputeLabStore {
     for (const subassignment of snapshot.peerSubassignments ?? []) this.peerSubassignments.set(subassignment.peerAssignmentId, subassignment);
     for (const obs of snapshot.capabilityObservations ?? []) this.capabilityObservations.set(obs.observationId, obs);
     for (const obs of snapshot.connectivityObservations ?? []) this.connectivityObservations.set(obs.observationId, obs);
+    for (const entry of snapshot.receiptLogEntries ?? []) this.receiptLogEntries.set(entry.entryId, entry);
+    for (const segment of snapshot.receiptLogSegments ?? []) this.receiptLogSegments.set(segment.segmentId, segment);
+    this.nextReceiptLogSequence = Math.max(
+      1,
+      ...Array.from(this.receiptLogEntries.values()).map((entry) => entry.sequence + 1),
+    );
   }
 
-  registerWorker(input: { label?: string; capability: WorkerCapability; signingPublicKey?: JsonWebKey; clientId?: string; accountUid?: string }): {
+  registerWorker(input: { label?: string; capability: WorkerCapability; signingPublicKey?: JsonWebKey; clientId?: string; accountUid?: string; clientIpHash?: ContentHash; inviteId?: string }): {
     worker: WorkerRecord;
     session: WorkerSession;
     acceptedKernels: string[];
@@ -674,6 +764,8 @@ export class ComputeLabStore {
     const workerId = randomId("cw");
     const clientId = normalizeIdentityToken(input.clientId);
     const accountUid = normalizeIdentityToken(input.accountUid);
+    const inviteId = normalizeIdentityToken(input.inviteId);
+    this.enforceRegistrationCaps({ clientId, accountUid, clientIpHash: input.clientIpHash, inviteId });
     const worker: WorkerRecord = {
       workerId,
       label: input.label,
@@ -682,9 +774,12 @@ export class ComputeLabStore {
       lastSeenAt: now,
       clientId,
       accountUid,
+      clientIpHash: input.clientIpHash,
+      inviteId,
     };
     this.workers.set(workerId, worker);
     const session = this.createSession(workerId, input.signingPublicKey);
+    worker.signingPublicKeyHash = session.signingPublicKeyHash;
     this.recordCapabilityObservation(worker, session, "register");
     this.reputation.set(workerId, {
       workerId,
@@ -1651,8 +1746,14 @@ export class ComputeLabStore {
     worker.lastSeenAt = this.now();
     session.lastSeenAt = worker.lastSeenAt;
     if (this.requireReceiptSignatures && !session.signingPublicKey) return null;
-    if (this.shouldQuarantineWorker(worker.workerId).quarantined) return null;
+    if (this.shouldQuarantineIdentity(worker).quarantined) return null;
     if (this.activeAssignmentsForWorker(worker.workerId) >= Math.max(1, worker.capability.maxConcurrentChunks || 1)) {
+      return null;
+    }
+    if (
+      this.maxActiveAssignmentsPerIdentity > 0 &&
+      this.activeAssignmentsForIdentity(worker) >= this.maxActiveAssignmentsPerIdentity
+    ) {
       return null;
     }
     const profile = this.workerProfiles().find((candidate) => candidate.workerId === worker.workerId);
@@ -1707,11 +1808,15 @@ export class ComputeLabStore {
     assignmentToken: string;
     refusalReason?: WorkerRefusalReason;
   }): Assignment {
+    this.expireAssignmentIntake();
     this.requireSession(input.workerId, input.workerSessionId, input.workerSessionToken);
     const assignment = this.requireAssignment(input.assignmentId);
     if (assignment.assignmentToken !== input.assignmentToken) throw new Error("assignment token mismatch");
     if (assignment.workerId !== input.workerId || assignment.workerSessionId !== input.workerSessionId) {
       throw new Error("assignment mismatch");
+    }
+    if (!this.acceptAssignmentsFlag && !input.refusalReason) {
+      throw new Error("assignment intake closed");
     }
     if (input.refusalReason) {
       assignment.status = "cancelled";
@@ -1755,7 +1860,7 @@ export class ComputeLabStore {
         "duplicate-receipt",
         `assignment already receipted by ${existingReceipt.receiptId}`,
       );
-      this.receipts.set(receipt.receiptId, receipt);
+      this.storeReceipt(receipt);
       this.bumpReputation(input.workerId, "rejected");
       return { receipt };
     }
@@ -1765,7 +1870,7 @@ export class ComputeLabStore {
     const policyMismatch = receiptPolicyMismatch(task, input);
     if (policyMismatch) {
       const receipt = this.makeReceipt(input, "malformed", policyMismatch);
-      this.receipts.set(receipt.receiptId, receipt);
+      this.storeReceipt(receipt);
       assignment.status = "receipted";
       this.bumpReputation(input.workerId, "rejected");
       return { receipt };
@@ -1773,7 +1878,7 @@ export class ComputeLabStore {
     const peerMismatch = this.peerReceiptMismatch(task, chunk, assignment, input, receivedAt);
     if (peerMismatch) {
       const receipt = this.makeReceipt(input, "malformed", peerMismatch);
-      this.receipts.set(receipt.receiptId, receipt);
+      this.storeReceipt(receipt);
       assignment.status = "receipted";
       this.bumpReputation(input.workerId, "rejected");
       return { receipt };
@@ -1781,7 +1886,7 @@ export class ComputeLabStore {
     const mismatch = receiptMismatch(chunk, input);
     if (mismatch) {
       const receipt = this.makeReceipt(input, mismatch.decision, mismatch.reason);
-      this.receipts.set(receipt.receiptId, receipt);
+      this.storeReceipt(receipt);
       assignment.status = "receipted";
       this.bumpReputation(input.workerId, "rejected");
       return { receipt };
@@ -1790,7 +1895,7 @@ export class ComputeLabStore {
     if (task.validationPolicy.validationMode === "measurement") {
       if (chunk.kind !== DEVICE_WITNESS_WEBRTC_KERNEL_ID) {
         const receipt = this.makeReceipt(input, "pending");
-        this.receipts.set(receipt.receiptId, receipt);
+        this.storeReceipt(receipt);
         assignment.status = "receipted";
         const validation = this.evaluateMeasurementChunk(task, chunk);
         return { receipt: this.receipts.get(receipt.receiptId) ?? receipt, validation };
@@ -1802,7 +1907,7 @@ export class ComputeLabStore {
         ? "pending"
         : "malformed";
       const receipt = this.makeReceipt(measurementInput, decision, decision === "malformed" ? "measurement transcript hash mismatch" : undefined);
-      this.receipts.set(receipt.receiptId, receipt);
+      this.storeReceipt(receipt);
       assignment.status = "receipted";
       if (decision === "malformed") {
         this.bumpReputation(input.workerId, "rejected");
@@ -1814,7 +1919,7 @@ export class ComputeLabStore {
 
     if (task.validationPolicy.validationMode === "quorum") {
       const receipt = this.makeReceipt(input, "pending");
-      this.receipts.set(receipt.receiptId, receipt);
+      this.storeReceipt(receipt);
       assignment.status = "receipted";
       const validation = this.evaluateQuorumChunk(task, chunk);
       return { receipt: this.receipts.get(receipt.receiptId) ?? receipt, validation };
@@ -1824,7 +1929,7 @@ export class ComputeLabStore {
       ? "pending"
       : "output-mismatch";
     const receipt = this.makeReceipt(input, decision, decision === "output-mismatch" ? "output hash did not match expected public hash" : undefined);
-    this.receipts.set(receipt.receiptId, receipt);
+    this.storeReceipt(receipt);
     assignment.status = "receipted";
     if (decision === "output-mismatch") this.bumpReputation(input.workerId, "rejected");
     const validation = this.evaluateChunk(task, chunk);
@@ -1837,6 +1942,74 @@ export class ComputeLabStore {
 
   getReceipt(receiptId: string): ExecutionReceipt | null {
     return this.receipts.get(receiptId) ?? null;
+  }
+
+  listReceiptLogEntries(input: { afterSequence?: number; limit?: number; includeSegmented?: boolean } = {}): ReceiptLogEntry[] {
+    const afterSequence = Math.max(0, input.afterSequence ?? 0);
+    const limit = Math.max(1, Math.min(1000, input.limit ?? 100));
+    return Array.from(this.receiptLogEntries.values())
+      .filter((entry) => entry.sequence > afterSequence && (input.includeSegmented === true || !entry.segmentId))
+      .sort((a, b) => a.sequence - b.sequence)
+      .slice(0, limit);
+  }
+
+  listReceiptLogSegments(input: { limit?: number } = {}): ReceiptLogSegment[] {
+    const limit = Math.max(1, Math.min(200, input.limit ?? 50));
+    return Array.from(this.receiptLogSegments.values())
+      .sort((a, b) => b.firstSequence - a.firstSequence)
+      .slice(0, limit);
+  }
+
+  getReceiptLogSegment(segmentId: string): { segment: ReceiptLogSegment; entries: ReceiptLogEntry[] } | null {
+    const segment = this.receiptLogSegments.get(segmentId);
+    if (!segment) return null;
+    const entries = this.entriesForSegment(segment);
+    return { segment, entries };
+  }
+
+  receiptLogHead(): { lastSequence: number; latestSegment: ReceiptLogSegment | null; unsealedEntries: number } {
+    const latestSegment = Array.from(this.receiptLogSegments.values())
+      .sort((a, b) => b.lastSequence - a.lastSequence)[0] ?? null;
+    return {
+      lastSequence: this.nextReceiptLogSequence - 1,
+      latestSegment,
+      unsealedEntries: Array.from(this.receiptLogEntries.values()).filter((entry) => !entry.segmentId).length,
+    };
+  }
+
+  sealReceiptLogSegment(input: { maxEntries?: number } = {}): ReceiptLogSegment | null {
+    const maxEntries = Math.max(1, Math.min(500, input.maxEntries ?? 100));
+    const entries = this.listReceiptLogEntries({ limit: maxEntries });
+    if (!entries.length) return null;
+    const previous = Array.from(this.receiptLogSegments.values())
+      .sort((a, b) => b.lastSequence - a.lastSequence)[0];
+    const segmentBase = {
+      firstSequence: entries[0].sequence,
+      lastSequence: entries[entries.length - 1].sequence,
+      prevSegmentHash: previous?.segmentHash,
+      entryHashes: entries.map((entry) => entry.entryHash),
+      entryCount: entries.length,
+      sealedAt: this.now(),
+    };
+    const segmentHash = receiptLogSegmentHash(segmentBase);
+    const segmentId = `rseg-${segmentHash.value.slice(0, 20)}`;
+    const segment: ReceiptLogSegment = {
+      segmentId,
+      ...segmentBase,
+      segmentHash,
+    };
+    for (const entry of entries) entry.segmentId = segmentId;
+    this.receiptLogSegments.set(segment.segmentId, segment);
+    return segment;
+  }
+
+  verifyReceiptLogSegment(segmentId: string): ReceiptLogSegmentVerification | null {
+    const bundle = this.getReceiptLogSegment(segmentId);
+    if (!bundle) return null;
+    const previous = Array.from(this.receiptLogSegments.values())
+      .filter((segment) => segment.lastSequence < bundle.segment.firstSequence)
+      .sort((a, b) => b.lastSequence - a.lastSequence)[0];
+    return verifyReceiptLogSegmentBundle(bundle.segment, bundle.entries, previous);
   }
 
   verifyReceipt(receiptId: string): ReceiptVerification | null {
@@ -2598,6 +2771,19 @@ export class ComputeLabStore {
     ).length;
   }
 
+  private sessionsForWorker(workerId: string): WorkerSession[] {
+    return Array.from(this.sessions.values()).filter((session) => session.workerId === workerId);
+  }
+
+  private activeAssignmentsForIdentity(worker: WorkerRecord): number {
+    this.expireAssignments();
+    return Array.from(this.assignments.values()).filter((assignment) => {
+      if (assignment.expiresAt <= this.now() || (assignment.status !== "offered" && assignment.status !== "accepted")) return false;
+      const assignedWorker = this.workers.get(assignment.workerId);
+      return !!assignedWorker && this.sameAdmissionIdentity(worker, assignedWorker);
+    }).length;
+  }
+
   private shouldQuarantineWorker(workerId: string): { quarantined: boolean; reason?: string } {
     const rep = this.reputation.get(workerId);
     if (!rep) return { quarantined: false };
@@ -2610,6 +2796,39 @@ export class ComputeLabStore {
       return { quarantined: true, reason: "bad receipt rate exceeded scheduler threshold" };
     }
     return { quarantined: false };
+  }
+
+  private shouldQuarantineIdentity(worker: WorkerRecord): { quarantined: boolean; reason?: string } {
+    const own = this.shouldQuarantineWorker(worker.workerId);
+    if (own.quarantined) return own;
+    const related = Array.from(this.workers.values()).filter((candidate) =>
+      candidate.workerId === worker.workerId || this.sameAdmissionIdentity(worker, candidate)
+    );
+    const totals = related.reduce((acc, candidate) => {
+      const rep = this.reputation.get(candidate.workerId);
+      if (!rep) return acc;
+      acc.accepted += rep.accepted;
+      acc.rejected += rep.rejected;
+      acc.disagreements += rep.disagreements;
+      return acc;
+    }, { accepted: 0, rejected: 0, disagreements: 0 });
+    const hardBad = totals.rejected + totals.disagreements;
+    const decided = totals.accepted + hardBad;
+    if (hardBad >= 5 && totals.accepted === 0) {
+      return { quarantined: true, reason: "admission identity has repeated bad receipts with no accepted work" };
+    }
+    if (decided >= 10 && hardBad / decided >= 0.5) {
+      return { quarantined: true, reason: "admission identity bad receipt rate exceeded scheduler threshold" };
+    }
+    return { quarantined: false };
+  }
+
+  private sameAdmissionIdentity(a: WorkerRecord, b: WorkerRecord): boolean {
+    return sameOptionalString(a.accountUid, b.accountUid) ||
+      sameOptionalString(a.clientId, b.clientId) ||
+      sameOptionalString(a.inviteId, b.inviteId) ||
+      hashesEqual(a.clientIpHash, b.clientIpHash) ||
+      hashesEqual(a.signingPublicKeyHash, b.signingPublicKeyHash);
   }
 
   private activeWebRtcPairForWorker(workerId: string): WebRtcPairRecord | null {
@@ -2628,9 +2847,112 @@ export class ComputeLabStore {
     reason: string,
   ): { receipt: ExecutionReceipt } {
     const receipt = this.makeReceipt(input, decision, reason);
-    this.receipts.set(receipt.receiptId, receipt);
+    this.storeReceipt(receipt);
     this.bumpReputation(input.workerId, "rejected");
     return { receipt };
+  }
+
+  private enforceRegistrationCaps(input: {
+    clientId?: string;
+    accountUid?: string;
+    clientIpHash?: ContentHash;
+    inviteId?: string;
+  }): void {
+    const activeWorkers = Array.from(this.workers.values()).filter((worker) =>
+      this.sessionsForWorker(worker.workerId).some((session) => session.expiresAt > this.now())
+    );
+    if (
+      this.maxWorkersPerIp > 0 &&
+      input.clientIpHash &&
+      activeWorkers.filter((worker) => hashesEqual(worker.clientIpHash, input.clientIpHash)).length >= this.maxWorkersPerIp
+    ) {
+      throw new Error("worker registration IP cap exceeded");
+    }
+    const identityMatches = (worker: WorkerRecord) =>
+      sameOptionalString(worker.accountUid, input.accountUid) ||
+      sameOptionalString(worker.clientId, input.clientId) ||
+      sameOptionalString(worker.inviteId, input.inviteId);
+    if (
+      this.maxSessionsPerClient > 0 &&
+      (input.accountUid || input.clientId || input.inviteId) &&
+      activeWorkers.filter(identityMatches).length >= this.maxSessionsPerClient
+    ) {
+      throw new Error("worker registration identity cap exceeded");
+    }
+  }
+
+  private storeReceipt(receipt: ExecutionReceipt): void {
+    this.receipts.set(receipt.receiptId, receipt);
+    this.appendReceiptLogEntry({
+      eventKind: "receipt-submitted",
+      receipt,
+    });
+  }
+
+  private appendReceiptLogEntry(input:
+    | { eventKind: "receipt-submitted" | "receipt-decision"; receipt: ExecutionReceipt; validation?: ValidationRecord }
+    | { eventKind: "validation-recorded"; validation: ValidationRecord; task: ComputeTask; chunk: ComputeChunk }
+  ): ReceiptLogEntry {
+    const receipt = input.eventKind === "validation-recorded" ? undefined : input.receipt;
+    const validation = input.eventKind === "receipt-submitted" ? undefined : input.validation;
+    const task = input.eventKind === "validation-recorded"
+      ? input.task
+      : this.tasks.get(input.receipt.taskId);
+    const chunk = input.eventKind === "validation-recorded"
+      ? input.chunk
+      : this.findChunk(input.receipt.chunkId);
+    const worker = receipt ? this.workers.get(receipt.workerId) : undefined;
+    const sequence = this.nextReceiptLogSequence++;
+    const base: Omit<ReceiptLogEntry, "entryHash"> = {
+      entryId: `rlog-${sequence.toString().padStart(12, "0")}`,
+      sequence,
+      eventKind: input.eventKind,
+      recordedAt: this.now(),
+      receiptId: receipt?.receiptId,
+      validationId: validation?.validationId,
+      taskId: receipt?.taskId ?? validation?.taskId ?? "",
+      chunkId: receipt?.chunkId ?? validation?.chunkId ?? "",
+      taskKind: task?.kind ?? receipt?.kernelId ?? "unknown",
+      chunkOrdinal: chunk?.ordinal ?? -1,
+      assignmentId: receipt?.assignmentId,
+      kernelId: receipt?.kernelId ?? chunk?.kernelId ?? "unknown",
+      kernelHash: receipt?.kernelHash ?? chunk?.kernelHash ?? EMPTY_CONTENT_HASH,
+      inputHash: receipt?.inputHash ?? chunk?.inputHash ?? EMPTY_CONTENT_HASH,
+      artifactHash: receipt?.artifactHash ?? chunk?.artifactHash,
+      outputHash: receipt?.outputHash,
+      receiptHash: receipt?.receiptHash,
+      signatureStatus: receipt?.signatureStatus,
+      signaturePublicKeyHash: receipt?.signaturePublicKeyHash,
+      decision: receipt?.decision ?? validation?.status,
+      reason: receipt?.reason ?? validation?.reason,
+      transport: receipt?.transport,
+      executionMode: receipt?.executionMode,
+      validationPolicy: publicValidationPolicyForLog(task?.validationPolicy),
+      comparedReceiptIds: validation?.comparedReceiptIds,
+      acceptedReceiptIds: validation?.acceptedReceiptIds,
+      workerHash: worker ? hashCanonical({ kind: "compute-worker", workerId: worker.workerId }) : undefined,
+      workerSessionHash: receipt ? hashCanonical({ kind: "compute-worker-session", workerSessionId: receipt.workerSessionId }) : undefined,
+    };
+    const entry: ReceiptLogEntry = {
+      ...base,
+      entryHash: receiptLogEntryHash(base),
+    };
+    this.receiptLogEntries.set(entry.entryId, entry);
+    return entry;
+  }
+
+  private findChunk(chunkId: string): ComputeChunk | undefined {
+    for (const task of this.tasks.values()) {
+      const chunk = task.chunks.find((candidate) => candidate.chunkId === chunkId);
+      if (chunk) return chunk;
+    }
+    return undefined;
+  }
+
+  private entriesForSegment(segment: ReceiptLogSegment): ReceiptLogEntry[] {
+    return Array.from(this.receiptLogEntries.values())
+      .filter((entry) => entry.segmentId === segment.segmentId)
+      .sort((a, b) => a.sequence - b.sequence);
   }
 
   private makeReceipt(
@@ -2809,6 +3131,20 @@ export class ComputeLabStore {
       recordedAt: this.now(),
     };
     this.validations.set(validation.validationId, validation);
+    this.appendReceiptLogEntry({
+      eventKind: "validation-recorded",
+      validation,
+      task,
+      chunk,
+    });
+    for (const receipt of receipts) {
+      if (receipt.decision === "pending") continue;
+      this.appendReceiptLogEntry({
+        eventKind: "receipt-decision",
+        receipt,
+        validation,
+      });
+    }
     return validation;
   }
 
@@ -3316,11 +3652,28 @@ function stringParam(value: unknown): string {
   return typeof value === "string" ? value : String(value ?? "");
 }
 
+function publicValidationPolicyForLog(policy: ValidationPolicy | undefined): Omit<ValidationPolicy, "expectedOutputHash"> {
+  if (!policy) {
+    return {
+      determinismClass: "bit-exact",
+      validationMode: "expected-hash",
+      minExecutions: 0,
+      minAgreeing: 0,
+    };
+  }
+  const { expectedOutputHash: _expectedOutputHash, ...publicPolicy } = policy;
+  return publicPolicy;
+}
+
 function normalizeIdentityToken(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim().slice(0, 128);
   if (!/^[A-Za-z0-9._:\-]{1,128}$/.test(trimmed)) return undefined;
   return trimmed;
+}
+
+function sameOptionalString(a: string | undefined, b: string | undefined): boolean {
+  return !!a && !!b && a === b;
 }
 
 function hashesEqual(a: ContentHash | undefined, b: ContentHash | undefined): boolean {
@@ -3395,6 +3748,65 @@ export function computeReceiptHash(
   input: Parameters<typeof receiptHashPayload>[0],
 ): ContentHash {
   return hashCanonical(receiptHashPayload(input));
+}
+
+export function receiptLogEntryHash(input: Omit<ReceiptLogEntry, "entryHash">): ContentHash {
+  const { segmentId: _segmentId, ...payload } = input;
+  return hashCanonical({
+    receiptLogEntryVersion: 1,
+    ...payload,
+  });
+}
+
+export function receiptLogSegmentHash(input: Omit<ReceiptLogSegment, "segmentId" | "segmentHash">): ContentHash {
+  return hashCanonical({
+    receiptLogSegmentVersion: 1,
+    firstSequence: input.firstSequence,
+    lastSequence: input.lastSequence,
+    prevSegmentHash: input.prevSegmentHash,
+    entryHashes: input.entryHashes,
+    entryCount: input.entryCount,
+    sealedAt: input.sealedAt,
+  });
+}
+
+export function verifyReceiptLogSegmentBundle(
+  segment: ReceiptLogSegment,
+  entries: ReceiptLogEntry[],
+  previous?: ReceiptLogSegment,
+): ReceiptLogSegmentVerification {
+  const errors: string[] = [];
+  const ordered = entries.slice().sort((a, b) => a.sequence - b.sequence);
+  const expectedHash = receiptLogSegmentHash(segment);
+  if (!hashesEqual(segment.segmentHash, expectedHash)) errors.push("segment hash mismatch");
+  if (previous && !hashesEqual(segment.prevSegmentHash, previous.segmentHash)) {
+    errors.push("previous segment hash mismatch");
+  }
+  if (!previous && segment.prevSegmentHash) errors.push("unexpected previous segment hash");
+  if (ordered.length !== segment.entryCount) errors.push("segment entry count mismatch");
+  if (ordered[0]?.sequence !== segment.firstSequence) errors.push("first sequence mismatch");
+  if (ordered[ordered.length - 1]?.sequence !== segment.lastSequence) errors.push("last sequence mismatch");
+  for (let i = 0; i < ordered.length; i++) {
+    const entry = ordered[i];
+    if (entry.sequence !== segment.firstSequence + i) errors.push(`sequence gap at ${entry.sequence}`);
+    const { entryHash: _entryHash, ...payload } = entry;
+    const expectedEntryHash = receiptLogEntryHash(payload);
+    if (!hashesEqual(entry.entryHash, expectedEntryHash)) errors.push(`entry hash mismatch at ${entry.sequence}`);
+    const segmentHash = segment.entryHashes[i];
+    if (!hashesEqual(segmentHash, entry.entryHash)) errors.push(`segment entry hash mismatch at ${entry.sequence}`);
+    if (entry.segmentId && entry.segmentId !== segment.segmentId) errors.push(`entry segment mismatch at ${entry.sequence}`);
+  }
+  return {
+    segmentId: segment.segmentId,
+    ok: errors.length === 0,
+    entryCount: ordered.length,
+    firstSequence: segment.firstSequence,
+    lastSequence: segment.lastSequence,
+    segmentHash: segment.segmentHash,
+    expectedSegmentHash: expectedHash,
+    previousSegmentHash: previous?.segmentHash,
+    errors,
+  };
 }
 
 function normalizeSigningPublicKey(input: JsonWebKey | undefined): JsonWebKey | undefined {

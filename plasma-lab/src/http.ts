@@ -5,7 +5,7 @@ export function json(res: ServerResponse, code: number, body: unknown): void {
     "content-type": "application/json",
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET,POST,OPTIONS",
-    "access-control-allow-headers": "content-type,authorization,x-plasma-admin-token,x-worker-session-token,x-webrtc-session-token,x-webrtc-pair-token",
+    "access-control-allow-headers": "content-type,authorization,x-plasma-admin-token,x-worker-session-token,x-webrtc-session-token,x-webrtc-pair-token,x-compute-invite-token",
   });
   res.end(JSON.stringify(body));
 }
@@ -33,4 +33,9 @@ export async function readJson<T>(req: IncomingMessage): Promise<T | null> {
 export function header(req: IncomingMessage, name: string): string {
   const value = req.headers[name.toLowerCase()];
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
+export function clientIp(req: IncomingMessage): string {
+  const forwarded = header(req, "x-forwarded-for").split(",")[0]?.trim();
+  return forwarded || req.socket.remoteAddress || "unknown";
 }

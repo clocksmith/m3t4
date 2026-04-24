@@ -956,6 +956,7 @@ class ComputeClient {
         outputHash: { algorithm: "sha256", value: msg.outputHash },
         derived: msg.derived,
         publicOutput: msg.publicOutput,
+        preview: msg.preview,
         determinismClass: current.determinismClass || "bit-exact",
         validationMode: current.validationMode || "expected-hash",
         executionMode: msg.executionMode || "cpu",

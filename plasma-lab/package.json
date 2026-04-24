@@ -16,9 +16,11 @@
     "smoke:webrtc-microscopy-tile-score": "PLASMA_LAB_SMOKE_KERNEL=microscopy-tile-score node scripts/smoke-webrtc-client-artifact.cjs",
     "smoke:webrtc-exploit-search": "PLASMA_LAB_SMOKE_KERNEL=exploit-search node scripts/smoke-webrtc-client-artifact.cjs",
     "smoke:webrtc-asset-tile-audit": "PLASMA_LAB_SMOKE_KERNEL=asset-tile-audit node scripts/smoke-webrtc-client-artifact.cjs",
+    "smoke:webrtc-ladder": "node scripts/smoke-webrtc-ladder.cjs",
     "smoke:webrtc-contact-map-tile": "PLASMA_LAB_SMOKE_KERNEL=contact-map-tile node scripts/smoke-webrtc-client-artifact.cjs",
     "smoke:webrtc-tensor-tile": "PLASMA_LAB_SMOKE_KERNEL=tensor-tile node scripts/smoke-webrtc-client-artifact.cjs",
     "smoke:webrtc-artifact": "node scripts/smoke-webrtc-client-artifact.cjs",
+    "verify:receipt-log": "tsc && node dist/receipt-log-verifier.js",
     "start": "tsc && node dist/index.js"
   },
   "dependencies": {

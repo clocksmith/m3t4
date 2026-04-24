@@ -115,6 +115,14 @@ Current production status as of 2026-04-24:
 - controlled two-browser WebRTC seed-sweep smokes have passed with
   task-required WebRTC, accepted server-issued peer subassignments,
   peer-signed subreceipts, and public receipt verifier success.
+- public receipt-log endpoints now expose both sealed-segment verification and
+  a log-derived projection at `/compute/public/receipt-log/verify` and
+  `/compute/public/receipt-log/projection`; `npm -w plasma-lab run
+  verify:receipt-log -- <bundle.json>` runs the same archive verifier offline
+  against published bundles or exported snapshots.
+- `npm -w plasma-lab run smoke:webrtc-ladder` runs the six-family strict
+  WebRTC smoke ladder: replay-verify, seed-sweep, asset-tile-audit,
+  image-tile-infer, microscopy-tile-score, and exploit-search.
 - repo head now also supports `plasma.tensor_tile.v0` over the same strict
   WebRTC peer-subassignment path; the next hosted smoke should validate that
   end to end after deploy auth is restored.

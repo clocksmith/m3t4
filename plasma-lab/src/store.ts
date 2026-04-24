@@ -96,7 +96,7 @@ import {
   normalizeTensorTileParams,
   runTensorTileReference,
 } from "./kernels/tensor-tile.js";
-import { canonicalJson, hashCanonical, randomId, randomToken, sha256 } from "./plasma/hash.js";
+import { canonicalJson, hashCanonical, randomId, randomToken, sha256, sha256Hex } from "./plasma/hash.js";
 import { canAssign } from "./workload-policy.js";
 import type {
   ContentHash,
@@ -134,6 +134,7 @@ export const COMPUTE_COLLECTIONS = {
   networkClasses: "compute_network_classes",
   publicStats: "compute_public_stats",
   replayBadges: "compute_replay_badges",
+  publicTiles: "compute_public_tiles",
   control: "compute_control",
 } as const;
 
@@ -712,6 +713,29 @@ export interface StoreOptions {
   maxActiveAssignmentsPerIdentity?: number;
 }
 
+export interface PublicTileProvenance {
+  label: string;
+  sourceUrl?: string;
+  license?: string;
+  attribution?: string;
+}
+
+// Content-addressed public tile. Distributed to workers via the
+// cache → p2p → http transport so tile-shaped kernels stop embedding
+// megabyte payloads inside chunk.params.
+export interface PublicTile {
+  sha256: string;
+  mimeType: "image/rgba";
+  widthPx: number;
+  heightPx: number;
+  byteLength: number;
+  bytesBase64: string;
+  provenance: PublicTileProvenance;
+  submittedAt: number;
+}
+
+export const PUBLIC_TILE_MAX_BYTES = 512 * 1024; // keep under Firestore's 1MB doc limit
+
 export interface ComputeLabSnapshot {
   control: {
     acceptAssignments: boolean;
@@ -731,6 +755,7 @@ export interface ComputeLabSnapshot {
   connectivityObservations: ConnectivityObservation[];
   receiptLogEntries: ReceiptLogEntry[];
   receiptLogSegments: ReceiptLogSegment[];
+  publicTiles: PublicTile[];
 }
 
 export class ComputeLabStore {
@@ -748,6 +773,7 @@ export class ComputeLabStore {
   private readonly connectivityObservations = new Map<string, ConnectivityObservation>();
   private readonly receiptLogEntries = new Map<string, ReceiptLogEntry>();
   private readonly receiptLogSegments = new Map<string, ReceiptLogSegment>();
+  private readonly publicTiles = new Map<string, PublicTile>();
   private readonly now: () => number;
   private readonly assignmentTimeoutMs: number;
   private readonly workerSessionTtlMs: number;
@@ -809,6 +835,7 @@ export class ComputeLabStore {
       connectivityObservations: Array.from(this.connectivityObservations.values()),
       receiptLogEntries: Array.from(this.receiptLogEntries.values()).sort((a, b) => a.sequence - b.sequence),
       receiptLogSegments: Array.from(this.receiptLogSegments.values()).sort((a, b) => a.firstSequence - b.firstSequence),
+      publicTiles: Array.from(this.publicTiles.values()).sort((a, b) => b.submittedAt - a.submittedAt),
     };
   }
 
@@ -827,6 +854,7 @@ export class ComputeLabStore {
     this.connectivityObservations.clear();
     this.receiptLogEntries.clear();
     this.receiptLogSegments.clear();
+    this.publicTiles.clear();
     this.nextReceiptLogSequence = 1;
     if (snapshot.control) {
       this.acceptAssignmentsFlag = snapshot.control.acceptAssignments;
@@ -847,6 +875,7 @@ export class ComputeLabStore {
     for (const obs of snapshot.connectivityObservations ?? []) this.connectivityObservations.set(obs.observationId, obs);
     for (const entry of snapshot.receiptLogEntries ?? []) this.receiptLogEntries.set(entry.entryId, entry);
     for (const segment of snapshot.receiptLogSegments ?? []) this.receiptLogSegments.set(segment.segmentId, segment);
+    for (const tile of snapshot.publicTiles ?? []) this.publicTiles.set(tile.sha256, tile);
     this.nextReceiptLogSequence = Math.max(
       1,
       ...Array.from(this.receiptLogEntries.values()).map((entry) => entry.sequence + 1),
@@ -1474,29 +1503,53 @@ export class ComputeLabStore {
 
   seedImageTileInferTask(input: {
     sourceId?: string;
-    width: number;
-    height: number;
-    rgbaBase64: string;
+    width?: number;
+    height?: number;
+    rgbaBase64?: string;
+    tileSha256?: string;
     topK?: number;
     minExecutions?: number;
     minAgreeing?: number;
     requiredTransport?: TransportKind;
     requiredPeerSubreceipt?: boolean;
   }): ComputeTask {
+    // Resolve tile bytes via the public tile store when tileSha256 is
+    // supplied; otherwise accept legacy inline rgbaBase64. Server uses the
+    // full bytes to compute the reference hash, but chunk.params only ship
+    // the sha256 + dims when the store-backed path is used so the worker
+    // fetches via cache → p2p → http instead of receiving the bytes inline.
+    let sourceId = input.sourceId ?? "image-tile";
+    let width: number;
+    let height: number;
+    let rgbaBase64: string;
+    let tileSha256: string | undefined;
+    if (input.tileSha256) {
+      const tile = this.getPublicTile(String(input.tileSha256).toLowerCase());
+      if (!tile) throw new Error("tileSha256 not in public tile store");
+      width = tile.widthPx;
+      height = tile.heightPx;
+      rgbaBase64 = tile.bytesBase64;
+      tileSha256 = tile.sha256;
+    } else {
+      if (input.width == null || input.height == null || input.rgbaBase64 == null) {
+        throw new Error("tileSha256 or (width, height, rgbaBase64) required");
+      }
+      width = input.width;
+      height = input.height;
+      rgbaBase64 = input.rgbaBase64;
+    }
     const normalized = normalizeImageTileInferParams({
-      sourceId: input.sourceId ?? "image-tile",
-      width: input.width,
-      height: input.height,
-      rgbaBase64: input.rgbaBase64,
+      sourceId, width, height, rgbaBase64,
       topK: input.topK ?? 3,
     });
-    const params = {
+    const params: Record<string, string | number | boolean> = {
       sourceId: normalized.sourceId,
       width: normalized.width,
       height: normalized.height,
-      rgbaBase64: normalized.rgbaBase64,
       topK: normalized.topK,
     };
+    if (tileSha256) params.tileSha256 = tileSha256;
+    else params.rgbaBase64 = normalized.rgbaBase64;
     const expectedOutputHash = runImageTileInferReference(normalized).outputHash;
     const taskId = randomId("task");
     const minExecutions = Math.max(1, input.minExecutions ?? 2);
@@ -1773,26 +1826,37 @@ export class ComputeLabStore {
 
   seedMicroscopyTileScoreTask(input: {
     sourceId?: string;
-    width: number;
-    height: number;
-    rgbaBase64: string;
+    width?: number;
+    height?: number;
+    rgbaBase64?: string;
+    tileSha256?: string;
     minExecutions?: number;
     minAgreeing?: number;
     requiredTransport?: TransportKind;
     requiredPeerSubreceipt?: boolean;
   }): ComputeTask {
-    const normalized = normalizeMicroscopyTileScoreParams({
-      sourceId: input.sourceId ?? "microscopy-tile",
-      width: input.width,
-      height: input.height,
-      rgbaBase64: input.rgbaBase64,
-    });
-    const params = {
+    let sourceId = input.sourceId ?? "microscopy-tile";
+    let width: number; let height: number; let rgbaBase64: string;
+    let tileSha256: string | undefined;
+    if (input.tileSha256) {
+      const tile = this.getPublicTile(String(input.tileSha256).toLowerCase());
+      if (!tile) throw new Error("tileSha256 not in public tile store");
+      width = tile.widthPx; height = tile.heightPx; rgbaBase64 = tile.bytesBase64;
+      tileSha256 = tile.sha256;
+    } else {
+      if (input.width == null || input.height == null || input.rgbaBase64 == null) {
+        throw new Error("tileSha256 or (width, height, rgbaBase64) required");
+      }
+      width = input.width; height = input.height; rgbaBase64 = input.rgbaBase64;
+    }
+    const normalized = normalizeMicroscopyTileScoreParams({ sourceId, width, height, rgbaBase64 });
+    const params: Record<string, string | number | boolean> = {
       sourceId: normalized.sourceId,
       width: normalized.width,
       height: normalized.height,
-      rgbaBase64: normalized.rgbaBase64,
     };
+    if (tileSha256) params.tileSha256 = tileSha256;
+    else params.rgbaBase64 = normalized.rgbaBase64;
     const expectedOutputHash = runMicroscopyTileScoreReference(normalized).outputHash;
     const taskId = randomId("task");
     const minExecutions = Math.max(1, input.minExecutions ?? 2);
@@ -1898,26 +1962,37 @@ export class ComputeLabStore {
 
   seedAssetTileAuditTask(input: {
     sourceId?: string;
-    width: number;
-    height: number;
-    rgbaBase64: string;
+    width?: number;
+    height?: number;
+    rgbaBase64?: string;
+    tileSha256?: string;
     minExecutions?: number;
     minAgreeing?: number;
     requiredTransport?: TransportKind;
     requiredPeerSubreceipt?: boolean;
   }): ComputeTask {
-    const normalized = normalizeAssetTileAuditParams({
-      sourceId: input.sourceId ?? "asset-tile",
-      width: input.width,
-      height: input.height,
-      rgbaBase64: input.rgbaBase64,
-    });
-    const params = {
+    let sourceId = input.sourceId ?? "asset-tile";
+    let width: number; let height: number; let rgbaBase64: string;
+    let tileSha256: string | undefined;
+    if (input.tileSha256) {
+      const tile = this.getPublicTile(String(input.tileSha256).toLowerCase());
+      if (!tile) throw new Error("tileSha256 not in public tile store");
+      width = tile.widthPx; height = tile.heightPx; rgbaBase64 = tile.bytesBase64;
+      tileSha256 = tile.sha256;
+    } else {
+      if (input.width == null || input.height == null || input.rgbaBase64 == null) {
+        throw new Error("tileSha256 or (width, height, rgbaBase64) required");
+      }
+      width = input.width; height = input.height; rgbaBase64 = input.rgbaBase64;
+    }
+    const normalized = normalizeAssetTileAuditParams({ sourceId, width, height, rgbaBase64 });
+    const params: Record<string, string | number | boolean> = {
       sourceId: normalized.sourceId,
       width: normalized.width,
       height: normalized.height,
-      rgbaBase64: normalized.rgbaBase64,
     };
+    if (tileSha256) params.tileSha256 = tileSha256;
+    else params.rgbaBase64 = normalized.rgbaBase64;
     const expectedOutputHash = runAssetTileAuditReference(normalized).outputHash;
     const taskId = randomId("task");
     const minExecutions = Math.max(1, input.minExecutions ?? 2);
@@ -2175,6 +2250,55 @@ export class ComputeLabStore {
     return Array.from(this.receiptLogEntries.values())
       .filter((entry) => entry.sequence > afterSequence && (input.includeSegmented === true || !entry.segmentId))
       .sort((a, b) => a.sequence - b.sequence)
+      .slice(0, limit);
+  }
+
+  // Public tile store — content-addressed, admin-uploaded. Workers that
+  // run tile-shaped kernels reference tiles by sha256 and fetch bytes via
+  // the cache → p2p → http transport instead of receiving bytes inline.
+  upsertPublicTile(tile: Omit<PublicTile, "submittedAt"> & { submittedAt?: number }): PublicTile {
+    if (!/^[0-9a-f]{64}$/.test(tile.sha256)) throw new Error("sha256 must be lowercase hex (64 chars)");
+    if (tile.mimeType !== "image/rgba") throw new Error("mimeType must be image/rgba");
+    if (!Number.isInteger(tile.widthPx) || tile.widthPx <= 0 || tile.widthPx > 4096) throw new Error("widthPx out of range");
+    if (!Number.isInteger(tile.heightPx) || tile.heightPx <= 0 || tile.heightPx > 4096) throw new Error("heightPx out of range");
+    if (!Number.isInteger(tile.byteLength) || tile.byteLength <= 0 || tile.byteLength > PUBLIC_TILE_MAX_BYTES) {
+      throw new Error(`byteLength must be 1..${PUBLIC_TILE_MAX_BYTES}`);
+    }
+    if (tile.byteLength !== tile.widthPx * tile.heightPx * 4) throw new Error("byteLength must equal widthPx * heightPx * 4");
+    if (typeof tile.bytesBase64 !== "string" || tile.bytesBase64.length === 0) throw new Error("bytesBase64 required");
+    let decoded: Buffer;
+    try { decoded = Buffer.from(tile.bytesBase64, "base64"); } catch { throw new Error("bytesBase64 invalid"); }
+    if (decoded.length !== tile.byteLength) throw new Error("bytesBase64 decodes to wrong length");
+    const actualSha = sha256Hex(new Uint8Array(decoded));
+    if (actualSha !== tile.sha256) throw new Error("sha256 mismatch");
+    if (!tile.provenance?.label) throw new Error("provenance.label required");
+    const stored: PublicTile = {
+      sha256: tile.sha256,
+      mimeType: tile.mimeType,
+      widthPx: tile.widthPx,
+      heightPx: tile.heightPx,
+      byteLength: tile.byteLength,
+      bytesBase64: tile.bytesBase64,
+      provenance: {
+        label: String(tile.provenance.label).slice(0, 120),
+        sourceUrl: tile.provenance.sourceUrl ? String(tile.provenance.sourceUrl).slice(0, 500) : undefined,
+        license: tile.provenance.license ? String(tile.provenance.license).slice(0, 120) : undefined,
+        attribution: tile.provenance.attribution ? String(tile.provenance.attribution).slice(0, 250) : undefined,
+      },
+      submittedAt: tile.submittedAt ?? this.now(),
+    };
+    this.publicTiles.set(stored.sha256, stored);
+    return stored;
+  }
+
+  getPublicTile(sha256: string): PublicTile | null {
+    return this.publicTiles.get(sha256) ?? null;
+  }
+
+  listPublicTiles(input: { limit?: number } = {}): PublicTile[] {
+    const limit = Math.max(1, Math.min(200, input.limit ?? 50));
+    return Array.from(this.publicTiles.values())
+      .sort((a, b) => b.submittedAt - a.submittedAt)
       .slice(0, limit);
   }
 

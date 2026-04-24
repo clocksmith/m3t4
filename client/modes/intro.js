@@ -68,9 +68,9 @@ export function mount(mountEl, { setStatus }) {
       <section class="intro-fork" aria-label="start">
         <h1>there can only be none</h1>
         <div class="intro-fork-lines">
-          <a class="intro-line-cta is-blue" href="/build" data-intro-nav title="Open Tune and shape a bot before sending it live">tune a bot</a>
-          <a class="intro-line-cta is-red" href="/spectate" data-intro-nav title="Open Live and watch the current ranked match stream">watch it fail</a>
-          <a class="intro-line-cta is-purple" href="/profile" data-intro-nav title="Open Roster and install a public bot">make it public</a>
+          <a class="intro-line-cta is-blue" href="/tune" data-intro-nav title="Open Tune and shape a bot before sending it live">tune a bot</a>
+          <a class="intro-line-cta is-red" href="/live" data-intro-nav title="Open Live and watch the current ranked match stream">watch it fail</a>
+          <a class="intro-line-cta is-purple" href="/roster" data-intro-nav title="Open Roster and install a public bot">make it public</a>
         </div>
       </section>
       <div class="intro-crawl" id="intro-crawl"></div>
@@ -147,7 +147,7 @@ export function mount(mountEl, { setStatus }) {
   }
 
   function enter() {
-    navigateTo("spectate");
+    navigateTo("live");
   }
 
   function syncCrtHeight() {

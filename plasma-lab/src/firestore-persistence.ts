@@ -55,6 +55,7 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
       connectivityObservations,
       receiptLogEntries,
       receiptLogSegments,
+      publicTiles,
       control,
     ] = await Promise.all([
       this.readCollection<ComputeLabSnapshot["workers"][number]>(COMPUTE_COLLECTIONS.workers),
@@ -71,6 +72,7 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
       this.readCollection<ComputeLabSnapshot["connectivityObservations"][number]>(COMPUTE_COLLECTIONS.connectivityObservations),
       this.readCollection<ComputeLabSnapshot["receiptLogEntries"][number]>(COMPUTE_COLLECTIONS.receiptLogEntries),
       this.readCollection<ComputeLabSnapshot["receiptLogSegments"][number]>(COMPUTE_COLLECTIONS.receiptLogSegments),
+      this.readCollection<ComputeLabSnapshot["publicTiles"][number]>(COMPUTE_COLLECTIONS.publicTiles),
       this.readCollection<ComputeLabSnapshot["control"]>(COMPUTE_COLLECTIONS.control),
     ]);
     const now = Date.now();
@@ -90,6 +92,7 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
       connectivityObservations,
       receiptLogEntries,
       receiptLogSegments,
+      publicTiles,
     };
   }
 
@@ -154,6 +157,9 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
     }
     if (patch.receiptLogSegments?.length) {
       writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.receiptLogSegments, patch.receiptLogSegments, (segment) => segment.segmentId, mergeReceiptLogSegment));
+    }
+    if (patch.publicTiles?.length) {
+      writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.publicTiles, patch.publicTiles, (tile) => tile.sha256));
     }
     if (shouldRefreshDerived(patch)) {
       // Narrow the per-entity derived collections to only the workers/matches

@@ -14,15 +14,18 @@ test("route config keeps browser feature gates centralized", () => {
   assert.equal(DEFAULT_ROUTE, "intro");
   assert.equal(LEGACY_HASH.start, "");
   assert.equal(LEGACY_HASH.intro, "");
-  assert.equal(LEGACY_HASH.practice, "build");
+  assert.equal(LEGACY_HASH.practice, "tune");
   assert.equal(LEGACY_HASH.rules, "about");
+  assert.equal(LEGACY_HASH.spectate, "live");
+  assert.equal(LEGACY_HASH.build, "tune");
+  assert.equal(LEGACY_HASH.profile, "roster");
   assert.equal(DEFAULT_FEATURES.p2pDuel, false);
   assert.equal(DEFAULT_FEATURES.computeGenomeKmer, false);
   assert.equal(DEFAULT_FEATURES.webgpuRenderer, false);
   assert.equal(DEFAULT_FEATURES.webglRenderer, false);
   assert.equal(featureForRoute("duel"), "p2pDuel");
-  assert.equal(featureForRoute("spectate"), null);
-  assert.deepEqual(Object.keys(MODES), ["intro", "build", "spectate", "profile", "compute", "rules", "about"]);
+  assert.equal(featureForRoute("live"), null);
+  assert.deepEqual(Object.keys(MODES), ["intro", "tune", "live", "roster", "compute", "rules", "about"]);
 });
 
 test("top navigation keeps home on the logo without a start tab", () => {

@@ -18,9 +18,12 @@ export const DEFAULT_FEATURES = {
 export const LEGACY_HASH = {
   start: "",
   intro: "",
-  practice: "build",
+  practice: "tune",
   lore: "intro",
   rules: "about",
+  spectate: "live",
+  build: "tune",
+  profile: "roster",
 };
 
 const ROUTE_FEATURES = {

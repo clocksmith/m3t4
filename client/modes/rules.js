@@ -62,7 +62,7 @@ export function mount(root, { setStatus }) {
         title: rules.title ?? "Rules",
         subtitle: rules.subtitle ?? "",
         className: "rules-hero",
-        action: linkButtonHtml({ href: "/spectate", variant: "danger", text: "watch live", attrs: { title: "Leave this page and watch live matches" } }),
+        action: linkButtonHtml({ href: "/live", variant: "danger", text: "watch live", attrs: { title: "Leave this page and watch live matches" } }),
       })}
 
       ${aboutCardHtml(rules.about)}

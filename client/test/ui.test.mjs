@@ -107,7 +107,7 @@ test("contextCardHtml and statListHtml render stable shared structures", () => {
 
 test("routeToUrl and navigateTo preserve target search and hash", () => {
   assert.equal(routeToPath("intro"), "/");
-  assert.equal(routeToUrl("spectate", { search: "?match=abc", hash: "#proof" }), "/spectate?match=abc#proof");
+  assert.equal(routeToUrl("live", { search: "?match=abc", hash: "#proof" }), "/live?match=abc#proof");
   assert.equal(routeToUrl("/", { search: "view=full", hash: "top" }), "/?view=full#top");
 
   const previousWindow = global.window;

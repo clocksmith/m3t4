@@ -412,6 +412,43 @@ export async function handleComputeLabRequest(
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/compute/public/tiles/manifest") {
+    const limitRaw = url.searchParams.get("limit");
+    const limit = limitRaw ? Number(limitRaw) : undefined;
+    const tiles = deps.store.listPublicTiles({ limit: Number.isFinite(limit) && limit! > 0 ? limit : undefined });
+    const body = {
+      kind: "m3t4.public-tile.manifest.v0",
+      generatedAt: Date.now(),
+      sourceOrder: ["cache", "p2p", "http"],
+      fallback: { onHit: "return", onMiss: "next", onFailure: "terminal" },
+      tiles: tiles.map((tile) => ({
+        sha256: tile.sha256,
+        mimeType: tile.mimeType,
+        widthPx: tile.widthPx,
+        heightPx: tile.heightPx,
+        byteLength: tile.byteLength,
+        provenance: tile.provenance,
+        submittedAt: tile.submittedAt,
+        httpPath: `/compute/public/tiles/${encodeURIComponent(tile.sha256)}`,
+        cacheKey: `public-tile:${tile.sha256}`,
+      })),
+    };
+    json(res, 200, { ...body, manifestHash: hashCanonical(body) });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname.startsWith("/compute/public/tiles/")) {
+    const sha256 = url.pathname.slice("/compute/public/tiles/".length);
+    if (!/^[0-9a-f]{64}$/.test(sha256)) {
+      json(res, 400, { error: "sha256 must be 64 hex chars" });
+      return true;
+    }
+    const tile = deps.store.getPublicTile(sha256);
+    if (!tile) json(res, 404, { error: "tile not found" });
+    else json(res, 200, tile);
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/compute/public/receipt-log/manifest") {
     const limit = Number(url.searchParams.get("limit") ?? "");
     const segments = deps.store.listReceiptLogSegments({ limit: Number.isFinite(limit) && limit > 0 ? limit : undefined });
@@ -725,6 +762,52 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     json(res, 403, { error: "admin disabled" });
     return true;
   }
+  if (req.method === "POST" && url.pathname === "/compute/admin/tiles") {
+    const body = await readJson<{
+      sha256?: string;
+      mimeType?: "image/rgba";
+      widthPx?: number;
+      heightPx?: number;
+      byteLength?: number;
+      bytesBase64?: string;
+      provenance?: { label?: string; sourceUrl?: string; license?: string; attribution?: string };
+    }>(req);
+    try {
+      const tile = deps.store.upsertPublicTile({
+        sha256: String(body?.sha256 ?? "").toLowerCase(),
+        mimeType: "image/rgba",
+        widthPx: Number(body?.widthPx ?? 0),
+        heightPx: Number(body?.heightPx ?? 0),
+        byteLength: Number(body?.byteLength ?? 0),
+        bytesBase64: String(body?.bytesBase64 ?? ""),
+        provenance: {
+          label: String(body?.provenance?.label ?? ""),
+          sourceUrl: body?.provenance?.sourceUrl ? String(body.provenance.sourceUrl) : undefined,
+          license: body?.provenance?.license ? String(body.provenance.license) : undefined,
+          attribution: body?.provenance?.attribution ? String(body.provenance.attribution) : undefined,
+        },
+      });
+      await flushStore(deps.store);
+      json(res, 200, {
+        sha256: tile.sha256,
+        widthPx: tile.widthPx,
+        heightPx: tile.heightPx,
+        byteLength: tile.byteLength,
+        httpPath: `/compute/public/tiles/${encodeURIComponent(tile.sha256)}`,
+        cacheKey: `public-tile:${tile.sha256}`,
+      });
+    } catch (e) {
+      json(res, 400, { error: message(e) });
+    }
+    return true;
+  }
+  if (req.method === "GET" && url.pathname === "/compute/admin/tiles") {
+    const limitRaw = url.searchParams.get("limit");
+    const limit = limitRaw ? Number(limitRaw) : undefined;
+    const tiles = deps.store.listPublicTiles({ limit: Number.isFinite(limit) && limit! > 0 ? limit : undefined });
+    json(res, 200, { tiles });
+    return true;
+  }
   if (req.method === "POST" && url.pathname === "/compute/admin/assignments") {
     const body = await readJson<{ acceptAssignments?: boolean; durationMs?: number }>(req);
     if (typeof body?.acceptAssignments !== "boolean") {
@@ -901,6 +984,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       width?: number;
       height?: number;
       rgbaBase64?: string;
+      tileSha256?: string;
       topK?: number;
       minExecutions?: number;
       minAgreeing?: number;
@@ -911,9 +995,10 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       const preset = body?.presetId ? resolveTileSamplePreset(body.presetId, "image") : null;
       const task = deps.store.seedImageTileInferTask({
         sourceId: body?.sourceId ?? preset?.sourceId,
-        width: body?.width ?? preset?.width ?? 0,
-        height: body?.height ?? preset?.height ?? 0,
-        rgbaBase64: String(body?.rgbaBase64 ?? preset?.rgbaBase64 ?? ""),
+        width: body?.width ?? preset?.width,
+        height: body?.height ?? preset?.height,
+        rgbaBase64: body?.tileSha256 ? undefined : (body?.rgbaBase64 ?? preset?.rgbaBase64),
+        tileSha256: body?.tileSha256,
         topK: body?.topK,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
@@ -975,6 +1060,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       width?: number;
       height?: number;
       rgbaBase64?: string;
+      tileSha256?: string;
       minExecutions?: number;
       minAgreeing?: number;
       requiredTransport?: TransportKind;
@@ -984,9 +1070,10 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       const preset = body?.presetId ? resolveTileSamplePreset(body.presetId, "microscopy") : null;
       const task = deps.store.seedMicroscopyTileScoreTask({
         sourceId: body?.sourceId ?? preset?.sourceId,
-        width: body?.width ?? preset?.width ?? 0,
-        height: body?.height ?? preset?.height ?? 0,
-        rgbaBase64: String(body?.rgbaBase64 ?? preset?.rgbaBase64 ?? ""),
+        width: body?.width ?? preset?.width,
+        height: body?.height ?? preset?.height,
+        rgbaBase64: body?.tileSha256 ? undefined : (body?.rgbaBase64 ?? preset?.rgbaBase64),
+        tileSha256: body?.tileSha256,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
         requiredTransport: transportPolicy(body?.requiredTransport),
@@ -1048,6 +1135,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       width?: number;
       height?: number;
       rgbaBase64?: string;
+      tileSha256?: string;
       minExecutions?: number;
       minAgreeing?: number;
       requiredTransport?: TransportKind;
@@ -1057,9 +1145,10 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       const preset = body?.presetId ? resolveTileSamplePreset(body.presetId, "image") : null;
       const task = deps.store.seedAssetTileAuditTask({
         sourceId: body?.sourceId ?? preset?.sourceId,
-        width: body?.width ?? preset?.width ?? 0,
-        height: body?.height ?? preset?.height ?? 0,
-        rgbaBase64: String(body?.rgbaBase64 ?? preset?.rgbaBase64 ?? ""),
+        width: body?.width ?? preset?.width,
+        height: body?.height ?? preset?.height,
+        rgbaBase64: body?.tileSha256 ? undefined : (body?.rgbaBase64 ?? preset?.rgbaBase64),
+        tileSha256: body?.tileSha256,
         minExecutions: body?.minExecutions,
         minAgreeing: body?.minAgreeing,
         requiredTransport: transportPolicy(body?.requiredTransport),
@@ -1471,7 +1560,9 @@ function isCachedPublicRead(pathname: string): boolean {
     pathname === "/compute/public/receipt-log/verify" ||
     pathname === "/compute/public/receipt-log/segments" ||
     pathname.startsWith("/compute/public/receipt-log/segments/") ||
-    pathname.startsWith("/compute/public/replay-badges/")
+    pathname.startsWith("/compute/public/replay-badges/") ||
+    pathname === "/compute/public/tiles/manifest" ||
+    pathname.startsWith("/compute/public/tiles/")
   );
 }
 

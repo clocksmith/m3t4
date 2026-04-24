@@ -178,7 +178,7 @@ async function renderDashboard(user) {
   root.innerHTML = `
     <div class="page">
       ${rosterPageHeaderHtml({
-        subtitle: `@${user.handle ?? "unclaimed"} · ${user.uid} · only you can see this`,
+        subtitle: `@${user.handle ?? "unclaimed"} · ${user.uid}`,
         action: buttonHtml({ id: "signout", text: "sign out", attrs: { title: "End your current session" } }),
       })}
       ${rosterIntroPanelHtml({ needsHandle: !user.handle })}

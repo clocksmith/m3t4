@@ -750,7 +750,7 @@ class ComputeClient {
     this.runWorkerAssignment({ assignment, chunk, task });
   }
 
-  runWorkerAssignment({ assignment, chunk, task }) {
+  async runWorkerAssignment({ assignment, chunk, task }) {
     this.current = {
       assignmentId: assignment.assignmentId,
       assignmentToken: assignment.assignmentToken,
@@ -765,7 +765,51 @@ class ComputeClient {
     this.state = `running ${chunk.kind}`;
     this.emit();
     if (!this.worker) this.worker = this.spawnWorker();
-    this.worker.postMessage({ type: "run", assignmentId: assignment.assignmentId, chunk });
+    try {
+      const prepared = await this.prepareChunkForWorker(chunk);
+      this.worker.postMessage({ type: "run", assignmentId: assignment.assignmentId, chunk: prepared });
+    } catch (e) {
+      // Prefetch (tile fetch over cache → p2p → http) failed. Release the
+      // assignment locally and back off — the coordinator will reissue.
+      this.debug.lastWorkerError = {
+        kind: "tile-prefetch",
+        assignmentId: assignment.assignmentId,
+        chunkId: chunk.chunkId,
+        message: message(e),
+        at: Date.now(),
+      };
+      this.state = `tile prefetch failed: ${message(e)}`;
+      this.current = null;
+      this.totals.rejected++;
+      this.emit();
+      this.schedule(5000);
+    }
+  }
+
+  // Before posting a chunk to the worker, resolve any tileSha256 reference
+  // via the cache → p2p → http transport. Workers stay compute-only; all
+  // network traffic lives on the main thread.
+  async prepareChunkForWorker(chunk) {
+    const params = chunk?.params;
+    if (!params || typeof params !== "object") return chunk;
+    if (typeof params.tileSha256 !== "string") return chunk;
+    try {
+      const { fetchPublicTile } = await import("./tile-archive.js");
+      const origin = computeLabOrigin();
+      const { body } = await fetchPublicTile({ sha256: params.tileSha256, origin });
+      const { tileSha256, ...rest } = params;
+      return {
+        ...chunk,
+        params: {
+          ...rest,
+          width: body.widthPx,
+          height: body.heightPx,
+          rgbaBase64: body.bytesBase64,
+        },
+      };
+    } catch (e) {
+      throw new Error(`tile fetch failed: ${message(e)}`);
+    }
   }
 
   async runWebRtcAssignment({ assignment, chunk, task }) {
@@ -1029,6 +1073,14 @@ function installConsoleHelper(client) {
     replayArchive: async (options = {}) => {
       const { loadRecentReplays } = await import("./replay-archive.js");
       return loadRecentReplays(options);
+    },
+    tileArchive: async (options = {}) => {
+      const { fetchTileManifest } = await import("./tile-archive.js");
+      return fetchTileManifest(options);
+    },
+    fetchTile: async (sha256, options = {}) => {
+      const { fetchPublicTile } = await import("./tile-archive.js");
+      return fetchPublicTile({ sha256, ...options });
     },
   };
 }

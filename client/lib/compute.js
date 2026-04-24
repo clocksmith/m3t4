@@ -30,10 +30,7 @@ const ASSET_TILE_AUDIT_KERNEL = "asset.tile_audit.v0";
 const PUBLIC_ARTIFACT_KERNEL = "m3t4.public_artifact_verify.v0";
 const REPLAY_VERIFY_KERNEL = "m3t4.replay_verify.v1";
 const SEED_SWEEP_KERNEL = "m3t4.seed_sweep.v0";
-const EMBEDDING_TILE_KERNEL = "ml.embedding_tile.v0";
 const IMAGE_TILE_INFER_KERNEL = "ml.image_tile_infer.v0";
-const PREFILL_TOPK_PROBE_KERNEL = "ml.prefill_topk_probe.v0";
-const LOGIT_DIVERGENCE_KERNEL = "ml.logit_divergence.v0";
 const CONTACT_MAP_TILE_KERNEL = "science.contact_map_tile.v0";
 const GENOME_KMER_KERNEL = "science.genome_kmer.v0";
 const MICROSCOPY_TILE_SCORE_KERNEL = "science.microscopy_tile_score.v0";
@@ -1017,22 +1014,6 @@ function artifactWebRtcStrict() {
   return window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__ === true;
 }
 
-function embeddingTileEnabled() {
-  return window.__M3T4_COMPUTE_EMBED_TILE__ === true && embeddingTileModelId().length > 0;
-}
-
-function embeddingTileModelId() {
-  return String(window.__M3T4_COMPUTE_EMBED_MODEL__ || "").trim();
-}
-
-function prefillTopkProbeEnabled() {
-  return window.__M3T4_COMPUTE_PREFILL_TOPK_PROBE__ === true;
-}
-
-function logitDivergenceEnabled() {
-  return window.__M3T4_COMPUTE_LOGIT_DIVERGENCE__ === true;
-}
-
 function genomeKmerEnabled() {
   return window.__M3T4_COMPUTE_GENOME_KMER__ === true;
 }
@@ -1180,9 +1161,6 @@ async function buildCapability(runtimeInfo = {}, opts = {}) {
     kernels.push("device_witness.webgpu.v0");
     kernels.push(CONTACT_MAP_TILE_KERNEL);
     kernels.push(TENSOR_TILE_KERNEL);
-    if (embeddingTileEnabled()) kernels.push(EMBEDDING_TILE_KERNEL);
-    if (prefillTopkProbeEnabled()) kernels.push(PREFILL_TOPK_PROBE_KERNEL);
-    if (logitDivergenceEnabled()) kernels.push(LOGIT_DIVERGENCE_KERNEL);
   }
   if (genomeKmerEnabled()) kernels.push(GENOME_KMER_KERNEL);
   if (typeof RTCPeerConnection !== "undefined") kernels.push("device_witness.webrtc.v0");
@@ -2026,77 +2004,6 @@ function safeWebRtcDataChunk(chunk) {
       throw new Error("seed sweep public preset params required");
     }
   }
-  if (chunk.kind === EMBEDDING_TILE_KERNEL) {
-    const topK = Number(chunk.params?.topK);
-    if (!Number.isSafeInteger(topK) || topK < 1 || topK > 8) {
-      throw new Error("embedding tile topK invalid");
-    }
-    if (typeof chunk.params?.modelId !== "string" || chunk.params.modelId.length === 0) {
-      throw new Error("embedding tile modelId required");
-    }
-    if (
-      typeof chunk.params?.queryText !== "string" ||
-      chunk.params.queryText.length === 0 ||
-      chunk.params.queryText.length > 2048
-    ) {
-      throw new Error("embedding tile queryText invalid");
-    }
-    if (
-      typeof chunk.params?.documentsJson !== "string" ||
-      chunk.params.documentsJson.length === 0 ||
-      chunk.params.documentsJson.length > 16 * 1024
-    ) {
-      throw new Error("embedding tile documentsJson invalid");
-    }
-    let docs = null;
-    try { docs = JSON.parse(chunk.params.documentsJson); } catch {}
-    if (
-      !Array.isArray(docs) ||
-      docs.length < 1 ||
-      docs.length > 16 ||
-      docs.some((doc) => typeof doc !== "string" || doc.length === 0 || doc.length > 2048)
-    ) {
-      throw new Error("embedding tile documents invalid");
-    }
-  }
-  if (chunk.kind === PREFILL_TOPK_PROBE_KERNEL) {
-    const topK = Number(chunk.params?.topK);
-    if (!Number.isSafeInteger(topK) || topK < 1 || topK > 8) {
-      throw new Error("prefill top-k probe topK invalid");
-    }
-    if (
-      typeof chunk.params?.modelId !== "string" ||
-      chunk.params.modelId !== "gemma-3-270m-it-q4k-ehf16-af32"
-    ) {
-      throw new Error("prefill top-k probe modelId invalid");
-    }
-    if (
-      typeof chunk.params?.promptText !== "string" ||
-      chunk.params.promptText.length === 0 ||
-      chunk.params.promptText.length > 1024
-    ) {
-      throw new Error("prefill top-k probe promptText invalid");
-    }
-  }
-  if (chunk.kind === LOGIT_DIVERGENCE_KERNEL) {
-    const topK = Number(chunk.params?.topK);
-    if (!Number.isSafeInteger(topK) || topK < 1 || topK > 8) {
-      throw new Error("logit divergence topK invalid");
-    }
-    if (
-      typeof chunk.params?.modelId !== "string" ||
-      chunk.params.modelId !== "gemma-3-270m-it-q4k-ehf16-af32"
-    ) {
-      throw new Error("logit divergence modelId invalid");
-    }
-    if (
-      typeof chunk.params?.promptText !== "string" ||
-      chunk.params.promptText.length === 0 ||
-      chunk.params.promptText.length > 1024
-    ) {
-      throw new Error("logit divergence promptText invalid");
-    }
-  }
   if (chunk.kind === GENOME_KMER_KERNEL) {
     const k = Number(chunk.params?.k);
     if (!Number.isSafeInteger(k) || k < 2 || k > 6) {
@@ -2171,7 +2078,7 @@ function safeWebRtcDataChunk(chunk) {
 }
 
 function webRtcDataKernel(kind) {
-  return kind === ASSET_TILE_AUDIT_KERNEL || kind === PUBLIC_ARTIFACT_KERNEL || kind === REPLAY_VERIFY_KERNEL || kind === SEED_SWEEP_KERNEL || kind === EMBEDDING_TILE_KERNEL || kind === IMAGE_TILE_INFER_KERNEL || kind === PREFILL_TOPK_PROBE_KERNEL || kind === LOGIT_DIVERGENCE_KERNEL || kind === CONTACT_MAP_TILE_KERNEL || kind === GENOME_KMER_KERNEL || kind === MICROSCOPY_TILE_SCORE_KERNEL || kind === EXPLOIT_SEARCH_KERNEL || kind === TENSOR_TILE_KERNEL;
+  return kind === ASSET_TILE_AUDIT_KERNEL || kind === PUBLIC_ARTIFACT_KERNEL || kind === REPLAY_VERIFY_KERNEL || kind === SEED_SWEEP_KERNEL || kind === IMAGE_TILE_INFER_KERNEL || kind === CONTACT_MAP_TILE_KERNEL || kind === GENOME_KMER_KERNEL || kind === MICROSCOPY_TILE_SCORE_KERNEL || kind === EXPLOIT_SEARCH_KERNEL || kind === TENSOR_TILE_KERNEL;
 }
 
 const PEER_WORK_PARAMS = Object.freeze({ start: 1009, endExclusive: 1033 });
@@ -2569,20 +2476,14 @@ function cloneJson(value) {
 }
 
 function peerWarmTimeoutMs(kind) {
-  if (kind === EMBEDDING_TILE_KERNEL) return 45_000;
-  if (kind === PREFILL_TOPK_PROBE_KERNEL || kind === LOGIT_DIVERGENCE_KERNEL) return 30_000;
   return 5_000;
 }
 
 function peerWorkerTimeoutMs(kind) {
-  if (kind === EMBEDDING_TILE_KERNEL) return 45_000;
-  if (kind === PREFILL_TOPK_PROBE_KERNEL || kind === LOGIT_DIVERGENCE_KERNEL) return 30_000;
   return 3_500;
 }
 
 function webRtcDataTimeoutMs(kind) {
-  if (kind === EMBEDDING_TILE_KERNEL) return 45_000;
-  if (kind === PREFILL_TOPK_PROBE_KERNEL || kind === LOGIT_DIVERGENCE_KERNEL) return 30_000;
   return 6_500;
 }
 

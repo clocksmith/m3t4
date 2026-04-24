@@ -1206,10 +1206,9 @@ Public peer proposal remains intentionally closed until quotas and duplicate
 suppression are added. Registered peers should execute assigned preset tasks;
 they should not be able to mint arbitrary public task backlog.
 
-The Doppler-backed browser ML probes are parked out of the active Hosting
-surface. Immediate public work stays on non-ML kernels while the browser
-runtime boundary is redesigned so `m3t4` does not ship the whole Doppler source
-tree for one workload lane.
+Browser-model ML probes are removed from the active Hosting surface. Immediate
+public work stays on bounded non-ML kernels while the browser runtime and
+validator boundaries are redesigned.
 
 ## Public Artifact Export
 

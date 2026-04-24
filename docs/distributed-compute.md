@@ -51,8 +51,8 @@ Current controlled-production status as of 2026-04-22:
   accepted public chunks and receipts, not per-user credit.
 - `plasma.tensor_tile.v0` is implemented as the first bounded WebGPU
   useful-work fixture, gated to workers with accepted WebGPU witness evidence.
-- Doppler-backed browser ML probes are currently parked outside the active
-  public compute surface and Hosting bundle.
+- Browser-model ML probes are removed from the active public compute surface
+  and Hosting bundle.
 - repo head also supports `plasma.tensor_tile.v0` over strict WebRTC
   `plasma-data` with task-required transport and peer subassignments; the next
   hosted smoke is still pending deploy auth recovery.
@@ -123,9 +123,9 @@ Repo head now supports the following near-term real workloads:
    scoring with deterministic focus, stain-balance, cellularity, artifact, and
    anomaly heuristics. This keeps the science-shaped lane truthful without
    requiring a heavyweight browser model.
-6. Doppler-backed browser ML probes are currently parked rather than exposed
-   on the public compute surface. The active public lanes remain non-ML
-   workloads while the browser-runtime boundary is redesigned.
+6. Browser-model ML probes are not part of the active public compute surface.
+   The active public lanes remain bounded non-ML workloads while the
+   browser-runtime and validator boundaries are redesigned.
 
 Do not jump straight from `plasma.tensor_tile.v0` to full training, private
 inference, or full protein folding. The honest next constraint is validator

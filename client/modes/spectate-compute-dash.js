@@ -35,6 +35,7 @@ export function createSpectateComputeDash({ root, computeLabOrigin }) {
   let quorum = null;      // { matchId, totalSubmitters, ticks: [...] }
   let certificate = null; // { winnerHandle, bundleRoot, bundleManifestHash, matchReceiptHash, counts }
   let matchMeta = null;   // { winnerHandle } set on matchEnd
+  let bundleVerified = false;
   let lastAcceptedCounts = new Map(); // chunkId -> accepted count, for synthetic feed diffs
   let feed = [];          // [{ t, kind, text, emphasis }]
   let pollTimer = null;
@@ -66,6 +67,7 @@ export function createSpectateComputeDash({ root, computeLabOrigin }) {
   function onMatchStart({ matchId: nextMatchId, bundle, match }) {
     matchId = nextMatchId ?? null;
     bundleRef = bundle ? normalizeBundleRef(bundle) : null;
+    bundleVerified = false;
     aggregate = null;
     quorum = null;
     certificate = null;
@@ -146,6 +148,7 @@ export function createSpectateComputeDash({ root, computeLabOrigin }) {
       return res.json();
     };
     try {
+      if (bundleRef && !bundleVerified) await verifyBundleForMatch(fetchJson);
       if (!bundleRef && matchId) await discoverBundleForMatch(fetchJson);
       const [aggJson, quorumJson] = await Promise.all([
         bundleRef ? fetchJson(`/compute/public/bundles/${encodeURIComponent(bundleRef.bundleId)}`).catch((e) => ({ error: e.message })) : Promise.resolve(null),
@@ -204,7 +207,29 @@ export function createSpectateComputeDash({ root, computeLabOrigin }) {
     const science = matches.find((bundle) => bundle.kernelId === "science.contact_map_tile.v0") ?? matches[0];
     if (!science?.bundleId) return;
     bundleRef = normalizeBundleRef(science);
+    bundleVerified = true;
     if (bundleRef) pushBundleStartFeed(bundleRef, "recovered");
+  }
+
+  async function verifyBundleForMatch(fetchJson) {
+    const json = await fetchJson("/compute/public/bundles?limit=25").catch(() => null);
+    const bundles = Array.isArray(json?.bundles) ? json.bundles : [];
+    const exact = bundles.find((bundle) => bundle?.bundleId === bundleRef?.bundleId);
+    if (exact) {
+      bundleRef = normalizeBundleRef(exact);
+      bundleVerified = true;
+      return;
+    }
+    const matches = bundles.filter((bundle) => bundle?.matchId === matchId);
+    const science = matches.find((bundle) => bundle.kernelId === "science.contact_map_tile.v0") ?? matches[0];
+    if (science?.bundleId) {
+      bundleRef = normalizeBundleRef(science);
+      bundleVerified = true;
+      if (bundleRef) pushBundleStartFeed(bundleRef, "recovered");
+      return;
+    }
+    bundleRef = null;
+    bundleVerified = false;
   }
 
   function normalizeBundleRef(bundle) {

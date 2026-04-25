@@ -79,6 +79,8 @@ export async function materializeScienceBundle(
     sponsors: string[];
     expectedMatchSec?: number;
     presetId?: string;
+    tileRows?: number;
+    tileCols?: number;
   },
   fetchImpl: FetchLike = fetch,
 ): Promise<MaterializedBundle | null> {
@@ -88,6 +90,8 @@ export async function materializeScienceBundle(
     sponsors: input.sponsors,
     expectedMatchSec: input.expectedMatchSec ?? 180,
     presetId: input.presetId,
+    tileRows: input.tileRows,
+    tileCols: input.tileCols,
   }, fetchImpl);
   if (!res.ok || !res.body?.bundle?.bundleId) return null;
   return {

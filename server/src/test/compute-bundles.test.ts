@@ -81,6 +81,37 @@ test("materializeScienceBundle posts to materialize-contact-map and returns bund
   assert.equal(seen[0].url, "http://plasma-lab.test/compute/admin/bundles/materialize-contact-map");
   assert.equal(seen[0].body.matchId, "m1");
   assert.equal(seen[0].body.expectedMatchSec, 120);
+  assert.equal(seen[0].body.tileRows, undefined);
+  assert.equal(seen[0].body.tileCols, undefined);
+});
+
+test("materializeScienceBundle forwards explicit tile grid sizing", async () => {
+  const seen: any[] = [];
+  const fetchImpl = async (_url: string, init: any) => {
+    seen.push(JSON.parse(init.body));
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        bundle: { bundleId: "bundle-small", kernelId: "science.contact_map_tile.v0", chunkIds: ["c1"], sponsors: [], deadlineAt: null },
+        preset: "preset-a",
+        tileRows: 4,
+        tileCols: 4,
+        chunkCount: 16,
+      }),
+      text: async () => "",
+    };
+  };
+  const result = await materializeScienceBundle(OK_CONFIG, {
+    matchId: "m-small",
+    sponsors: [],
+    tileRows: 4,
+    tileCols: 4,
+  }, fetchImpl as any);
+  assert.ok(result);
+  assert.equal(result!.chunkCount, 16);
+  assert.equal(seen[0].tileRows, 4);
+  assert.equal(seen[0].tileCols, 4);
 });
 
 test("materializeScienceBundle returns null on admin failure", async () => {

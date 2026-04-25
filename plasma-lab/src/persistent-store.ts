@@ -3,6 +3,7 @@ import {
   ComputeLabStore,
   type Assignment,
   type ConnectivityObservation,
+  type ComputeBundleManifest,
   type ComputeLabSnapshot,
   type ComputeTask,
   type ExecutionReceipt,
@@ -13,6 +14,7 @@ import {
   type ValidationRecord,
   type WebRtcPairRecord,
   type WebRtcSessionRecord,
+  type WitnessAttestation,
   type WorkerRecord,
   type WorkerSession,
 } from "./store.js";
@@ -319,6 +321,34 @@ export class PersistentComputeLabStore extends ComputeLabStore {
   }): ComputeTask {
     const out = super.seedAssetTileAuditTask(input);
     this.persist(() => ({ tasks: [out] }));
+    return out;
+  }
+
+  createBundle(input: Parameters<ComputeLabStore["createBundle"]>[0]): ComputeBundleManifest {
+    const out = super.createBundle(input);
+    const chunkIds = new Set(out.chunkIds);
+    this.persist((snapshot) => ({
+      bundles: [out],
+      tasks: snapshot.tasks.filter((task) => task.chunks.some((chunk) => chunkIds.has(chunk.chunkId))),
+    }));
+    return out;
+  }
+
+  markBundleRunning(bundleId: string): ComputeBundleManifest {
+    const out = super.markBundleRunning(bundleId);
+    this.persist(() => ({ bundles: [out] }));
+    return out;
+  }
+
+  sealBundle(input: Parameters<ComputeLabStore["sealBundle"]>[0]): ComputeBundleManifest {
+    const out = super.sealBundle(input);
+    this.persist(() => ({ bundles: [out] }));
+    return out;
+  }
+
+  submitWitnessAttestation(input: Parameters<ComputeLabStore["submitWitnessAttestation"]>[0]): WitnessAttestation {
+    const out = super.submitWitnessAttestation(input);
+    this.persist(() => ({ witnessAttestations: [out] }));
     return out;
   }
 

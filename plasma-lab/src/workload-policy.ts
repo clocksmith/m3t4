@@ -73,36 +73,38 @@ const POLICIES: WorkloadPolicy[] = [
   // Kept reachable via the store + scheduler so receipt-verification tests,
   // WebRTC proof fixtures, and manual admin seeding still work end to end.
   { workload: SEED_SWEEP_KERNEL_ID,              release: "admin-preview", scheduleMode: "manual",       requiredTier: "cpu-light",     publicVisible: false, defaultEnabled: false },
-  { workload: EXPLOIT_SEARCH_KERNEL_ID,          release: "released",     scheduleMode: "manual",        requiredTier: "cpu-light",     publicVisible: true,  defaultEnabled: true  },
-  { workload: ASSET_TILE_AUDIT_KERNEL_ID,        release: "released",     scheduleMode: "manual",        requiredTier: "cpu-light",     publicVisible: true,  defaultEnabled: true  },
+  // Hidden CPU lanes — admin/test paths keep working; public surfaces hide them.
+  { workload: EXPLOIT_SEARCH_KERNEL_ID,          release: "admin-preview", scheduleMode: "manual",        requiredTier: "cpu-light",     publicVisible: false, defaultEnabled: false },
+  { workload: ASSET_TILE_AUDIT_KERNEL_ID,        release: "admin-preview", scheduleMode: "manual",        requiredTier: "cpu-light",     publicVisible: false, defaultEnabled: false },
 
   // Science lanes.
-  { workload: GENOME_KMER_KERNEL_ID,             release: "released",     scheduleMode: "bounded-window", requiredTier: "cpu-light",     publicVisible: true,  defaultEnabled: true  },
-  { workload: MICROSCOPY_TILE_SCORE_KERNEL_ID,   release: "released",     scheduleMode: "bounded-window", requiredTier: "cpu-light",     publicVisible: true,  defaultEnabled: true  },
+  { workload: GENOME_KMER_KERNEL_ID,             release: "admin-preview", scheduleMode: "manual",        requiredTier: "cpu-light",     publicVisible: false, defaultEnabled: false },
+  { workload: MICROSCOPY_TILE_SCORE_KERNEL_ID,   release: "admin-preview", scheduleMode: "manual",        requiredTier: "cpu-light",     publicVisible: false, defaultEnabled: false },
   // Contact map stays experimental until we have production receipts + previews.
-  { workload: CONTACT_MAP_TILE_KERNEL_ID,        release: "experimental", scheduleMode: "bounded-window", requiredTier: "webgpu-light",  publicVisible: true,  defaultEnabled: true  },
-  // Mandelbrot is the showcase bit-exact-u32 WebGPU lane. Starts
-  // experimental + manual so we can admin-seed first before opening
-  // intake to scheduler-driven cron.
-  { workload: MANDELBROT_TILE_KERNEL_ID,         release: "experimental", scheduleMode: "manual",        requiredTier: "webgpu-light",  publicVisible: true,  defaultEnabled: true  },
+  { workload: CONTACT_MAP_TILE_KERNEL_ID,        release: "experimental",  scheduleMode: "bounded-window", requiredTier: "webgpu-light", publicVisible: true,  defaultEnabled: true  },
+  // Mandelbrot hidden in favor of focusing public GPU intake on the
+  // contact-map and heat-diffusion science lanes; still admin-seedable.
+  { workload: MANDELBROT_TILE_KERNEL_ID,         release: "admin-preview", scheduleMode: "manual",        requiredTier: "webgpu-light",  publicVisible: false, defaultEnabled: false },
   // Heat diffusion — textbook PDE, integer explicit Euler stencil on a
   // bounded grid. Admin-seedable experimental lane, public-visible.
-  { workload: HEAT_DIFFUSION_TILE_KERNEL_ID,     release: "experimental", scheduleMode: "manual",        requiredTier: "webgpu-light",  publicVisible: true,  defaultEnabled: true  },
+  { workload: HEAT_DIFFUSION_TILE_KERNEL_ID,     release: "experimental",  scheduleMode: "manual",        requiredTier: "webgpu-light",  publicVisible: true,  defaultEnabled: true  },
 
-  // ML.
-  { workload: IMAGE_TILE_INFER_KERNEL_ID,        release: "released",     scheduleMode: "bounded-window", requiredTier: "cpu-light",     publicVisible: true,  defaultEnabled: true  },
+  // ML — hidden (CPU-only inference superseded by WebGPU lanes).
+  { workload: IMAGE_TILE_INFER_KERNEL_ID,        release: "admin-preview", scheduleMode: "manual",        requiredTier: "cpu-light",     publicVisible: false, defaultEnabled: false },
 
   // Plasma / infra.
-  { workload: TENSOR_TILE_KERNEL_ID,             release: "released",     scheduleMode: "manual",        requiredTier: "webgpu-light",  publicVisible: true,  defaultEnabled: true  },
-  { workload: PRIME_SEARCH_KERNEL_ID,            release: "admin-preview", scheduleMode: "manual",       requiredTier: "cpu-light",     publicVisible: false, defaultEnabled: false },
+  { workload: TENSOR_TILE_KERNEL_ID,             release: "released",      scheduleMode: "manual",        requiredTier: "webgpu-light",  publicVisible: true,  defaultEnabled: true  },
+  { workload: PRIME_SEARCH_KERNEL_ID,            release: "admin-preview", scheduleMode: "manual",        requiredTier: "cpu-light",     publicVisible: false, defaultEnabled: false },
 
   // Device witness — infrastructure workloads. Public-visible for
   // transparency but grouped separately in the UI (witness tier) so they
   // don't clutter the main science/compute lanes.
-  { workload: DEVICE_WITNESS_WEBGPU_KERNEL_ID,         release: "released", scheduleMode: "manual", requiredTier: "witness",   publicVisible: true, defaultEnabled: true },
-  { workload: DEVICE_WITNESS_WEBRTC_KERNEL_ID,         release: "released", scheduleMode: "manual", requiredTier: "witness",   publicVisible: true, defaultEnabled: true },
-  { workload: DEVICE_WITNESS_RENDER_KERNEL_ID,         release: "released", scheduleMode: "manual", requiredTier: "witness",   publicVisible: true, defaultEnabled: true },
-  { workload: DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID, release: "released", scheduleMode: "manual", requiredTier: "witness",   publicVisible: true, defaultEnabled: true },
+  { workload: DEVICE_WITNESS_WEBGPU_KERNEL_ID,         release: "released",      scheduleMode: "manual", requiredTier: "witness", publicVisible: true,  defaultEnabled: true  },
+  { workload: DEVICE_WITNESS_WEBRTC_KERNEL_ID,         release: "released",      scheduleMode: "manual", requiredTier: "witness", publicVisible: true,  defaultEnabled: true  },
+  { workload: DEVICE_WITNESS_RENDER_KERNEL_ID,         release: "released",      scheduleMode: "manual", requiredTier: "witness", publicVisible: true,  defaultEnabled: true  },
+  // Derived-buffer witness hidden — render-fixture witness covers the
+  // CPU determinism check on its own.
+  { workload: DEVICE_WITNESS_DERIVED_BUFFER_KERNEL_ID, release: "admin-preview", scheduleMode: "manual", requiredTier: "witness", publicVisible: false, defaultEnabled: false },
 ];
 
 const POLICY_BY_WORKLOAD = new Map<string, WorkloadPolicy>(POLICIES.map((p) => [p.workload, p]));

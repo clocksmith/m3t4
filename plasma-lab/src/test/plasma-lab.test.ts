@@ -3179,7 +3179,7 @@ test("HTTP public stats suppress detailed aggregates until enough workers exist"
   assert.equal(summary.status, 200);
   assert.equal(summary.body.stats.scoreVersion, "compute-score-v1");
   assert.equal(summary.body.status.acceptAssignments, true);
-  assert.ok(summary.body.useCases.some((useCase: any) => useCase.workload === "science.genome_kmer.v0"));
+  assert.ok(summary.body.useCases.some((useCase: any) => useCase.workload === "science.contact_map_tile.v0"));
 });
 
 test("HTTP worker receipts endpoint returns only the authenticated worker's receipts", async (t) => {

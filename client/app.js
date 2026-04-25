@@ -82,11 +82,21 @@ async function loadFeatures() {
     if (FEATURES.computeWebRtcArtifacts !== true) {
       window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__ = false;
     }
+    maybeResumeComputeOptIn();
   } catch {
     // Static/local client without a reachable API keeps optional surfaces hidden.
   }
 
   await router.refreshRoutes();
+}
+
+function maybeResumeComputeOptIn() {
+  const helper = window.m3t4Compute;
+  if (FEATURES.computeSlackWorker !== true || !helper?.status || !helper?.start) return;
+  const snapshot = helper.status();
+  if (snapshot?.optIn === true && snapshot.enabled !== true) {
+    void helper.start(snapshot.mode || "quiet");
+  }
 }
 
 function installLinkInterceptor() {

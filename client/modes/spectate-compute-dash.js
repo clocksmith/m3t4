@@ -5,7 +5,7 @@
 //
 // Data model:
 //   - bundle      — the currently-anchored ComputeBundleManifest (from
-//                   matchStart.bundle event)
+//                   matchStart.bundle event, or recovered from public list)
 //   - aggregate   — periodic GET /compute/public/bundles/:id (counts,
 //                   per-chunk status, tile mosaic coordinates)
 //   - quorum      — periodic GET /compute/public/matches/:matchId/witness-quorum
@@ -65,7 +65,7 @@ export function createSpectateComputeDash({ root, computeLabOrigin }) {
 
   function onMatchStart({ matchId: nextMatchId, bundle, match }) {
     matchId = nextMatchId ?? null;
-    bundleRef = bundle ? { ...bundle } : null;
+    bundleRef = bundle ? normalizeBundleRef(bundle) : null;
     aggregate = null;
     quorum = null;
     certificate = null;
@@ -73,14 +73,7 @@ export function createSpectateComputeDash({ root, computeLabOrigin }) {
     sealed = false;
     lastAcceptedCounts = new Map();
     feed = [];
-    if (bundleRef) {
-      pushFeed({
-        t: Date.now(),
-        kind: "bundle-start",
-        text: `bundle ${bundleRef.bundleId.slice(0, 14)} opened · ${bundleRef.kernelId} · ${bundleRef.chunkCount} chunks`,
-        emphasis: true,
-      });
-    }
+    if (bundleRef) pushBundleStartFeed(bundleRef);
     if (display !== "hidden") scheduleNextPoll(0);
     renderAll();
   }
@@ -153,6 +146,7 @@ export function createSpectateComputeDash({ root, computeLabOrigin }) {
       return res.json();
     };
     try {
+      if (!bundleRef && matchId) await discoverBundleForMatch(fetchJson);
       const [aggJson, quorumJson] = await Promise.all([
         bundleRef ? fetchJson(`/compute/public/bundles/${encodeURIComponent(bundleRef.bundleId)}`).catch((e) => ({ error: e.message })) : Promise.resolve(null),
         matchId ? fetchJson(`/compute/public/matches/${encodeURIComponent(matchId)}/witness-quorum`).catch((e) => ({ error: e.message })) : Promise.resolve(null),
@@ -201,6 +195,36 @@ export function createSpectateComputeDash({ root, computeLabOrigin }) {
   function pushFeed(entry) {
     feed.unshift(entry);
     if (feed.length > FEED_LIMIT) feed.length = FEED_LIMIT;
+  }
+
+  async function discoverBundleForMatch(fetchJson) {
+    const json = await fetchJson("/compute/public/bundles?limit=25").catch(() => null);
+    const bundles = Array.isArray(json?.bundles) ? json.bundles : [];
+    const matches = bundles.filter((bundle) => bundle?.matchId === matchId);
+    const science = matches.find((bundle) => bundle.kernelId === "science.contact_map_tile.v0") ?? matches[0];
+    if (!science?.bundleId) return;
+    bundleRef = normalizeBundleRef(science);
+    if (bundleRef) pushBundleStartFeed(bundleRef, "recovered");
+  }
+
+  function normalizeBundleRef(bundle) {
+    if (!bundle?.bundleId) return null;
+    return {
+      bundleId: bundle.bundleId,
+      kernelId: bundle.kernelId ?? "unknown",
+      chunkCount: bundle.chunkCount ?? bundle.targetChunkCount ?? bundle.chunkIds?.length ?? 0,
+      presetId: bundle.presetId,
+      sponsors: Array.isArray(bundle.sponsors) ? bundle.sponsors : [],
+    };
+  }
+
+  function pushBundleStartFeed(ref, source = "opened") {
+    pushFeed({
+      t: Date.now(),
+      kind: "bundle-start",
+      text: `bundle ${ref.bundleId.slice(0, 14)} ${source} · ${ref.kernelId} · ${ref.chunkCount} chunks`,
+      emphasis: true,
+    });
   }
 
   // --- rendering ---

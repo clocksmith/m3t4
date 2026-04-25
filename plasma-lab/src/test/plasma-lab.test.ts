@@ -264,6 +264,29 @@ test("public worker registration strips self-reported cpu-reference", async (t) 
   assert.equal(profile?.allowedWorkloadTier, "observe-only");
 });
 
+test("public WebGPU worker registration seeds a bootstrap witness task", async (t) => {
+  const store = new ComputeLabStore({ acceptAssignments: true });
+  const srv = await boot(store, baseConfig);
+  t.after(() => srv.close());
+
+  const worker = await req(srv.port, "POST", "/compute/workers/register", {
+    capability: webgpuCapability,
+    clientId: "webgpu-browser-a",
+  });
+  assert.equal(worker.status, 200);
+  assert.match(worker.body.bootstrapWitnessTaskId, /^task-/);
+
+  const tasks = store.exportSnapshot().tasks.filter((task) =>
+    task.kind === "device_witness.webgpu.v0" &&
+    task.targetWorkerIds?.includes(worker.body.workerId)
+  );
+  assert.equal(tasks.length, 1);
+
+  const assigned = await next(srv.port, worker.body);
+  assert.equal(assigned.task.kind, "device_witness.webgpu.v0");
+  assert.equal(assigned.task.taskId, worker.body.bootstrapWitnessTaskId);
+});
+
 test("public worker registration can require invite tokens", async (t) => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const srv = await boot(store, {

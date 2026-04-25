@@ -4,12 +4,13 @@ import type { PlasmaLabConfig } from "./config.js";
 import { clientIp, header, html, json, readJson } from "./http.js";
 import { canonicalJson, hashCanonical } from "./plasma/hash.js";
 import type { ContentHash, DerivedExecutionEvidence, ExecutionMode, GovernorMode, TransportKind, ValidationPolicy, WorkerCapability, WorkerRefusalReason } from "./plasma/types.js";
-import { bundleManifestHash, ComputeLabStore, type ComputeChunk, type ExecutionReceipt, type PeerSubassignment, type PeerSubreceipt, type ValidationRecord, type WebRtcPairRecord, type WebRtcSessionRecord } from "./store.js";
+import { bundleManifestHash, ComputeLabStore, type ComputeChunk, type ExecutionReceipt, type PeerSubassignment, type PeerSubreceipt, type ValidationRecord, type WebRtcPairRecord, type WebRtcSessionRecord, type WorkerRecord } from "./store.js";
 import { COMPUTE_USE_CASES } from "./use-cases.js";
 import { canSeed, getWorkloadPolicy, isPublicVisible } from "./workload-policy.js";
 import { CONTACT_MAP_PRESETS, resolveContactMapPreset } from "./contact-map-presets.js";
 import { GENOME_KMER_PRESETS, resolveGenomeKmerPreset } from "./genome-kmer-presets.js";
 import { IMAGE_TILE_SAMPLE_PRESETS, MICROSCOPY_TILE_SAMPLE_PRESETS, resolveTileSamplePreset } from "./image-tile-presets.js";
+import { DEVICE_WITNESS_WEBGPU_KERNEL_ID } from "./kernels/device-witness.js";
 
 export interface RouteDeps {
   store: ComputeLabStore;
@@ -95,6 +96,7 @@ export async function handleComputeLabRequest(
         clientIpHash: admission.clientIpHash,
         inviteId: admission.inviteId,
       });
+      const bootstrapWitnessTaskId = maybeSeedWebGpuBootstrapWitness(deps.store, worker);
       await flushStore(deps.store);
       json(res, 200, {
         workerId: worker.workerId,
@@ -105,6 +107,7 @@ export async function handleComputeLabRequest(
           ? { algorithm: "ecdsa-p256-sha256", publicKeyHash: session.signingPublicKeyHash }
           : undefined,
         acceptedKernels,
+        bootstrapWitnessTaskId,
       });
     } catch (e) {
       const error = message(e);
@@ -148,8 +151,9 @@ export async function handleComputeLabRequest(
       const worker = deps.store.updateCapability(authFrom(body, req, {
         capability: sanitizePublicWorkerCapability(body.capability, adminAllowed(req, deps.config)),
       }));
+      const bootstrapWitnessTaskId = maybeSeedWebGpuBootstrapWitness(deps.store, worker);
       await flushStore(deps.store);
-      json(res, 200, { ok: true, acceptedKernels: worker.capability.kernels });
+      json(res, 200, { ok: true, acceptedKernels: worker.capability.kernels, bootstrapWitnessTaskId });
     } catch (e) {
       json(res, 400, { error: message(e) });
     }
@@ -2026,6 +2030,27 @@ function sanitizePublicWorkerCapability(capability: WorkerCapability, trustedRef
     ...capability,
     runtimeSurfaces: Array.from(new Set(runtimeSurfaces)),
   };
+}
+
+function maybeSeedWebGpuBootstrapWitness(store: ComputeLabStore, worker: WorkerRecord): string | null {
+  if (!worker.capability.kernels.includes(DEVICE_WITNESS_WEBGPU_KERNEL_ID)) return null;
+  if (!worker.capability.runtimeSurfaces.includes("browser-webgpu")) return null;
+  const profile = store.workerProfiles().find((candidate) => candidate.workerId === worker.workerId);
+  if (profile?.allowedWorkloadTier === "webgpu-light") return null;
+  const snapshot = store.exportSnapshot();
+  const alreadyPending = snapshot.tasks.some((task) =>
+    task.kind === DEVICE_WITNESS_WEBGPU_KERNEL_ID &&
+    task.status === "running" &&
+    task.targetWorkerIds?.includes(worker.workerId) &&
+    task.chunks.some((chunk) => chunk.status === "pending")
+  );
+  if (alreadyPending) return null;
+  const task = store.seedDeviceWitnessWebGpuTask({
+    minExecutions: 1,
+    minAgreeing: 1,
+    targetWorkerIds: [worker.workerId],
+  });
+  return task.taskId;
 }
 
 function publicPeerSubassignment(subassignment: PeerSubassignment, includeToken = false) {

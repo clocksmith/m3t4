@@ -85,26 +85,36 @@ export async function handleComputeLabRequest(
       json(res, 403, { error: admission.error });
       return true;
     }
-    const { worker, session, acceptedKernels } = deps.store.registerWorker({
-      label: body.label,
-      capability: sanitizePublicWorkerCapability(body.capability, adminAllowed(req, deps.config)),
-      signingPublicKey: body.signingPublicKey,
-      clientId: body.clientId,
-      accountUid: body.accountUid,
-      clientIpHash: admission.clientIpHash,
-      inviteId: admission.inviteId,
-    });
-    await flushStore(deps.store);
-    json(res, 200, {
-      workerId: worker.workerId,
-      workerSessionId: session.workerSessionId,
-      workerSessionToken: session.token,
-      expiresAt: session.expiresAt,
-      receiptSigning: session.signingPublicKeyHash
-        ? { algorithm: "ecdsa-p256-sha256", publicKeyHash: session.signingPublicKeyHash }
-        : undefined,
-      acceptedKernels,
-    });
+    try {
+      const { worker, session, acceptedKernels } = deps.store.registerWorker({
+        label: body.label,
+        capability: sanitizePublicWorkerCapability(body.capability, adminAllowed(req, deps.config)),
+        signingPublicKey: body.signingPublicKey,
+        clientId: body.clientId,
+        accountUid: body.accountUid,
+        clientIpHash: admission.clientIpHash,
+        inviteId: admission.inviteId,
+      });
+      await flushStore(deps.store);
+      json(res, 200, {
+        workerId: worker.workerId,
+        workerSessionId: session.workerSessionId,
+        workerSessionToken: session.token,
+        expiresAt: session.expiresAt,
+        receiptSigning: session.signingPublicKeyHash
+          ? { algorithm: "ecdsa-p256-sha256", publicKeyHash: session.signingPublicKeyHash }
+          : undefined,
+        acceptedKernels,
+      });
+    } catch (e) {
+      const error = message(e);
+      if (/worker registration .* cap exceeded/i.test(error)) {
+        res.setHeader("retry-after", "60");
+        json(res, 429, { error, retryAfterMs: 60_000 });
+      } else {
+        json(res, 400, { error });
+      }
+    }
     return true;
   }
 

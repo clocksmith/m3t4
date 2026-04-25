@@ -288,8 +288,14 @@ class ComputeClient {
           accountUid: this.accountUid || undefined,
         }),
       });
-      if (!res.ok) throw new Error(`register failed: ${res.status}`);
-      const body = await res.json();
+      const raw = await res.text();
+      const body = raw ? JSON.parse(raw) : {};
+      if (!res.ok) {
+        const suffix = body?.error ? `: ${body.error}` : "";
+        const err = new Error(`register failed: ${res.status}${suffix}`);
+        err.retryAfterMs = body?.retryAfterMs;
+        throw err;
+      }
       this.workerId = body.workerId;
       this.workerSessionId = body.workerSessionId;
       this.workerSessionToken = body.workerSessionToken;
@@ -297,8 +303,7 @@ class ComputeClient {
       this.lastCapabilityUpdateAt = performance.now();
     } catch (e) {
       this.state = `register-failed: ${message(e)}`;
-      this.enabled = false;
-      persistOptIn(false);
+      this.schedule(Math.max(5000, e?.retryAfterMs ?? MODE_PROFILE[this.mode].pollMs));
     }
   }
 

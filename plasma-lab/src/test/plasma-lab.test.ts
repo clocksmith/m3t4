@@ -297,6 +297,26 @@ test("worker registration caps apply across active client sessions", () => {
   );
 });
 
+test("HTTP worker registration caps return retryable status", async (t) => {
+  const store = new ComputeLabStore({ maxSessionsPerClient: 1 });
+  const srv = await boot(store, baseConfig);
+  t.after(() => srv.close());
+
+  const first = await req(srv.port, "POST", "/compute/workers/register", {
+    capability,
+    clientId: "browser-shared",
+  });
+  assert.equal(first.status, 200);
+
+  const second = await req(srv.port, "POST", "/compute/workers/register", {
+    capability,
+    clientId: "browser-shared",
+  });
+  assert.equal(second.status, 429);
+  assert.match(second.body.error, /identity cap exceeded/);
+  assert.equal(second.body.retryAfterMs, 60_000);
+});
+
 test("public receipt verifier only exposes accepted receipts", async (t) => {
   const store = new ComputeLabStore({ acceptAssignments: true });
   const task = store.seedPrimeTask({ start: 100, endExclusive: 140, chunkSize: 40, minExecutions: 2, minAgreeing: 2 });

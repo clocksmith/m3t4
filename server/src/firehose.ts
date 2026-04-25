@@ -305,12 +305,14 @@ export class Firehose {
             enabled: true,
             computeLabOrigin: CONFIG.computeLabOrigin,
             adminToken: CONFIG.computeLabAdminToken,
-            timeoutMs: 2500,
+            timeoutMs: 5000,
           },
           {
             matchId,
             sponsors: [sideA.stable.handle, sideB.stable.handle].filter(Boolean),
             expectedMatchSec: 180,
+            tileRows: 4,
+            tileCols: 4,
           },
         )
       : null;

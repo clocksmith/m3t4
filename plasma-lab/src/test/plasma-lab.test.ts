@@ -1964,6 +1964,46 @@ test("persistent store saves and restores compute snapshots", async () => {
   assert.equal(restored.summary().workers, 1);
 });
 
+test("persistent store saves and restores compute bundles", async () => {
+  let saved: Partial<ComputeLabSnapshot> = {};
+  const persistence = {
+    load: async () => clone(saved),
+    save: async (snapshot: ComputeLabSnapshot) => {
+      saved = clone(snapshot);
+    },
+    savePatch: async (patch: Partial<ComputeLabSnapshot>) => {
+      saved = mergeSnapshotPatch(saved, patch);
+    },
+  };
+  const store = await PersistentComputeLabStore.create({ acceptAssignments: true }, persistence);
+  const task = store.seedContactMapTileTask({
+    rowResidues: "ACDE",
+    colResidues: "FGHI",
+    minExecutions: 1,
+    minAgreeing: 1,
+  });
+  const bundle = store.createBundle({
+    kind: "science",
+    kernelId: "science.contact_map_tile.v0",
+    matchId: "m-bundle",
+    chunkIds: [task.chunks[0].chunkId],
+  });
+  store.markBundleRunning(bundle.bundleId);
+  store.sealBundle({
+    bundleId: bundle.bundleId,
+    matchId: "m-bundle",
+    matchReceiptHash: { algorithm: "sha256", value: "a".repeat(64) },
+  });
+  await store.flush();
+
+  const restored = await PersistentComputeLabStore.create({ acceptAssignments: true }, persistence);
+  const restoredBundle = restored.getBundle(bundle.bundleId);
+  assert.ok(restoredBundle);
+  assert.equal(restoredBundle.status, "sealed");
+  assert.equal(restoredBundle.matchId, "m-bundle");
+  assert.equal((restored.getTask(task.taskId) as any)?.bundleId, bundle.bundleId);
+});
+
 test("persistent store honors bounded assignment intake windows", async () => {
   let now = 1_000;
   let saved: Partial<ComputeLabSnapshot> = {};
@@ -3628,6 +3668,9 @@ function mergeSnapshotPatch(
   mergeById(next, patch, "connectivityObservations", "observationId");
   mergeById(next, patch, "receiptLogEntries", "entryId");
   mergeById(next, patch, "receiptLogSegments", "segmentId");
+  mergeById(next, patch, "publicTiles", "sha256");
+  mergeById(next, patch, "bundles", "bundleId");
+  mergeById(next, patch, "witnessAttestations", "attestationId");
   return next;
 }
 

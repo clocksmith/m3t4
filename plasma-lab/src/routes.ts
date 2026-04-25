@@ -402,8 +402,11 @@ export async function handleComputeLabRequest(
   if (req.method === "GET" && url.pathname.startsWith("/compute/public/replay-badges/")) {
     const matchId = url.pathname.slice("/compute/public/replay-badges/".length);
     const badge = deps.store.replayBadge(matchId);
-    if (!badge || badge.status !== "verified") json(res, 404, { error: "verified replay badge not found" });
-    else json(res, 200, badge);
+    if (!badge || badge.status !== "verified") {
+      json(res, 200, { status: "pending", matchId, generatedAt: Date.now() });
+    } else {
+      json(res, 200, badge);
+    }
     return true;
   }
 

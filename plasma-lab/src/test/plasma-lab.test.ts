@@ -3337,7 +3337,8 @@ test("HTTP public replay badge route exposes verified artifact summaries only", 
   assert.equal(resp.body.rulesHash, "rules-route");
 
   const missing = await req(srv.port, "GET", "/compute/public/replay-badges/missing");
-  assert.equal(missing.status, 404);
+  assert.equal(missing.status, 200);
+  assert.equal(missing.body.status, "pending");
 });
 
 test("WebRTC signaling routes are disabled behind the signaling flag", async (t) => {

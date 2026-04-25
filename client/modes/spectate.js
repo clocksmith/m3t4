@@ -509,6 +509,7 @@ async function updateReplayBadge(matchId) {
       const res = await fetch(`${origin}/compute/public/replay-badges/${encodeURIComponent(matchId)}`, { cache: "no-store" });
       if (!res.ok) continue;
       const badge = await res.json();
+      if (badge?.status !== "verified") continue;
       el.textContent = `verified ${badge.agreedReceipts}/${badge.requiredReceipts}`;
       el.className = "ok";
       el.title = [badge.rulesHash ? `rules ${badge.rulesHash}` : "", badge.stageHash ? `stage ${badge.stageHash}` : ""]

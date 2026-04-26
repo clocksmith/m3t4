@@ -880,6 +880,13 @@ export class ComputeLabStore {
   private acceptAssignmentsFlag: boolean;
   private assignmentIntakeClosesAt: number | null = null;
   private nextReceiptLogSequence = 1;
+  // Cache the public-stats payload for a short TTL so the public dashboard
+  // endpoints stay snappy under load even when the task table is large.
+  // Invariants: stats are observational, not authoritative — a few seconds
+  // of staleness is acceptable; blocking the request thread for seconds
+  // because we recompute every call is not.
+  private publicStatsCache = new Map<string, { value: PublicComputeStats; expiresAt: number }>();
+  private static readonly PUBLIC_STATS_TTL_MS = 5_000;
 
   constructor(options: StoreOptions = {}) {
     this.now = options.now ?? Date.now;
@@ -3234,16 +3241,25 @@ export class ComputeLabStore {
 
   publicStats(options: { minWorkers?: number; suppressSmall?: boolean } = {}): PublicComputeStats {
     const minWorkers = options.minWorkers ?? 5;
+    const suppressSmall = options.suppressSmall !== false;
+    const cacheKey = `${minWorkers}:${suppressSmall}`;
+    const now = this.now();
+    const cached = this.publicStatsCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      return cached.value;
+    }
     const profiles = this.workerProfiles();
-    const suppressed = options.suppressSmall !== false && profiles.length < minWorkers;
-    return summarizePublicStats({
-      generatedAt: this.now(),
+    const suppressed = suppressSmall && profiles.length < minWorkers;
+    const value = summarizePublicStats({
+      generatedAt: now,
       minWorkers,
       suppressed,
       profiles,
       receipts: Array.from(this.receipts.values()),
       tasks: Array.from(this.tasks.values()),
     });
+    this.publicStatsCache.set(cacheKey, { value, expiresAt: now + ComputeLabStore.PUBLIC_STATS_TTL_MS });
+    return value;
   }
 
   replayBadges(): ReplayVerificationBadge[] {

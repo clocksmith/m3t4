@@ -270,6 +270,34 @@ class ComputeClient {
     this.emit();
   }
 
+  // Server forgot our session (lab restart, expiry, or eviction). Clear local
+  // identity so the next ensureWorkerRegistered() call re-registers fresh
+  // instead of spamming 400s with stale credentials.
+  recoverFromUnknownSession(reason) {
+    if (!this.workerId && !this.workerSessionId && !this.workerSessionToken) return false;
+    this.workerId = null;
+    this.workerSessionId = null;
+    this.workerSessionToken = null;
+    this.lastCapabilityUpdateAt = 0;
+    this.current = null;
+    this.state = `re-registering: ${reason || "session lost"}`;
+    this.emit();
+    return true;
+  }
+
+  async maybeHandleSessionError(res) {
+    if (!res || res.ok) return false;
+    if (res.status !== 400) return false;
+    let body = null;
+    try { body = await res.clone().json(); } catch { body = null; }
+    const errText = String(body?.error || "").toLowerCase();
+    if (errText.includes("unknown worker session") || errText.includes("session expired") || errText.includes("session not found")) {
+      this.recoverFromUnknownSession(body?.error || "unknown session");
+      return true;
+    }
+    return false;
+  }
+
   async ensureWorkerRegistered() {
     if (this.workerId && this.workerSessionId && this.workerSessionToken) return;
     try {
@@ -406,6 +434,9 @@ class ComputeClient {
       const res = await fetch(url, {
         headers: { [SESSION_TOKEN_HEADER]: this.workerSessionToken },
       });
+      if (await this.maybeHandleSessionError(res)) {
+        return fallback();
+      }
       if (!res.ok) throw new Error(`receipts fetch ${res.status}`);
       const body = await res.json();
       const receipts = Array.isArray(body.receipts) ? body.receipts : [];
@@ -635,6 +666,12 @@ class ComputeClient {
       await this.acceptAssignment(body.assignment);
       this.runAssignment(body);
     } catch (e) {
+      const msg = String(message(e) || "").toLowerCase();
+      if (msg.includes("unknown worker session") || msg.includes("session expired") || msg.includes("session not found")) {
+        this.recoverFromUnknownSession("poll: " + message(e));
+        this.schedule(1000);
+        return;
+      }
       this.state = `poll error: ${message(e)}`;
       this.schedule(Math.max(5000, MODE_PROFILE[this.mode].pollMs));
       this.emit();
@@ -642,7 +679,7 @@ class ComputeClient {
   }
 
   async heartbeat() {
-    await fetch(computeLabOrigin() + "/compute/workers/heartbeat", {
+    const res = await fetch(computeLabOrigin() + "/compute/workers/heartbeat", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -652,6 +689,7 @@ class ComputeClient {
         governorMode: this.mode,
       }),
     });
+    if (await this.maybeHandleSessionError(res)) return;
     await this.maybeUpdateCapability();
   }
 
@@ -661,7 +699,7 @@ class ComputeClient {
     this.lastCapabilityUpdateAt = now;
     try {
       this.capability = await buildCapability(runtimeInfoBucket(this), { benchmark: false });
-      await fetch(computeLabOrigin() + "/compute/capabilities", {
+      const res = await fetch(computeLabOrigin() + "/compute/capabilities", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -671,6 +709,7 @@ class ComputeClient {
           capability: this.capability,
         }),
       });
+      await this.maybeHandleSessionError(res);
     } catch {
       // Capability updates are advisory; assignment receipts carry validation.
     }
@@ -727,7 +766,7 @@ class ComputeClient {
 
   async acceptAssignment(assignment) {
     const gate = this.currentGate();
-    await fetch(computeLabOrigin() + "/compute/assignments/accept", {
+    const res = await fetch(computeLabOrigin() + "/compute/assignments/accept", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -739,6 +778,9 @@ class ComputeClient {
         refusalReason: gate || undefined,
       }),
     });
+    if (await this.maybeHandleSessionError(res)) {
+      throw new Error("session expired");
+    }
     if (gate) throw new Error(gate);
   }
 

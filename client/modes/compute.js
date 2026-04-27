@@ -7,10 +7,25 @@ let off = null;
 let refreshTimer = null;
 let contactMapTimer = null;
 let myWorkTimer = null;
+let myWorkElapsedTicker = null;
 const PUBLIC_REFRESH_OPEN_MS = 30_000;
 const PUBLIC_REFRESH_CLOSED_MS = 120_000;
 const CONTACT_MAP_REGION_LIMIT = 6;
 const CONTACT_MAP_ACCEPTED_LIMIT = 4;
+let latestMyReceiptIds = new Set();
+let latestMyReceiptCount = 0;
+const contactMapListeners = new Set();
+function publishMyReceipts(receipts) {
+  latestMyReceiptIds = new Set(
+    (receipts || [])
+      .map((r) => (r && typeof r.receiptId === "string" ? r.receiptId : null))
+      .filter(Boolean),
+  );
+  latestMyReceiptCount = latestMyReceiptIds.size;
+  for (const fn of contactMapListeners) {
+    try { fn(); } catch { /* noop */ }
+  }
+}
 
 function computeLabOrigin() {
   return String(window.__M3T4_COMPUTE_LAB_ORIGIN__ || "").replace(/\/+$/, "");
@@ -78,6 +93,7 @@ function controlsPanelHtml() {
         <div><span>pause reason</span><strong id="compute-local-gate">—</strong></div>
         <div><span>worker id</span><strong id="compute-local-worker">—</strong></div>
         <div><span>pace</span><strong id="compute-local-mode">—</strong></div>
+        <div><span title="Transport used by your most recent accepted receipts. WebRTC means you're peer-to-peer with another browser; HTTPS means classic origin-relayed.">your transport</span><strong id="compute-local-transport">—</strong></div>
         <div><span>accepted (session)</span><strong id="compute-local-accepted">0</strong></div>
         <div><span>pending (session)</span><strong id="compute-local-pending">0</strong></div>
         <div><span>rejected (session)</span><strong id="compute-local-rejected">0</strong></div>
@@ -135,14 +151,16 @@ function workloadsPanelHtml() {
 
 function contactMapPanelHtml() {
   return `
-    <section class="panel compute-contact-map-panel" aria-label="Science workload snapshot">
+    <section class="panel compute-contact-map-panel" aria-label="Community science workload snapshot">
       <div class="compute-contact-map-head">
         <div class="compute-contact-map-title">
-          <h3>Science Queue</h3>
+          <h3>Community Science Queue</h3>
+          <div class="tight compute-scope-tag">community-wide · all workers</div>
           <div id="compute-contact-map-note" class="tight">loading</div>
         </div>
         ${linkButtonHtml({ href: "/live", text: "live bundle view", attrs: { title: "Watch active bundle chunks on the Live page" } })}
       </div>
+      <div id="compute-contact-map-yours" class="compute-contact-map-yours" hidden></div>
       <div class="compute-contact-map-summary">
         <div><span>queued tasks</span><strong id="compute-contact-map-tasks">0</strong></div>
         <div><span>regions</span><strong id="compute-contact-map-regions">0</strong></div>
@@ -158,10 +176,19 @@ function myWorkPanelHtml() {
     <section class="panel compute-my-work-panel" aria-label="Your recent work">
       <div class="compute-my-work-head">
         <div>
-          <h3>Your recent work</h3>
-          <div id="compute-my-work-scope" class="tight">this browser</div>
+          <h3>Your Work</h3>
+          <div id="compute-my-work-scope" class="tight compute-scope-tag">this browser</div>
         </div>
         <div id="compute-my-work-note" class="tight">loading</div>
+      </div>
+      <div id="compute-my-work-running" class="compute-my-work-running"></div>
+      <div id="compute-my-work-legend" class="tight compute-my-work-legend">
+        <strong>What you'll see below:</strong>
+        <span><em>running</em> = a job is executing in this tab right now ·
+        <em>awaiting validation</em> = receipt submitted, server hasn't validated yet ·
+        <em>validated</em> = work is done and accepted ·
+        <em>rejected</em> = receipt failed validation ·
+        timestamps are when the receipt was first submitted.</span>
       </div>
       <div id="compute-my-work-linking" class="compute-my-work-linking" hidden></div>
       <div id="compute-my-work-by-kernel" class="compute-my-work-by-kernel"></div>
@@ -294,7 +321,7 @@ function wirePublicData(root) {
   }
 
   async function fetchPublicSummary(origin) {
-    const summaryRes = await fetch(`${origin}/compute/public/summary`, { cache: "no-store" });
+    const summaryRes = await fetch(`${origin}/compute/public/summary`);
     if (summaryRes.ok) {
       const summary = await summaryRes.json();
       return {
@@ -305,9 +332,9 @@ function wirePublicData(root) {
     }
     if (summaryRes.status !== 404) throw new Error(`summary ${summaryRes.status}`);
     const [statsRes, useCasesRes, statusRes] = await Promise.all([
-      fetch(`${origin}/compute/public/stats`, { cache: "no-store" }),
-      fetch(`${origin}/compute/use-cases`, { cache: "no-store" }),
-      fetch(`${origin}/compute/status`, { cache: "no-store" }),
+      fetch(`${origin}/compute/public/stats`),
+      fetch(`${origin}/compute/use-cases`),
+      fetch(`${origin}/compute/status`),
     ]);
     let status = null;
     if (statusRes.ok) {
@@ -391,6 +418,40 @@ function wireContactMapData(root) {
   const activeEl = must(root, "#compute-contact-map-active");
   const receiptsEl = must(root, "#compute-contact-map-receipts");
   const rollupEl = must(root, "#compute-contact-map-rollup");
+  const yoursEl = must(root, "#compute-contact-map-yours");
+  let lastTilesPayload = null;
+
+  function renderYours(tiles) {
+    if (!Array.isArray(tiles) || latestMyReceiptIds.size === 0) {
+      yoursEl.hidden = true;
+      yoursEl.innerHTML = "";
+      return;
+    }
+    let yourReceipts = 0;
+    let yourTiles = 0;
+    for (const tile of tiles) {
+      const receipts = Array.isArray(tile.receipts) ? tile.receipts : [];
+      let hit = 0;
+      for (const r of receipts) {
+        if (r && typeof r.receiptId === "string" && latestMyReceiptIds.has(r.receiptId)) {
+          hit++;
+        }
+      }
+      if (hit > 0) {
+        yourReceipts += hit;
+        yourTiles++;
+      }
+    }
+    if (yourReceipts === 0 && yourTiles === 0) {
+      yoursEl.hidden = false;
+      yoursEl.innerHTML = `<div class="tight">You haven't shown up in this community queue yet — opt in above and your contributed regions will be highlighted here.</div>`;
+      return;
+    }
+    yoursEl.hidden = false;
+    yoursEl.innerHTML = `<div class="tight"><strong>You contributed</strong> ${formatInt(yourReceipts)} accepted receipt${yourReceipts === 1 ? "" : "s"} across ${formatInt(yourTiles)} region${yourTiles === 1 ? "" : "s"} of this community queue.</div>`;
+  }
+
+  contactMapListeners.add(() => renderYours(lastTilesPayload));
 
   async function refresh() {
     const origin = computeLabOrigin();
@@ -400,10 +461,12 @@ function wireContactMapData(root) {
       return;
     }
     try {
-      const res = await fetch(`${origin}/compute/public/contact-map/aggregate`, { cache: "no-store" });
+      const res = await fetch(`${origin}/compute/public/contact-map/aggregate`);
       if (!res.ok) throw new Error(`aggregate ${res.status}`);
       const body = await res.json();
       const tiles = Array.isArray(body.tiles) ? body.tiles : [];
+      lastTilesPayload = tiles;
+      renderYours(tiles);
       const totalTasks = Math.max(0, Number(body.totalTasks ?? tiles.length) || 0);
       const totalAcceptedReceipts = Math.max(0, Number(body.totalAcceptedReceipts) || 0);
       const receiptTiles = tiles.filter((tile) => Number(tile.receiptCount) > 0).length;
@@ -565,7 +628,49 @@ function wireMyWorkData(root) {
   const linkingEl = must(root, "#compute-my-work-linking");
   const kernelsEl = must(root, "#compute-my-work-by-kernel");
   const recentEl = must(root, "#compute-my-work-recent");
+  const runningEl = must(root, "#compute-my-work-running");
   const client = getComputeClient();
+
+  function renderRunning(snapshot) {
+    const enabled = snapshot.enabled === true;
+    const current = snapshot.current ?? null;
+    if (current && current.assignmentId) {
+      const elapsedMs = current.startedAt
+        ? Math.max(0, performance.now() - Number(current.startedAt))
+        : 0;
+      const elapsed = formatDuration(elapsedMs);
+      runningEl.innerHTML = `
+        <div class="compute-my-work-running-card is-running">
+          <div class="compute-my-work-running-row">
+            <span class="compute-my-work-running-dot" aria-hidden="true"></span>
+            <strong>Running now</strong>
+            <span class="tight">elapsed ${escapeHtml(elapsed)}</span>
+          </div>
+          <div class="compute-my-work-running-meta tight">
+            <span><em>kind</em> ${escapeHtml(current.kind || "—")}</span>
+            <span><em>assignment</em> <code>${escapeHtml(shortId(current.assignmentId))}</code></span>
+            <span><em>chunk</em> <code>${escapeHtml(shortId(current.chunkId || ""))}</code></span>
+            <span><em>determinism</em> ${escapeHtml(current.determinismClass || "—")}</span>
+          </div>
+        </div>`;
+      return;
+    }
+    if (!enabled) {
+      runningEl.innerHTML = `<div class="compute-my-work-running-card is-idle tight">Worker is not opted in. Click <strong>opt in</strong> above to start receiving jobs.</div>`;
+      return;
+    }
+    const stateText = snapshot.state || "waiting";
+    runningEl.innerHTML = `<div class="compute-my-work-running-card is-idle tight">No job in flight right now (<em>${escapeHtml(stateText)}</em>). The next assignment will appear here when it starts.</div>`;
+  }
+
+  // Subscribe to snapshot updates so the in-flight indicator stays current,
+  // and tick elapsed time every second while a job is running.
+  client.subscribe((snap) => renderRunning(snap));
+  const elapsedTicker = setInterval(() => {
+    const snap = client.snapshot();
+    if (snap?.current?.assignmentId) renderRunning(snap);
+  }, 1000);
+  myWorkElapsedTicker = elapsedTicker;
 
   function renderLinking(body) {
     const signedIn = body?.scope === "account" && body?.accountUid;
@@ -580,9 +685,37 @@ function wireMyWorkData(root) {
       <a href="/roster" title="Go to the roster page to sign in or link this browser">sign in</a>`;
   }
 
+  const transportEl = document.getElementById("compute-local-transport");
+  function renderTransport(receipts) {
+    if (!transportEl) return;
+    const recent = receipts.filter((r) => r && r.decision === "accepted").slice(0, 20);
+    if (recent.length === 0) {
+      transportEl.textContent = "—";
+      transportEl.title = "No accepted receipts in this browser yet — start a job to see whether your transport is peer-to-peer (WebRTC) or origin-relayed (HTTPS).";
+      return;
+    }
+    const counts = {};
+    for (const r of recent) {
+      const t = (r.transport || "unknown").toLowerCase();
+      counts[t] = (counts[t] || 0) + 1;
+    }
+    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const top = entries[0];
+    const summary = entries.map(([t, n]) => `${n} ${t}`).join(" · ");
+    const label = top[0] === "webrtc"
+      ? `peer-to-peer (${summary})`
+      : top[0] === "https" || top[0] === "http"
+        ? `origin-relayed (${summary})`
+        : summary;
+    transportEl.textContent = label;
+    transportEl.title = `Last ${recent.length} accepted receipt${recent.length === 1 ? "" : "s"} — webrtc means a direct peer carried the bytes; https means the origin relayed them.`;
+  }
+
   async function refresh() {
     const body = await client.fetchMyReceipts(50);
     const receipts = Array.isArray(body?.receipts) ? body.receipts : [];
+    publishMyReceipts(receipts);
+    renderTransport(receipts);
     scopeEl.textContent = scopeLabel(body);
     renderLinking(body);
     if (receipts.length === 0) {
@@ -653,9 +786,10 @@ function renderByKernel(receipts) {
   for (const r of receipts) {
     const key = r.kernelId || r.taskKind || "unknown";
     if (!groups.has(key)) {
-      groups.set(key, { kernelId: key, accepted: 0, pending: 0, rejected: 0, lastAcceptedAt: 0 });
+      groups.set(key, { kernelId: key, accepted: 0, pending: 0, rejected: 0, lastAcceptedAt: 0, lastSubmittedAt: 0 });
     }
     const g = groups.get(key);
+    if (r.receivedAt > g.lastSubmittedAt) g.lastSubmittedAt = r.receivedAt;
     if (r.decision === "accepted") {
       g.accepted++;
       if (r.receivedAt > g.lastAcceptedAt) g.lastAcceptedAt = r.receivedAt;
@@ -663,36 +797,79 @@ function renderByKernel(receipts) {
     else g.rejected++;
   }
   const rows = Array.from(groups.values())
-    .sort((a, b) => (b.lastAcceptedAt - a.lastAcceptedAt) || (b.accepted - a.accepted));
-  return rows.map((g) => `
+    .sort((a, b) => (b.lastSubmittedAt - a.lastSubmittedAt) || (b.accepted - a.accepted));
+  return rows.map((g) => {
+    const lastValidatedText = g.lastAcceptedAt
+      ? `last validated ${relativeTime(g.lastAcceptedAt)}`
+      : (g.pending > 0 ? "no validated yet — receipts pending" : "no validated receipts yet");
+    return `
     <article class="compute-my-work-kernel">
       <div class="compute-my-work-kernel-head">
-        <strong>${escapeHtml(g.kernelId)}</strong>
-        <span class="tight">${g.lastAcceptedAt ? `last accepted ${relativeTime(g.lastAcceptedAt)}` : "no accepted yet"}</span>
+        <strong>${escapeHtml(kernelDisplayName(g.kernelId))}</strong>
+        <span class="tight" title="A receipt is 'validated' once the server confirms the work was correct.">${escapeHtml(lastValidatedText)}</span>
       </div>
       <div class="compute-my-work-kernel-counts">
-        <span><em>${formatInt(g.accepted)}</em> accepted</span>
-        <span><em>${formatInt(g.pending)}</em> pending</span>
-        <span><em>${formatInt(g.rejected)}</em> rejected</span>
+        <span title="Server confirmed this work and recorded it."><em>${formatInt(g.accepted)}</em> validated</span>
+        <span title="Receipt submitted but server hasn't validated yet — typically clears within seconds to a minute."><em>${formatInt(g.pending)}</em> awaiting validation</span>
+        <span title="Receipt failed validation — work won't count."><em>${formatInt(g.rejected)}</em> rejected</span>
       </div>
     </article>
-  `).join("");
+  `;
+  }).join("");
+}
+
+function kernelDisplayName(id) {
+  const map = {
+    "science.contact_map_tile.v0": "Contact Map Tile (science)",
+    "science.tensor_tile.v0": "Tensor Tile (science)",
+    "science.image_tile_infer.v0": "Image Tile Inference (science)",
+    "science.microscopy_tile_score.v0": "Microscopy Tile Score (science)",
+    "science.genome_kmer.v0": "Genome k-mer (science)",
+    "device_witness.webgpu.v0": "WebGPU Device Witness",
+    "device_witness.webrtc.v0": "WebRTC Device Witness",
+    "m3t4.replay_verify.v0": "Replay Verify",
+    "m3t4.seed_sweep.v0": "Seed Sweep",
+    "m3t4.exploit_search.v0": "Exploit Search",
+    "m3t4.asset_tile_audit.v0": "Asset Tile Audit",
+    "infra.public_artifact_verify.v0": "Public Artifact Verify",
+  };
+  return map[id] || id;
 }
 
 function renderRecentList(receipts) {
   if (!receipts.length) return "";
   return `
     <ul class="compute-my-work-list">
-      ${receipts.map((r) => `
-        <li class="compute-my-work-row" data-decision="${escapeHtml(r.decision)}">
-          <code>${escapeHtml(shortId(r.receiptId || ""))}</code>
-          <span>${escapeHtml(r.kernelId || r.taskKind || "")}</span>
-          <span>${escapeHtml(r.decision)}</span>
-          <span>${escapeHtml(r.transport || "—")}</span>
-          <span>${escapeHtml(r.executionMode || "—")}</span>
-          <span class="tight">${relativeTime(r.receivedAt)}</span>
-        </li>
-      `).join("")}
+      ${receipts.map((r) => {
+        const dec = r.decision || "";
+        let decLabel = dec;
+        if (dec === "accepted") decLabel = "✓ validated";
+        else if (dec === "pending") decLabel = "⏳ awaiting validation";
+        else if (dec === "rejected") decLabel = "✗ rejected";
+        const decTitle = dec === "accepted"
+          ? "Server confirmed this work and recorded it."
+          : dec === "pending"
+            ? "Receipt submitted; server hasn't validated yet."
+            : dec === "rejected"
+              ? "Receipt failed validation."
+              : "";
+        const t = String(r.transport || "").toLowerCase();
+        const transportLabel = t === "webrtc" ? "peer (webrtc)" : (t === "http" || t === "https") ? "origin (https)" : (r.transport || "—");
+        const transportTitle = t === "webrtc"
+          ? "Bytes moved peer-to-peer between this browser and another worker over WebRTC."
+          : (t === "http" || t === "https")
+            ? "Bytes moved through the origin server over HTTPS — not peer-to-peer."
+            : "";
+        return `
+        <li class="compute-my-work-row" data-decision="${escapeHtml(dec)}">
+          <code title="receipt id">${escapeHtml(shortId(r.receiptId || ""))}</code>
+          <span>${escapeHtml(kernelDisplayName(r.kernelId || r.taskKind || ""))}</span>
+          <span title="${escapeHtml(decTitle)}">${escapeHtml(decLabel)}</span>
+          <span title="${escapeHtml(transportTitle)}">${escapeHtml(transportLabel)}</span>
+          <span title="execution mode">${escapeHtml(r.executionMode || "—")}</span>
+          <span class="tight" title="When this receipt was first submitted to the server.">submitted ${relativeTime(r.receivedAt)}</span>
+        </li>`;
+      }).join("")}
     </ul>`;
 }
 
@@ -764,4 +941,6 @@ export function unmount() {
   contactMapTimer = null;
   if (myWorkTimer) clearInterval(myWorkTimer);
   myWorkTimer = null;
+  if (myWorkElapsedTicker) clearInterval(myWorkElapsedTicker);
+  myWorkElapsedTicker = null;
 }

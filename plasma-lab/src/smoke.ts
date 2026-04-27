@@ -129,6 +129,7 @@ async function startLocalServer(): Promise<SmokeServer> {
     workerSessionTtlMs: 60_000,
     webrtcSessionTtlMs: 60_000,
     requireReceiptSignatures: false,
+    maxPendingTasks: 0,
   };
   const store = new ComputeLabStore({
     acceptAssignments: config.acceptAssignments,

@@ -223,7 +223,7 @@ export function mount(root, { setStatus }) {
   applyDashState(dashState);
   connect();
   refreshLeaderboard();
-  lbTimer = setInterval(refreshLeaderboard, 8000);
+  lbTimer = setInterval(refreshLeaderboard, 30000);
   loop();
 }
 

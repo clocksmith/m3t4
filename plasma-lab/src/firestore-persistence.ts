@@ -36,49 +36,69 @@ function db(): Firestore {
   return configuredDb;
 }
 
+// Which collections persist to Firestore vs live ephemerally in memory.
+// Ephemeral collections re-populate from live traffic after a restart:
+// workers re-register via heartbeats, sessions re-issue, observations and
+// webrtc pairs are transient by design. Persisting them costs a write per
+// heartbeat/probe with no recovery value — the lab works fine without them
+// across restarts.
+//
+// Toggle PLASMA_LAB_PERSIST_EPHEMERAL=1 to re-enable persistence of the
+// ephemeral set if you need it for an investigation; default is off.
+const persistEphemeral = process.env.PLASMA_LAB_PERSIST_EPHEMERAL === "1"
+  || /^(true|yes|on)$/i.test(process.env.PLASMA_LAB_PERSIST_EPHEMERAL ?? "");
+
 export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
   constructor(private readonly firestore: Firestore = db()) {}
 
   async load(): Promise<Partial<ComputeLabSnapshot>> {
-    const [
-      workers,
-      sessions,
-      tasks,
-      assignments,
-      receipts,
-      validations,
-      reputation,
-      webrtcSessions,
-      webrtcPairs,
-      peerSubassignments,
-      capabilityObservations,
-      connectivityObservations,
-      receiptLogEntries,
-      receiptLogSegments,
-      publicTiles,
-      bundles,
-      witnessAttestations,
-      control,
-    ] = await Promise.all([
-      this.readCollection<ComputeLabSnapshot["workers"][number]>(COMPUTE_COLLECTIONS.workers),
-      this.readCollection<ComputeLabSnapshot["sessions"][number]>(COMPUTE_COLLECTIONS.sessions),
-      this.readCollection<ComputeLabSnapshot["tasks"][number]>(COMPUTE_COLLECTIONS.tasks),
-      this.readCollection<ComputeLabSnapshot["assignments"][number]>(COMPUTE_COLLECTIONS.assignments),
-      this.readCollection<ComputeLabSnapshot["receipts"][number]>(COMPUTE_COLLECTIONS.receipts),
-      this.readCollection<ComputeLabSnapshot["validations"][number]>(COMPUTE_COLLECTIONS.validations),
+    // Always-load: durable artifacts that the lab can't reconstruct from
+    // live traffic — receipts, validations, the receipt log, bundles,
+    // public tiles, witness attestations, tasks/assignments, control.
+    //
+    // Bounded loads: tasks/assignments are filtered to in-flight only;
+    // receipts/validations/witnessAttestations are filtered to a
+    // recent-window so cold starts don't pull tens of thousands of
+    // already-completed records into memory. Configurable via
+    // PLASMA_LAB_LOAD_WINDOW_DAYS (default 7).
+    const recentCutoff = Date.now() - (Number(process.env.PLASMA_LAB_LOAD_WINDOW_DAYS ?? "7") * 86_400_000);
+    const durable = Promise.all([
+      this.readCollectionWhere<ComputeLabSnapshot["tasks"][number]>(COMPUTE_COLLECTIONS.tasks, "status", "==", "running"),
+      this.readCollectionWhere<ComputeLabSnapshot["assignments"][number]>(COMPUTE_COLLECTIONS.assignments, "status", "in", ["offered", "accepted", "receipted"]),
+      this.readCollectionWhere<ComputeLabSnapshot["receipts"][number]>(COMPUTE_COLLECTIONS.receipts, "receivedAt", ">=", recentCutoff),
+      this.readCollectionWhere<ComputeLabSnapshot["validations"][number]>(COMPUTE_COLLECTIONS.validations, "receivedAt", ">=", recentCutoff),
       this.readCollection<ComputeLabSnapshot["reputation"][number]>(COMPUTE_COLLECTIONS.reputation),
-      this.readCollection<ComputeLabSnapshot["webrtcSessions"][number]>(COMPUTE_COLLECTIONS.webrtcSessions),
-      this.readCollection<ComputeLabSnapshot["webrtcPairs"][number]>(COMPUTE_COLLECTIONS.webrtcPairs),
-      this.readCollection<ComputeLabSnapshot["peerSubassignments"][number]>(COMPUTE_COLLECTIONS.peerSubassignments),
-      this.readCollection<ComputeLabSnapshot["capabilityObservations"][number]>(COMPUTE_COLLECTIONS.capabilityObservations),
-      this.readCollection<ComputeLabSnapshot["connectivityObservations"][number]>(COMPUTE_COLLECTIONS.connectivityObservations),
       this.readCollection<ComputeLabSnapshot["receiptLogEntries"][number]>(COMPUTE_COLLECTIONS.receiptLogEntries),
       this.readCollection<ComputeLabSnapshot["receiptLogSegments"][number]>(COMPUTE_COLLECTIONS.receiptLogSegments),
       this.readCollection<ComputeLabSnapshot["publicTiles"][number]>(COMPUTE_COLLECTIONS.publicTiles),
       this.readCollection<ComputeLabSnapshot["bundles"][number]>(COMPUTE_COLLECTIONS.bundles),
-      this.readCollection<ComputeLabSnapshot["witnessAttestations"][number]>(COMPUTE_COLLECTIONS.witnessAttestations),
+      this.readCollectionWhere<ComputeLabSnapshot["witnessAttestations"][number]>(COMPUTE_COLLECTIONS.witnessAttestations, "submittedAt", ">=", recentCutoff),
       this.readCollection<ComputeLabSnapshot["control"]>(COMPUTE_COLLECTIONS.control),
     ]);
+    // Optionally-load ephemeral state. Off by default.
+    const ephemeral = persistEphemeral
+      ? Promise.all([
+        this.readCollection<ComputeLabSnapshot["workers"][number]>(COMPUTE_COLLECTIONS.workers),
+        this.readCollection<ComputeLabSnapshot["sessions"][number]>(COMPUTE_COLLECTIONS.sessions),
+        this.readCollection<ComputeLabSnapshot["webrtcSessions"][number]>(COMPUTE_COLLECTIONS.webrtcSessions),
+        this.readCollection<ComputeLabSnapshot["webrtcPairs"][number]>(COMPUTE_COLLECTIONS.webrtcPairs),
+        this.readCollection<ComputeLabSnapshot["peerSubassignments"][number]>(COMPUTE_COLLECTIONS.peerSubassignments),
+        this.readCollection<ComputeLabSnapshot["capabilityObservations"][number]>(COMPUTE_COLLECTIONS.capabilityObservations),
+        this.readCollection<ComputeLabSnapshot["connectivityObservations"][number]>(COMPUTE_COLLECTIONS.connectivityObservations),
+      ])
+      : Promise.resolve([[], [], [], [], [], [], []] as [
+        ComputeLabSnapshot["workers"],
+        ComputeLabSnapshot["sessions"],
+        ComputeLabSnapshot["webrtcSessions"],
+        ComputeLabSnapshot["webrtcPairs"],
+        ComputeLabSnapshot["peerSubassignments"],
+        ComputeLabSnapshot["capabilityObservations"],
+        ComputeLabSnapshot["connectivityObservations"],
+      ]);
+    const [
+      [tasks, assignments, receipts, validations, reputation, receiptLogEntries, receiptLogSegments, publicTiles, bundles, witnessAttestations, control],
+      [workers, sessions, webrtcSessions, webrtcPairs, peerSubassignments, capabilityObservations, connectivityObservations],
+    ] = await Promise.all([durable, ephemeral]);
     const now = Date.now();
     return {
       control: control[0],
@@ -120,11 +140,11 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
     const publicStats = derived.publicStats({ suppressSmall: false });
     const writes: Array<Promise<void>> = [];
     if (patch.control) writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.control, [patch.control], () => "latest"));
-    if (workers.length) {
+    if (persistEphemeral && workers.length) {
       writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.workers, workers, (worker) => worker.workerId, mergeWorker));
       writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.capabilities, capabilities, (capability) => capability.workerId));
     }
-    if (patch.sessions?.length) {
+    if (persistEphemeral && patch.sessions?.length) {
       writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.sessions, patch.sessions, (session) => session.workerSessionId, mergeWorkerSession));
     }
     if (tasks.length) {
@@ -143,19 +163,19 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
     if (patch.reputation?.length) {
       writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.reputation, patch.reputation, (rep) => rep.workerId, mergeReputation));
     }
-    if (patch.webrtcSessions?.length) {
+    if (persistEphemeral && patch.webrtcSessions?.length) {
       writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.webrtcSessions, patch.webrtcSessions, (session) => session.sessionId, mergeWebRtcSession));
     }
-    if (patch.webrtcPairs?.length) {
+    if (persistEphemeral && patch.webrtcPairs?.length) {
       writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.webrtcPairs, patch.webrtcPairs, (pair) => pair.pairId, mergeWebRtcPair));
     }
-    if (patch.peerSubassignments?.length) {
+    if (persistEphemeral && patch.peerSubassignments?.length) {
       writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.peerSubassignments, patch.peerSubassignments, (subassignment) => subassignment.peerAssignmentId));
     }
-    if (patch.capabilityObservations?.length) {
+    if (persistEphemeral && patch.capabilityObservations?.length) {
       writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.capabilityObservations, patch.capabilityObservations, (obs) => obs.observationId));
     }
-    if (patch.connectivityObservations?.length) {
+    if (persistEphemeral && patch.connectivityObservations?.length) {
       writes.push(this.upsertCollection(COMPUTE_COLLECTIONS.connectivityObservations, patch.connectivityObservations, (obs) => obs.observationId));
     }
     if (patch.receiptLogEntries?.length) {
@@ -203,6 +223,20 @@ export class FirestoreComputeLabPersistence implements ComputeLabPersistence {
 
   private async readCollection<T>(collection: string): Promise<T[]> {
     const snap = await this.firestore.collection(collection).get();
+    return snap.docs.map((doc) => doc.data() as T);
+  }
+
+  // Read only documents matching `field == value`. Used to bound startup
+  // reads to live state (tasks: status==running; receipts: receivedAt>=cutoff)
+  // so we don't pull tens of thousands of completed/expired docs into memory
+  // every cold start.
+  private async readCollectionWhere<T>(
+    collection: string,
+    field: string,
+    op: FirebaseFirestore.WhereFilterOp,
+    value: unknown,
+  ): Promise<T[]> {
+    const snap = await this.firestore.collection(collection).where(field, op, value).get();
     return snap.docs.map((doc) => doc.data() as T);
   }
 

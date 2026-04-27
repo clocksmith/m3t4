@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /api/
+Disallow: /compute/public/receipt-log/
+Disallow: /compute/public/contact-map/
+Disallow: /compute/admin/
+Crawl-delay: 30

@@ -53,10 +53,45 @@ function db(): Firestore {
 export class FirestoreStableStore implements StableStore {
   private readonly db: Firestore;
   private readonly ready: Promise<void>;
+  private listActiveCache: { stables: Stable[]; loadedAt: number } | null = null;
+  private listActiveInflight: Promise<Stable[]> | null = null;
+  private readonly listActiveTtlMs = Number(process.env.M3T4_STABLES_CACHE_TTL_MS ?? 120_000);
+  private readonly listActiveRefreshMs = Number(process.env.M3T4_STABLES_REFRESH_MS ?? 90_000);
+  private listActiveRefreshTimer: NodeJS.Timeout | null = null;
+  private replaySummariesCache: Map<number, { summaries: PublicReplayArtifactSummary[]; loadedAt: number }> = new Map();
+  private replaySummariesInflight: Map<number, Promise<PublicReplayArtifactSummary[]>> = new Map();
+  private readonly replaySummariesTtlMs = Number(process.env.M3T4_REPLAY_SUMMARIES_CACHE_TTL_MS ?? 60_000);
 
   constructor(database: Firestore = db()) {
     this.db = database;
     this.ready = this.seedSystemPhantoms();
+    // Background refresh: keep the stables mirror warm without per-call cache
+    // misses. Runs every M3T4_STABLES_REFRESH_MS (default 90s); listActive()
+    // serves entirely from cache except on the very first call.
+    this.startListActiveRefresh();
+  }
+
+  private startListActiveRefresh(): void {
+    if (this.listActiveRefreshTimer || this.listActiveRefreshMs <= 0) return;
+    const tick = async () => {
+      try {
+        const snap = await this.db.collection(FIRESTORE_COLLECTIONS.stables).get();
+        this.listActiveCache = {
+          stables: snap.docs.map((doc) => doc.data() as Stable),
+          loadedAt: Date.now(),
+        };
+      } catch {
+        // Background refresh failures are non-fatal; existing cache stays.
+      }
+    };
+    this.listActiveRefreshTimer = setInterval(tick, this.listActiveRefreshMs);
+    // Don't keep the event loop alive solely on this timer (Cloud Run is OK
+    // shutting down idle).
+    this.listActiveRefreshTimer.unref?.();
+  }
+
+  invalidateListActiveCache(): void {
+    this.listActiveCache = null;
   }
 
   async getStable(userId: string): Promise<Stable | null> {
@@ -167,11 +202,28 @@ export class FirestoreStableStore implements StableStore {
 
   async listActive(sinceMs: number): Promise<Stable[]> {
     await this.ready;
-    const cutoff = Date.now() - sinceMs;
-    const snap = await this.db.collection(FIRESTORE_COLLECTIONS.stables).get();
-    return snap.docs
-      .map((doc) => doc.data() as Stable)
-      .filter((st) => activeRosterSlots(st.slots).some((s) => s.submittedAt >= cutoff || s.lastPlayedAt >= cutoff));
+    const now = Date.now();
+    const cutoff = now - sinceMs;
+    const cached = this.listActiveCache;
+    if (cached && now - cached.loadedAt < this.listActiveTtlMs) {
+      return cached.stables.filter((st) =>
+        activeRosterSlots(st.slots).some((s) => s.submittedAt >= cutoff || s.lastPlayedAt >= cutoff),
+      );
+    }
+    if (!this.listActiveInflight) {
+      this.listActiveInflight = (async () => {
+        const snap = await this.db.collection(FIRESTORE_COLLECTIONS.stables).get();
+        const stables = snap.docs.map((doc) => doc.data() as Stable);
+        this.listActiveCache = { stables, loadedAt: Date.now() };
+        return stables;
+      })().finally(() => {
+        this.listActiveInflight = null;
+      });
+    }
+    const stables = await this.listActiveInflight;
+    return stables.filter((st) =>
+      activeRosterSlots(st.slots).some((s) => s.submittedAt >= cutoff || s.lastPlayedAt >= cutoff),
+    );
   }
 
   async updateAfterMatch(res: MatchUpdate): Promise<void> {
@@ -239,12 +291,30 @@ export class FirestoreStableStore implements StableStore {
   ): Promise<PublicReplayArtifactSummary[]> {
     await this.ready;
     const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
-    const snap = await this.db
-      .collection(FIRESTORE_COLLECTIONS.publicReplayArtifacts)
-      .orderBy("exportedAt", "desc")
-      .limit(limit)
-      .get();
-    return snap.docs.map((doc) => summarizePublicReplayArtifact(doc.data() as PublicReplayArtifactV1));
+    const now = Date.now();
+    const cached = this.replaySummariesCache.get(limit);
+    if (cached && now - cached.loadedAt < this.replaySummariesTtlMs) {
+      return cached.summaries;
+    }
+    let inflight = this.replaySummariesInflight.get(limit);
+    if (!inflight) {
+      inflight = (async () => {
+        const snap = await this.db
+          .collection(FIRESTORE_COLLECTIONS.publicReplayArtifacts)
+          .orderBy("exportedAt", "desc")
+          .limit(limit)
+          .get();
+        const summaries = snap.docs.map((doc) =>
+          summarizePublicReplayArtifact(doc.data() as PublicReplayArtifactV1),
+        );
+        this.replaySummariesCache.set(limit, { summaries, loadedAt: Date.now() });
+        return summaries;
+      })().finally(() => {
+        this.replaySummariesInflight.delete(limit);
+      });
+      this.replaySummariesInflight.set(limit, inflight);
+    }
+    return inflight;
   }
 
   async applyDecay(): Promise<number> {

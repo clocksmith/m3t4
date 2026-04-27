@@ -41,6 +41,7 @@ export interface PlasmaLabConfig {
   workerSessionTtlMs: number;
   webrtcSessionTtlMs: number;
   requireReceiptSignatures: boolean;
+  maxPendingTasks: number;
 }
 
 export const CONFIG: PlasmaLabConfig = {
@@ -67,6 +68,7 @@ export const CONFIG: PlasmaLabConfig = {
   workerSessionTtlMs: parseInt(process.env.COMPUTE_WORKER_SESSION_TTL_MS ?? "3600000", 10),
   webrtcSessionTtlMs: parseInt(process.env.COMPUTE_WEBRTC_SESSION_TTL_MS ?? "600000", 10),
   requireReceiptSignatures: envFlag("COMPUTE_REQUIRE_RECEIPT_SIGNATURES", true),
+  maxPendingTasks: envInt("COMPUTE_MAX_PENDING_TASKS", 500),
 };
 
 function storeBackend(): "memory" | "firestore" {

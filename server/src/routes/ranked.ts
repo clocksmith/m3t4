@@ -30,6 +30,7 @@ export function registerRankedRoutes(routes: RouteList, deps: RankedRouteDeps): 
   routes.push(async (req, res, url) => {
     if (req.method === "GET" && url.pathname === "/api/status") {
       const active = await store.listActive(config.activePoolMs);
+      res.setHeader("cache-control", "public, max-age=10, stale-while-revalidate=30");
       json(res, 200, {
         ok: true,
         cycleMs: config.cycleMs,
@@ -57,6 +58,7 @@ export function registerRankedRoutes(routes: RouteList, deps: RankedRouteDeps): 
       const rows = active
         .map((st) => stablePublic(st))
         .sort((a, b) => b.eloAggregate - a.eloAggregate);
+      res.setHeader("cache-control", "public, max-age=20, stale-while-revalidate=40");
       json(res, 200, rows.slice(0, 50));
       return true;
     }

@@ -44,6 +44,7 @@ export function registerReplayVerifyRoutes(routes: RouteList, deps: ReplayRouteD
         artifacts,
       };
       const manifestHash = manifestContentHash(body);
+      res.setHeader("cache-control", "public, max-age=30, stale-while-revalidate=120");
       json(res, 200, { ...body, manifestHash });
       return true;
     }
@@ -56,7 +57,10 @@ export function registerReplayVerifyRoutes(routes: RouteList, deps: ReplayRouteD
       }
       const artifact = await deps.store.getPublicReplayArtifact(matchId);
       if (!artifact) json(res, 404, { error: "public replay artifact not found" });
-      else json(res, 200, artifact);
+      else {
+        res.setHeader("cache-control", "public, max-age=300, stale-while-revalidate=600");
+        json(res, 200, artifact);
+      }
       return true;
     }
 

@@ -46,6 +46,7 @@ const baseConfig: PlasmaLabConfig = {
   workerSessionTtlMs: 60_000,
   webrtcSessionTtlMs: 60_000,
   requireReceiptSignatures: false,
+  maxPendingTasks: 0,
 };
 
 const capability: WorkerCapability = {

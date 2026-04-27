@@ -396,12 +396,14 @@ export async function handleComputeLabRequest(
   }
 
   if (req.method === "GET" && url.pathname === "/compute/public/stats") {
+    res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=120");
     json(res, 200, deps.store.publicStats());
     return true;
   }
 
   if (req.method === "GET" && url.pathname === "/compute/public/summary") {
     const summary = deps.store.summary();
+    res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=120");
     json(res, 200, {
       stats: deps.store.publicStats(),
       useCases: publicUseCases(),
@@ -425,6 +427,7 @@ export async function handleComputeLabRequest(
   }
 
   if (req.method === "GET" && url.pathname === "/compute/public/contact-map/aggregate") {
+    res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=120");
     json(res, 200, deps.store.publicContactMapAggregate());
     return true;
   }
@@ -606,6 +609,7 @@ export async function handleComputeLabRequest(
   if (req.method === "GET" && url.pathname === "/compute/public/receipt-log/manifest") {
     const limit = Number(url.searchParams.get("limit") ?? "");
     const segments = deps.store.listReceiptLogSegments({ limit: Number.isFinite(limit) && limit > 0 ? limit : undefined });
+    res.setHeader("cache-control", "public, max-age=30, stale-while-revalidate=120");
     const body = {
       kind: "m3t4.receipt-log.manifest.v0",
       generatedAt: Date.now(),
@@ -664,13 +668,19 @@ export async function handleComputeLabRequest(
     if (action === "verify") {
       const verification = deps.store.verifyReceiptLogSegment(segmentId);
       if (!verification) json(res, 404, { error: "receipt log segment not found" });
-      else json(res, 200, verification);
+      else {
+        res.setHeader("cache-control", "public, max-age=300, stale-while-revalidate=600");
+        json(res, 200, verification);
+      }
       return true;
     }
     if (action === undefined || action === "") {
       const segment = deps.store.getReceiptLogSegment(segmentId);
       if (!segment) json(res, 404, { error: "receipt log segment not found" });
-      else json(res, 200, segment);
+      else {
+        res.setHeader("cache-control", "public, max-age=31536000, immutable");
+        json(res, 200, segment);
+      }
       return true;
     }
   }
@@ -1001,6 +1011,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   // preset. Seeds tasks AND records the bundle in a single admin call.
   if (req.method === "POST" && url.pathname === "/compute/admin/bundles/materialize-contact-map") {
     if (!guardSeed(res, "science.contact_map_tile.v0")) return true;
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       presetId?: string;
       matchId?: string | null;
@@ -1093,6 +1104,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   // task so quorum is genuinely independent), records the bundle.
   if (req.method === "POST" && url.pathname === "/compute/admin/bundles/materialize-replay-verify") {
     if (!guardSeed(res, "m3t4.replay_verify.v1")) return true;
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       matchId?: string;
       replayArtifactJson?: string;
@@ -1209,6 +1221,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
       return true;
     }
     if (!guardSeed(res, "prime-search.v0")) return true;
+    if (!guardBacklog(res, deps)) return true;
     try {
       const task = deps.store.seedPrimeTask({
         start: body?.start ?? 1_000_000,
@@ -1226,6 +1239,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/device-witness-webgpu") {
     if (!guardSeed(res, "device_witness.webgpu.v0")) return true;
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       seed?: number;
       count?: number;
@@ -1250,6 +1264,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/device-witness-render") {
     if (!guardSeed(res, "device_witness.render_fixture.v0")) return true;
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       minExecutions?: number;
       minAgreeing?: number;
@@ -1270,6 +1285,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/device-witness-derived-buffer") {
     if (!guardSeed(res, "device_witness.derived_buffer.v0")) return true;
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       seed?: number;
       count?: number;
@@ -1292,6 +1308,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/device-witness-webrtc") {
     if (!guardSeed(res, "device_witness.webrtc.v0")) return true;
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       timeoutMs?: number;
       minExecutions?: number;
@@ -1312,6 +1329,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/tensor-tile") {
     if (!guardSeed(res, "plasma.tensor_tile.v0")) return true;
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       seed?: number;
       rows?: number;
@@ -1342,6 +1360,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/image-tile-infer") {
     if (!guardSeed(res, "ml.image_tile_infer.v0")) return true;
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       presetId?: string;
       sourceId?: string;
@@ -1383,6 +1402,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/genome-kmer") {
     if (!guardSeed(res, "science.genome_kmer.v0")) return true;
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       presetId?: string;
       sequenceId?: string;
@@ -1418,6 +1438,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/microscopy-tile-score") {
     if (!guardSeed(res, "science.microscopy_tile_score.v0")) return true;
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       presetId?: string;
       sourceId?: string;
@@ -1457,6 +1478,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/exploit-search") {
     if (!guardSeed(res, "m3t4.exploit_search.v0")) return true;
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       stageId?: string;
       brainA?: string;
@@ -1493,6 +1515,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/asset-tile-audit") {
     if (!guardSeed(res, "asset.tile_audit.v0")) return true;
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       presetId?: string;
       sourceId?: string;
@@ -1532,6 +1555,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/heat-diffusion-tile") {
     if (!guardSeed(res, "science.heat_diffusion_tile.v0")) return true;
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       widthPx?: number;
       heightPx?: number;
@@ -1564,6 +1588,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/mandelbrot-tile") {
     if (!guardSeed(res, "science.mandelbrot_tile.v0")) return true;
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       widthPx?: number;
       heightPx?: number;
@@ -1600,6 +1625,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/contact-map-tile") {
     if (!guardSeed(res, "science.contact_map_tile.v0")) return true;
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       presetId?: string;
       rowResidues?: string;
@@ -1638,6 +1664,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     return true;
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/science-cycle") {
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       genomePresetIds?: string[];
       contactPresetIds?: string[];
@@ -1695,6 +1722,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/public-artifact") {
     if (!guardSeed(res, "m3t4.public_artifact_verify.v0")) return true;
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       artifact?: {
         matchId?: string;
@@ -1736,6 +1764,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/replay-verify") {
     if (!guardSeed(res, "m3t4.replay_verify.v1")) return true;
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       replayArtifact?: unknown;
       replayArtifactJson?: string;
@@ -1767,6 +1796,7 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
   }
   if (req.method === "POST" && url.pathname === "/compute/admin/tasks/seed-sweep") {
     if (!guardSeed(res, "m3t4.seed_sweep.v0")) return true;
+    if (!guardBacklog(res, deps)) return true;
     const body = await readJson<{
       stageId?: string;
       brainA?: string;
@@ -2248,6 +2278,31 @@ function guardSeed(
   if (verdict.ok) return true;
   json(res, 403, { error: `seed rejected: ${verdict.reason}` });
   return false;
+}
+
+// Backpressure: refuse to seed new tasks when the queue is already saturated.
+// Counts in-flight (not yet complete) tasks and rejects above
+// `config.maxPendingTasks` (env COMPUTE_MAX_PENDING_TASKS, default 500). Lets
+// workers drain the existing queue before more arrives instead of letting
+// auto-seed pile up tens of thousands of tasks.
+function guardBacklog(res: ServerResponse, deps: RouteDeps): boolean {
+  const limit = deps.config.maxPendingTasks;
+  if (!Number.isFinite(limit) || limit <= 0) return true;
+  let pending = 0;
+  for (const task of deps.store.exportSnapshot().tasks ?? []) {
+    if (task.status === "running") pending++;
+    if (pending >= limit) {
+      res.setHeader("retry-after", "60");
+      json(res, 503, {
+        error: "queue saturated",
+        pendingTasks: pending,
+        limit,
+        hint: "Lab is throttling new task seeding while workers drain the existing queue. Retry after some receipts complete.",
+      });
+      return false;
+    }
+  }
+  return true;
 }
 
 function dashboardHtml(): string {

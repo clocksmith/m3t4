@@ -1,6 +1,6 @@
 import { ARENA_L, ARENA_R, ARENA_T, CLASH_FREEZE, COYOTE_TIME, DOUBLE_KO_RESPAWN_S, FLOOR_Y, GOAL_DWELL_RADIUS, GOAL_DWELL_S, GOAL_TIMER_START, GRAVITY, HIT_FREEZE, JUMP_BUFFER_TIME, KILL_RESPAWN_S, POINTS_TO_WIN_ROUND, RESPAWN_INVULN_S, ROUNDS_TO_WIN_MATCH, ROUND_TIMER_MAX_TICKS, STATS, STEP, TIMEOUT_TIEBREAK, WALL_SLIDE, } from "./constants.js";
 import { BEHAVIOR_VERSION } from "./brain.js";
-import { createStepperWorld, settleWorldWinner, stepWorld, unpackAction } from "./simulate.js";
+import { createStepperWorld, settleWorldWinner, stepWorld, unpackAction, worldToFrame } from "./simulate.js";
 export const REPLAY_SCHEMA_ID = "m3t4.replay";
 export const REPLAY_SCHEMA_VERSION = 1;
 export const REPLAY_ACTION_ENCODING = "decision-action-pairs-v1";
@@ -461,6 +461,63 @@ export function verifyActionLog(input) {
     return {
         ok: true,
         result,
+        simConstantsHash: REPLAY_CONSTANTS_HASH,
+        behaviorVersion: BEHAVIOR_VERSION,
+    };
+}
+export function framesFromActionLog(input) {
+    const bytes = input.actionLog;
+    if (bytes.length % 2 !== 0) {
+        return {
+            ok: false,
+            frames: [],
+            result: { winner: -1, finalScore: [0, 0], finalRounds: [0, 0], ticks: 0, logHash: "00000000" },
+            reason: "actionLog must contain paired P1/P2 bytes",
+            simConstantsHash: REPLAY_CONSTANTS_HASH,
+            behaviorVersion: BEHAVIOR_VERSION,
+        };
+    }
+    const world = createStepperWorld({
+        stage: input.stage,
+        seed: input.seed,
+        chars: input.chars,
+    });
+    const maxTicks = input.maxTicks ?? ROUND_TIMER_MAX_TICKS * ROUNDS_TO_WIN_MATCH * 2;
+    let offset = 0;
+    let hashAcc = 2166136261 >>> 0;
+    const empty = {};
+    const frames = [worldToFrame(world)];
+    while (world.matchWinner === -1 && world.tick < maxTicks) {
+        if (world.freeze > 0 || world.roundPause > 0) {
+            stepWorld(world, empty, empty);
+            frames.push(worldToFrame(world));
+            continue;
+        }
+        if (offset + 1 >= bytes.length) {
+            const result = replayResultFromWorld(world, hashAcc.toString(16).padStart(8, "0"));
+            return {
+                ok: false,
+                frames,
+                result,
+                reason: `action log ended early at tick ${world.tick}`,
+                simConstantsHash: REPLAY_CONSTANTS_HASH,
+                behaviorVersion: BEHAVIOR_VERSION,
+            };
+        }
+        const pa = bytes[offset++];
+        const pb = bytes[offset++];
+        hashAcc = fnvByte(hashAcc, pa);
+        hashAcc = fnvByte(hashAcc, pb);
+        stepWorld(world, unpackAction(pa), unpackAction(pb));
+        frames.push(worldToFrame(world));
+    }
+    settleWorldWinner(world);
+    const result = replayResultFromWorld(world, hashAcc.toString(16).padStart(8, "0"));
+    return {
+        ok: offset === bytes.length,
+        frames,
+        result,
+        reason: offset === bytes.length ? undefined : `action log has ${bytes.length - offset} trailing bytes`,
         simConstantsHash: REPLAY_CONSTANTS_HASH,
         behaviorVersion: BEHAVIOR_VERSION,
     };

@@ -2,9 +2,35 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    // ===== Match-engine collections (Functions architecture) =====
+    //
+    // Spectator-readable. Match docs contain stage/seed/actionLog/result
+    // and intentionally exclude brain configs, so reads are safe.
+    match /matches/{matchId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Match-chain head + lock. Server-only. Read access is fine for
+    // monitoring; writes are gated to Functions service account.
+    match /state/{stateDoc} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // WebRTC signaling: short-lived session docs. Anyone with the
+    // sessionId can read/append candidates+offer+answer. Sessions
+    // expire via TTL field; clients should respect expiresAt.
+    match /webrtc/{sessionId} {
+      allow read: if true;
+      allow write: if false; // Writes go through webrtcSignal callable.
+    }
+
+    // ===== Stables (private brain configs) =====
+    //
     // Private canonical state. Contains submitted bot configs and Elo stats.
-    // Only the Cloud Run service account should access this through the Admin
-    // SDK. Browser clients use API endpoints instead.
+    // Only the Functions service account should access this through the Admin
+    // SDK. Browser clients use the submitStable callable instead.
     match /stables/{uid} {
       allow read, write: if false;
     }

@@ -1,4 +1,5 @@
 import type { BrainConfig, Character, MatchResult, Stage } from "./types.js";
+import { type TraceFrame } from "./simulate.js";
 export declare const REPLAY_SCHEMA_ID = "m3t4.replay";
 export declare const REPLAY_SCHEMA_VERSION = 1;
 export declare const REPLAY_ACTION_ENCODING = "decision-action-pairs-v1";
@@ -182,4 +183,20 @@ export interface VerifyActionLogOutput {
     behaviorVersion: number;
 }
 export declare function verifyActionLog(input: VerifyActionLogInput): VerifyActionLogOutput;
+export interface FramesFromActionLogInput {
+    seed: number;
+    stage: Stage;
+    chars: [Character, Character];
+    actionLog: Uint8Array;
+    maxTicks?: number;
+}
+export interface FramesFromActionLogOutput {
+    ok: boolean;
+    frames: TraceFrame[];
+    result: ReplayResultV1;
+    reason?: string;
+    simConstantsHash: string;
+    behaviorVersion: number;
+}
+export declare function framesFromActionLog(input: FramesFromActionLogInput): FramesFromActionLogOutput;
 export declare function isReplayArtifactV1(value: unknown): value is ReplayArtifactV1;

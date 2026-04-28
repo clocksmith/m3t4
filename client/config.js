@@ -8,6 +8,7 @@ window.__M3T4_WS_ORIGIN__ = isLocalM3t4Config
   : "wss://arena-server-789525635095.us-central1.run.app";
 window.__M3T4_AUTH_MODE__ = isLocalM3t4Config ? "dev" : "firebase";
 window.__M3T4_COMPUTE_SLACK_WORKER__ = false;
+window.__M3T4_COMPUTE_FIREBASE__ = true;
 window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS__ = false;
 window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__ = false;
 window.__M3T4_COMPUTE_GENOME_KMER__ = false;
@@ -23,3 +24,8 @@ window.__M3T4_FIREBASE_CONFIG__ = {
   appId: "1:789525635095:web:be4cb0f8394c73c680bc52",
   measurementId: "G-7DQNL6QVQX",
 };
+window.__M3T4_FIREBASE__ = window.__M3T4_FIREBASE_CONFIG__;
+window.__M3T4_FIREBASE_REGION__ = "us-central1";
+window.__M3T4_USE_FIREBASE_FEED__ = false;
+window.__M3T4_USE_P2P_MESH__ = true;
+window.__M3T4_USE_STATIC_MATCHES__ = true;

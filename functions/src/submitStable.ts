@@ -1,20 +1,34 @@
 // submitStable: authenticated callable that lets a player submit their
-// brain config for a slot. Validates by compiling the brain and writes
-// to stables/<userId>.
+// brain config for a slot. Validates by compiling the brain, rate-limits
+// per uid, optionally enforces handle uniqueness, and writes to
+// stables/<userId>.
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import { compileBrain, type BrainConfig } from "@m3t4/sim";
 import { db, COLLECTIONS } from "./firestore.js";
+import {
+  HANDLE_PATTERN,
+  MAX_SLOTS,
+  emptyStable,
+  normalizeStableTotals,
+  publicStableDoc,
+  sanitizeHandle,
+  type StableDoc,
+  type StableSlotDoc,
+} from "./stable-public.js";
 
 const REGION = "us-central1";
-const MAX_SLOTS = 4;
+// Reject submissions arriving faster than this per uid. Mirrors the
+// legacy SUBMIT_RATE_MS env on arena-server (default 30s).
+const SUBMIT_RATE_MS = Number(process.env.SUBMIT_RATE_MS ?? 30_000);
 
 interface SubmitStableInput {
   handle?: string;
   slotIdx: number;
   config: BrainConfig;
   name?: string;
+  cosmetics?: unknown;
 }
 
 export const submitStable = onCall(
@@ -29,67 +43,105 @@ export const submitStable = onCall(
     if (!Number.isInteger(slotIdx) || slotIdx < 0 || slotIdx >= MAX_SLOTS) {
       throw new HttpsError("invalid-argument", `slotIdx must be 0..${MAX_SLOTS - 1}`);
     }
-
     if (!data.config) throw new HttpsError("invalid-argument", "config required");
-
     try {
       compileBrain(data.config);
     } catch (e) {
-      throw new HttpsError("invalid-argument", `brain config invalid: ${e instanceof Error ? e.message : String(e)}`);
+      throw new HttpsError(
+        "invalid-argument",
+        `brain config invalid: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
 
-    const handle = sanitizeHandle(data.handle ?? auth.token.name ?? auth.uid.slice(0, 12));
-    const slotId = `${auth.uid}-${slotIdx}`;
+    const requestedHandle = sanitizeHandle(
+      data.handle ?? auth.token.name ?? auth.uid.slice(0, 12),
+    );
+    if (!HANDLE_PATTERN.test(requestedHandle)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "handle must be 3-20 chars, lowercase letters/digits/underscore",
+      );
+    }
+
     const slotName = (data.name ?? `slot-${slotIdx}`).slice(0, 32);
     const now = Date.now();
 
     const firestore = db();
-    const ref = firestore.collection(COLLECTIONS.stables).doc(auth.uid);
-    await firestore.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      const existing = snap.exists ? (snap.data() as StableDoc) : null;
+    const stableRef = firestore.collection(COLLECTIONS.stables).doc(auth.uid);
+    const publicRef = firestore.collection(COLLECTIONS.publicStables).doc(auth.uid);
+    const handleRef = firestore.collection(COLLECTIONS.handles).doc(requestedHandle);
+
+    const result = await firestore.runTransaction(async (tx) => {
+      const stableSnap = await tx.get(stableRef);
+      const existing = stableSnap.exists ? (stableSnap.data() as StableDoc) : null;
+
+      // Rate limit: reject submissions faster than SUBMIT_RATE_MS for the
+      // same slot index.
+      if (existing) {
+        const prev = existing.slots?.[slotIdx];
+        const lastSubmittedAt = prev?.submittedAt ?? 0;
+        if (lastSubmittedAt && now - lastSubmittedAt < SUBMIT_RATE_MS) {
+          throw new HttpsError(
+            "resource-exhausted",
+            `please wait ${Math.ceil((SUBMIT_RATE_MS - (now - lastSubmittedAt)) / 1000)}s before re-submitting`,
+          );
+        }
+      }
+
+      // Handle uniqueness. If this uid already owns the handle, fine.
+      // Otherwise, the handle must be free.
+      const handleSnap = await tx.get(handleRef);
+      if (handleSnap.exists) {
+        const owner = handleSnap.data() as { userId?: string };
+        if (owner.userId && owner.userId !== auth.uid) {
+          throw new HttpsError("already-exists", "handle taken");
+        }
+      }
+
+      // If the user is changing handles, free up the old one.
+      const oldHandle = existing?.handle;
+      if (oldHandle && oldHandle !== requestedHandle) {
+        tx.delete(firestore.collection(COLLECTIONS.handles).doc(oldHandle));
+      }
+
+      // Write the new handle index entry.
+      tx.set(handleRef, { handle: requestedHandle, userId: auth.uid, updatedAt: now });
+
       const slots = existing?.slots ? [...existing.slots] : [];
       const prev = slots[slotIdx];
-      const slot: SlotDoc = {
-        slotId: prev?.slotId ?? slotId,
+      const slot: StableSlotDoc = {
+        slotIdx,
+        slotId: prev?.slotId ?? `${auth.uid}-${slotIdx}`,
         name: slotName,
         config: data.config,
         elo: prev?.elo ?? 1500,
+        peakElo: Math.max(prev?.peakElo ?? prev?.elo ?? 1500, prev?.elo ?? 1500),
+        wins: prev?.wins ?? 0,
+        losses: prev?.losses ?? 0,
+        draws: prev?.draws ?? 0,
+        cosmetics: data.cosmetics ?? prev?.cosmetics ?? null,
         lastPlayedAt: prev?.lastPlayedAt ?? 0,
         submittedAt: now,
+        rateLockedUntil: now + SUBMIT_RATE_MS,
       };
       slots[slotIdx] = slot;
-      const next: StableDoc = {
-        userId: auth.uid,
-        handle,
+
+      const base = existing ?? emptyStable(auth.uid, requestedHandle, now);
+      const next: StableDoc = normalizeStableTotals({
+        ...base,
         slots,
         lastActiveAt: now,
         updatedAt: now,
-      };
-      tx.set(ref, next, { merge: true });
+        createdAt: existing?.createdAt ?? now,
+        userId: auth.uid,
+        handle: requestedHandle,
+      });
+      tx.set(stableRef, next, { merge: true });
+      tx.set(publicRef, publicStableDoc(next), { merge: true });
+      return { slotId: slot.slotId, handle: requestedHandle };
     });
-    logger.info("submitStable", { uid: auth.uid, slotIdx });
-    return { ok: true, slotId };
+
+    logger.info("submitStable", { uid: auth.uid, slotIdx, handle: result.handle });
+    return { ok: true, slotId: result.slotId, handle: result.handle };
   },
 );
-
-function sanitizeHandle(input: string): string {
-  return String(input).toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 20) || "anon";
-}
-
-interface SlotDoc {
-  slotId: string;
-  name: string;
-  config: unknown;
-  elo: number;
-  lastPlayedAt: number;
-  submittedAt: number;
-}
-
-interface StableDoc {
-  userId: string;
-  handle: string;
-  slots: SlotDoc[];
-  lastActiveAt: number;
-  updatedAt: number;
-}

@@ -223,6 +223,13 @@ async function renderDashboard(user) {
   wirePendingBuildConfig();
 }
 
+function useFirebaseRoster() {
+  return auth.mode === "firebase" && Boolean(window.__M3T4_FIREBASE_CONFIG__ ?? window.__M3T4_FIREBASE__);
+}
+
+function firebaseSubmitApi() {
+  return import("../lib/submit.js");
+}
 
 function wireClaimHandle() {
   root.querySelector("#handle-claim").addEventListener("click", async () => {
@@ -230,7 +237,9 @@ function wireClaimHandle() {
     const err = root.querySelector("#handle-err");
     err.textContent = "";
     try {
-      const r = await api.claimHandle(await auth.token(), input.value.trim());
+      const r = useFirebaseRoster()
+        ? await (await firebaseSubmitApi()).claimHandle(input.value.trim())
+        : await api.claimHandle(await auth.token(), input.value.trim());
       auth.setHandle(r.handle);
       trackProfileHandleClaim(true);
     } catch (e) { err.textContent = e.message; trackProfileHandleClaim(false); }
@@ -250,13 +259,21 @@ function wireSubmit(user) {
       const cfg = normalizeBuildConfig(configFromState(draft.state));
       const cosmetics = selectedCosmeticsForSeat(selectedSlot);
       assertClientUniqueBody(selectedSlot, cosmetics);
-      const r = await api.submitSlot(
-        await auth.token(),
-        selectedSlot,
-        cfg,
-        nonGenericNameOrEmpty(nameInput) || undefined,
-        cosmetics,
-      );
+      const r = useFirebaseRoster()
+        ? await (await firebaseSubmitApi()).submitStable({
+          handle: rosterCache?.handle ?? user.handle,
+          slotIdx: selectedSlot,
+          config: cfg,
+          name: nonGenericNameOrEmpty(nameInput) || undefined,
+          cosmetics,
+        })
+        : await api.submitSlot(
+          await auth.token(),
+          selectedSlot,
+          cfg,
+          nonGenericNameOrEmpty(nameInput) || undefined,
+          cosmetics,
+        );
       msg.className = "ok";
       msg.textContent = `seat ${seatNumber(selectedSlot)} ${wasFilled ? "revised" : "installed"} · slotId=${r.slotId}`;
       sessionStorage.removeItem("m3t4:pendingSubmit");
@@ -371,15 +388,22 @@ async function loadStable(user) {
   const grid = root.querySelector("#roster-grid");
   if (!grid) return;
   try {
-    const token = await auth.token();
-    const [status, s] = await Promise.all([
-      api.status().catch(() => null),
-      api.getMyStable(token).catch((e) => {
-        if (e.status === 404) return null;
-        throw e;
-      }),
-    ]);
-    rosterSize = normalizeRosterSize(status?.maxSlots);
+    let s = null;
+    if (useFirebaseRoster()) {
+      s = await (await firebaseSubmitApi()).getMyStableOnce();
+      rosterSize = DEFAULT_ROSTER_SIZE;
+    } else {
+      const token = await auth.token();
+      const [status, stable] = await Promise.all([
+        api.status().catch(() => null),
+        api.getMyStable(token).catch((e) => {
+          if (e.status === 404) return null;
+          throw e;
+        }),
+      ]);
+      s = stable;
+      rosterSize = normalizeRosterSize(status?.maxSlots);
+    }
     if (selectedSlot >= rosterSize) selectedSlot = Math.max(0, rosterSize - 1);
     rosterCache = s;
     if (s?.handle && user.handle !== s.handle) {
@@ -648,6 +672,9 @@ function friendlySubmitError(error, slotIdx) {
   const retryMs = Number(error?.body?.retryAfterMs ?? 0);
   const retry = Number.isFinite(retryMs) && retryMs > 0 ? ` (${cooldownLabel(retryMs)})` : "";
   if (/rate limited/i.test(message)) {
+    return `seat ${seatNumber(slotIdx)} is saved; edits unlock after the cooldown${retry}`;
+  }
+  if (/please wait/i.test(message) || error?.code === "resource-exhausted") {
     return `seat ${seatNumber(slotIdx)} is saved; edits unlock after the cooldown${retry}`;
   }
   return message;

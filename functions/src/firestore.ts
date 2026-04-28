@@ -18,7 +18,14 @@ export function db(): Firestore {
 export const COLLECTIONS = {
   matches: "matches",
   stables: "stables",
+  publicStables: "publicStables",
+  handles: "handles",
   state: "state",
   // Optional: used by Phase 2 P2P signaling.
   webrtc: "webrtc",
+  computeWorkers: "compute_workers",
+  computeAssignments: "compute_assignments",
+  computeReceipts: "compute_receipts",
+  computePublicStats: "compute_public_stats",
+  computePeerPresence: "compute_peer_presence",
 } as const;

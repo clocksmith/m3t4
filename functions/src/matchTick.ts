@@ -5,7 +5,7 @@
 
 import { onRequest } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
-import { runMatch, selectPair } from "@m3t4/match-engine";
+import { runMatch, selectPair, type StableSummary } from "@m3t4/match-engine";
 import { db, COLLECTIONS } from "./firestore.js";
 import {
   releaseChainLock,
@@ -13,6 +13,12 @@ import {
 } from "./match-chain.js";
 import { loadActiveStables } from "./active-stables.js";
 import { enqueueAt } from "./cloud-tasks.js";
+import {
+  normalizeStableTotals,
+  publicStableDoc,
+  type StableDoc,
+  type StableSlotDoc,
+} from "./stable-public.js";
 
 const REGION = "us-central1";
 
@@ -65,21 +71,52 @@ export const matchTick = onRequest(
         startedAt,
       });
 
-      // Single batch: write match doc + ELO updates atomically.
+      // Single batch: write match doc + roster slot stats/ELO + public
+      // leaderboard projections. This keeps spectate, profile, and
+      // leaderboard reading the same authoritative match schedule.
       const batch = firestore.batch();
       const matchRef = firestore.collection(COLLECTIONS.matches).doc(matchId);
       batch.set(matchRef, match);
 
-      const stableA = firestore.collection(COLLECTIONS.stables).doc(pair.a.userId);
-      const stableB = firestore.collection(COLLECTIONS.stables).doc(pair.b.userId);
+      const sideSummaries = new Map<string, StableSummary>([
+        [stableKey(pair.a.userId, pair.a.slotId), pair.a],
+        [stableKey(pair.b.userId, pair.b.slotId), pair.b],
+      ]);
+      const summaryA = sideSummaries.get(stableKey(match.a.userId, match.a.slotId)) ?? pair.a;
+      const summaryB = sideSummaries.get(stableKey(match.b.userId, match.b.slotId)) ?? pair.b;
+      const stableA = firestore.collection(COLLECTIONS.stables).doc(match.a.userId);
+      const stableB = firestore.collection(COLLECTIONS.stables).doc(match.b.userId);
+      const [stableASnap, stableBSnap] = await Promise.all([stableA.get(), stableB.get()]);
+      const nextStableA = applyMatchToStable({
+        existing: stableASnap.exists ? (stableASnap.data() as StableDoc) : null,
+        summary: summaryA,
+        slotId: match.a.slotId,
+        side: 0,
+        winner: match.result.winner as 0 | 1 | -1,
+        elo: eloAfter.a,
+        matchId,
+        now: startedAt,
+      });
+      const nextStableB = applyMatchToStable({
+        existing: stableBSnap.exists ? (stableBSnap.data() as StableDoc) : null,
+        summary: summaryB,
+        slotId: match.b.slotId,
+        side: 1,
+        winner: match.result.winner as 0 | 1 | -1,
+        elo: eloAfter.b,
+        matchId,
+        now: startedAt,
+      });
+      batch.set(stableA, nextStableA);
+      batch.set(stableB, nextStableB);
       batch.set(
-        stableA,
-        { lastActiveAt: startedAt, lastMatchId: matchId, lastEloA: eloAfter.a },
+        firestore.collection(COLLECTIONS.publicStables).doc(match.a.userId),
+        publicStableDoc(nextStableA),
         { merge: true },
       );
       batch.set(
-        stableB,
-        { lastActiveAt: startedAt, lastMatchId: matchId, lastEloB: eloAfter.b },
+        firestore.collection(COLLECTIONS.publicStables).doc(match.b.userId),
+        publicStableDoc(nextStableB),
         { merge: true },
       );
       await batch.commit();
@@ -139,3 +176,65 @@ export const matchTick = onRequest(
     }
   },
 );
+
+function stableKey(userId: string, slotId: string): string {
+  return `${userId}\n${slotId}`;
+}
+
+function applyMatchToStable(input: {
+  existing: StableDoc | null;
+  summary: StableSummary;
+  slotId: string;
+  side: 0 | 1;
+  winner: 0 | 1 | -1;
+  elo: number;
+  matchId: string;
+  now: number;
+}): StableDoc {
+  const { existing, summary, slotId, side, winner, elo, matchId, now } = input;
+  const base: StableDoc = existing ?? {
+    userId: summary.userId,
+    handle: summary.handle,
+    slots: [],
+    lastActiveAt: now,
+    updatedAt: now,
+    createdAt: now,
+  };
+  const slots = Array.isArray(base.slots) ? [...base.slots] : [];
+  let slotIdx = slots.findIndex((slot) => slot?.slotId === slotId);
+  if (slotIdx < 0) {
+    slotIdx = Number.isInteger(summary.slotIdx) ? Number(summary.slotIdx) : slots.length;
+  }
+  const prev = slots[slotIdx];
+  const nextSlot: StableSlotDoc = {
+    ...(prev ?? {}),
+    slotIdx,
+    slotId,
+    name: prev?.name ?? summary.slotName,
+    config: prev?.config ?? summary.config,
+    cosmetics: prev?.cosmetics ?? summary.cosmetics ?? null,
+    elo,
+    peakElo: Math.max(numberOr(prev?.peakElo, numberOr(prev?.elo, elo)), elo),
+    wins: numberOr(prev?.wins, 0) + (winner === side ? 1 : 0),
+    losses: numberOr(prev?.losses, 0) + (winner !== -1 && winner !== side ? 1 : 0),
+    draws: numberOr(prev?.draws, 0) + (winner === -1 ? 1 : 0),
+    lastPlayedAt: now,
+    submittedAt: numberOr(prev?.submittedAt, now),
+    rateLockedUntil: numberOr(prev?.rateLockedUntil, 0),
+  };
+  slots[slotIdx] = nextSlot;
+  return normalizeStableTotals({
+    ...base,
+    userId: summary.userId,
+    handle: summary.handle,
+    slots,
+    lastActiveAt: now,
+    updatedAt: now,
+    createdAt: base.createdAt ?? now,
+    lastMatchId: matchId,
+  });
+}
+
+function numberOr(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}

@@ -15,6 +15,7 @@ window.__M3T4_AUTH_MODE__ = isLocalM3t4Config ? "dev" : "firebase";
 // Opt-in volunteer compute. Requires explicit browser opt-in from the public
 // compute surface or window.m3t4Compute.start().
 window.__M3T4_COMPUTE_SLACK_WORKER__ = false;
+window.__M3T4_COMPUTE_FIREBASE__ = true;
 window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS__ = false;
 window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__ = false;
 window.__M3T4_COMPUTE_GENOME_KMER__ = false;
@@ -29,6 +30,11 @@ window.__M3T4_FIREBASE_CONFIG__ = {
   messagingSenderId: "",
   appId: "",
 };
+window.__M3T4_FIREBASE__ = window.__M3T4_FIREBASE_CONFIG__;
+window.__M3T4_FIREBASE_REGION__ = "us-central1";
+window.__M3T4_USE_FIREBASE_FEED__ = false;
+window.__M3T4_USE_P2P_MESH__ = true;
+window.__M3T4_USE_STATIC_MATCHES__ = true;
 
 // Closed alpha only. This is a convenience gate for the static app, not a
 // substitute for server-side auth.

@@ -91,7 +91,7 @@ class FirebaseAuth {
       if (!config?.apiKey || !config?.authDomain || !config?.projectId || !config?.appId) {
         throw new Error("Firebase client config missing");
       }
-      const version = window.__M3T4_FIREBASE_SDK_VERSION__ || "10.13.2";
+      const version = window.__M3T4_FIREBASE_SDK_VERSION__ || "10.13.0";
       const [appSdk, authSdk] = await Promise.all([
         import(`https://www.gstatic.com/firebasejs/${version}/firebase-app.js`),
         import(`https://www.gstatic.com/firebasejs/${version}/firebase-auth.js`),

@@ -285,6 +285,7 @@ function wireControls(root) {
 }
 
 function wirePublicData(root) {
+  const client = getComputeClient();
   const noteEl = must(root, "#compute-public-note");
   const scoreEl = must(root, "#compute-public-score");
   const receiptsEl = must(root, "#compute-public-receipts");
@@ -321,6 +322,9 @@ function wirePublicData(root) {
   }
 
   async function fetchPublicSummary(origin) {
+    if (typeof client.fetchPublicSummary === "function") {
+      return client.fetchPublicSummary();
+    }
     const summaryRes = await fetch(`${origin}/compute/public/summary`);
     if (summaryRes.ok) {
       const summary = await summaryRes.json();
@@ -359,7 +363,8 @@ function wirePublicData(root) {
 
   async function refresh() {
     const origin = computeLabOrigin();
-    if (!origin) {
+    const hasClientSummary = typeof client.fetchPublicSummary === "function";
+    if (!origin && !hasClientSummary) {
       noteEl.textContent = "offline";
       workloadsNoteEl.textContent = "offline";
       renderEmptyRows("No public compute origin is configured.");

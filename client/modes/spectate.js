@@ -23,12 +23,6 @@ import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
 import rosterCatalog from "../content/roster-catalog.v1.json" with { type: "json" };
 import { BODY_VARIANTS, BODY_PORTRAIT_SHEETS } from "../content/character-presentation.js";
 import { createSpectateComputeDash } from "./spectate-compute-dash.js";
-import {
-  framesFromActionLog as feedFramesFromActionLog,
-  subscribeLatestMatch,
-  subscribeStaticMatch,
-} from "../lib/match-feed.js";
-
 // When true, the spectator subscribes to a Firestore `matches` collection
 // (Functions-driven live matches). When false but `__M3T4_USE_STATIC_MATCHES__`
 // is true, the spectator fetches pre-generated matches from /matches/index.json
@@ -42,6 +36,23 @@ function useStaticFeed() {
   if (useFirebaseFeed()) return false;
   if (globalThis.window?.__M3T4_USE_STATIC_MATCHES__ === false) return false;
   return true;
+}
+function useMeshFeed() {
+  return useFirebaseFeed() && globalThis.window?.__M3T4_USE_P2P_MESH__ !== false;
+}
+
+let matchFeedModulePromise = null;
+function matchFeed() {
+  if (!matchFeedModulePromise) matchFeedModulePromise = import("../lib/match-feed.js");
+  return matchFeedModulePromise;
+}
+
+function peerMesh() {
+  return import("../lib/peer-mesh.js");
+}
+
+function submitApi() {
+  return import("../lib/submit.js");
 }
 
 const SIM_HZ = 120;                // canonical sim rate
@@ -368,12 +379,129 @@ async function attachRenderer(rendererId, targetCanvas) {
 let firebaseFeedStop = null;
 let firebaseFeedSeenMatchId = null;
 
-function connectFirebaseFeed() {
+async function consumeMatchDoc(matchDoc, { replayFailureTitle = "BROADCAST REJECTED" } = {}) {
+  if (!running) return;
+  if (!matchDoc || matchDoc.matchId === firebaseFeedSeenMatchId) return;
+  firebaseFeedSeenMatchId = matchDoc.matchId;
+  onEvent({
+    type: "matchStart",
+    match: {
+      matchId: matchDoc.matchId,
+      a: matchDoc.a,
+      b: matchDoc.b,
+      stageId: matchDoc.stageId,
+    },
+    seed: matchDoc.seed,
+    bundle: null,
+  });
+  let frames;
+  try {
+    frames = (await matchFeed()).framesFromActionLog(matchDoc);
+  } catch (e) {
+    setSignalFailure(
+      replayFailureTitle,
+      `Local replay failed: ${e instanceof Error ? e.message : String(e)}`,
+      "decode-fail",
+      15000,
+    );
+    return;
+  }
+  const tickMs = matchDoc.durationMs / Math.max(1, frames.length);
+  const elapsedMs = Math.max(0, Date.now() - matchDoc.startedAt);
+  const startIdx = Math.min(frames.length - 1, Math.floor(elapsedMs / tickMs));
+  const STRIDE = 3;
+  let idx = startIdx;
+  const tick = () => {
+    if (!running || firebaseFeedSeenMatchId !== matchDoc.matchId) return;
+    if (idx >= frames.length) {
+      onEvent({
+        type: "matchEnd",
+        matchId: matchDoc.matchId,
+        winner: matchDoc.result.winner,
+        finalScore: matchDoc.result.finalScore,
+        eloBefore: matchDoc.eloDelta
+          ? [matchDoc.a.eloBefore, matchDoc.b.eloBefore]
+          : undefined,
+        eloAfter: matchDoc.eloAfter
+          ? [matchDoc.eloAfter.a, matchDoc.eloAfter.b]
+          : undefined,
+        bundles: null,
+      });
+      return;
+    }
+    const chunk = frames.slice(idx, idx + STRIDE);
+    idx += chunk.length;
+    onEvent({ type: "frames", matchId: matchDoc.matchId, frames: chunk });
+    setTimeout(tick, STRIDE * tickMs);
+  };
+  tick();
+}
+
+async function connectMeshFeed() {
+  if (firebaseFeedStop) return;
+  signalState = null;
+  setStat("stat-ws", "p2p");
+  statusCb("p2p mesh");
+
+  let stopHead = null;
+  let stopMesh = null;
+  let activeHeadId = null;
+  let fellBack = false;
+  let headTimer = setTimeout(() => {
+    if (!activeHeadId) fallbackToDirect("match-chain empty");
+  }, 4000);
+
+  const fallbackToDirect = (reason) => {
+    if (fellBack || !running) return;
+    fellBack = true;
+    if (headTimer) { clearTimeout(headTimer); headTimer = null; }
+    if (stopMesh) { try { stopMesh(); } catch {} stopMesh = null; }
+    if (stopHead) { try { stopHead(); } catch {} stopHead = null; }
+    firebaseFeedStop = null;
+    appendStreamLine(`p2p fallback — ${reason}`);
+    void connectFirebaseFeed();
+  };
+
+  try {
+    const [{ subscribeCurrentMatchId }, { joinMesh }] = await Promise.all([matchFeed(), peerMesh()]);
+    stopHead = subscribeCurrentMatchId(
+      ({ matchId }) => {
+        if (!running || !matchId || matchId === activeHeadId) return;
+        if (headTimer) { clearTimeout(headTimer); headTimer = null; }
+        activeHeadId = matchId;
+        firebaseFeedSeenMatchId = null;
+        if (stopMesh) { try { stopMesh(); } catch {} stopMesh = null; }
+        joinMesh({
+          matchId,
+          onMatchDoc: (matchDoc) => { void consumeMatchDoc(matchDoc); },
+          onPayload: () => {},
+          onError: (err) => {
+            appendStreamLine(`p2p degraded — ${err?.message ?? err}`);
+            setStat("stat-ws", "p2p/fallback");
+          },
+        })
+          .then((stop) => { stopMesh = stop; })
+          .catch((err) => fallbackToDirect(err?.message ?? "mesh unavailable"));
+      },
+      (err) => fallbackToDirect(err?.message ?? "match-chain unavailable"),
+    );
+    firebaseFeedStop = () => {
+      if (headTimer) { clearTimeout(headTimer); headTimer = null; }
+      if (stopHead) { try { stopHead(); } catch {} stopHead = null; }
+      if (stopMesh) { try { stopMesh(); } catch {} stopMesh = null; }
+    };
+  } catch (e) {
+    fallbackToDirect(e instanceof Error ? e.message : String(e));
+  }
+}
+
+async function connectFirebaseFeed() {
   if (firebaseFeedStop) return;
   signalState = null;
   setStat("stat-ws", "live");
   statusCb("firebase live");
   try {
+    const { framesFromActionLog, subscribeLatestMatch } = await matchFeed();
     firebaseFeedStop = subscribeLatestMatch((matchDoc) => {
       if (!running) return;
       if (!matchDoc || matchDoc.matchId === firebaseFeedSeenMatchId) return;
@@ -394,7 +522,7 @@ function connectFirebaseFeed() {
       // Reconstruct frames locally and feed them into the same buffer.
       let frames;
       try {
-        frames = feedFramesFromActionLog(matchDoc);
+        frames = framesFromActionLog(matchDoc);
       } catch (e) {
         setSignalFailure(
           "BROADCAST REJECTED",
@@ -448,12 +576,13 @@ function connectFirebaseFeed() {
   }
 }
 
-function connectStaticFeed() {
+async function connectStaticFeed() {
   if (firebaseFeedStop) return;
   signalState = null;
   setStat("stat-ws", "live");
   statusCb("static feed");
   try {
+    const { framesFromActionLog, subscribeStaticMatch } = await matchFeed();
     firebaseFeedStop = subscribeStaticMatch((matchDoc) => {
       if (!running) return;
       if (!matchDoc || matchDoc.matchId === firebaseFeedSeenMatchId) return;
@@ -471,7 +600,7 @@ function connectStaticFeed() {
       });
       let frames;
       try {
-        frames = feedFramesFromActionLog(matchDoc);
+        frames = framesFromActionLog(matchDoc);
       } catch (e) {
         setSignalFailure(
           "BROADCAST REJECTED",
@@ -519,11 +648,12 @@ function connectStaticFeed() {
 function connect() {
   if (!running) return;
   if (useFirebaseFeed()) {
-    connectFirebaseFeed();
+    if (useMeshFeed()) void connectMeshFeed();
+    else void connectFirebaseFeed();
     return;
   }
   if (useStaticFeed()) {
-    connectStaticFeed();
+    void connectStaticFeed();
     return;
   }
   try {
@@ -898,19 +1028,28 @@ function interpolateFrame(a, b, t) {
 async function refreshLeaderboard() {
   try {
     const rows = await leaderboard(10);
-    leaderboardEl.innerHTML = `
-      <table>
-        ${rows.map((r, i) => `
-          <tr>
-            <td class="rank">${i + 1}</td>
-            <td class="handle" title="@${escapeHtml(r.handle)}">@${escapeHtml(r.handle)}</td>
-            <td class="elo">${r.eloAggregate}</td>
-            <td class="wl">${r.wins}-${r.losses}</td>
-          </tr>`).join("")}
-      </table>`;
+    renderLeaderboardRows(rows);
   } catch (e) {
-    leaderboardEl.textContent = `offline — ${e.message}`;
+    try {
+      const rows = await (await submitApi()).getPublicLeaderboard(10);
+      renderLeaderboardRows(rows);
+    } catch {
+      leaderboardEl.textContent = `offline — ${e.message}`;
+    }
   }
+}
+
+function renderLeaderboardRows(rows) {
+  leaderboardEl.innerHTML = `
+    <table>
+      ${rows.map((r, i) => `
+        <tr>
+          <td class="rank">${i + 1}</td>
+          <td class="handle" title="@${escapeHtml(r.handle)}">@${escapeHtml(r.handle)}</td>
+          <td class="elo">${r.eloAggregate}</td>
+          <td class="wl">${r.wins}-${r.losses}</td>
+        </tr>`).join("")}
+    </table>`;
 }
 
 function formatDelta(n) {

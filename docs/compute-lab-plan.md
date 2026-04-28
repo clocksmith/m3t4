@@ -1,1824 +1,203 @@
-# Compute Lab Plan
+# Firebase Browser Compute Plan
 
-This document is the canonical plan for introducing `plasma-lab` as an
-isolated, opt-in volunteer compute sidecar for m3t4.
+This is the current compute plan for m3t4. The production path is Firebase
+Functions + Firestore + WebRTC + `client/workers/plasma-worker.js`. The old
+`plasma-lab` Cloud Run sidecar is preserved for staff smokes, receipt-log
+research, and as the source package for deterministic public kernels.
 
-## North Star
+## Goal
 
-One browser session carries both the ranked game lane and the advisory compute
-lane:
+Let opted-in browsers contribute public deterministic compute while keeping
+server cost low and ranked authority isolated.
 
-1. Game lane: ranked-deterministic arena, server-authoritative sim, live
-   spectator stream, hard-to-exploit curated meta.
-2. Compute lane: opt-in receipt-carrying public compute through `plasma-lab`,
-   advisory-only, device-idle-gated, and isolated from ranked authority.
+The compute lane must be useful, bounded, and honest:
 
-Same handle, same browser session, same opt-in surface. Ranked outcomes are
-decided by the server-side deterministic sim; compute outcomes are decided by
-quorum validation or expected-hash validation against public inputs. There is
-no crossover between ranked authority and compute results.
+- public inputs only
+- deterministic kernels only
+- server-held expected hashes
+- browser worker execution off the render thread
+- WebRTC peer attempt when possible
+- local worker fallback when peers are unavailable
+- Firebase Function validation before public credit
+- aggregate public stats without private per-user leakage
 
-Business sentence:
+## Non-crossover boundary
 
-> Players can watch, compete, and optionally donate receipt-carrying compute
-> from a single browser session, where ranked authority stays server-side,
-> compute stays advisory, and every public receipt is independently
-> verifiable.
+Compute must never read or mutate:
 
-Current implementation should not use that sentence as a shipped claim without
-qualification. Today, public compute receipts are signed, validation-bound, and
-receipt-log verifiable; the no-private-database third-party verifier remains a
-public-open gate.
-
-Proof order:
-
-1. Meta-health proof: bounded-budget legal bot search finds specific, costly,
-   understandable counters, not universal exploits.
-2. Determinism proof: same config, seed, and roster produce bit-identical
-   replay hashes from the public action log.
-3. Receipt proof: every published compute result carries an ECDSA P-256 signed
-   receipt that can be verified against declared public input.
-4. Non-crossover proof: compute never reaches ranked authority, Elo mutation,
-   roster mutation, match scheduling, private configs, or hidden brain logic.
-5. Scale proof: hosted multi-browser strict WebRTC receipts cover the advisory
-   workload ladder before any broader public-open claim.
-
-## Completion Checklist
-
-1. Lock the curated 16-preset roster as the meta reference ceiling.
-2. Run the adversarial loop: evolve candidates against Hall of Fame, archive
-   exploits, and change exactly one thing, roster selection or trait-to-brain
-   mapping, when a universal exploit appears.
-3. Keep trait knobs legible and orthogonal; forbid silent correlation that lets
-   one knob win multiple axes.
-4. Maintain server-authoritative ranked: private configs, hidden brain logic,
-   schedule, and Elo authority all stay server-side.
-5. Keep deterministic sim discipline: fixed-tick canonical constants, replay
-   hash per match, and versioned constants archive.
-6. Keep live spectator stream server-traced: the client interpolates but never
-   simulates ranked authority.
-7. Keep P2P exhibition duels non-ranked, voluntary, server-tokened, and
-   action-log verified on submit.
-8. Keep handle claim flow one-per-user, lowercased, with no silent reissuance
-   and an audit trail.
-9. Enforce bot submission budget and hard caps server-side; client renders
-   preview only.
-10. Keep `plasma-lab` isolated as a Cloud Run sidecar with no shared authority
-    over ranked services.
-11. Keep the opt-in browser worker renderer-first: compute runs only in
-    measured slack.
-12. Require ECDSA P-256 receipt signing per assignment/chunk with
-    `COMPUTE_REQUIRE_RECEIPT_SIGNATURES=true` for validation work.
-13. Use quorum validation or expected-hash comparison without shipping
-    server-held expected hashes to workers.
-14. Enforce strict WebRTC proof mode with `transport=webrtc`, server-issued
-    peer subassignments, and peer-signed subreceipts.
-15. Keep assignment intake gated off by default and open only in bounded admin
-    windows.
-16. Production-smoke at least six public workload families with accepted
-    receipts, not just code-complete kernels.
-17. Publish a verifier path where anyone can verify a receipt bundle against
-    declared public input offline.
-18. Derive global compute score from accepted receipts without per-user PII
-    leakage.
-19. Keep replay archive, receipt archive, and exploit archive
-    content-addressed, linkable by hash, and auditable.
-20. Enforce anti-claims in docs and UI: compute is advisory, ranked is
-    authoritative, and the renderer always has first claim.
-
-## Current Name And Claim
-
-The current implementation is **Receipt-Carrying Spectator Compute**:
-
-- isolated sidecar service
-- opt-in browser worker
-- renderer-budgeted slack execution
-- public/advisory inputs only
-- assignment-bound receipts
-- quorum or expected-hash validation
-- no ranked authority
-
-It is also fair to call the current shape **Chaperoned Sidecar Compute**.
-
-Current production status as of 2026-04-24:
-
-- `plasma-lab` is deployed as an isolated Cloud Run sidecar.
-- public m3t4 compute flags remain off in `/api/status`.
-- staff-controlled WebRTC signaling/data routes are enabled in `plasma-lab`.
-- assignment intake defaults to closed and is opened only with bounded admin
-  windows.
-- `COMPUTE_REQUIRE_RECEIPT_SIGNATURES=true` is active for production
-  validation work.
-- arena-server can optionally auto-seed public-artifact, replay-verify, and
-  public-preset seed-sweep advisory tasks after replay archive; all auto-seed
-  switches default off.
-- controlled two-browser WebRTC seed-sweep smokes have passed with
-  task-required WebRTC, accepted server-issued peer subassignments,
-  peer-signed subreceipts, and public receipt verifier success.
-- public receipt-log endpoints now expose both sealed-segment verification and
-  a log-derived projection at `/compute/public/receipt-log/verify` and
-  `/compute/public/receipt-log/projection`; `npm -w plasma-lab run
-  verify:receipt-log -- <bundle.json>` runs the same archive verifier offline
-  against published bundles or exported snapshots.
-- `npm -w plasma-lab run smoke:webrtc-ladder` runs the six-family strict
-  WebRTC smoke ladder: replay-verify, seed-sweep, asset-tile-audit,
-  image-tile-infer, microscopy-tile-score, and exploit-search.
-- repo head now also supports `plasma.tensor_tile.v0` over the same strict
-  WebRTC peer-subassignment path; the next hosted smoke should validate that
-  end to end after deploy auth is restored.
-- repo head now also supports four bounded exact-hash advisory workloads that
-  are code-complete and admin-seedable but not yet production-smoked in this
-  run:
-  - `m3t4.exploit_search.v0`
-  - `asset.tile_audit.v0`
-  - `ml.image_tile_infer.v0`
-  - `science.microscopy_tile_score.v0`
-- admin-only cron seeding exists for `science.genome_kmer.v0` and
-  `science.contact_map_tile.v0` through `/compute/admin/tasks/science-cycle`.
-- public peer proposal remains closed until quotas, duplicate suppression, and
-  public-window operating policy are in place.
-
-Do not describe the current implementation as fused-kernel, zero-copy,
-shared-buffer, or "every game frame is a science frame." The browser worker
-creates its own task inputs and execution buffers, and the renderer keeps first
-claim on the device. Plasma-lab can collect receipts and accepted summaries,
-but those receipts are sidecar evidence until a later derived-compute contract
-binds source frame/artifact hashes, shared buffer regions, producer kernels,
-and derived output hashes.
-
-Future names are reserved for later milestones:
-
-- **Receipt-Verified Shared-Buffer Compute**: public/redacted buffer regions are
-  explicitly shared under a Plasma contract and receipts bind region hashes.
-- **Fused-Kernel Chaperoned Compute**: one admitted dispatch/pass produces both
-  a game-visible result and a useful derived output under dual validation.
-
-## Boundary
-
-The game is authoritative. The compute lab is advisory.
-
-The renderer owns the device. Compute borrows measured slack.
-
-Compute results are never authoritative until accepted by validator policy, and
-even accepted summaries remain advisory to ranked. Accepted compute summaries
-may later decorate the game, but they must not decide the game.
-
-The compute lab must never receive or control:
-
-- private ranked configs
+- private ranked stable configs
 - hidden brain logic
 - ranked execution authority
-- Elo mutation authority
-- roster mutation authority
-- match scheduling authority
-- Live stream dependency
-- shared render/game buffers unless a Plasma derived-compute contract declares
-  public/redacted buffer regions, lifetimes, source hashes, and validation
-  policy
+- Elo authority except through the live match Function
+- roster release state
+- match scheduling locks
+- server-held expected hashes
 
-Anti-claims:
+Accepted compute receipts are advisory. They can power public stats and future
+badges, but they are not ranked truth.
 
-- not ranked authority for compute, ever
-- not private-input compute
-- not P2P ranked authority
-- not fused-kernel or shared-buffer compute yet
-- not "every game frame is a science frame"
-- not Elo-decorating compute until a derived-compute contract binds the public
-  frame/artifact hashes and receipt policy
+## Current implementation
 
-## Planes
+### Client
 
-The existing game plane stays focused on the current product:
+- `client/lib/firebase-compute.js` is the Firebase compute client.
+- `client/lib/compute.js` selects Firebase compute when
+  `window.__M3T4_COMPUTE_FIREBASE__ === true`.
+- `client/workers/plasma-worker.js` executes the actual CPU/WebGPU kernels.
+- WebRTC peer execution is attempted first using the shared `webrtcSignal`
+  Function.
+- Local worker execution is the fallback path.
 
-```text
-arena-worker
-  schedules ranked matches
-  runs authoritative simulations
-  emits firehose events
-  updates Elo
+### Functions
 
-arena-server
-  serves auth, roster, leaderboard, status, Live WS fanout
-  exposes public match/replay metadata
+- `computeRegister`: records worker session/capability.
+- `computeClaim`: selects a workload lane and stores the server-held expected
+  hash on the assignment doc.
+- `computeSubmitReceipt`: validates submitted output hash against the stored
+  expected hash and writes a receipt.
+- `computeMyReceipts`: returns the caller's recent receipts.
+- `computePublicSummary`: returns aggregate status/use-case data.
+- `webrtcSignal`: stateless signaling write validator.
+- `expireSessions`: deletes stale signaling/presence docs.
 
-client Live
-  renders server frames/events
-```
-
-Add a separate sidecar plane:
+### Firestore
 
 ```text
-plasma-lab
-  worker registration
-  capability tracking
-  task queue
-  assignment issuing
-  receipt ingestion
-  duplicate/quorum validation
-  reputation/credit accounting
-  receipt summary API
-  admin/receipt dashboard
+compute_workers/{workerId}
+compute_assignments/{assignmentId}
+compute_receipts/{receiptId}
+compute_public_stats/latest
+compute_peer_presence/{peerId}
+webrtc/{sessionId}
 ```
 
-The data flow is one-way:
+`compute_assignments` contains expected hashes and must not be browser-readable.
+
+## Assignment lifecycle
 
 ```text
-game -> public artifacts -> compute lab -> accepted summaries -> optional UI badge
+user opts in
+  -> anonymous/account Firebase Auth
+  -> computeRegister(capability)
+  -> computeClaim(workerId)
+      Function selects lane
+      Function builds public params
+      Function runs reference kernel
+      Function stores expectedOutputHash privately
+      Function returns assignment without expected hash
+  -> browser tries WebRTC peer compute
+  -> fallback to local plasma worker if peer path fails
+  -> computeSubmitReceipt(receipt)
+      Function compares outputHash to expectedOutputHash
+      Function writes accepted/rejected receipt
+      Function updates aggregate stats
 ```
 
-Never:
+## Runtime surfaces
 
-```text
-game <-> compute lab <-> ranked authority
-```
+Browsers advertise:
 
-Shared-buffer or fused-kernel experiments, when they exist, must remain
-non-ranked and non-private until Plasma has a derived-compute extension and the
-m3t4 implementation has a public fixture proving it does not expose hidden
-brain logic, private roster configs, auth material, or mutable ranked state.
+- `cpu` when Worker + Web Crypto are available.
+- `webrtc` when `RTCPeerConnection` exists.
+- `webgpu` when `navigator.gpu` exists.
 
-## Service
+Claim selection prefers WebGPU lanes only for WebGPU-capable browsers. CPU-only
+browsers still receive safe CPU lanes.
 
-Use one service name consistently: `plasma-lab`.
+## Workload lanes
 
-Deploy it as its own Cloud Run service with separate logs, scaling, IAM,
-environment variables, rate limits, and kill switches. The main `arena-server`
-must not import the compute coordinator into the ranked path.
+CPU-oriented lanes:
 
-The implementation supports an in-memory store for local/dev and an optional
-Firestore-backed store for staged Cloud Run testing:
+- `prime-search.v0`
+- `asset.tile_audit.v0`
+- `ml.image_tile_infer.v0`
+- `science.microscopy_tile_score.v0`
+- `science.genome_kmer.v0`
+- `m3t4.seed_sweep.v0`
+- `m3t4.exploit_search.v0`
+- `device_witness.render_fixture.v0`
+- `device_witness.derived_buffer.v0`
 
-```text
-PLASMA_LAB_STORE_BACKEND=memory|firestore
-PLASMA_LAB_FIRESTORE_PROJECT_ID=<optional separate compute project>
-```
+WebGPU-preferred lanes:
 
-Same-project collection naming is useful for code organization, but it is not
-a hard read boundary when the Admin SDK has broad Firestore credentials. For
-strict isolation, deploy `plasma-lab` with a service account that can access a
-separate compute project/database/bucket and cannot access ranked private
-collections.
+- `plasma.tensor_tile.v0`
+- `science.contact_map_tile.v0`
+- `science.mandelbrot_tile.v0`
+- `science.heat_diffusion_tile.v0`
+- `device_witness.webgpu.v0`
 
-## Storage
+The plasma worker still contains additional kernels such as replay/public
+artifact verification for legacy sidecar and future explicit assignment flows.
+The automatic Firebase claim generator mints only the lanes it can construct
+from public local params.
 
-Do not reuse ranked/private collections. Compute-owned collections:
+## Validation model
 
-```text
-compute_workers
-compute_capabilities
-compute_tasks
-compute_chunks
-compute_assignments
-compute_receipts
-compute_validations
-compute_reputation
-compute_artifact_exports
-compute_sessions
-compute_webrtc_sessions
-compute_webrtc_pairs
-compute_capability_observations
-compute_connectivity_observations
-compute_worker_profiles
-compute_device_classes
-compute_network_classes
-compute_public_stats
-compute_replay_badges
-```
+Current Firebase production validation is expected-hash validation:
 
-The compute service may store references to public game artifacts:
+- Functions generate or normalize public assignment params.
+- Functions run the matching reference kernel.
+- Functions store `expectedOutputHash` in `compute_assignments`.
+- Browser workers only receive assignment ID, token, kernel ID/hash, input hash,
+  and params.
+- Receipt acceptance is a direct hash comparison.
 
-```text
-matchId
-replayHash
-rulesHash
-stageHash
-artifactHash
-publicFrameHash
-publicActionLogHash
-resultHash
-```
+This is not a trusted-browser or trusted-GPU claim. The browser is treated as an
+untrusted executor of deterministic public work.
 
-The game plane exports sanitized replay summaries to:
+## WebRTC compute model
 
-```text
-Firestore: publicReplayArtifacts/{matchId}
-HTTP:      GET /api/replays/public-artifact/:matchId
-```
+WebRTC is transport only:
 
-The public envelope contains `payload`, `artifactHash`, and `artifactSha256`.
-`payload` is canonicalized and hashed; it contains public tuple metadata, public
-player refs, result hashes, action-log hashes, and frame metadata, but not
-private bot configs.
+- Offerer claims an assignment from Functions.
+- Offerer creates a `webrtc` signaling session.
+- Target peer sees an offer where `offer.purpose === "compute"`.
+- Peer runs the chunk in its own plasma worker and returns a result over the
+  data channel.
+- Offerer submits the final receipt to Functions.
+- If the peer does not answer or the channel fails, the offerer computes locally
+  and submits a fallback receipt.
 
-It must not store or receive:
-
-```text
-private BrainConfig
-private ranked slot configs
-hidden brain source/decision code
-stable private configs
-Elo write authority
-roster mutation authority
-match scheduling authority
-```
-
-Enforce this with IAM. The `plasma-lab` service account should not have
-permissions to read private ranked config collections. The game service may
-export public artifacts into a public-artifact namespace. The compute service
-reads those public artifacts and writes receipts/summaries.
+A WebRTC receipt means the result travelled through a peer channel. It does not
+prove the peer was honest hardware.
 
 ## Flags
 
-Initial flags:
-
-```text
-FEATURE_COMPUTE_LAB_ROUTES=false
-FEATURE_COMPUTE_TASK_ADMIN=false
-FEATURE_COMPUTE_SLACK_WORKER=false
-FEATURE_COMPUTE_WEBRTC_ARTIFACTS=false
-FEATURE_COMPUTE_WEBRTC_SIGNALING=false
-FEATURE_COMPUTE_WEBRTC_DATA=false
-FEATURE_COMPUTE_WEBRTC_TURN=false
-FEATURE_COMPUTE_RECEIPT_DASHBOARD=false
-FEATURE_COMPUTE_LIVE_BADGES=false
-FEATURE_COMPUTE_AUTO_SEED_REPLAY_TASKS=false
-FEATURE_COMPUTE_AUTO_SEED_SEED_SWEEP_TASKS=false
-COMPUTE_AUTO_SEED_SWEEP_BRAIN_A=unicorn
-COMPUTE_AUTO_SEED_SWEEP_BRAIN_B=disruptor
-COMPUTE_AUTO_SEED_SWEEP_SEED_COUNT=32
-COMPUTE_AUTO_SEED_SWEEP_CHUNK_SIZE=8
-```
-
-Operational kill switch:
-
-```text
-COMPUTE_ACCEPT_ASSIGNMENTS=false
-COMPUTE_REQUIRE_RECEIPT_SIGNATURES=true
-```
-
-That stops issuing new work without hiding old receipts or tearing down
-dashboards. If it is flipped off, already-issued assignments may report until
-their deadline; remaining work becomes no-fault timeout/cancelled.
-`COMPUTE_REQUIRE_RECEIPT_SIGNATURES=true` keeps validation-eligible production
-sessions from receiving work unless they registered an ECDSA P-256 receipt key.
-
-## Transport
-
-Use HTTP as the control, signaling, fallback, and observability plane.
-
-Use Plasma WebRTC as the optional peer/data plane behind flags.
-
-The rule:
-
-```text
-same task
-same chunk
-same assignment
-same receipt
-same validation policy
-different transport
-```
-
-Transport cannot change truth semantics.
-
-## HTTP Control Plane
-
-Worker endpoints:
-
-```text
-POST /compute/workers/register
-POST /compute/workers/heartbeat
-GET  /compute/workers/status
-POST /compute/capabilities
-POST /compute/connectivity
-GET  /compute/tasks/next
-POST /compute/assignments/accept
-POST /compute/receipts
-GET  /compute/status
-GET  /compute/healthz
-GET  /compute/use-cases
-GET  /compute/public/stats
-GET  /compute/public/replay-badges/:matchId
-```
-
-Admin/debug endpoints behind admin auth:
-
-```text
-POST /compute/admin/assignments  # {acceptAssignments, durationMs?}
-POST /compute/admin/tasks/seed
-POST /compute/admin/tasks/device-witness-webgpu
-POST /compute/admin/tasks/device-witness-render
-POST /compute/admin/tasks/device-witness-derived-buffer
-POST /compute/admin/tasks/device-witness-webrtc
-POST /compute/admin/tasks/public-artifact
-POST /compute/admin/tasks/seed-sweep
-POST /compute/admin/tasks/tensor-tile
-POST /compute/admin/tasks/:taskId/cancel
-GET  /compute/admin/tasks/:taskId
-GET  /compute/admin/receipts/:receiptId
-GET  /compute/admin/dashboard
-GET  /compute/admin/dashboard.html
-GET  /compute/admin/worker-profiles
-GET  /compute/admin/public-stats
-GET  /compute/admin/replay-badges/:matchId
-GET  /compute/admin/capability-map
-GET  /compute/admin/connectivity-map
-```
-
-Device Witness raw data is admin-only in this phase. Raw workers, receipts,
-capabilities, connectivity observations, and aggregate maps are not public.
-`/compute/public/stats` is privacy-suppressed until the worker count passes the
-configured anonymity floor. Replay badges expose artifact verification status,
-not who computed it.
-
-The admin dashboard includes a redacted WebRTC pair list for staff pairing
-tests: pair status, offer/answer presence, candidate counts, and expiry. It
-must not expose pair tokens or raw SDP/candidate payloads in summary views.
-
-HTTP WebRTC signaling endpoints, enabled only by
-`FEATURE_COMPUTE_WEBRTC_SIGNALING=true`:
-
-```text
-POST /compute/webrtc/sessions
-POST /compute/webrtc/sessions/:sessionId/offer
-POST /compute/webrtc/sessions/:sessionId/answer
-POST /compute/webrtc/sessions/:sessionId/candidates
-GET  /compute/webrtc/sessions/:sessionId/candidates
-POST /compute/webrtc/sessions/:sessionId/close
-GET  /compute/webrtc/ice-config
-POST /compute/webrtc/pairs/join
-GET  /compute/webrtc/pairs/:pairId
-POST /compute/webrtc/pairs/:pairId/offer
-POST /compute/webrtc/pairs/:pairId/answer
-POST /compute/webrtc/pairs/:pairId/candidates
-POST /compute/webrtc/pairs/:pairId/close
-```
-
-The `/pairs` routes are the first real two-browser measurement path. They are
-still advisory: clients submit only bucketed connectivity observations and the
-raw signaling payloads stay inside the short-lived signaling store. TURN is
-disabled unless `FEATURE_COMPUTE_WEBRTC_TURN=true` and explicit TURN credentials
-are configured; use it as a measured fallback with cost guards, not as the
-default path.
-
-## Plasma WebRTC
-
-Keep the Plasma channel names unchanged:
-
-```text
-plasma-control
-plasma-data
-plasma-receipts
-```
-
-Suggested use:
-
-```text
-plasma-control
-  hello
-  capability
-  task-offer
-  chunk-assign
-  pause
-  resume
-  cancel
-
-plasma-data
-  chunk input bytes
-  artifact fragments
-  result fragments
-
-plasma-receipts
-  execution receipt
-  validation receipt
-  receipt acknowledgement
-```
-
-Server-side signaling should handle opaque SDP/candidate payloads, not
-instantiate browser `RTCPeerConnection`. Browser WebRTC code belongs in a
-browser package.
-
-Add ops gates before public WebRTC:
-
-```text
-STUN/TURN config
-TURN budget guard
-session TTL
-max candidates/session
-HTTP fallback when ICE fails
-```
-
-Current implementation status:
-
-```text
-FEATURE_COMPUTE_WEBRTC_SIGNALING=false by default
-POST /compute/webrtc/sessions creates an opaque signaling session
-POST offer/answer/candidates stores opaque browser payloads
-GET candidates reads the session using x-webrtc-session-token
-FEATURE_COMPUTE_WEBRTC_DATA still gates actual data-channel work
-```
-
-## Plasma Slice
-
-Do not import sibling repo files ad hoc.
-
-Before production imports, create stable package boundaries in Plasma or vendor
-the minimal slice into `plasma-lab` with a source commit note:
-
-```text
-packages/plasma-contract
-  task/chunk/receipt/session types
-  envelope types
-  determinism classes
-  validation policy types
-
-packages/plasma-core
-  canonical hashing
-  envelope validation
-  memory transport
-  protocol routing
-  validator helpers
-
-packages/plasma-browser-webrtc
-  DataChannel transport
-  WebRTC channel setup
-  browser-only types
-
-packages/plasma-node-coordinator
-  assignment issuing
-  receipt ingestion helpers
-  validation orchestration
-```
-
-The first m3t4 slice vendors only minimal contract/runtime primitives into
-`plasma-lab/src/plasma`.
-
-## Worker Lifecycle
-
-Worker lifecycle:
-
-```text
-unregistered
-registered
-heartbeat-ok
-capability-known
-offered-assignment
-assignment-accepted
-connected
-executing
-receipted
-validating
-accepted | rejected | timeout | no-quorum
-credited | not-credited
-```
-
-Refusing work is normal. A browser may say:
-
-```text
-not-now
-render-struggling
-tab-hidden
-low-battery
-chunk-too-large
-unsupported-kernel
-user-disabled
-```
-
-Every worker session receives a short-lived session token. Every assignment
-receives an assignment token. Receipts must bind:
-
-```text
-workerId
-workerSessionId
-workerSessionToken
-assignmentId
-assignmentToken
-taskId
-chunkId
-inputHash
-outputHash
-```
-
-Browser workers may also register a session-scoped ECDSA P-256 public key.
-When present, every receipt for that session must include a canonical
-`receiptHash` and a signature over that hash. Assignment and session tokens are
-validation secrets only; they must never be stored in durable receipt records or
-included in public receipt verification output.
-
-## Receipt Shape
-
-Every receipt binds to an assignment, not just a chunk.
-
-Receipt fields:
-
-```text
-receiptId
-workerId
-workerSessionId
-assignmentId
-taskId
-chunkId
-kernelId
-kernelHash
-inputHash
-artifactHash (server-held for public artifact tasks)
-outputHash
-determinismClass
-validationMode
-executionMode: cpu | webgpu
-transport: http | webrtc
-governorMode: quiet | standard | after-match
-deviceClass
-adapterInfo
-computeMs
-receivedAt
-clientVersion
-receiptHash
-signature
-signaturePublicKeyHash
-signatureStatus: unsigned | verified | missing | invalid | key-unavailable
-signatureRequired: boolean in public verifier responses
-peerSubreceipt: required for WebRTC data-plane work
-peerAssignmentId: required on strict WebRTC peer subreceipts
-```
-
-Production validation-eligible workers must register a receipt signing public
-key. Unsigned historical receipts can still be inspected, but assignment intake
-does not issue validation work to unsigned sessions when
-`COMPUTE_REQUIRE_RECEIPT_SIGNATURES=true`.
-
-Durable public-ish receipt logs should avoid raw fingerprinting data. Store
-adapter/device values as buckets or hashes where possible:
-
-```text
-gpuVendorBucket
-browserFamily
-capabilityHash
-maxBufferBucket
-```
-
-Current implementation notes:
-
-- each submitted receipt emits an immutable `receipt-submitted` log entry
-- validation creates separate `validation-recorded` and `receipt-decision`
-  entries, because receipt rows can legitimately move from pending to accepted
-- admin can seal pending entries with `POST /compute/admin/receipt-log/seal`
-- public readers can inspect `/compute/public/receipt-log/head`,
-  `/compute/public/receipt-log/manifest`,
-  `/compute/public/receipt-log/segments`, and
-  `/compute/public/receipt-log/segments/:segmentId/verify`
-- the compute page should prefer `/compute/public/summary` for public stats,
-  visible workload lanes, and intake state, falling back to the older split
-  endpoints only for deploy compatibility
-- the manifest publishes content-addressed segment refs and the safe
-  `cache -> p2p -> http` source order for future peer distribution; HTTPS
-  remains the fallback and no peer byte is trusted without hash verification
-- the bundled verifier recomputes entry hashes and segment hashes; it is not
-  yet the separate no-private-database verifier required for public-open claims
-
-## Receipt States
-
-Keep failure states separate:
-
-```text
-pending
-accepted
-rejected
-timeout
-quorum-missing
-disagreement
-malformed
-assignment-mismatch
-duplicate-receipt
-input-mismatch
-output-mismatch
-kernel-mismatch
-validator-error
-internal-error
-```
-
-Timeout is not the same as a wrong answer.
-
-Public receipt verification:
-
-```text
-GET /compute/receipts/:receiptId/verify
-```
-
-The verifier recomputes the canonical receipt hash from persisted receipt
-fields, checks it against the stored hash, and verifies the session signature
-when the worker registered a signing key. This proves receipt integrity and
-session binding; it does not prove the browser, OS, or GPU was honest.
-
-## Durable Receipt Log And Independent Verifier
-
-The single-receipt verifier above is necessary but not sufficient for migration
-away from a coordinator-centric trust story. Public acceptance outcomes must be
-replayable from an immutable log by a second verifier.
-
-The goal is not "publish every database row." The goal is:
-
-- stable ordering for accepted public-compute decisions
-- stable refs for the public bytes and policies used in those decisions
-- enough persisted data for an external verifier to recompute receipt integrity
-  and acceptance outcomes without private control-plane state
-
-### Log Unit
-
-Use immutable receipt-log segments, not mutable timestamp-only tables.
-
-Segment shape:
-
-```text
-segmentSeq
-prevSegmentHash
-publishedAt
-entries[]
-segmentHash
-```
-
-Entry ordering inside a segment must be stable and explicit:
-
-```text
-entrySeq
-entryType
-entryBody
-entryHash
-```
-
-`segmentHash` is computed over:
-
-```text
-segmentSeq
-prevSegmentHash
-publishedAt
-ordered entry hashes
-```
-
-This creates a hash-linked append chain without pretending Firestore write time
-is a durable trust anchor.
-
-### Entry Types
-
-Minimum public replayable entry types:
-
-```text
-receipt-submitted
-receipt-accepted
-receipt-rejected
-chunk-accepted
-task-completed
-```
-
-Only accepted-path entries need to be public for the first migration stage, but
-their ordering must still be explicit.
-
-### What A Replayable Accepted Entry Must Carry
-
-For a second verifier to replay acceptance, each accepted receipt or accepted
-chunk record must include stable refs and hashes for:
-
-```text
-receiptId
-receiptHash
-receipt fields required to recompute the hash
-kernelId
-kernelHash
-inputHash
-artifactHash (when applicable)
-outputHash
-validationMode
-determinismClass
-validationPolicyHash
-validationPolicyRef
-inputRef
-kernelManifestRef
-accepted peer-subassignment refs for strict WebRTC work
-```
-
-Assignment/session tokens remain validation secrets and must never appear in
-the durable public log.
-
-### Stable Refs
-
-"Independent verifier" only means something if the verifier can reach the same
-inputs the coordinator used. Every accepted entry must therefore point to:
-
-```text
-content-addressed input artifact
-content-addressed kernel manifest or kernel bundle
-content-addressed validation-policy bundle
-```
-
-If any of those refs are mutable or implicit, verification is not independent;
-it is just another coordinator read.
-
-### Publication Host
-
-The first implementation may publish segments from `plasma-lab`, but the
-segment store must be outside the in-memory request path. Acceptable first
-shapes:
-
-```text
-object storage with immutable segment objects
-generation-locked append publication
-portable equivalent on another object store
-```
-
-Do not make "same Cloud Run instance wrote JSON" the long-term trust anchor.
-The writer may stay centralized; the published segments must still be durable
-and replayable elsewhere.
-
-### Independent Verifier
-
-Run the independent verifier as a separate process or service. It should:
-
-1. read published receipt-log segments in order
-2. recompute `receiptHash` for each accepted receipt entry
-3. verify signatures when `signatureRequired=true`
-4. fetch `inputRef`, `kernelManifestRef`, and `validationPolicyRef`
-5. recompute acceptance outcomes for accepted receipts and chunks
-6. publish verifier results keyed by `segmentHash`
-
-Minimum verifier result shape:
-
-```text
-segmentHash
-verifierVersion
-checkedEntries
-receiptHashMismatches
-signatureMismatches
-acceptanceMismatches
-checkedAt
-```
-
-### Privacy And Public Surface
-
-Durable public receipt logs should still avoid raw fingerprinting values. Keep
-the public log bucketed or hashed where possible:
-
-```text
-gpuVendorBucket
-browserFamily
-capabilityHash
-maxBufferBucket
-```
-
-Public receipt logs are not a license to publish stable device fingerprints.
-
-### Exit Condition For This Phase
-
-Do not claim independent verification until:
-
-- accepted public outcomes can be replayed from published refs alone
-- the second verifier no longer needs private database reads
-- verifier/coordinator mismatch rate is measured and acceptably low
-- segment-hash divergence is zero
-
-That is the threshold for moving public badge and stats derivation off mutable
-coordinator state and onto log-derived views.
-
-## Determinism
-
-Use Plasma determinism classes as the protocol field:
-
-```text
-bit-exact
-tolerance-bounded
-replicated-quorum
-```
-
-Use separate runtime and validation fields:
-
-```text
-runtimeSurface: browser-js | browser-wasm | browser-webgpu | cpu-reference
-validationMode: expected-hash | quorum | tolerance | human-review
-```
-
-Do not pretend all browser compute is byte-stable. A task declares its
-determinism class and validation policy.
-
-## Workloads
-
-### Device Witness
-
-Device Witness is the first browser-diversity bundle. The browser proves what
-kind of machine/network/render stack it is, using tiny opt-in probes that are
-safe to run beside Live.
-
-Implemented Phase 1 observations:
-
-```text
-device_witness.webgpu.v0
-  adapter availability bucket
-  vendor/features/buffer-size buckets
-  tiny u32 buffer transform
-  expected-output correctness bucket
-  latency/throughput buckets
-
-device_witness.webrtc.v0
-  HTTP health RTT bucket
-  browser network API buckets
-  local RTCPeerConnection/datachannel open bucket
-  ICE gather bucket
-  host/srflx/relay candidate buckets
-  optional STUN success bucket from COMPUTE_STUN_URLS
-
-device_witness.render_fixture.v0
-  worker-side OffscreenCanvas alpha/compositing fixture
-  pixel tolerance pass/fail bucket
-  fixture latency bucket
-```
-
-These reports are scheduler intelligence, not ranked truth. They answer:
-
-```text
-which browsers can run WebGPU correctly
-which devices are fast enough without hurting rendering
-which clients have viable WebRTC primitives
-which browser/render stacks drift on tiny fixtures
-```
-
-Storage:
-
-```text
-compute_capability_observations
-compute_connectivity_observations
-```
-
-Visibility:
-
-```text
-raw observations: admin-only
-aggregate maps: admin-only initially
-future public stats: counts only, no worker ids, no rare fingerprints
-```
-
-Phase 1.5 promotes all three Device Witness probes into assignment-bound
-receipts:
-
-```text
-device_witness.webgpu.v0
-  coordinator issues seed/count challenge
-  browser worker runs the u32 transform on WebGPU
-  receipt carries assignmentId, kernelHash, inputHash, outputHash, duration
-  validator checks server-held expected output hash
-
-device_witness.render_fixture.v0
-  coordinator issues canvas2d-alpha-samples-v1 challenge
-  browser worker samples known pixels from OffscreenCanvas
-  receipt carries assignmentId, kernelHash, inputHash, outputHash, duration
-  validator checks expected sample-byte hash
-
-device_witness.webrtc.v0
-  coordinator issues local-datachannel-transcript-v1 challenge
-  browser performs local RTCPeerConnection/datachannel probe
-  receipt carries assignmentId, kernelHash, inputHash, transcript hash, duration
-  validator checks hash over issued challenge params and whitelisted buckets
-  raw SDP, raw ICE candidates, IPs, ISP, and exact location are not stored
-```
-
-Admin seed routes:
-
-```text
-POST /compute/admin/tasks/device-witness-webgpu
-POST /compute/admin/tasks/device-witness-render
-POST /compute/admin/tasks/device-witness-derived-buffer
-POST /compute/admin/tasks/device-witness-webrtc
-```
-
-Controlled production smoke, 2026-04-22:
-
-```text
-origin: https://plasma-lab-789525635095.us-central1.run.app
-mode: assignments opened only during each controlled run, then disabled
-
-N=1 derived-buffer smoke:
-  task: task-9d8d5ba7f3a33414
-  receipt: rcpt-c11a95d05f8d0509
-  validation: val-095c5877ee462d85
-  result: accepted
-
-N=2 derived-buffer smoke:
-  task: task-f570268bdcffb781
-  receipts: rcpt-f8f30bb6a3fabbe0, rcpt-0d11561a858afc58
-  validation: val-0e5d46229ed820e9
-  result: both receipts accepted, chunk accepted, task complete
-
-N=2 derived-buffer browser smoke, repeatable script:
-  command: npm -w plasma-lab run smoke:derived-browser
-  env: PLASMA_LAB_SMOKE_ORIGIN, PLASMA_LAB_SMOKE_ADMIN_TOKEN, M3T4_SMOKE_GAME_ORIGIN
-  note: Playwright must be resolvable by Node; use NODE_PATH for an external install
-  task: task-76df66f0e5483f0d
-  receipts: rcpt-c547fae55473527f, rcpt-d0f5c06ef84b7b91
-  validation: val-25cda3dd504ca07a
-  result: both receipts accepted, chunk accepted, task complete
-
-N=2 public-artifact production smoke:
-  command: node plasma-lab/dist/smoke.js
-  task: task-a9a79a1bc9aac3c0
-  receipts: rcpt-c631ea84e617cb75, rcpt-16a5c0c4a878ef51
-  validation: val-b20a621d75a23e83
-  result: both receipts accepted, chunk accepted, task complete
-
-Closed-alpha staff rehearsal:
-  surface: deployed m3t4.ai browser client, staff-only console flag
-  public feature flag: computeSlackWorker=false
-  command shape: set __M3T4_COMPUTE_SLACK_WORKER__, import /lib/compute.js, start("quiet")
-  task: task-98abd2ef657671b4
-  receipts: rcpt-27714195291fbf4d, rcpt-3fae735327518878
-  validation: val-d670fb7552262789
-  result: 2 browsers, 7.1s window, both receipts accepted, chunk accepted, task complete
-
-Closed-alpha WebRTC staff window:
-  command: npm -w plasma-lab run smoke:webrtc-browser
-  env: PLASMA_LAB_SMOKE_ORIGIN, PLASMA_LAB_SMOKE_ADMIN_TOKEN, M3T4_SMOKE_GAME_ORIGIN
-  task: task-88ba001cb5b528e9
-  receipts: rcpt-6f2d05d708b2f3b7, rcpt-68fbcba0733869c7
-  validation: val-a53c730737178ec9
-  result: 2 browsers, 10.3s window, WebRTC data channel open, measurement receipts accepted
-  data work: request-ok on offerer, served-ok on answerer, no relay observed
-
-WebRTC public-artifact transfer:
-  command: npm -w plasma-lab run smoke:webrtc-artifact
-  env: PLASMA_LAB_SMOKE_ORIGIN, PLASMA_LAB_SMOKE_ADMIN_TOKEN, M3T4_SMOKE_GAME_ORIGIN
-  task: task-d1aabea87a32448a
-  receipts: rcpt-ae00c482ed47a6b4, rcpt-d7707d8a14222e3d
-  validation: val-ed5af97b3757f671
-  result: public-artifact chunks moved over plasma-data, receipt acks over plasma-receipts
-  authority: normal HTTP receipt ingestion accepted both transport=webrtc expected-hash receipts (historical, before peer-subreceipt hardening)
-  safety: assignment intake closed before the P2P transfer began and remained closed afterward
-
-WebRTC client public-artifact transfer:
-  command: npm -w plasma-lab run smoke:webrtc-client-artifact
-  env: PLASMA_LAB_SMOKE_ORIGIN, PLASMA_LAB_SMOKE_ADMIN_TOKEN, M3T4_SMOKE_GAME_ORIGIN
-  repeat: set PLASMA_LAB_SMOKE_REPEAT=5 or pass --repeat=5 for a hosted soak
-  replay verify: set PLASMA_LAB_SMOKE_KERNEL=replay-verify or pass --kernel=replay-verify
-  seed sweep: set PLASMA_LAB_SMOKE_KERNEL=seed-sweep or pass --kernel=seed-sweep
-  contact map tile: set PLASMA_LAB_SMOKE_KERNEL=contact-map-tile or pass --kernel=contact-map-tile
-  tensor tile: set PLASMA_LAB_SMOKE_KERNEL=tensor-tile or pass --kernel=tensor-tile
-  use: launches two real browser clients, first accepts Device Witness render receipts to promote them out of observe-only, sets the staff-only WebRTC artifact flag, opens intake only during the controlled window, and requires two accepted transport=webrtc receipts with linked peer subassignments and peer-signed subreceipts
-
-Hardened WebRTC seed-sweep production smoke:
-  deployed revision: plasma-lab-00024-5th
-  source commit: 79a7c9e
-  command: npm -w plasma-lab run smoke:webrtc-seed-sweep
-  task: task-555294f4e2acb6e3
-  witness task: task-2396214dba49bd62
-  witness validation: val-df0e0102e34ca0f4
-  receipts: rcpt-1dbd0bd2ae291076, rcpt-d2995bdb41c9dc1f
-  validation: val-88fed8abd38dee6f
-  output hash: bda3a0265687d12576981409428bf10ea11cc9b2c3a6621905ea18924a571b4a
-  result: 2 hosted browsers, WebRTC plasma-data transfer, peer-signed subreceipts, both receipts accepted, chunk accepted, task complete
-  verifier: both receipt verifier endpoints returned ok=true and signatureVerified=true
-  flags after run: acceptAssignments=false, WebRTC signaling/data=true, TURN=false, requireReceiptSignatures=true, pending chunks=0
-
-Strict WebRTC peer-subassignment seed-sweep production smoke:
-  deployed revision: plasma-lab-00025-cnv
-  client commit: 829c704
-  command: npm -w plasma-lab run smoke:webrtc-seed-sweep
-  task: task-79d3836617a45ad8
-  witness task: task-342c9bdae8d2a320
-  witness validation: val-0ddf4c7473a5c0ee
-  receipts: rcpt-f4ec0e21acf4b297, rcpt-04f12572ef37bad4
-  peer subassignments: psub-8b58c65e8b9f3836, psub-dcfb5062b01cf42a
-  validation: val-951969f278ba8707
-  output hash: bda3a0265687d12576981409428bf10ea11cc9b2c3a6621905ea18924a571b4a
-  result: 2 hosted browsers, required transport=webrtc, accepted server-issued peer subassignments, peer-signed subreceipts, both receipts accepted, chunk accepted, task complete
-  verifier: both receipt verifier endpoints returned ok=true, signatureRequired=true, signatureStatus=verified, and receiptHashMatches=true
-  flags after run: acceptAssignments=false, WebRTC signaling/data=true, TURN=false, requireReceiptSignatures=true, pending chunks=0
-
-Strict WebRTC peer-subassignment seed-sweep 3-pass repeat:
-  command: PLASMA_LAB_SMOKE_REPEAT=3 npm -w plasma-lab run smoke:webrtc-seed-sweep
-  tasks: task-9aa0173fa6b2355e, task-72932f16cf77a670, task-966848e031fb05cb
-  validations: val-581ba26bb97ca327, val-cfc36e92b0965725, val-2557a10a33b4bb2e
-  receipts: 6 accepted transport=webrtc receipts
-  result: strict peer-subassignment path passed 3/3 in the hosted Chromium environment
-  relay: no relay observed in this environment
-  flags after run: acceptAssignments=false
-
-Post-config-clean strict WebRTC smoke:
-  task: task-64f18509a50ea10a
-  validation: val-7041c017dd6aa4ce
-  receipts: rcpt-2f1b10e3fdbf09a6, rcpt-40dc38229a864d6b
-  result: strict peer-subassignment path accepted both receipts, pageErrors empty on both hosted browser pages, /config.js served as text/javascript
-  flags after run: acceptAssignments=false
-
-WebRTC hosted-client public-artifact 5-pass soak:
-  origin: https://m3t4.ai
-  tasks: task-e74c00a19ca998e5, task-bd5bfed3ddfe4af6, task-1acc1efc996c42be, task-6df61c81c99f98c8, task-42105b57df533f0d
-  validations: val-8147f74d62308144, val-ad4010546bb5095f, val-79990272c3c551c3, val-4cc94d054aa8241d, val-ae8a40240b27a535
-  receipts: 10 accepted transport=webrtc expected-hash receipts (historical, before peer-subreceipt hardening)
-  result: transfer=plasma-data for every receipt, no relay observed, no page errors, assignment intake false after each pass
-
-WebRTC public-artifact 3-pass soak:
-  tasks: task-a9c8f3fef1a1e3ce, task-23dab3bae4588a78, task-19d7fbce279393e6
-  validations: val-8debca2b894eaf09, val-75d547cf5c0fd5a8, val-c043d91e7115c91f
-  receipts: 6 accepted transport=webrtc receipts
-  result: no relay observed, no rejected chunks, no timeouts, assignment intake false after each pass
-
-WebRTC public-artifact additional 5-pass soak:
-  tasks: task-7ac1064b78104db0, task-93bee98cb15335f4, task-afdbf6efa8d2dc8b, task-ffcd36028986aaca, task-bb2f217cd4e36a9d
-  validations: val-c939d1e8bc50b237, val-c4ec2779cd86994b, val-52461bfa835a395e, val-3741a016fd4eb26e, val-6fac9eba305f37d8
-  receipts: 10 accepted transport=webrtc receipts
-  aggregate: 9 public-artifact WebRTC tasks accepted including the first transfer
-  result: no relay observed, no rejected chunks, no timeouts, assignment intake false after each pass
-```
-
-Observation: every derived evidence field was present in the accepted
-production receipts. `sourceFrameHash`, `bufferRegionHash`,
-`producerKernelHash`, `outputHash`, and `derivedOutputHash` all matched the
-issued assignment and computed output. The Lean-stated invariant
-`outputHash = derivedOutputHash` held byte-for-byte in the real receipts, and
-Cloud Run emitted the structured `plasma-lab.derived-receipt` bitmask with all
-derived fields marked `matches`. `COMPUTE_ACCEPT_ASSIGNMENTS` was false after
-each smoke.
-
-`prime-search.v0` is plumbing only. Timebox it. It proves:
-
-```text
-register worker
-advertise capability
-assign chunk
-execute off-thread
-hash output
-submit receipt
-duplicate on another worker
-validate agreement
-credit accepted receipts
-record timeout/disagreement separately
-```
-
-The first useful m3t4 workload should be split into three safe claims:
-
-```text
-m3t4.public_artifact_verify.v0
-  verifies public artifact bytes/checkpoints match exported hashes
-
-m3t4.seed_sweep.v0
-  runs deterministic public-preset seed batches for meta-health diagnostics
-
-plasma.tensor_tile.v0
-  runs a deterministic u32 tensor/matmul tile in browser WebGPU
-  validates against a server-held CPU reference hash
-
-m3t4.replay_verify.v1
-  verifies public replay/action/checkpoint data reproduces expected result
-```
-
-`m3t4.replay_verify.v1` inputs:
-
-```text
-public ReplayArtifactV1 JSON
-action bytes embedded in the replay artifact
-expected result embedded in the artifact
-```
-
-Safety boundary:
-
-```text
-admin-seeded only while in closed alpha
-rejects replay artifacts containing private player configs
-browser workers re-simulate action logs from public initial state and public action bytes only
-accepted receipts require assignment-bound output hashes checked against a server-held expected hash; expected outputs are not exposed in `/compute/tasks/next`
-```
-
-Arena-server can seed replay verification work automatically after archiving a
-ranked replay when `FEATURE_COMPUTE_AUTO_SEED_REPLAY_TASKS=true`,
-`COMPUTE_LAB_ORIGIN` is set, and `PLASMA_LAB_ADMIN_TOKEN` is present. The hook
-posts both:
-
-```text
-POST /compute/admin/tasks/public-artifact
-POST /compute/admin/tasks/replay-verify
-```
-
-The replay-verify request uses a redacted copy of the replay artifact with
-private player configs removed. The hook is asynchronous and advisory; ranked
-archive and Elo updates must not depend on compute-lab task creation.
-
-`m3t4.public_artifact_verify.v0` inputs:
-
-```text
-matchId
-rulesHash
-stageHash
-artifactHash (server-held; not exposed in worker assignment payload)
-public artifact bytes or URL
-verification mode
-```
-
-Output:
-
-```text
-computedHash
-accepted/rejected candidate
-runtimeMs
-deviceClass
-receiptHash
-```
-
-Acceptance requires:
-
-```text
-assignmentId matches an issued assignment
-taskId/chunkId/kernelHash/inputHash match contract
-inputHash/rulesHash/stageHash match public artifact
-outputHash equals the server-held expected public artifact hash
-minAgreeing receipts satisfy validation policy
-validator records a reasoned outcome
-```
-
-Quorum agreement alone is not enough.
-
-Current implementation status:
-
-```text
-server exports PublicReplayArtifactV1
-plasma-lab seeds m3t4.public_artifact_verify.v0 from that envelope
-workers verify artifactSha256 by hashing canonical payload JSON
-2-of-2 assignment-bound expected-hash validation accepts the chunk without exposing expectedOutputHash or the server-held public artifact hash in the worker assignment payload
-npm -w plasma-lab run smoke exercises this path locally or against a deploy
-```
-
-`m3t4.seed_sweep.v0` is now implemented on both sides of the compute path:
-
-```text
-inputs: public stage id, public preset A, public preset B, seed range, sim constants hash, behavior version
-outputs: canonical summary JSON hash with winner/score/round/tick/logHash rows
-limits: max 512 seeds per task, max 64 seeds per chunk
-route: POST /compute/admin/tasks/seed-sweep
-browser: advertised by opted-in hidden spectator workers and executable as CPU browser JS over HTTP or WebRTC data channels
-production proof: two hosted browser clients completed a 2-of-2 strict WebRTC plasma-data seed sweep with server-held expected output, required transport=webrtc, verified top-level signatures, accepted server-issued peer subassignments, and verified peer-signed subreceipts.
-```
-
-Arena-server can auto-seed small public-preset seed sweeps after a replay is
-archived when `FEATURE_COMPUTE_AUTO_SEED_SEED_SWEEP_TASKS=true`. The default
-auto-seed body uses the archived match stage, public presets
-`unicorn`/`disruptor`, a deterministic seed window derived from the match id,
-32 seeds, and 8-seed chunks. This does not use private player configs and does
-not open assignment intake.
-
-This targets use cases 2 and 8 from the ladder: seed sweeps and balance
-diagnostics. It intentionally excludes private roster configs.
-
-Arena-server can also auto-seed one bounded tensor tile per archived replay
-when `FEATURE_COMPUTE_AUTO_SEED_TENSOR_TILE_TASKS=true`. The default tile is
-16x16x32 with a deterministic seed derived from the archived match id. This
-produces WebGPU-only useful substrate work without using private match state
-and without opening assignment intake.
-
-`plasma.tensor_tile.v0` is the first useful WebGPU substrate workload:
-
-```text
-inputs: public seed, rows, cols, depth
-outputs: little-endian u32 tensor tile bytes
-limits: rows/cols 1..64, depth 1..256, max 4096 output cells
-route: POST /compute/admin/tasks/tensor-tile
-browser: advertised only by WebGPU-capable opted-in browser workers; executable over HTTP or strict WebRTC data channels
-scheduler: requires webgpu-light, which requires accepted Device Witness WebGPU evidence
-validation: assignment-bound expected-hash receipts against server-held CPU reference output; strict WebRTC mode also requires accepted peer subassignments and peer-signed subreceipts
-```
-
-This is not yet protein folding or distributed ML eval. It is the first
-bounded, deterministic WebGPU useful-work fixture that exercises the same
-queue/receipt/score path those later workloads need.
-
-`science.genome_kmer.v0` is the simplest science-shaped CPU workload:
-
-```text
-inputs: public ACGT-only sequence window, sequenceId, k
-outputs: little-endian u32 k-mer histogram bytes
-limits: sequence windows up to 256 bases, k 2..6
-route: POST /compute/admin/tasks/genome-kmer
-preset seeding: pass presetId from the checked-in public preset catalog
-browser: advertised by opted-in browser workers with the genome-kmer feature enabled
-scheduler: cpu-light
-validation: assignment-bound expected-hash receipts against a server-held CPU reference histogram
-```
-
-`science.contact_map_tile.v0` is the low-bandwidth protein-shaped workload:
-
-```text
-inputs: public residue windows, rowStart, colStart, minSeparation
-outputs: little-endian u32 contact-score tile bytes
-limits: 1..64 residues per side, max 4096 output cells
-route: POST /compute/admin/tasks/contact-map-tile
-preset seeding: pass presetId from the checked-in public preset catalog
-browser: advertised only by WebGPU-capable opted-in browser workers; executable over HTTP or strict WebRTC data channels
-scheduler: requires webgpu-light, which requires accepted Device Witness WebGPU evidence
-validation: assignment-bound expected-hash receipts against a server-held integer contact-score reference
-```
-
-Initial public presets checked into the repo:
-
-- `human-myoglobin-core-helices` (`P02144`)
-- `human-hemoglobin-alpha-fold-core` (`P69905`)
-- `human-lysozyme-stable-core` (`P61626`)
-
-For cron-safe science seeding, use the bundled cycle endpoint:
-
-```text
-route: POST /compute/admin/tasks/science-cycle
-body: { genomePresetIds?: string[], contactPresetIds?: string[], minExecutions?: number, minAgreeing?: number }
-default: first genome-kmer preset and first contact-map preset
-auth: x-plasma-admin-token
-rollback: POST /compute/admin/tasks/:taskId/cancel for any seeded task, or close intake with COMPUTE_ACCEPT_ASSIGNMENTS=false
-```
-
-Public peer proposal remains intentionally closed until quotas and duplicate
-suppression are added. Registered peers should execute assigned preset tasks;
-they should not be able to mint arbitrary public task backlog.
-
-Browser-model ML probes are removed from the active Hosting surface. Immediate
-public work stays on bounded non-ML kernels while the browser runtime and
-validator boundaries are redesigned.
-
-## Public Artifact Export
-
-After a ranked match is archived, the game plane writes an immutable public
-artifact summary:
-
-```text
-matchId
-publicTuplePath
-artifactHash
-artifactSha256
-stageHash
-actionLogHash
-actionLogSha256
-expectedLogHash
-expectedResult
-frameLogHash
-createdAt
-```
-
-Export is passive and non-blocking. If export fails, ranked still works.
-
-Public export must exclude:
-
-```text
-private bot configs
-hidden brain decisions
-raw opponent configs
-auth/user tokens
-server secrets
-non-public strategy internals
-```
-
-## Slack Governor
-
-The browser gets a small opt-in controller separate from the renderer.
-
-Current browser slice:
-
-```text
-client/lib/compute.js
-client/workers/plasma-worker.js
-window.__M3T4_COMPUTE_SLACK_WORKER__ = false by default
-window.__M3T4_COMPUTE_LAB_ORIGIN__ must be set
-window.m3t4Compute.start("quiet") is the hidden staff opt-in
-capability reporting sends only coarse buckets after opt-in
-```
-
-It observes:
-
-```text
-recent frame times
-p95 frame time
-dropped-frame bursts
-document visibility
-battery state
-low-power mode where detectable
-mobile/device class
-recent user interaction
-match phase: active | countdown | intermission | reconnecting
-WebGPU availability
-```
-
-Capability mapping currently reports:
-
-```text
-deviceClass
-browser family bucket
-hardware concurrency bucket
-WebGPU available | unavailable | no-adapter | probe-failed
-GPU vendor bucket
-feature-count bucket
-buffer-size buckets
-one tiny WebGPU compute benchmark bucket after opt-in
-WebGPU expected-output correctness bucket
-WebGPU mismatch-count bucket
-worker fixture status
-OffscreenCanvas alpha/compositing fixture bucket
-kernel latency bucket
-throughput bucket
-render p95 bucket
-dropped-frame burst bucket
-hidden/low-battery/render-struggle pause buckets
-battery bucket
-visibility bucket
-capabilityHash over the bucketed capability record
-```
-
-It does not send raw adapter names, raw device strings, or private configs.
-The browser refreshes capability reports periodically through
-`POST /compute/capabilities`; these reports are advisory scheduler hints, not
-validation truth. The dashboard aggregates current worker capability under
-`capabilityMap` and historical observations under `capabilityObservationMap`.
-
-Scheduler admission is tiered:
-
-```text
-observe-only
-  can receive Device Witness and measurement tasks that establish evidence
-
-cpu-light
-  can receive public replay/artifact verification and seed-sweep chunks
-
-webgpu-light
-  can receive cpu-light work and future small WebGPU chunks
-```
-
-`cpu-reference` workers enter at `cpu-light`. Browser workers start at
-`observe-only` until accepted Device Witness render or WebGPU receipts promote
-them. Self-reported capability buckets can inform dashboards and tie-break
-scores, but they are not promotion evidence. The scheduler also scores
-candidates with trust score, recent failure rate, WebRTC direct-success rate,
-TURN need, kernel timing, live concurrency, and quarantine state. These controls
-are assignment hints only; receipts still require assignment binding, canonical
-hashes, production signing keys, server-held expected-output validation, and
-normal quorum validation.
-
-Connectivity witness reports are submitted through `POST /compute/connectivity`
-after opt-in. The browser records only buckets: HTTP RTT, Network Information
-API class, local WebRTC datachannel open latency, ICE gather timing, candidate
-type availability, visibility, and battery state. It does not submit IP
-addresses, ICE candidate strings, SDP, ISP, or exact location.
-
-Conservative first policy:
-
-```text
-p95 frame < 10ms
-  allow small GPU chunks
-
-p95 frame 10-14ms
-  CPU or tiny GPU chunks only
-
-p95 frame > 14ms
-  pause compute
-
-any dropped-frame burst
-  pause compute for 5-10s
-
-hidden tab
-  pause GPU work by default
-
-mobile
-  off or quiet by default
-
-low battery / low power
-  pause
-
-user interaction
-  pause briefly
-```
-
-The server or peer may offer work. The browser decides whether it is polite to
-run now.
-
-Good shape:
-
-```text
-Live renderer reports health metrics
-Slack governor subscribes to metrics
-Compute worker runs separately
-Renderer never waits for compute
-```
-
-Bad shape:
-
-```text
-render loop awaits compute
-playback depends on compute state
-WS playback blocked by compute work
-frame decode shares synchronous heavy work with compute
-```
-
-Compute chunks must be bounded and preemptible between work units. If a task
-cannot be chunked politely, it is not a good spectator workload yet.
-
-## User Modes
-
-User-facing modes:
-
-```text
-off
-quiet
-standard
-after-match only
-```
-
-Public default:
-
-```text
-off
-```
-
-Do not use words like max, turbo, mining, or boost.
-
-Public users must explicitly opt in. The UI should explain:
-
-```text
-Your browser may verify public replay artifacts when Live has spare frame budget.
-It never sees private bot configs or controls ranked outcomes.
-You can turn this off at any time.
-```
-
-## Dashboard
-
-Build the receipt dashboard before public opt-in or staff/friends Live alpha.
-
-Admin dashboard should show:
-
-```text
-active workers
-registered workers
-capability mix
-pending tasks
-running assignments
-completed chunks
-receipt accept rate
-disagreement rate
-timeout rate
-avg/p95 computeMs
-validation reasons
-top pause reasons
-frame-time impact
-Device Witness WebGPU correctness buckets
-Device Witness WebRTC/ICE buckets
-Device Witness rendering fixture buckets
-derived worker/device/network profiles
-privacy-suppressed public stats
-verified replay badges
-```
-
-Core product metric:
-
-```text
-verified useful artifacts per spectator-minute without hurting frame time
-```
-
-Do not optimize for raw compute.
-
-## Rollout
-
-Rollout order:
-
-```text
-1. local only, MemoryEnvelopeTransport, seeded prime tasks
-2. local HTTP control plane, prime receipts
-3. staging plasma-lab service, no client UI
-4. replay/public-artifact verify adapter over HTTP
-5. admin receipt dashboard
-6. same-browser WebRTC loopback
-7. two-browser LAN/WebRTC test
-8. derived worker/device/network profiles
-9. replay verification badge endpoint
-10. closed alpha WebRTC lab
-11. hidden client opt-in panel behind flag
-12. staff/friends alpha on Live
-13. replay verification tasks only
-14. public opt-in compute panel
-15. public volunteer-verified replay badge
-```
-
-## Closed Alpha Staff Window
-
-Use the runtime assignment toggle as the primary control. Keep the deploy-time
-flags enabled only for the surfaces being measured, but keep assignment intake
-closed until a staff window starts. Prefer the timed toggle or
-`durationMs` API for every staff window; the store reports the active deadline
-as `assignmentIntakeClosesAt` and closes intake automatically when it expires.
-
-```bash
-export PLASMA_LAB_ORIGIN="https://plasma-lab-789525635095.us-central1.run.app"
-export PLASMA_LAB_ADMIN_TOKEN="$(gcloud secrets versions access latest --secret=plasma-lab-admin-token --project=m3ta-ai)"
-
-# Open the staff window with an automatic 30-second close.
-curl -fsS -X POST "$PLASMA_LAB_ORIGIN/compute/admin/assignments" \
-  -H "content-type: application/json" \
-  -H "x-plasma-admin-token: $PLASMA_LAB_ADMIN_TOKEN" \
-  --data '{"acceptAssignments":true,"durationMs":30000}'
-
-# Close the staff window immediately.
-curl -fsS -X POST "$PLASMA_LAB_ORIGIN/compute/admin/assignments" \
-  -H "content-type: application/json" \
-  -H "x-plasma-admin-token: $PLASMA_LAB_ADMIN_TOKEN" \
-  --data '{"acceptAssignments":false}'
-```
-
-For staff/friends M0b soak windows, cap intake to:
-
-```text
-duration: 10 minutes open assignment intake
-participants: 2-3 staff browsers, all opted in manually
-seeded backlog: one task at a time
-quorum: 2-of-2 assignment-bound server-held expected-hash checks for public artifact/replay/seed-sweep tasks
-transport: strict WebRTC proof tasks require requiredTransport=webrtc, requiredPeerSubreceipt=true, and accepted peer subassignments; HTTP remains a fallback only for non-proof tasks
-stop condition: accepted chunks expected, zero rejected/disagreement chunks
-dashboard guard: disable intake if running assignments exceed 4
-frame guard: disable intake if staff browsers report repeated render-struggling pauses
-```
-
-`FEATURE_COMPUTE_WEBRTC_ARTIFACTS` is a client flag served by arena-server in
-`/api/status`. It only lets the hidden browser worker try
-`m3t4.public_artifact_verify.v0`, `m3t4.replay_verify.v1`, and
-`m3t4.seed_sweep.v0` over `plasma-data`; it does not open assignment intake,
-create tasks, or bypass receipt validation. The client still requires
-plasma-lab `FEATURE_COMPUTE_WEBRTC_SIGNALING=true` and
-`FEATURE_COMPUTE_WEBRTC_DATA=true` from `/compute/status`. Non-proof tasks can
-fall back to the normal HTTP worker path if pairing fails. Strict proof tasks
-are policy-driven: if a task has `requiredTransport="webrtc"` or
-`requiredPeerSubreceipt=true`, the browser must try the WebRTC data path and
-fail closed instead of attempting HTTP fallback.
-`window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS_STRICT__=true` remains a staff smoke
-flag for non-policy artifact tests; task policy is authoritative for strict
-proof work.
-
-Public intake controls are separate from assignment intake:
-
-```text
-COMPUTE_PUBLIC_REGISTRATION=false      # default: admin or invite required
-COMPUTE_WORKER_INVITE_TOKENS=a,b,c     # raw tokens stay in service env only
-COMPUTE_MAX_WORKERS_PER_IP=8
-COMPUTE_MAX_SESSIONS_PER_CLIENT=4
-COMPUTE_MAX_ACTIVE_ASSIGNMENTS_PER_IDENTITY=2
-COMPUTE_STRICT_PROOF_TASKS_DEFAULT=true
-```
-
-The service stores hashed client IP and hashed invite IDs in worker records so
-the scheduler can apply caps and aggregate quarantine without publishing raw
-tokens or IP addresses.
-
-For the pre-panel staff rehearsal, keep `computeSlackWorker=false` and
-`computeWebRtcArtifacts=false` in `/api/status` and opt in from staff devtools
-only:
+Client flags:
 
 ```js
-window.__M3T4_COMPUTE_LAB_ORIGIN__ = "https://plasma-lab-789525635095.us-central1.run.app";
-window.__M3T4_COMPUTE_SLACK_WORKER__ = true;
-window.__M3T4_COMPUTE_WEBRTC_ARTIFACTS__ = true;
-const { getComputeClient } = await import("/lib/compute.js");
-getComputeClient();
-await window.m3t4Compute.start("quiet");
+window.__M3T4_COMPUTE_FIREBASE__ = true;
+window.__M3T4_COMPUTE_STUN_URLS__ = ["stun:stun.l.google.com:19302"];
+window.__M3T4_COMPUTE_ICE_SERVERS__ = [{ urls: "stun:stun.l.google.com:19302" }];
 ```
 
-Rollback note:
+Legacy sidecar flags such as `FEATURE_COMPUTE_LAB_ROUTES`,
+`COMPUTE_ACCEPT_ASSIGNMENTS`, and `FEATURE_COMPUTE_WEBRTC_DATA` apply only to
+the optional `plasma-lab` Cloud Run sidecar path.
 
-```text
-primary rollback: POST /compute/admin/assignments {"acceptAssignments":false}
-window guard: use POST /compute/admin/assignments {"acceptAssignments":true,"durationMs":30000} or the dashboard timed button
-task rollback: POST /compute/admin/tasks/:taskId/cancel for the active seeded task
-client rollback: staff runs window.m3t4Compute.stop(); hidden opt-in remains off by default
-transport rollback: set FEATURE_COMPUTE_WEBRTC_ARTIFACTS=false, FEATURE_COMPUTE_WEBRTC_DATA=false, or FEATURE_COMPUTE_WEBRTC_SIGNALING=false
-service rollback: set COMPUTE_ACCEPT_ASSIGNMENTS=false on deploy or scale plasma-lab to zero
-hosting rollback: Firebase Hosting release rollback if a client config flag is wrong
-```
+## Production guardrails
 
-Rollback options:
+- Keep `__M3T4_COMPUTE_FIREBASE__` false until compute Functions and rules are
+  deployed.
+- Keep assignment payloads public and bounded.
+- Keep `compute_assignments` private.
+- Keep cleanup deployed so stale signaling/presence docs do not accumulate.
+- Watch Firestore reads/writes and Functions invocation counts after enabling
+  compute.
+- Do not claim Sybil resistance, hardware attestation, private-input compute,
+  or ranked compute authority.
 
-```text
-FEATURE_COMPUTE_SLACK_WORKER=false
-FEATURE_COMPUTE_WEBRTC_ARTIFACTS=false
-FEATURE_COMPUTE_WEBRTC_DATA=false
-FEATURE_COMPUTE_WEBRTC_SIGNALING=false
-FEATURE_COMPUTE_LAB_ROUTES=false
-COMPUTE_ACCEPT_ASSIGNMENTS=false
-COMPUTE_REQUIRE_RECEIPT_SIGNATURES=true
-scale plasma-lab to zero
-```
+## Future bridge work
 
-The game remains up.
+A stricter future public compute tier can add:
 
-## First Visible Win
+- signed browser receipts
+- invite/admission controls
+- duplicate/quorum validation for selected lanes
+- receipt-log segment publication
+- independent verifier packages
+- strict WebRTC-only assignment policies
+- tournament/public-manifest match verification
 
-Do not announce "P2P is live."
-
-Show something useful:
-
-```text
-This replay was checked by volunteer compute.
-2/2 receipts agreed.
-rules hash: ...
-replay hash: ...
-verified at: ...
-```
-
-## Allowed Deeper Integrations
-
-Read-only integrations only:
-
-```text
-verified replay badge
-compute credit
-receipt inspector
-public meta-health reports
-capability stats
-replay verification history
-```
-
-## Forbidden Deeper Integrations
-
-Do not use compute lab to:
-
-```text
-decide ranked outcomes
-run hidden brains
-mutate Elo
-schedule matches
-inspect private configs
-block Live playback
-replace arena-worker authority
-```
-
-## First Build Slice
-
-The first slice is:
-
-```text
-docs/compute-lab-plan.md
-minimal plasma contract package/vendor slice
-separate plasma-lab service skeleton
-separate compute storage collection names
-HTTP worker registration
-HTTP task assignment
-HTTP assignment acceptance
-HTTP receipt submission
-prime-search.v0 plumbing
-public_artifact_verify.v0 task contract
-admin status endpoint
-no public UI
-```
-
-The second slice adds:
-
-```text
-server/src/public-artifacts.ts
-publicReplayArtifacts store projection
-GET /api/replays/public-artifact/:matchId
-m3t4.public_artifact_verify.v0 kernel
-HTTP admin seeding for public artifact verification
-tests for config redaction and receipt acceptance
-```
-
-The third slice adds:
-
-```text
-PLASMA_LAB_STORE_BACKEND=firestore
-compute_* Firestore collection names and server-only rules
-plasma-lab/Dockerfile
-plasma-lab/cloudbuild.yaml
-GET /compute/admin/dashboard.html
-npm -w plasma-lab run smoke
-HTTP WebRTC signaling skeleton behind FEATURE_COMPUTE_WEBRTC_SIGNALING
-m3t4.seed_sweep.v0 for public preset seed sweeps
-bucketed browser capability reporting after opt-in
-WebGPU micro-benchmark and runtime-health buckets for capability mapping
-GET /compute/use-cases reports implemented/experimental/planned advisory uses
-```
-
-The fourth slice adds:
-
-```text
-Device Witness bundle
-POST /compute/connectivity
-compute_capability_observations persisted and capped
-compute_connectivity_observations persisted and capped
-admin-only capability/connectivity maps
-WebGPU expected-output correctness probe
-optional COMPUTE_STUN_URLS exposed to the opt-in browser witness
-worker-side OffscreenCanvas rendering fixture probe
-WebRTC local datachannel and ICE bucket probe
-WebRTC two-browser pairing/signaling probe behind flag
-derived worker/device/network profiles
-privacy-suppressed public stats
-public replay badge endpoint for verified artifacts
-```
-
-The fifth slice promotes all three Device Witness probes to receipts:
-
-```text
-device_witness.webgpu.v0 task kind
-device_witness.render_fixture.v0 task kind
-device_witness.webrtc.v0 task kind
-server-side expected output reference kernels for WebGPU/render
-measurement validation for WebRTC transcript receipts
-browser execution for assignment-bound WebGPU/render/WebRTC challenges
-admin seeding for all three witness tasks
-compute_receipts validation for all three witness tasks
-```
-
-The spectator GPU can be "double spent" only as slack. The arena always gets
-first claim. The compute lab earns trust by verifying public artifacts, not by
-touching ranked authority.
+Those are additive. The current Firebase path is already useful as low-cost,
+expected-hash, public deterministic volunteer compute.

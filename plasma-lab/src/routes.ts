@@ -96,7 +96,9 @@ export async function handleComputeLabRequest(
         clientIpHash: admission.clientIpHash,
         inviteId: admission.inviteId,
       });
-      const bootstrapWitnessTaskId = maybeSeedWebGpuBootstrapWitness(deps.store, worker);
+      const bootstrapWitnessTaskId = deps.config.bootstrapWitnessOnRegister
+        ? maybeSeedWebGpuBootstrapWitness(deps.store, worker)
+        : null;
       await flushStore(deps.store);
       json(res, 200, {
         workerId: worker.workerId,
@@ -151,7 +153,9 @@ export async function handleComputeLabRequest(
       const worker = deps.store.updateCapability(authFrom(body, req, {
         capability: sanitizePublicWorkerCapability(body.capability, adminAllowed(req, deps.config)),
       }));
-      const bootstrapWitnessTaskId = maybeSeedWebGpuBootstrapWitness(deps.store, worker);
+      const bootstrapWitnessTaskId = deps.config.bootstrapWitnessOnRegister
+        ? maybeSeedWebGpuBootstrapWitness(deps.store, worker)
+        : null;
       await flushStore(deps.store);
       json(res, 200, { ok: true, acceptedKernels: worker.capability.kernels, bootstrapWitnessTaskId });
     } catch (e) {
@@ -1841,6 +1845,54 @@ async function handleAdmin(req: IncomingMessage, res: ServerResponse, url: URL, 
     } catch (e) {
       json(res, 404, { error: message(e) });
     }
+    return true;
+  }
+  // Bulk-cancel running tasks. Filters: { status?, kind?, olderThanMs?,
+  // maxCancel? }. olderThanMs is relative to createdAt (defaults to 0 = no
+  // age filter). Returns { scanned, cancelled, remainingRunning }. Single
+  // flushStore at the end so the lab persists once instead of N times.
+  if (req.method === "POST" && url.pathname === "/compute/admin/tasks/bulk-cancel-running") {
+    const body = await readJson<{
+      kind?: string;
+      olderThanMs?: number;
+      maxCancel?: number;
+    }>(req);
+    const olderThanMs = Number.isFinite(body?.olderThanMs) ? Number(body!.olderThanMs) : 0;
+    const cutoff = olderThanMs > 0 ? Date.now() - olderThanMs : Number.POSITIVE_INFINITY;
+    const maxCancel = Number.isFinite(body?.maxCancel) && body!.maxCancel! > 0
+      ? Math.floor(body!.maxCancel!)
+      : Number.POSITIVE_INFINITY;
+    const kind = typeof body?.kind === "string" ? body!.kind : null;
+    let scanned = 0;
+    let cancelled = 0;
+    const errors: Array<{ taskId: string; error: string }> = [];
+    const snap = deps.store.exportSnapshot();
+    for (const task of snap.tasks ?? []) {
+      scanned++;
+      if (task.status !== "running") continue;
+      if (kind && task.kind !== kind) continue;
+      if (olderThanMs > 0 && (task.createdAt ?? 0) >= cutoff) continue;
+      if (cancelled >= maxCancel) break;
+      try {
+        deps.store.cancelTask(task.taskId);
+        cancelled++;
+      } catch (e) {
+        errors.push({ taskId: task.taskId, error: message(e) });
+      }
+    }
+    if (cancelled > 0) {
+      try {
+        await flushStore(deps.store);
+      } catch (e) {
+        json(res, 500, { error: `flush failed: ${message(e)}`, scanned, cancelled, errors });
+        return true;
+      }
+    }
+    let remainingRunning = 0;
+    for (const task of deps.store.exportSnapshot().tasks ?? []) {
+      if (task.status === "running") remainingRunning++;
+    }
+    json(res, 200, { scanned, cancelled, remainingRunning, errors: errors.slice(0, 20) });
     return true;
   }
   if (req.method === "GET" && url.pathname.startsWith("/compute/admin/receipts/")) {

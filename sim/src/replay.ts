@@ -6,7 +6,7 @@ import {
 } from "./constants.js";
 import { BEHAVIOR_VERSION } from "./brain.js";
 import type { BrainConfig, Character, MatchResult, Stage } from "./types.js";
-import { createStepperWorld, settleWorldWinner, stepWorld, unpackAction } from "./simulate.js";
+import { createStepperWorld, settleWorldWinner, stepWorld, unpackAction, worldToFrame, type TraceFrame } from "./simulate.js";
 
 export const REPLAY_SCHEMA_ID = "m3t4.replay";
 export const REPLAY_SCHEMA_VERSION = 1;
@@ -680,6 +680,88 @@ export function verifyActionLog(input: VerifyActionLogInput): VerifyActionLogOut
   return {
     ok: true,
     result,
+    simConstantsHash: REPLAY_CONSTANTS_HASH,
+    behaviorVersion: BEHAVIOR_VERSION,
+  };
+}
+
+// framesFromActionLog: re-run the world from a sealed action log and yield
+// every per-tick TraceFrame. Used by spectator clients that have only the
+// public match doc (stage + seed + chars + actionLog) and need to render
+// the match without knowing brain configs.
+//
+// Mirrors verifyActionLog's stepping loop; collects frames instead of
+// just verifying the result.
+export interface FramesFromActionLogInput {
+  seed: number;
+  stage: Stage;
+  chars: [Character, Character];
+  actionLog: Uint8Array;
+  maxTicks?: number;
+}
+
+export interface FramesFromActionLogOutput {
+  ok: boolean;
+  frames: TraceFrame[];
+  result: ReplayResultV1;
+  reason?: string;
+  simConstantsHash: string;
+  behaviorVersion: number;
+}
+
+export function framesFromActionLog(input: FramesFromActionLogInput): FramesFromActionLogOutput {
+  const bytes = input.actionLog;
+  if (bytes.length % 2 !== 0) {
+    return {
+      ok: false,
+      frames: [],
+      result: { winner: -1, finalScore: [0, 0], finalRounds: [0, 0], ticks: 0, logHash: "00000000" },
+      reason: "actionLog must contain paired P1/P2 bytes",
+      simConstantsHash: REPLAY_CONSTANTS_HASH,
+      behaviorVersion: BEHAVIOR_VERSION,
+    };
+  }
+  const world = createStepperWorld({
+    stage: input.stage,
+    seed: input.seed,
+    chars: input.chars,
+  });
+  const maxTicks = input.maxTicks ?? ROUND_TIMER_MAX_TICKS * ROUNDS_TO_WIN_MATCH * 2;
+  let offset = 0;
+  let hashAcc = 2166136261 >>> 0;
+  const empty = {};
+  const frames: TraceFrame[] = [worldToFrame(world)];
+  while (world.matchWinner === -1 && world.tick < maxTicks) {
+    if (world.freeze > 0 || world.roundPause > 0) {
+      stepWorld(world, empty, empty);
+      frames.push(worldToFrame(world));
+      continue;
+    }
+    if (offset + 1 >= bytes.length) {
+      const result = replayResultFromWorld(world, hashAcc.toString(16).padStart(8, "0"));
+      return {
+        ok: false,
+        frames,
+        result,
+        reason: `action log ended early at tick ${world.tick}`,
+        simConstantsHash: REPLAY_CONSTANTS_HASH,
+        behaviorVersion: BEHAVIOR_VERSION,
+      };
+    }
+    const pa = bytes[offset++];
+    const pb = bytes[offset++];
+    hashAcc = fnvByte(hashAcc, pa);
+    hashAcc = fnvByte(hashAcc, pb);
+    stepWorld(world, unpackAction(pa), unpackAction(pb));
+    frames.push(worldToFrame(world));
+  }
+  settleWorldWinner(world);
+  const result = replayResultFromWorld(world, hashAcc.toString(16).padStart(8, "0"));
+  return {
+    ok: offset === bytes.length,
+    frames,
+    result,
+    reason: offset === bytes.length ? undefined : `action log has ${bytes.length - offset} trailing bytes`,
     simConstantsHash: REPLAY_CONSTANTS_HASH,
     behaviorVersion: BEHAVIOR_VERSION,
   };

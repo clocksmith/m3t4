@@ -23,6 +23,26 @@ import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
 import rosterCatalog from "../content/roster-catalog.v1.json" with { type: "json" };
 import { BODY_VARIANTS, BODY_PORTRAIT_SHEETS } from "../content/character-presentation.js";
 import { createSpectateComputeDash } from "./spectate-compute-dash.js";
+import {
+  framesFromActionLog as feedFramesFromActionLog,
+  subscribeLatestMatch,
+  subscribeStaticMatch,
+} from "../lib/match-feed.js";
+
+// When true, the spectator subscribes to a Firestore `matches` collection
+// (Functions-driven live matches). When false but `__M3T4_USE_STATIC_MATCHES__`
+// is true, the spectator fetches pre-generated matches from /matches/index.json
+// and replays them on a wall-clock virtual schedule. Default: static mode if
+// neither flag is set (the cheapest path).
+function useFirebaseFeed() {
+  return Boolean(globalThis.window?.__M3T4_USE_FIREBASE_FEED__);
+}
+function useStaticFeed() {
+  // Default to static if no other feed is selected.
+  if (useFirebaseFeed()) return false;
+  if (globalThis.window?.__M3T4_USE_STATIC_MATCHES__ === false) return false;
+  return true;
+}
 
 const SIM_HZ = 120;                // canonical sim rate
 const JITTER_BUFFER_FRAMES = 24;   // ~8 chunks at STRIDE=3 -> ~200ms
@@ -305,6 +325,8 @@ export function unmount() {
   running = false;
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
   if (ws) { try { ws.close(); } catch {} ws = null; }
+  if (firebaseFeedStop) { try { firebaseFeedStop(); } catch {} firebaseFeedStop = null; }
+  firebaseFeedSeenMatchId = null;
   if (lbTimer) { clearInterval(lbTimer); lbTimer = null; }
   if (rafId) cancelAnimationFrame(rafId);
   if (computeDash) { computeDash.destroy(); computeDash = null; }
@@ -338,8 +360,172 @@ async function attachRenderer(rendererId, targetCanvas) {
   ctx = nextRenderer.ctx;
 }
 
+// Firebase feed wiring: subscribes to Firestore matches, re-derives
+// frames from the action log, and pushes synthetic events into the same
+// onEvent() pipeline the WebSocket path uses. One subscription handles
+// the entire spectate session; the unsubscribe is held in `firebaseFeedStop`
+// and torn down by the existing close path.
+let firebaseFeedStop = null;
+let firebaseFeedSeenMatchId = null;
+
+function connectFirebaseFeed() {
+  if (firebaseFeedStop) return;
+  signalState = null;
+  setStat("stat-ws", "live");
+  statusCb("firebase live");
+  try {
+    firebaseFeedStop = subscribeLatestMatch((matchDoc) => {
+      if (!running) return;
+      if (!matchDoc || matchDoc.matchId === firebaseFeedSeenMatchId) return;
+      firebaseFeedSeenMatchId = matchDoc.matchId;
+      // Synthesize a matchStart event in the same shape as the legacy WS
+      // payload so the existing onEvent() handler can consume it.
+      onEvent({
+        type: "matchStart",
+        match: {
+          matchId: matchDoc.matchId,
+          a: matchDoc.a,
+          b: matchDoc.b,
+          stageId: matchDoc.stageId,
+        },
+        seed: matchDoc.seed,
+        bundle: null,
+      });
+      // Reconstruct frames locally and feed them into the same buffer.
+      let frames;
+      try {
+        frames = feedFramesFromActionLog(matchDoc);
+      } catch (e) {
+        setSignalFailure(
+          "BROADCAST REJECTED",
+          `Local replay failed: ${e instanceof Error ? e.message : String(e)}`,
+          "decode-fail",
+          15000,
+        );
+        return;
+      }
+      // Time-align playback: skip frames that should already have played
+      // based on the match's startedAt timestamp.
+      const tickMs = matchDoc.durationMs / Math.max(1, frames.length);
+      const elapsedMs = Math.max(0, Date.now() - matchDoc.startedAt);
+      const startIdx = Math.min(frames.length - 1, Math.floor(elapsedMs / tickMs));
+      // Drip frames into the existing playback buffer at the same rate
+      // the WS path used (chunks of STRIDE).
+      const STRIDE = 3;
+      let idx = startIdx;
+      const tick = () => {
+        if (!running || firebaseFeedSeenMatchId !== matchDoc.matchId) return;
+        if (idx >= frames.length) {
+          onEvent({
+            type: "matchEnd",
+            matchId: matchDoc.matchId,
+            winner: matchDoc.result.winner,
+            finalScore: matchDoc.result.finalScore,
+            eloBefore: matchDoc.eloDelta
+              ? [matchDoc.a.eloBefore, matchDoc.b.eloBefore]
+              : undefined,
+            eloAfter: matchDoc.eloAfter
+              ? [matchDoc.eloAfter.a, matchDoc.eloAfter.b]
+              : undefined,
+            bundles: null,
+          });
+          return;
+        }
+        const chunk = frames.slice(idx, idx + STRIDE);
+        idx += chunk.length;
+        onEvent({ type: "frames", matchId: matchDoc.matchId, frames: chunk });
+        setTimeout(tick, STRIDE * tickMs);
+      };
+      tick();
+    });
+  } catch (e) {
+    setSignalFailure(
+      "BROADCAST UNAVAILABLE",
+      `Firestore subscription failed: ${e instanceof Error ? e.message : String(e)}`,
+      "unavailable",
+      5000,
+    );
+  }
+}
+
+function connectStaticFeed() {
+  if (firebaseFeedStop) return;
+  signalState = null;
+  setStat("stat-ws", "live");
+  statusCb("static feed");
+  try {
+    firebaseFeedStop = subscribeStaticMatch((matchDoc) => {
+      if (!running) return;
+      if (!matchDoc || matchDoc.matchId === firebaseFeedSeenMatchId) return;
+      firebaseFeedSeenMatchId = matchDoc.matchId;
+      onEvent({
+        type: "matchStart",
+        match: {
+          matchId: matchDoc.matchId,
+          a: matchDoc.a,
+          b: matchDoc.b,
+          stageId: matchDoc.stageId,
+        },
+        seed: matchDoc.seed,
+        bundle: null,
+      });
+      let frames;
+      try {
+        frames = feedFramesFromActionLog(matchDoc);
+      } catch (e) {
+        setSignalFailure(
+          "BROADCAST REJECTED",
+          `Local replay failed: ${e instanceof Error ? e.message : String(e)}`,
+          "decode-fail",
+          15000,
+        );
+        return;
+      }
+      const tickMs = matchDoc.durationMs / Math.max(1, frames.length);
+      const elapsedMs = Math.max(0, Date.now() - matchDoc.startedAt);
+      const startIdx = Math.min(frames.length - 1, Math.floor(elapsedMs / tickMs));
+      const STRIDE = 3;
+      let idx = startIdx;
+      const tick = () => {
+        if (!running || firebaseFeedSeenMatchId !== matchDoc.matchId) return;
+        if (idx >= frames.length) {
+          onEvent({
+            type: "matchEnd",
+            matchId: matchDoc.matchId,
+            winner: matchDoc.result.winner,
+            finalScore: matchDoc.result.finalScore,
+            eloAfter: matchDoc.eloAfter ? [matchDoc.eloAfter.a, matchDoc.eloAfter.b] : undefined,
+            bundles: null,
+          });
+          return;
+        }
+        const chunk = frames.slice(idx, idx + STRIDE);
+        idx += chunk.length;
+        onEvent({ type: "frames", matchId: matchDoc.matchId, frames: chunk });
+        setTimeout(tick, STRIDE * tickMs);
+      };
+      tick();
+    });
+  } catch (e) {
+    setSignalFailure(
+      "BROADCAST UNAVAILABLE",
+      `Static feed unavailable: ${e instanceof Error ? e.message : String(e)}`,
+      "unavailable",
+      5000,
+    );
+  }
+}
+
 function connect() {
   if (!running) return;
+  if (useFirebaseFeed()) {
+    connectFirebaseFeed();
+    return;
+  }
+  if (useStaticFeed()) {
+    connectStaticFeed();
+    return;
+  }
   try {
     ws = new WebSocket(WS_ORIGIN + "/ws");
   } catch (e) {

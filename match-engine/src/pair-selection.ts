@@ -11,8 +11,10 @@ import type { BrainConfig } from "@m3t4/sim";
 export interface StableSummary {
   userId: string;
   handle: string;
+  slotIdx?: number;
   slotId: string;
   slotName: string;
+  cosmetics?: unknown;
   config: BrainConfig;
   elo: number;
   isHuman: boolean;

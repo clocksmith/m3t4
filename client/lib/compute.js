@@ -1,4 +1,8 @@
-// Hidden spectator slack worker for plasma-lab.
+// Compute client selector.
+//
+// Production Firebase compute is loaded lazily from firebase-compute.js when
+// window.__M3T4_COMPUTE_FIREBASE__ is true. The legacy plasma-lab HTTP client
+// below remains available for staff sidecar smokes and rollback/dev paths.
 //
 // This is intentionally dormant by default. It only runs when:
 //   1. deploy-time config sets window.__M3T4_COMPUTE_SLACK_WORKER__ = true
@@ -1093,11 +1097,105 @@ class ComputeClient {
 }
 
 let singleton = null;
+let firebaseSingleton = null;
 
 export function getComputeClient() {
+  if (firebaseComputeEnabled()) {
+    if (!firebaseSingleton) firebaseSingleton = new LazyFirebaseComputeClient();
+    return firebaseSingleton;
+  }
   if (!singleton) singleton = new ComputeClient();
   installConsoleHelper(singleton);
   return singleton;
+}
+
+class LazyFirebaseComputeClient {
+  constructor() {
+    this.actual = null;
+    this.loading = null;
+    this.listeners = new Map();
+    this.load();
+  }
+
+  snapshot() {
+    if (this.actual?.snapshot) return this.actual.snapshot();
+    return {
+      available: typeof Worker !== "undefined" && !!globalThis.crypto?.subtle,
+      configured: firebaseComputeEnabled() && firebaseComputeOriginConfigured(),
+      originConfigured: firebaseComputeOriginConfigured(),
+      workerFeatureEnabled: firebaseComputeEnabled(),
+      enabled: false,
+      mode: "quiet",
+      state: "loading firebase compute",
+      workerId: null,
+      workerSessionId: null,
+      clientId: null,
+      accountUid: null,
+      current: null,
+      totals: { accepted: 0, rejected: 0, pending: 0 },
+      gate: null,
+      frameP95Ms: 0,
+      origin: "firebase-functions",
+      optIn: false,
+      policy: { ...DEFAULT_POLICY },
+      webrtcArtifacts: typeof RTCPeerConnection !== "undefined",
+      firebaseCompute: true,
+    };
+  }
+
+  diagnostics() {
+    return this.actual?.diagnostics?.() ?? { snapshot: this.snapshot(), debug: { loading: true } };
+  }
+
+  subscribe(fn) {
+    fn(this.snapshot());
+    const entry = { unsub: null };
+    this.listeners.set(fn, entry);
+    this.load()
+      .then((client) => {
+        if (!this.listeners.has(fn)) return;
+        entry.unsub = client.subscribe(fn);
+      })
+      .catch((e) => {
+        if (this.listeners.has(fn)) fn({ ...this.snapshot(), state: `firebase compute load failed: ${message(e)}` });
+      });
+    return () => {
+      const current = this.listeners.get(fn);
+      this.listeners.delete(fn);
+      try { current?.unsub?.(); } catch {}
+    };
+  }
+
+  async load() {
+    if (this.actual) return this.actual;
+    if (!this.loading) {
+      this.loading = import("./firebase-compute.js").then((mod) => {
+        this.actual = mod.getFirebaseComputeClient();
+        installConsoleHelper(this.actual);
+        return this.actual;
+      });
+    }
+    return this.loading;
+  }
+
+  async maybeAutoStart(...args) { return (await this.load()).maybeAutoStart(...args); }
+  async start(...args) { return (await this.load()).start(...args); }
+  async stop(...args) { return (await this.load()).stop(...args); }
+  destroy(...args) { if (this.actual?.destroy) return this.actual.destroy(...args); }
+  setMode(...args) { void this.load().then((client) => client.setMode(...args)); }
+  setPolicy(...args) { void this.load().then((client) => client.setPolicy(...args)); }
+  setMatchPhase(...args) { void this.load().then((client) => client.setMatchPhase?.(...args)); }
+  recordFrame(...args) { if (this.actual?.recordFrame) this.actual.recordFrame(...args); }
+  async fetchMyReceipts(...args) { return (await this.load()).fetchMyReceipts(...args); }
+  async fetchPublicSummary(...args) { return (await this.load()).fetchPublicSummary(...args); }
+}
+
+function firebaseComputeEnabled() {
+  return typeof window !== "undefined" && window.__M3T4_COMPUTE_FIREBASE__ === true;
+}
+
+function firebaseComputeOriginConfigured() {
+  return typeof window !== "undefined" && Boolean(window.__M3T4_FIREBASE_CONFIG__ ?? window.__M3T4_FIREBASE__);
 }
 
 function installConsoleHelper(client) {

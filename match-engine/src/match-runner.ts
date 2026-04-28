@@ -66,10 +66,14 @@ export interface MatchDocV1 {
 export interface SideRef {
   userId: string;
   handle: string;
+  slotIdx?: number;
   slotId: string;
   slotName: string;
+  name: string;
   eloBefore: number;
+  elo: number;
   isHuman: boolean;
+  cosmetics?: unknown;
 }
 
 const DEFAULT_TICK_MS = 1000 / 120;
@@ -149,10 +153,14 @@ function sideRef(s: StableSummary): SideRef {
   return {
     userId: s.userId,
     handle: s.handle,
+    slotIdx: s.slotIdx,
     slotId: s.slotId,
     slotName: s.slotName,
+    name: s.slotName,
     eloBefore: s.elo,
+    elo: s.elo,
     isHuman: s.isHuman,
+    cosmetics: s.cosmetics,
   };
 }
 

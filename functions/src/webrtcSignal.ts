@@ -10,13 +10,18 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { db, COLLECTIONS } from "./firestore.js";
 import { randomUUID } from "node:crypto";
+import { FieldValue } from "firebase-admin/firestore";
 
 const REGION = "us-central1";
 const SESSION_TTL_MS = 5 * 60_000;
+const MAX_CANDIDATES_PER_POST = 8;
 
 export const webrtcSignal = onCall(
   { region: REGION, memory: "256MiB", timeoutSeconds: 15 },
   async (req) => {
+    const auth = req.auth;
+    if (!auth?.uid) throw new HttpsError("unauthenticated", "sign in required");
+
     const op = String(req.data?.op ?? "");
     const firestore = db();
     const now = Date.now();
@@ -26,6 +31,7 @@ export const webrtcSignal = onCall(
       await firestore.collection(COLLECTIONS.webrtc).doc(sessionId).set({
         createdAt: now,
         expiresAt: now + SESSION_TTL_MS,
+        createdBy: auth.uid,
         offer: null,
         answer: null,
         candidatesA: [],
@@ -40,12 +46,42 @@ export const webrtcSignal = onCall(
       const payload = req.data?.payload;
       if (!sessionId || !payload) throw new HttpsError("invalid-argument", "sessionId+payload required");
       const ref = firestore.collection(COLLECTIONS.webrtc).doc(sessionId);
+      const snap = await ref.get();
+      if (!snap.exists) throw new HttpsError("not-found", "session not found");
+      const expiresAt = Number(snap.data()?.expiresAt ?? 0);
+      if (expiresAt && expiresAt <= now) {
+        throw new HttpsError("deadline-exceeded", "session expired");
+      }
       const update: Record<string, unknown> = {};
-      if (payload.offer) update.offer = payload.offer;
-      if (payload.answer) update.answer = payload.answer;
+      if (payload.offer) {
+        update.offer = {
+          type: String(payload.offer.type ?? ""),
+          sdp: String(payload.offer.sdp ?? ""),
+          peerId: String(payload.peerId ?? auth.uid),
+          target: String(payload.target ?? ""),
+          purpose: String(payload.purpose ?? "spectate"),
+          postedBy: auth.uid,
+          postedAt: now,
+        };
+      }
+      if (payload.answer) {
+        update.answer = {
+          type: String(payload.answer.type ?? ""),
+          sdp: String(payload.answer.sdp ?? ""),
+          peerId: String(payload.peerId ?? auth.uid),
+          postedBy: auth.uid,
+          postedAt: now,
+        };
+      }
       if (Array.isArray(payload.candidates)) {
         const field = role === "answerer" ? "candidatesB" : "candidatesA";
-        update[field] = payload.candidates;
+        const candidates = payload.candidates
+          .slice(0, MAX_CANDIDATES_PER_POST)
+          .map((candidate: unknown) => sanitizeCandidate(candidate))
+          .filter((candidate: unknown) => candidate !== null);
+        if (candidates.length > 0) {
+          update[field] = FieldValue.arrayUnion(...candidates);
+        }
       }
       update.updatedAt = now;
       await ref.set(update, { merge: true });
@@ -55,3 +91,16 @@ export const webrtcSignal = onCall(
     throw new HttpsError("invalid-argument", `unknown op: ${op}`);
   },
 );
+
+function sanitizeCandidate(candidate: unknown): Record<string, unknown> | null {
+  if (!candidate || typeof candidate !== "object") return null;
+  const c = candidate as Record<string, unknown>;
+  const candidateLine = String(c.candidate ?? "");
+  if (!candidateLine || candidateLine.length > 4096) return null;
+  return {
+    candidate: candidateLine,
+    sdpMid: typeof c.sdpMid === "string" ? c.sdpMid : null,
+    sdpMLineIndex: typeof c.sdpMLineIndex === "number" ? c.sdpMLineIndex : null,
+    usernameFragment: typeof c.usernameFragment === "string" ? c.usernameFragment : null,
+  };
+}

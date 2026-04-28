@@ -27,6 +27,8 @@ import {
   orderBy,
   limit,
   onSnapshot,
+  doc,
+  getDoc,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 import {
@@ -43,8 +45,9 @@ let firestore = null;
 
 function ensureFirebase() {
   if (firestore) return firestore;
-  const config = window.__M3T4_FIREBASE__;
+  const config = window.__M3T4_FIREBASE_CONFIG__ ?? window.__M3T4_FIREBASE__;
   if (!config) throw new Error("window.__M3T4_FIREBASE__ not set");
+  if (!window.__M3T4_FIREBASE__) window.__M3T4_FIREBASE__ = config;
   app = getApps()[0] ?? initializeApp(config);
   firestore = getFirestore(app);
   return firestore;
@@ -63,6 +66,32 @@ export function subscribeLatestMatch(onMatch) {
       }
     });
   });
+}
+
+// Subscribe to the authoritative match-chain head. The Functions match
+// worker writes state/matchChain.latestMatchId after each committed match;
+// mesh spectators use this tiny document as the rendezvous before fetching
+// or receiving the actual match doc.
+export function subscribeCurrentMatchId(onHead, onError = () => {}) {
+  const fs = ensureFirebase();
+  const ref = doc(fs, "state", "matchChain");
+  return onSnapshot(
+    ref,
+    (snap) => {
+      const data = snap.data();
+      const matchId = data?.latestMatchId;
+      if (typeof matchId === "string" && matchId) {
+        onHead({ matchId, state: data });
+      }
+    },
+    onError,
+  );
+}
+
+export async function fetchMatchDoc(matchId) {
+  const fs = ensureFirebase();
+  const snap = await getDoc(doc(fs, "matches", matchId));
+  return snap.exists() ? snap.data() : null;
 }
 
 // Decode base64 to Uint8Array.
@@ -239,4 +268,3 @@ export function subscribeStaticMatch(onMatch, options = {}) {
   tick();
   return () => { stopped = true; };
 }
-

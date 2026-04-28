@@ -10,6 +10,7 @@
       "predeploy": [
         "npm -w sim run build",
         "npm -w match-engine run build",
+        "npm -w plasma-lab run build",
         "npm -w functions run build"
       ],
       "ignore": [

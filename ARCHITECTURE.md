@@ -1,508 +1,215 @@
 # m3t4 Architecture
 
-m3t4 is a deterministic bot-design arena. Players build agents by
-allocating a fixed budget across strategic knobs, then watch those agents
-fight in a shared ruleset. The architecture has two jobs:
+m3t4 is split by authority, not by transport. Firebase is the production
+control plane. WebRTC and browser workers move public bytes and public compute,
+but they never own ranked truth.
 
-1. Preserve the canonical ranked meta: legal configs, server authority,
-   reproducible replays, and trustworthy Elo.
-2. Enable private experimentation and exhibition play without forcing
-   players to reveal their bot configs.
+## Authority model
 
-The key distinction is that different match types prove different claims.
-Every replay artifact and live match should carry an immutable trust label
-that states exactly what was proven.
+| Surface | Authority | Transport | Canonical writes |
+| --- | --- | --- | --- |
+| Static spectate | baked artifacts | Firebase Hosting | none at runtime |
+| Live match chain | Firebase Functions | Cloud Tasks + Firestore | `matches`, `stables`, `publicStables`, `state/matchChain` |
+| Profile/submission | Firebase Functions | callable HTTPS | `stables`, `publicStables`, `handles` |
+| Spectator mesh | Functions + Firestore signaling | WebRTC data channel | transient `webrtc`, `meshSessions` |
+| Browser compute | Firebase Functions | WebRTC first, worker fallback | `compute_assignments`, `compute_receipts`, aggregate stats |
+| Local practice | client only | in-browser sim | none |
+| Legacy server | Cloud Run | REST/WebSocket | rollback/dev only |
 
-## Core Invariants
+## Core invariants
 
-- The sim is deterministic for a fixed rules hash, stage, seed, players,
-  and action log.
-- `sim/` is the only shared core. It knows deterministic mechanics and
-  replay primitives only; it must not import auth, Elo, WebRTC, P2P,
-  proof systems, storage, or ranked product code.
-- Ranked meta authority stays centralized. Elo, match registry, seed
-  issuance, account identity, and canonical roster releases are not
-  decentralized.
-- Bot configs are player IP. Public products should avoid revealing
-  configs unless the match tier explicitly requires it.
-- Replays bind to a sim version. A replay proved under one
-  `REPLAY_CONSTANTS_HASH` must not silently claim validity under another.
-- Offline search, RL, and community verification are allowed to discover
-  pressure, but ranked play remains constrained by the legal knob system.
+- `sim/` is deterministic for a fixed rules hash, stage, seed, configs, and
+  action log.
+- `match-engine/` contains pure match selection/run helpers used by Functions.
+- Private stable configs are never sent to spectator or compute peers.
+- Firestore rules block browser writes to authority collections; Functions use
+  Admin SDK for validated mutations.
+- Expected output hashes for compute assignments are server-held.
+- WebRTC is an optimization for fanout and peer execution, not a proof of
+  correctness.
+- Compute is advisory. Accepted compute receipts cannot alter Elo, roster,
+  match scheduling, private configs, or ranked outcomes.
 
-## Authority Boundaries
+## Runtime planes
 
-The product is separated by authority model, not by transport:
+```text
+Presentation plane
+  Firebase Hosting
+  client/modes/spectate.js
+  client/modes/profile.js
+  client/modes/compute.js
 
-| System | Authority | Inputs | Output | Trust label |
-| --- | --- | --- | --- | --- |
-| Ranked / presets / ladder | server | bot configs | match result + replay | `ranked-server` |
-| Practice | client-local | local configs | local sim only | `local-practice` |
-| Spectate | server | server tuple or frame stream | view/replay | `ranked-server` or `tuple-verified` |
-| P2P duel | peers + server verifier | action log only | verified exhibition replay | `p2p-action-verified` |
+Authority plane
+  functions/src/submitStable.ts
+  functions/src/claimHandle.ts
+  functions/src/matchTick.ts
+  functions/src/bootstrapMatch.ts
+  functions/src/compute.ts
 
-Code should follow the same boundary:
+State plane
+  Firestore collections under infra/firestore.rules
 
-- `server/src/routes/ranked.ts` owns the centralized product routes:
-  status, leaderboard, stable lookup, submit, handle claim, Elo decay.
-- `server/src/routes/replay.ts` owns reusable replay verification and
-  spectate tuple lookup.
-- `server/src/p2p/` owns exhibition duel route registration: challenge,
-  signaling, and action-log submission.
-- `server/src/community/` owns optional community attestation routes.
-- `server/src/labs/proof/` owns optional proof-carrying research routes.
+Peer plane
+  functions/src/webrtcSignal.ts
+  client/lib/peer-mesh.js
+  client/lib/firebase-compute.js
 
-Optional surfaces are feature-gated at route-registration time:
-
-```env
-FEATURE_P2P_DUEL=false
-FEATURE_COMMUNITY_VERIFY=false
-FEATURE_PROOF_LAB=false
-FEATURE_ZK=false
+Kernel plane
+  client/workers/plasma-worker.js
+  plasma-lab/src/kernels/* reference implementations
 ```
 
-Centralized beta deploys should leave all four disabled unless a launch
-checklist explicitly promotes one of those surfaces. Disabled optional
-routes should behave like absent product surfaces, not half-enabled
-features.
+## Match feeds
 
-## Trust Labels
+### Static feed
 
-Trust labels are first-class replay metadata. A viewer should be able to
-read one label and understand the match's proof tier without tracing the
-full provenance chain.
+Static mode is the default cost floor. `scripts/generate-static-matches.cjs`
+writes public match docs under `client/matches/`. The client reads
+`/matches/index.json`, chooses the current scheduled entry by wall clock, and
+loops the schedule locally.
 
-Every replay artifact should include:
+No Functions, Firestore reads, Cloud Tasks, or Cloud Scheduler jobs are required
+for static mode.
 
-```ts
-interface TrustLabel {
-  tier:
-    | "ranked-server"
-    | "local-practice"
-    | "tuple-verified"
-    | "p2p-action-verified"
-    | "community-verified"
-    | "attested-agent"
-    | "proof-carrying";
-  simConstantsHash: string;
-  behaviorVersion: number;
-  ruleset: "m3t4";
-  proofIssuedAt: string;
-  proofIssuer: "server" | "client" | "community-quorum";
-  verification?: {
-    quorum?: { required: number; total: number; agreed: number };
-    verifierIds?: string[];
-    actionLogHash?: string;
-    stateHashCadenceTicks?: number;
-  };
-}
+### Live Firebase feed
+
+Live mode is activated by client config and deployed Functions:
+
+1. `bootstrapMatch` acquires or resets the `state/matchChain` lock.
+2. `matchTick` loads active stables from Firestore. If fewer than two player
+   slots are available, it adds system preset fallbacks.
+3. The deterministic sim runs inside Functions through `match-engine` and
+   `@m3t4/sim`.
+4. The Function writes a compact public `matches/{matchId}` document with
+   action log and public refs.
+5. Elo, slot stats, and `publicStables/{uid}` projections are updated.
+6. The next `matchTick` is enqueued through Cloud Tasks.
+7. `matchTickWatchdog` is a repair loop only. It kicks the chain if the head is
+   stale or missing.
+
+This avoids an always-on arena worker while keeping a single authoritative
+match chain.
+
+## Spectator mesh
+
+The spectator mesh uses the same stateless signaling pattern as compute:
+
+- `webrtcSignal` validates a short callable request and writes offer/answer/ICE
+  payloads to `webrtc/{sessionId}`.
+- Clients subscribe to the Firestore signaling doc with `onSnapshot`.
+- Once the WebRTC data channel opens, match/action bytes move peer-to-peer.
+- `meshSessions/{matchId}/peers/{peerId}` is ephemeral presence/discovery.
+- `expireSessions` deletes stale signaling/presence docs.
+
+If the mesh cannot establish, spectators fall back to Firestore live feed or
+static match docs.
+
+## Browser compute
+
+The Firebase compute path is a small notary and validation layer:
+
+1. A browser opts in and authenticates through Firebase Auth, anonymous if the
+   user has no account session.
+2. `computeRegister` stores worker capability: supported kernels, CPU/WebRTC,
+   and WebGPU when `navigator.gpu` exists.
+3. `computeClaim` selects a public workload lane. Functions compute the
+   reference output hash and store it in `compute_assignments`.
+4. The client attempts WebRTC peer execution using the same `webrtcSignal`
+   callable.
+5. If no peer answers, the client runs the same chunk in
+   `client/workers/plasma-worker.js`.
+6. `computeSubmitReceipt` accepts or rejects by comparing the submitted hash
+   with the stored expected hash.
+7. Public stats are aggregate-only.
+
+Current workload lanes are public deterministic kernels only:
+
+- `prime-search.v0`
+- `m3t4.seed_sweep.v0`
+- `m3t4.exploit_search.v0`
+- `asset.tile_audit.v0`
+- `ml.image_tile_infer.v0`
+- `science.microscopy_tile_score.v0`
+- `science.genome_kmer.v0`
+- `science.contact_map_tile.v0`
+- `science.mandelbrot_tile.v0`
+- `science.heat_diffusion_tile.v0`
+- `plasma.tensor_tile.v0`
+- `device_witness.webgpu.v0`
+- `device_witness.render_fixture.v0`
+- `device_witness.derived_buffer.v0`
+
+Public-artifact and replay-verify kernels remain available in the plasma worker
+and legacy sidecar tooling, but the Firebase auto-claim generator only mints
+safe public workload families it can construct from local public params.
+
+## Firestore data model
+
+```text
+stables/{uid}
+  private player handle, slots, configs, Elo/stat fields
+  browser read: owner only
+  browser write: never
+
+publicStables/{uid}
+  public projection with handle, slot names, Elo/stat summaries, no configs
+  browser read: public
+  browser write: never
+
+handles/{handle}
+  uniqueness index
+  browser read/write: never
+
+matches/{matchId}
+  public match metadata, action log, frame/replay refs
+  browser read: public when live mode enabled
+  browser write: never
+
+state/matchChain
+  chain head, locks, next schedule metadata
+  browser read/write: never
+
+webrtc/{sessionId}
+  transient signaling payloads
+  writes through webrtcSignal only
+
+meshSessions/{matchId}/peers/{peerId}
+  spectator relay presence
+  browser self-scoped write
+
+compute_workers/{workerId}
+compute_assignments/{assignmentId}
+compute_receipts/{receiptId}
+compute_peer_presence/{peerId}
+compute_public_stats/latest
+  browser compute state; authority writes through Functions except peer presence
 ```
 
-Trust labels are immutable once the replay is created. If a replay is
-re-verified later under the same sim hash, the verifier can append an
-attestation record, but it should not mutate the original label. If the
-sim hash differs, the replay is archival only unless explicitly decoded
-with a mismatch override.
-
-## Match Tiers
-
-### Ranked Server
-
-`ranked-server` is the canonical competitive tier.
-
-Flow:
-
-1. Player submits a legal `BrainConfig` through `POST /api/ranked/submit`.
-2. Server validates budget, schema, and current rules compatibility.
-3. Server stores the config privately.
-4. Matchmaker selects opponents.
-5. Server runs the sim with both configs.
-6. Server archives a replay artifact with full private provenance.
-7. Server updates Elo and public match summaries.
-
-What this proves:
-
-- Both agents were legal submitted configs.
-- The approved server sim produced the result.
-- Elo changes are canonical.
-
-What remains private:
-
-- Player configs.
-- Full private replay payloads when they include config bodies.
-
-Ranked is the source of truth for the live meta and balance decisions.
-
-### Local Practice
-
-`local-practice` is fully client-side.
-
-Flow:
-
-1. Player builds or imports a config locally.
-2. Browser runs the bundled deterministic sim.
-3. Player watches local matches against presets or imported bots.
-4. Optional local replay export.
-
-What this proves:
-
-- Nothing canonical. It is a sandbox.
-
-Why it matters:
-
-- Fast iteration.
-- No server cost.
-- No config disclosure.
-
-### Tuple-Verified Spectating
-
-`tuple-verified` is the cheapest spectator mode for archived or canned
-matches.
-
-The server publishes a tuple:
-
-```ts
-{
-  simConstantsHash: string;
-  stageId: string;
-  seed: number;
-  playerRefs: [PublicPlayerRef, PublicPlayerRef];
-  expectedLogHash: string;
-}
-```
-
-Spectator clients reconstruct the match locally. This works only when the
-client has enough public player data to run the sim, such as named presets
-or intentionally public exhibition bots.
-
-Tradeoffs:
-
-- Very low bandwidth.
-- Great for public preset fights and static replay pages.
-- Not suitable for private ranked configs unless the server also publishes
-  those configs, which it should not do by default.
-
-### Action-Stream Spectating
-
-`p2p-action-verified` or `ranked-server` live streams can use action
-streams instead of public configs.
-
-The server or peers stream packed action bytes:
-
-```ts
-type PackedAction = number; // left/right/up/down/action in 5 bits
-```
-
-Spectators advance the deterministic sim from the action stream and check
-the final action-log hash.
-
-Tradeoffs:
-
-- Higher bandwidth than tuple replay, but still compact.
-- Works with private configs because actions reveal behavior, not config.
-- Enables live verification of the firehose.
-- Does not prove that actions came from a legal config unless the tier has
-  an additional authority or proof mechanism.
-
-## Private P2P Exhibition Duels
-
-P2P exhibitions let players duel without revealing configs. They are not
-ranked meta evidence unless upgraded with stronger proofs.
-
-### Rendezvous
-
-1. Alice challenges Bob.
-2. Server issues a signed match token:
-
-```ts
-interface MatchToken {
-  matchId: string;
-  playerIds: [string, string];
-  stageId: string;
-  seed: number;
-  simConstantsHash: string;
-  expiresAt: string;
-  stateHashCadenceTicks: number;
-  signature: string;
-}
-```
-
-3. Server provides WebRTC rendezvous metadata.
-4. If WebRTC fails, peers can fall back to WebSocket relay.
-
-### Lockstep Action Streaming
-
-For each sim tick:
-
-1. Alice computes action A locally from her private config.
-2. Bob computes action B locally from his private config.
-3. Peers exchange packed action bytes.
-4. Each applies both actions to local sim.
-5. Both produce the same next world state if inputs and rules match.
-
-Every `stateHashCadenceTicks`, default 120 ticks, both peers exchange a
-world-state hash. Hash mismatch invalidates the match or triggers rollback
-if rollback support exists.
-
-### Finalization
-
-At match end:
-
-1. Both peers sign the full action log hash.
-2. Both post result, action log, state checkpoints, and signatures to the
-   server.
-3. Server replays the action log under the token's seed, stage, and sim
-   hash.
-4. Server records the result if replay output matches the claimed winner.
-
-What this proves:
-
-- The submitted action log deterministically produces the recorded result.
-- Both peers agreed on the action stream.
-- The match was bound to the issued seed, stage, and sim hash.
-
-What it does not prove:
-
-- Either action stream came from a legal 360-budget config.
-- Either player used the approved brain.
-- Either player avoided hidden tools, manual control, or neural policies.
-
-That is acceptable because this tier is a private black-box exhibition
-tier. It proves the match, not the config.
-
-## Community Verification Pool
-
-Community verification is optional transparency and load sharing for
-exhibition matches.
-
-Default quorum policy:
-
-- Minimum verifier pool: `M = 3`
-- Required agreement: `N = 2`
-- Server audit triggers on any disagreement.
-- Per-match overrides may require higher quorum for tournaments.
-
-Worker flow:
-
-1. Worker receives match token and action log.
-2. Worker replays locally under the pinned sim hash.
-3. Worker submits signed result hash.
-4. Server aggregates verifier attestations.
-5. If quorum agrees with server replay, replay label can be upgraded to
-   `community-verified`.
-
-Community verification should never override server truth for ranked.
-It can add confidence to exhibitions and provide redundancy for public
-events.
-
-## Spectator Distributed Compute
-
-The Plasma-lite compute surface is an opt-in way for spectators to donate
-idle cycles. It is not ranked authority and must not receive private brain
-logic.
-
-Allowed early workloads:
-
-- public demo kernels such as `prime-search.v0`
-- public replay or action-log verification that does not require the brain
-- render or asset hash probes
-
-The shape mirrors Plasma:
-
-1. A peer advertises capability.
-2. The coordinator assigns a content-addressed chunk.
-3. The browser worker runs the chunk off-thread.
-4. The worker submits a receipt bound to the assignment ID.
-5. The coordinator validates hashes/quorum and updates local reputation.
-
-HTTP polling is the first transport. WebRTC data channels can replace the
-transport later, but the authority remains the assignment, output hash,
-validation policy, and receipt.
-
-## Replay Registry
-
-The server owns the replay registry. A replay entry should include:
-
-- `matchId`
-- trust label
-- sim constants hash
-- behavior version
-- stage hash
-- seed
-- player public refs
-- private player refs if server-only
-- action log hash
-- optional packed action log
-- final result
-- verifier attestations
-- archival warnings, including constants mismatch or missing private
-  provenance
-
-Replay artifacts should support redaction. Public views can hide private
-configs while preserving hashes, player refs, and action logs.
-
-## Server Responsibilities
-
-The server is responsible for:
-
-- Account auth.
-- Ranked config submission.
-- Ranked budget/schema validation.
-- Ranked match execution.
-- Elo and leaderboard state.
-- Matchmaking and P2P rendezvous signaling.
-- Seed issuance with signatures.
-- Sim-version manifest and `REPLAY_CONSTANTS_HASH` consensus.
-- WebSocket firehose.
-- Replay registry.
-- Verification endpoint for action logs.
-- Community verifier coordination.
-
-The server should not outsource canonical ranked truth to peers.
-
-## Client Responsibilities
-
-The client is responsible for:
-
-- Building and validating local configs before submission.
-- Running local practice.
-- Rendering server firehose matches.
-- Verifying tuple or action-stream replays when possible.
-- Running P2P exhibition lockstep.
-- Signing P2P action logs with session keys.
-- Optionally joining the community verifier pool.
-
-The client should treat trust labels as user-facing provenance. A replay
-viewer should show the label and sim hash near match metadata.
-
-## Privacy and Anti-Cheat Model
-
-Private configs are protected differently by tier:
-
-- Ranked: server sees configs, public does not.
-- Local practice: only the local player sees configs.
-- P2P exhibition: each player sees only their own config; actions are
-  public to the match participants and any replay viewers.
-- Proof-carrying future tiers: config privacy can be preserved while
-  proving legality, but only with additional proof machinery.
-
-Threats and mitigations:
-
-- Network tampering: signatures and hash checkpoints detect altered action
-  streams.
-- Desync: state hash mismatch invalidates or rolls back the match.
-- Post-match rewrite: signed action logs and server replay prevent it.
-- Seed cherry-picking: server-issued signed seeds prevent it.
-- Illegal private agent in P2P: not prevented at the action-verified tier.
-  The tier label must make that explicit.
-- Config reconstruction from actions: possible in theory, but the action
-  stream is much lower bandwidth than the config. Playstyle is observable;
-  exact knob recovery should be treated as hard but not impossible.
-
-## Proof-Carrying Future Tiers
-
-Proof-carrying is deferred until private-config ranked standing becomes a
-product requirement.
-
-### L1: Commit-Reveal
-
-Player commits to `hash(config + salt)` before match, then reveals config
-after match. Server verifies the revealed config is legal and reproduces
-the action log.
-
-Pros:
-
-- Simple.
-- Strong legality proof after reveal.
-
-Cons:
-
-- Reveals private config.
-- Better for tournaments than evergreen ranked.
-
-### L2: Trusted Execution / Attestation
-
-Player runs an approved agent runtime in an attested environment. The
-runtime proves it executed approved brain code over a legal private config.
-
-Pros:
-
-- Practical privacy-preserving path.
-- Much cheaper than zero-knowledge proofs.
-
-Cons:
-
-- Native launcher likely required.
-- Browser support is weak.
-- Platform-specific attestation is operationally heavy.
-
-### L3: Zero-Knowledge Replay Proof
-
-Player proves each action was generated by approved brain code from a
-legal hidden config and public observations.
-
-Pros:
-
-- Cleanest trust model.
-- Server and opponents need not see config.
-
-Cons:
-
-- Hard engineering.
-- Per-tick stateful brain proofs may be expensive.
-- Requires circuit-friendly fixed-point policy representation.
-
-## RL and Meta Lab
-
-The RL/meta lab is not a shipped ranked behavior layer. It is an
-adversarial research system.
-
-Allowed uses:
-
-- Fictitious self-play best-response rounds.
-- MAP-Elites exploit atlas.
-- Neural or black-box agents as search pressure.
-- Distilling learned pressure back into legal knob configs.
-- Discovering missing mechanics or broken trait mappings.
-
-Disallowed by default:
-
-- Installing neural policies directly into ranked.
-- Letting RL agents define canonical balance without conversion to legal
-  configs.
-- Mixing RL-generated behavior changes with roster selection in the same
-  evidence cycle.
-
-The knob-brain contract remains the product. RL is a microscope, not the
-game interface.
-
-## Implementation Order
-
-1. Add trust labels to existing replay artifacts.
-2. Pin labels to `REPLAY_CONSTANTS_HASH`, `BEHAVIOR_VERSION`, ruleset, and
-   proof issuer.
-3. Add tuple-verified spectator mode for public/canned matches.
-4. Add action-stream spectator verification for live firehose.
-5. Add P2P exhibition duels with server-signed match tokens and signed
-   action logs.
-6. Add server verification endpoint for action-log replay.
-7. Add community verification pool after P2P has real data.
-8. Defer proof-carrying tiers until private-config ranked is a confirmed
-   product promise.
-9. Defer RL lab integration until brain-v3 and its evolved roster have
-   completed Phase 4 measurement.
-
-## Non-Goals
+## Auth and profiles
+
+- Firebase Auth is the browser identity layer.
+- Profile reads use `stables/{uid}` owner-read and `publicStables` for public
+  views.
+- `claimHandle` mediates handle uniqueness.
+- `submitStable` validates config compilation, rate-limits by uid/slot, writes
+  private stable state, and updates public projections.
+- Security rules do not allow direct browser writes to private ranked state.
+
+## Legacy Cloud Run services
+
+`server/` and Cloud Run provisioning remain in source for rollback and local
+experiments. They are no longer the preferred production path for ordinary
+m3t4.ai operation.
+
+`plasma-lab` Cloud Run remains useful for staff smoke tests, receipt-log work,
+and advanced sidecar experiments. Production Firebase compute uses the same
+kernel/reference code without requiring that sidecar to be deployed.
+
+## Non-goals
 
 - Do not decentralize ranked Elo.
-- Do not expose private ranked configs in public replay views.
-- Do not claim P2P action verification proves legal config execution.
-- Do not make community workers authoritative for ranked.
-- Do not run old replays under new rules without explicit archival
-  mismatch labeling.
-
-## Design Principle
-
-Decentralize compute, viewing, and exhibition verification where it makes
-the game richer. Keep canonical ranked truth, roster releases, seed
-issuance, and meta evidence centralized and versioned.
+- Do not expose private ranked configs to public spectators or compute workers.
+- Do not claim WebRTC execution proves honest hardware/GPU execution.
+- Do not claim anonymous Sybil-resistant public compute.
+- Do not let compute receipts decorate or mutate ranked authority without a
+  later explicit bridge contract.

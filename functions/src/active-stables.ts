@@ -4,7 +4,7 @@
 // or played recently are eligible for matchmaking.
 
 import type { Firestore } from "firebase-admin/firestore";
-import type { BrainConfig } from "@m3t4/sim";
+import { STRATEGIES, STRATEGY_NAMES, type BrainConfig } from "@m3t4/sim";
 import type { StableSummary } from "@m3t4/match-engine";
 import { COLLECTIONS } from "./firestore.js";
 
@@ -46,15 +46,43 @@ export async function loadActiveStables(
     out.push({
       userId: data.userId,
       handle: data.handle,
+      slotIdx,
       slotId: slot.slotId,
       slotName: slot.name ?? `slot-${slotIdx}`,
+      cosmetics: slot.cosmetics ?? null,
       config: slot.config as BrainConfig,
       elo: typeof slot.elo === "number" ? slot.elo : 1500,
       isHuman: !data.userId.startsWith("system:"),
       lastPlayedAt: typeof slot.lastPlayedAt === "number" ? slot.lastPlayedAt : 0,
     });
   }
-  return out;
+  if (out.length >= 2) return out;
+  const existingUsers = new Set(out.map((stable) => stable.userId));
+  const fallback = systemFallbackStables().filter((stable) => !existingUsers.has(stable.userId));
+  return [...out, ...fallback].slice(0, Math.max(2, out.length));
+}
+
+function systemFallbackStables(): StableSummary[] {
+  return STRATEGY_NAMES.map((name, idx) => ({
+    userId: `system:${name}`,
+    handle: name,
+    slotIdx: 0,
+    slotId: `system:${name}-0`,
+    slotName: name,
+    config: STRATEGIES[name as keyof typeof STRATEGIES],
+    elo: 1500,
+    isHuman: false,
+    lastPlayedAt: 0,
+    cosmetics: defaultSystemCosmetics(idx),
+  }));
+}
+
+function defaultSystemCosmetics(idx: number): { body: string; weapon: string } {
+  const kits = [
+    { body: "sama", weapon: "worldcoin_orb_flail" },
+    { body: "darrius", weapon: "rolled_constitution_bat" },
+  ];
+  return kits[idx % kits.length];
 }
 
 interface StableDoc {
@@ -62,8 +90,10 @@ interface StableDoc {
   handle: string;
   slots: Array<{
     slotId: string;
+    slotIdx?: number;
     name?: string;
     config: unknown;
+    cosmetics?: unknown;
     elo?: number;
     lastPlayedAt?: number;
   }>;

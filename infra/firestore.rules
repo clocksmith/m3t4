@@ -28,15 +28,29 @@ service cloud.firestore {
 
     // ===== Stables (private brain configs) =====
     //
-    // Private canonical state. Contains submitted bot configs and Elo stats.
-    // Only the Functions service account should access this through the Admin
-    // SDK. Browser clients use the submitStable callable instead.
+    // A signed-in user can read their OWN stable doc (for the profile
+    // page). Writes always go through the submitStable callable so we
+    // can validate brain configs and rate-limit per uid. No public read.
     match /stables/{uid} {
-      allow read, write: if false;
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // ===== Spectator mesh presence =====
+    //
+    // Lightweight, ephemeral presence index. Each peer that wants to act
+    // as a relay for matchId publishes an entry; new spectators read the
+    // list to find a peer to connect to. Anyone can read; writes are
+    // gated to authenticated users (or anon-auth tokens for unsigned
+    // spectators) and self-scoped via the {peerId} path.
+    match /meshSessions/{matchId}/peers/{peerId} {
+      allow read: if true;
+      allow create: if request.auth != null && peerId == request.auth.uid;
+      allow update, delete: if request.auth != null && peerId == request.auth.uid;
     }
 
     // Handle uniqueness index. Also server-only because handle claims are
-    // mediated by POST /api/handle.
+    // mediated by the claimHandle/submitStable callables.
     match /handles/{handle} {
       allow read, write: if false;
     }
@@ -131,7 +145,16 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /compute_public_stats/{doc=**} {
-      allow read, write: if false;
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Firebase-native low-cost compute presence. Authenticated anonymous
+    // or signed-in browsers publish only their own ephemeral peer entry;
+    // assignment/receipt truth still goes through callables.
+    match /compute_peer_presence/{peerId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null && peerId == request.auth.uid;
     }
     match /compute_replay_badges/{doc=**} {
       allow read, write: if false;

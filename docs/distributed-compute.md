@@ -1,242 +1,136 @@
-# Distributed Compute
+# Distributed Compute Claim Boundary
 
-m3t4 should use P2P as an opt-in compute fabric, not as ranked authority.
-Ranked matches remain server-authoritative. Browser peers may contribute only
-public, deterministic, receipt-verifiable work.
+This document defines what m3t4 can and cannot claim about browser distributed
+compute.
 
-## Claim Boundary
+## Current claim
 
-The product claim is one browser session with two separate lanes:
+m3t4 supports opt-in advisory browser compute for public deterministic
+workloads. Firebase Functions mint assignments, keep expected hashes private,
+and validate submitted output hashes before counting receipts. Browsers execute
+work in an off-thread plasma worker, prefer WebRTC peer execution, and fall back
+to local worker execution when peers are unavailable.
 
-- ranked game lane: server-authoritative deterministic arena, Elo and roster
-  authority on the game service, live spectator stream from server traces
-- compute lane: opt-in public/advisory work through `plasma-lab`, signed
-  receipts, quorum or expected-hash validation, and no authority over ranked
-  results
+Safe public phrasing:
 
-The lanes share a user-facing session and opt-in surface, but not authority.
-Compute can produce accepted public summaries and receipt-linked decorations;
-it cannot decide ranked outcomes, schedule matches, mutate Elo, mutate rosters,
-read private configs, or execute hidden brain logic.
+> Opted-in browsers can run public deterministic compute jobs. Results are
+> receipt-bound and accepted only after Firebase Functions validate the output
+> hash against a server-held expected hash. This does not affect ranked match
+> authority.
 
-## Where This Belongs
+## What is true
 
-This plan spans three repos:
+- Compute is opt-in.
+- Anonymous Firebase Auth can identify unauthenticated workers.
+- Assignments are public-input deterministic chunks.
+- Server-held expected hashes are not returned to the browser.
+- Receipts bind assignment, task, chunk, kernel, input hash, output hash,
+  transport, execution mode, and client version.
+- WebRTC can carry work/results between browsers.
+- Local browser worker fallback keeps the system useful without enough peers.
+- WebGPU-capable browsers can receive WebGPU-preferred lanes.
+- Aggregate public stats can be shown without exposing private stable configs.
 
-- `m3t4`: concrete product integration, feature flags, worker UI, and safe
-  workload adapters.
-- `plasma`: task/chunk/receipt/validation contract and workload-adapter ladder.
-- `ouroboros`: product and strategy framing for receipt-carrying public compute.
+## What is not true
 
-The rule of thumb: if it changes the protocol, put it in Plasma. If it changes
-how m3t4 spectators participate, put it here. If it changes the company/product
-claim, put it in Ouroboros.
+Do not claim:
 
-For concrete migration sequencing from sidecar compute toward a mesh-first
-public data plane, see `docs/p2p-migration-plan.md`.
+- ranked matches run on untrusted peers
+- browsers are trusted hardware
+- GPU execution is attested
+- anonymous compute is Sybil-resistant
+- private configs or hidden brain logic are sent to workers
+- compute receipts can mutate Elo or ranked scheduling
+- WebRTC transport by itself proves correctness
+- every game frame is a science frame
+- fused-kernel or shared-buffer compute is production-ready
+- public users can propose arbitrary workloads
 
-## Current Shape
+## Workloads allowed in the Firebase path
 
-The repo has a Plasma-lite scaffold running through the isolated `plasma-lab`
-sidecar:
+Allowed workloads are deterministic, bounded, and public:
 
-- spectators opt in from the Live page
-- the browser registers a worker capability envelope
-- the coordinator assigns deterministic chunks
-- a Web Worker runs the chunk off the render thread
-- the worker submits an execution receipt
-- the coordinator verifies quorum and updates local reputation counters
+- small integer searches
+- public preset seed sweeps
+- public exploit-search scans
+- public asset/image/microscopy tile analysis
+- synthetic/public genome k-mer histograms
+- protein-adjacent public residue-window contact maps
+- Mandelbrot and heat-diffusion tiles
+- tensor tiles
+- device witness fixtures
 
-Current controlled-production status as of 2026-04-22:
+Disallowed workloads:
 
-- `plasma-lab` is deployed separately from ranked game authority.
-- public opt-in compute exists, but active public lanes are bounded and
-  assignment intake still defaults to off.
-- assignment intake defaults to off and is opened only for bounded windows.
-- production validation requires ECDSA P-256 receipt signing.
-- workers do not receive server-held expected output hashes.
-- strict WebRTC proof tasks require `transport=webrtc`, accepted
-  server-issued peer subassignments, and peer-signed subreceipts.
-- two hosted browser clients have completed `m3t4.seed_sweep.v0` over
-  `plasma-data` with 2-of-2 accepted signed strict receipts.
-- replay archive can optionally seed advisory public-artifact, replay-verify,
-  public-preset seed-sweep, and WebGPU tensor-tile work without opening
-  assignment intake.
-- `/compute/public/stats` now carries a global compute score derived from
-  accepted public chunks and receipts, not per-user credit.
-- `plasma.tensor_tile.v0` is implemented as the first bounded WebGPU
-  useful-work fixture, gated to workers with accepted WebGPU witness evidence.
-- Browser-model ML probes are removed from the active public compute surface
-  and Hosting bundle.
-- repo head also supports `plasma.tensor_tile.v0` over strict WebRTC
-  `plasma-data` with task-required transport and peer subassignments; the next
-  hosted smoke is still pending deploy auth recovery.
+- private ranked config evaluation
+- hidden brain policy execution
+- arbitrary user-submitted code
+- private image/model/data inference
+- canonical ranked match execution
+- training workloads without a validator story
+- tasks needing tolerance-based scientific judgment unless the validator is
+  explicitly designed for that tolerance
 
-The first demo kernel was `prime-search.v0`. It is intentionally boring: it
-proved assignment, execution, hashing, receipt submission, and quorum without
-shipping any private brain logic to the browser. The useful m3t4 kernels now in
-the safe ladder are public-artifact verification, public replay verification,
-and public-preset seed sweeps.
+## Receipt boundary
 
-The current proof ladder should be advanced in this order:
+A Firebase compute receipt proves only:
 
-1. meta-health proof for the curated 16-preset ceiling
-2. deterministic replay proof from action logs and versioned constants
-3. signed receipt proof for public compute outputs
-4. non-crossover proof between compute and ranked authority
-5. scale proof across hosted multi-browser strict WebRTC workloads
+- the Function issued an assignment to an authenticated worker session
+- the submitted output hash matched the expected hash stored server-side
+- the receipt was accepted or rejected by the current validation policy
 
-## Borrowed Rules
+It does not prove:
 
-From Plasma:
+- who physically operated the device
+- that a GPU was honest
+- that the result came from the claimed browser rather than another local tool
+- that the worker is unique across identities
 
-- task, chunk, receipt, and validation are separate concepts
-- every receipt is tied to a specific `chunk-assign`
-- output bytes are hashed before they are trusted
-- public peers are untrusted by default
-- a transport failure is not a compute failure
-- no P2P result becomes canonical ranked truth
+This is still useful because the jobs are public and deterministic. The receipt
+is an accounting and validation record, not a hardware attestation.
 
-From the Ouroboros receipt/notarization docs:
+## Authority separation
 
-- receipts are integrity artifacts, not compliance claims
-- say exactly what was observed and hashed
-- avoid overclaiming without hardware-backed attestation
-- make useful participation visible before selling topology
+Ranked authority lives in baked static artifacts or Firebase Functions live
+match execution. Browser compute is separate.
 
-## Safe m3t4 Workloads
+Allowed bridge:
 
-Recommended workload ladder:
+```text
+public game artifact -> public compute assignment -> accepted receipt -> public badge/stat
+```
 
-| Rank | Workload | Why It Fits | Validation | Product Fit |
-|---:|---|---|---|---|
-| 1 | `m3t4.replay_verify.v1` | Uses public action logs or frame/checkpoint hashes; no brain required | bit-exact replay/action hash | Spectators help verify public receipts and tournament artifacts |
-| 2 | `m3t4.match_batch.v0` | Embarrassingly parallel match sweeps, but only safe for public bots or non-secret kernels | bit-exact result hash | Meta-health, public build validation, tournament sweeps |
-| 3 | `m3t4.webgpu_benchmark.v0` | Measures real browser GPU capability before assigning harder work | deterministic fixtures plus tolerance checks | Hardware scouting for scheduler policy |
-| 4 | `asset.tile_audit.v0` | Visual, parallel, useful, low-risk, and tiny to ship | exact-hash audit summaries | Sprite cleanup, trim validation, fringe-alpha and bleed checks |
-| 5 | `science.docking_pose_toy.v0` | Independent ligand/pose chunks without full wet-lab claims | replicated quorum plus known controls | First science-looking adapter without overclaiming |
-| 6 | `science.microscopy_tile_score.v0` | Public microscopy tiles stay bounded and low-bandwidth | exact-hash deterministic scorecards first | Science-shaped without claiming diagnosis or hidden truth |
-| 7 | `science.drug_combo_sweep.v0` | Large parameter grids with independent seeds | statistical quorum and confidence intervals | Useful research shape with manageable validation |
-| 8 | `science.contact_map_tile.v0` | Folding-adjacent, low-bandwidth, and easy to shard by residue window | exact-hash integer contact-score tiles first; later tolerance-bounded learned scores | Bridge toward protein workloads without model downloads |
-| 9 | `science.conformer_search_mini.v0` | Many short stochastic trajectories | replicated seeds plus energy sanity checks | Realistic but validation is harder |
-| 10 | `plasma.tensor_tile.v0` | Direct WebGPU/tensor contract fit | server-held CPU reference hash for deterministic u32 tiles | Strong substrate proof, less visible to m3t4 users |
+Forbidden bridge:
 
-The first useful m3t4 class is public replay/artifact verification: public
-artifact hashes, public replay action logs, and public preset seed sweeps.
-Match batches remain unsafe unless every policy kernel, bot, and input is
-public, or a later attested/proof-carrying runtime exists.
+```text
+compute receipt -> Elo mutation
+compute receipt -> private config access
+compute receipt -> match scheduling authority
+compute receipt -> roster release authority
+```
 
-Repo head now supports the following near-term real workloads:
+## WebRTC language
 
-1. `science.contact_map_tile.v0`: public residue-window contact-score tiles.
-   This is now the low-bandwidth protein-shaped path: bounded integer tiles on
-   published sequences, validated by exact hash against a server-held
-   heuristic reference.
-2. `m3t4.exploit_search.v0`: bounded public-preset exploit scans over seed
-   windows. This uses deterministic sim telemetry to flag timeout draws,
-   clash loops, escape spirals, objective thrash, and reciprocal side-bias
-   evidence without touching private brains.
-3. `asset.tile_audit.v0`: public asset tile audits for trim, palette,
-   fringe-alpha, and edge-bleed risk. This is useful immediately for m3t4 art
-   cleanup and remains exact-hash + low-bandwidth.
-4. `ml.image_tile_infer.v0`: public image-tile classification on bounded RGBA
-   tiles using a fixed low-bandwidth classifier. This is the honest first
-   image lane before any heavier vision-model rollout.
-5. `science.microscopy_tile_score.v0`: public microscopy/pathology tile
-   scoring with deterministic focus, stain-balance, cellularity, artifact, and
-   anomaly heuristics. This keeps the science-shaped lane truthful without
-   requiring a heavyweight browser model.
-6. Browser-model ML probes are not part of the active public compute surface.
-   The active public lanes remain bounded non-ML workloads while the
-   browser-runtime and validator boundaries are redesigned.
+Safe language:
 
-Do not jump straight from `plasma.tensor_tile.v0` to full training, private
-inference, or full protein folding. The honest next constraint is validator
-shape: exact-hash bounded kernels work now, while heavier browser-ML and
-tolerance-bounded scientific inference still need a stronger validator story
-before they are production-truthful.
+- "WebRTC peer execution is attempted before local fallback."
+- "WebRTC reduces server data transfer when peers are available."
+- "Firebase Functions remain the notary and validator."
 
-Not safe for browser peers:
+Unsafe language:
 
-- ranked match execution
-- private config evaluation
-- canonical brain decision-making
-- Elo mutation
-- any work requiring hidden strategy code
-- arbitrary public task proposal without admission controls, quotas, and
-  duplicate suppression
+- "serverless proof"
+- "trustless GPU compute"
+- "decentralized ranked matches"
+- "the swarm decides match results"
 
-## WebRTC Path
+## Public UI copy rule
 
-The HTTP coordinator is the right first slice because it is easy to observe and
-rate-limit. The WebRTC path should reuse the same assignment and receipt shape:
+Use short, concrete wording:
 
-1. coordinator admits a peer and issues a session descriptor
-2. peers open `plasma-control`, `plasma-data`, and `plasma-receipts`
-3. coordinator sends `task-offer` then `chunk-assign`
-4. executor sends `chunk-result`
-5. validator or coordinator emits `validation-result`
-6. accepted chunks are assembled or credited
+- "Opt in to run public verification and science-shaped kernels."
+- "Receipts are advisory and do not affect ranked matches."
+- "Your browser computes only public chunks; private bot configs are not sent to
+  compute workers."
 
-WebRTC is a transport optimization. The authority still comes from content
-hashes, assignment IDs, validation policy, and replayable receipts.
-
-Current WebRTC claim:
-
-- `plasma-control`, `plasma-data`, and `plasma-receipts` are exercised in
-  controlled staff smokes.
-- accepted WebRTC data-plane receipts are still ingested and validated through
-  the normal coordinator path.
-- strict WebRTC proof tasks can require `requiredTransport: "webrtc"` and
-  `requiredPeerSubreceipt: true`, so a proof task cannot silently fall back to
-  HTTP and still count as WebRTC evidence.
-- admin-seeded public-artifact verify, replay verify, public-preset seed sweep,
-  and bounded tensor tile proof tasks now default to that strict WebRTC policy;
-  non-proof tasks keep HTTP fallback unless explicitly seeded otherwise.
-- accepted receipt state can now be sealed into hash-chained receipt-log
-  segments and checked through public receipt-log verification endpoints. This
-  is an audit foundation, not yet a full independent verifier service.
-- that strict WebRTC path now covers public-artifact verify, replay verify,
-  public-preset seed sweeps, and bounded tensor tiles; tensor tiles additionally
-  require WebGPU-witnessed `webgpu-light` peers.
-- each strict WebRTC parent receipt must link to an accepted server-issued peer
-  subassignment from the remote worker, with a signed subreceipt bound to pair,
-  parent assignment, chunk, input hash, and output hash.
-- no relay was observed in the latest controlled production smokes, but TURN/NAT
-  diversity is not yet a public-coverage claim.
-
-Remaining before public-open use:
-
-- invite issuance and public-window operating policy for the new registration
-  gate and per-identity caps
-- NAT-diverse TURN policy and metrics
-- retry, timeout, and stale-pair cleanup dashboards
-- independent receipt-log verifier service that replays published refs without
-  private database reads
-- public receipt inspector copy that avoids overstating host trust
-
-## Product Framing
-
-Call this “contribute idle cycles” in the product. Users should understand:
-
-- it is opt-in
-- once opted in, it keeps running when the tab is hidden, on battery, and
-  under render stress by default; spectators can opt into per-guard gentle
-  behavior (`pauseWhenHidden`, `pauseOnLowBattery`, `pauseOnRenderStruggle`)
-- it runs off-thread
-- it earns local credit/reputation
-- it helps public verification and experiments
-
-Do not sell “the swarm” as the feature. The feature is faster verification and
-useful public compute that gets better when spectators participate.
-
-Use “receipt-carrying volunteer compute” until the proof stack is real. A
-receipt says what assignment ran, what output hash came back, which validation
-policy accepted it, and how the peer was credited. It is not yet a claim that
-the contributor's host, browser, or GPU was fully trusted.
-
-The strongest current claim is: controlled opted-in browsers can exchange
-public deterministic work over WebRTC, receive server-issued peer
-subassignments, return assignment-bound signed receipts with linked
-peer-signed subreceipts, and have those receipts accepted by the sidecar
-validator without affecting ranked authority.
+Avoid broad claims about AI training, private inference, or guaranteed rewards.

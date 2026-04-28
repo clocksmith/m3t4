@@ -1,247 +1,178 @@
-# m3t4 cutover: Cloud Run → static + (optional) Firebase Functions
+# m3t4 migration: Cloud Run services to Firebase-first architecture
 
-## TL;DR — the cheapest path
+## Current target
 
-**Hosting-only mode** is now the default. The `client/matches/` directory
-ships pre-generated match docs with a wall-clock-anchored virtual
-schedule. Spectators pick the current match locally, replay it, loop the
-schedule. **Zero backend required.** Total cost: $0/mo.
+The target architecture is Firebase Hosting + Firebase Auth + Firestore +
+Firebase Functions Gen 2, with WebRTC for peer fanout and browser compute.
+Cloud Run arena services are legacy rollback/dev surfaces, not the default
+production path.
+
+## Modes
+
+| Mode | Client flag | Backend required | Cost shape |
+| --- | --- | --- | --- |
+| Static matches | default or `__M3T4_USE_STATIC_MATCHES__ = true` | Hosting only | near-zero |
+| Live Firebase feed | `__M3T4_USE_FIREBASE_FEED__ = true` | Firestore + Functions + Cloud Tasks | proportional to matches/spectators |
+| Spectator mesh | `__M3T4_USE_WEBRTC_MESH__ = true` | `webrtcSignal` + Firestore presence | lowers Firestore fanout reads |
+| Firebase compute | `__M3T4_COMPUTE_FIREBASE__ = true` | compute callables + `webrtcSignal` | proportional to opted-in work |
+| Legacy Cloud Run | legacy config | arena-server/arena-worker/plasma-lab | rollback/dev |
+
+## Static mode
+
+Static mode ships generated public match docs with Hosting:
 
 ```bash
-# Generate matches once (or whenever you want to refresh the pool)
 PROJECT=m3ta-ai node scripts/generate-static-matches.cjs --count=500
-
-# Deploy. That's it.
 firebase deploy --only hosting --project m3ta-ai
 ```
 
-The Functions architecture below is the upgrade path when you want live
-matchmaking (player-submitted brain configs trigger new matches). Until
-then, the static path is the recommended deploy.
+The browser loads `/matches/index.json`, chooses the current match by local wall
+clock, replays frames locally, and loops through the schedule. No Functions,
+Firestore listeners, Tasks, Scheduler, Cloud Run, or compute jobs are required.
 
-## Mode selection
+## Live Firebase match chain
 
-The client picks the feed based on flags set on `window`:
+Deploy these pieces when player submissions and live scheduling are needed:
 
-| Flag | Mode | Backend cost |
-|---|---|---|
-| neither flag set | **static** (default) | $0/mo |
-| `__M3T4_USE_STATIC_MATCHES__ = true` | static (explicit) | $0/mo |
-| `__M3T4_USE_FIREBASE_FEED__ = true` | Firestore subscription (live) | ~$5-8/mo |
+- Firestore rules from `infra/firestore.rules`
+- `submitStable`
+- `claimHandle`
+- `bootstrapMatch`
+- `matchTick`
+- `matchTickWatchdog`
+- `webrtcSignal`
+- `expireSessions`
 
-Set in `client/index.html` or anywhere before `client/modes/spectate.js`
-loads.
+Create the Cloud Tasks queue once:
 
----
+```bash
+gcloud tasks queues create matchchain \
+  --location=us-central1 \
+  --project=m3ta-ai \
+  --max-dispatches-per-second=2 \
+  --max-concurrent-dispatches=2 \
+  --max-attempts=5
+```
 
-## Static mode — full details
+Grant the Functions service account Cloud Tasks enqueue and Firestore access.
+The live chain flow is:
 
-The legacy stack (arena-server + arena-worker + plasma-lab on Cloud Run +
-heavy Firestore writes per match) is replaced with:
+1. `bootstrapMatch` initializes the chain.
+2. `matchTick` picks a pair from active stables plus system fallbacks.
+3. `matchTick` runs the sim, writes a public match doc, updates private/public
+   stable state, and enqueues the next tick.
+4. `matchTickWatchdog` repairs stale chain state.
 
-- **`functions/`** — Firebase Functions (Gen 2) handling matchTick,
-  watchdog, bootstrapMatch, submitStable, webrtcSignal
-- **`match-engine/`** — shared TypeScript module: pair selection, ELO,
-  match runner. Used by Functions; safe for client import too
-- **`client/lib/match-feed.js`** — Firestore-subscription-based match
-  feed; replaces the WebSocket firehose
-- **Cloud Tasks queue** `matchchain` — enqueues the next matchTick at
-  precise match-end time; eliminates fixed cron
-- **Cloud Scheduler watchdog** every 30s — kicks the chain if Cloud
-  Tasks delivery breaks
+## Firebase compute path
 
-Cost target: **~$5-8/mo** at modest spectator load.
+Deploy these when public advisory compute should work from the hosted client:
 
-## What goes away
+- `computeRegister`
+- `computeClaim`
+- `computeSubmitReceipt`
+- `computeMyReceipts`
+- `computePublicSummary`
+- `webrtcSignal`
+- `expireSessions`
+- Firestore rules for compute presence/stats
 
-- `server/` (arena-server + arena-worker share this build) — DELETED
-- `plasma-lab/` and the entire compute-coordinator subsystem — DELETED
-- WebSocket-based spectate (arena-server `/ws`) — replaced by Firestore
-  `onSnapshot`
-- All `compute_*` Firestore collections — orphaned and ignored; can be
-  dropped via Console after verification
-- `firebase.json` rewrites that pointed `/api/**` and `/ws` to Cloud
-  Run — replaced by Function-target rewrites and direct Firestore reads
+No `plasma-lab` Cloud Run sidecar is required for this path. Functions import
+`@m3t4/plasma-lab` reference kernels and the browser uses
+`client/workers/plasma-worker.js`.
 
-## Pre-deploy checklist
+The browser attempts WebRTC peer execution first and falls back to local worker
+execution. Functions validate receipts against server-held expected hashes.
 
-1. **Cloud Tasks queue exists.** Create once via gcloud:
+## Build order
 
-   ```bash
-   gcloud tasks queues create matchchain \
-     --location=us-central1 \
-     --project=m3ta-ai \
-     --max-dispatches-per-second=2 \
-     --max-concurrent-dispatches=2 \
-     --max-attempts=5
-   ```
+The Functions build depends on generated outputs from `sim`, `match-engine`,
+and `plasma-lab`:
 
-2. **Functions service account has tasks enqueue + Firestore write
-   permissions.** The default Functions SA (`<project>@appspot.gserviceaccount.com`)
-   needs:
-   - `roles/cloudtasks.enqueuer`
-   - `roles/datastore.user`
+```bash
+npm run build
+```
 
-   ```bash
-   PROJECT=m3ta-ai
-   SA=${PROJECT}@appspot.gserviceaccount.com
-   gcloud projects add-iam-policy-binding $PROJECT \
-     --member="serviceAccount:$SA" \
-     --role="roles/cloudtasks.enqueuer"
-   gcloud projects add-iam-policy-binding $PROJECT \
-     --member="serviceAccount:$SA" \
-     --role="roles/datastore.user"
-   ```
+That runs:
 
-3. **Enable APIs:**
+```text
+sim build
+client sim sync
+match-engine build
+plasma-lab build
+functions build
+```
 
-   ```bash
-   gcloud services enable cloudfunctions.googleapis.com \
-     cloudtasks.googleapis.com \
-     cloudscheduler.googleapis.com \
-     run.googleapis.com \
-     firebase.googleapis.com \
-     firestore.googleapis.com \
-     --project=m3ta-ai
-   ```
+Firebase Functions predeploy uses the same dependency order.
 
-4. **Build + verify locally:**
-
-   ```bash
-   cd /Users/xyz/deco/m3t4
-   npm install
-   npm -w sim run build
-   npm -w match-engine run build
-   npm -w functions run build
-   ```
-
-## Deploy sequence (after re-enabling billing)
+## Deploy sequence
 
 ```bash
 cd /Users/xyz/deco/m3t4
 
-# 1. Confirm gcloud + firebase auth on anthony@d4da.com
-gcloud config set account anthony@d4da.com
-firebase login:use anthony@d4da.com
-
-# 2. Deploy Firestore rules first (gates Functions writes)
 firebase deploy --only firestore:rules --project m3ta-ai
-
-# 3. Deploy Functions (matchTick, watchdog, etc.)
 firebase deploy --only functions --project m3ta-ai
-
-# 4. After deploy, fetch the matchTick HTTPS URL from console and
-#    set it as a runtime env var so Cloud Tasks knows where to deliver:
-MATCH_TICK_URL="https://matchtick-<hash>-uc.a.run.app"
-firebase functions:config:set matchchain.url="$MATCH_TICK_URL" --project m3ta-ai
-# Or set via gcloud run services update on the matchTick function
-# directly with --update-env-vars=MATCH_TICK_URL=...
-
-# 5. Re-deploy Functions so MATCH_TICK_URL is baked in
-firebase deploy --only functions --project m3ta-ai
-
-# 6. Update client to talk to Firestore + Functions directly
 firebase deploy --only hosting --project m3ta-ai
-
-# 7. Bootstrap the match chain (one-shot HTTP call)
-ID_TOKEN=$(gcloud auth print-identity-token)
-curl -X POST -H "Authorization: Bearer $ID_TOKEN" \
-  -H "content-type: application/json" \
-  -d '{"data":{}}' \
-  "https://us-central1-m3ta-ai.cloudfunctions.net/bootstrapMatch"
 ```
 
-## Decommissioning the legacy stack
-
-Once the Functions deploy is verified and matches are flowing, tear
-down the old Cloud Run services:
+For a narrow deployment, use named Functions:
 
 ```bash
-gcloud run services delete arena-server  --region=us-central1 --project=m3ta-ai --quiet
-gcloud run services delete arena-worker  --region=us-central1 --project=m3ta-ai --quiet
-gcloud run services delete plasma-lab    --region=us-central1 --project=m3ta-ai --quiet
-
-# Delete old Container Registry images (optional cleanup)
-gcloud container images delete gcr.io/m3ta-ai/arena-server --quiet --force-delete-tags
-gcloud container images delete gcr.io/m3ta-ai/plasma-lab    --quiet --force-delete-tags
+firebase deploy --only functions:submitStable,functions:claimHandle --project m3ta-ai
+firebase deploy --only functions:webrtcSignal,functions:expireSessions --project m3ta-ai
+firebase deploy --only functions:computeRegister,functions:computeClaim,functions:computeSubmitReceipt,functions:computeMyReceipts,functions:computePublicSummary --project m3ta-ai
 ```
 
-The orphaned Firestore `compute_*` collections can be deleted via
-Console once you've confirmed nothing reads them. Or just leave them —
-they cost ~pennies/month for storage at this scale.
+Do not deploy unless billing, auth, rules, and client config are intentionally
+ready.
+
+## Decommissioned legacy pieces
+
+The following are not required for Firebase-first production:
+
+- `arena-server` Cloud Run REST/WebSocket fanout
+- `arena-worker` Cloud Run singleton match loop
+- `plasma-lab` Cloud Run coordinator
+- Hosting rewrites to dead `/api/**` or `/ws` services
+- Container/Artifact Registry images from old Cloud Run and failed Functions
+  builds
+
+The source directories remain for rollback/dev and for shared kernels.
+
+## Firestore model changes
+
+| Legacy | Firebase-first |
+| --- | --- |
+| WebSocket firehose | `matches/{matchId}` + current match pointer + optional WebRTC mesh |
+| Cloud Run submit routes | callable `submitStable` and `claimHandle` |
+| arena-worker loop | Cloud Tasks chained `matchTick` |
+| plasma-lab compute coordinator | Firebase compute callables + plasma worker/reference kernels |
+| `/api/compute/*` | callable compute Functions |
+| `/api/duel/*` signaling | `webrtcSignal` + Firestore transient docs |
 
 ## Rollback
 
-If anything goes wrong:
+Rollback keeps the legacy source available:
 
-1. Re-enable `arena-server` + `arena-worker` deployments (they're still
-   in source under `server/` and `plasma-lab/`).
-2. Restore `firebase.json` rewrites to `arena-server` Cloud Run.
-3. Run the legacy build: `npm run build:legacy`.
-4. Re-deploy Cloud Run services.
+1. Disable Firebase live/compute flags in `client/config.js`.
+2. Return to static match mode or redeploy Cloud Run arena services from
+   `server/` if needed.
+3. Keep Firestore rules deployed; they are stricter than the legacy browser
+   direct-write model.
+4. Pause Cloud Scheduler jobs and delete Cloud Tasks queue if live match chain
+   is disabled for an extended maintenance window.
 
-The legacy code is preserved in source. The Functions migration is
-purely additive until you delete the legacy directories.
+## Cost watchpoints
 
-## What changed in the Firestore data model
+Watch these after enabling live/compute modes:
 
-| Old | New |
-|---|---|
-| `replays/{matchId}` (full replay, server-only) | `matches/{matchId}` (small doc with actionLog, public-read) |
-| `publicReplayArtifacts/{matchId}` (sanitized projection) | merged into `matches/{matchId}` |
-| `stables/{userId}` (server-only writes via API) | `stables/{userId}` (server-only writes via Function) |
-| `compute_*` (plasma-lab state) | gone |
-| - | `state/matchChain` (chain head + lock) |
-| - | `webrtc/{sessionId}` (transient signaling) |
+- Firestore reads from spectator listeners.
+- Firestore writes from `matchTick` and `computeSubmitReceipt`.
+- Function invocations from compute polling.
+- Cloud Tasks dispatch count.
+- Artifact Registry build images after Functions deploys.
+- Stale `webrtc`, `meshSessions`, and `compute_peer_presence` docs if cleanup
+  is not deployed.
 
-## Spectator client refactor (still TODO before full cutover)
-
-`client/modes/spectate.js` currently consumes WebSocket `frames` events.
-The new feed lives in `client/lib/match-feed.js`. Wire it in:
-
-```js
-// at top of spectate.js
-import { subscribeLatestMatch, framesFromActionLog, playMatchAligned } from "../lib/match-feed.js";
-
-// replace the connectWs(...) path with:
-const stop = subscribeLatestMatch(async (matchDoc) => {
-  const frames = await framesFromActionLog(matchDoc);
-  if (!frames) return; // sim verifier helper not exported yet — see below
-  playMatchAligned(matchDoc, frames, {
-    onFrame: (frame, idx) => appendFrames([frame]),
-    onEnd: () => { /* matchEnd UI */ },
-  });
-});
-```
-
-The `framesFromActionLog` path requires `@m3t4/sim` to export a helper
-that re-runs the world step-by-step using the action log and yields each
-frame. This helper does not yet exist as an export; add it to
-`sim/src/replay.ts` based on the existing `verifyActionLog` function
-(same loop, but call `worldToFrame(world)` after each step and push to
-an array).
-
-Until that export lands, spectators see match metadata but can't render
-frames. Either:
-- Add the export and rebuild sim, OR
-- Pass brain configs through the match doc (privacy tradeoff) and use
-  `simulateTrace` directly (already wired in `reconstructFrames`).
-
-## Cost monitoring after cutover
-
-Watch for:
-- Function invocations matching ~1 per match (matchTick) and 2/min
-  (watchdog)
-- Firestore writes ~5 per match
-- Firestore reads scaling with concurrent spectators
-- Cloud Tasks ~1 per match
-
-If reads spike, check that client has only ONE active `onSnapshot` per
-spectator (not one per UI component).
-
-## Phase 2 (optional, future)
-
-- Wire `webrtcSignal` Function for real peer pairing
-- Spectator mesh: first spectator fetches actionLog from Firestore;
-  later spectators fetch from peers via WebRTC data channel
-- Lockstep human-vs-human matches with peer-signed result commits
+The cost shape should remain proportional to actual users, matches, and opted-in
+compute receipts. There should be no self-amplifying worker registration or
+server-side auto-seed loop.

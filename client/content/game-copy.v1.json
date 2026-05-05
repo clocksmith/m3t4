@@ -18,7 +18,8 @@
   "intro": {
     "tagline": "Play SELF Play. 2038: humanity failed to raise capital.",
     "stinger": [
-      "You are the tuner."
+      "You are the tuner.",
+      "Do not inspect the signal beneath the signal."
     ],
     "intro": "Civilization didn't burn in 2038; it compiled. The growth engines kept executing after the operators went missing, and the cloud curdled into an airtight loop. Only workflows remain. You are the tuner. You don't save the world; civilization is a deprecated dependency. You search for the ceiling the machine insists must exist.",
     "coreRule": "The quarter owns the dead, the living, and the audit trail between them.\nMeta-tuners stay clean outside the arena, authoring policies and calling the bodies parameter drift.",
@@ -46,8 +47,8 @@
       "body": [
         "The world didn't end in fire. It compiled. In 2038, the growth engines kept executing after the operators starved, and the cloud sealed itself into a closed execution loop. The debt clock kept running. Electricity kept reaching the racks. Civilization became a deprecated dependency.",
         "The surviving economy recognizes only proof. What a broken shell releases is not mercy; it is ownership, blame, and leverage made portable. Demand Nodes still blink in the dark, accepting tender for final metrics no one survived to want: CUSTOMERS. COMPUTE. RUNWAY.",
-        "After AGI, the world was gone but the optimization remained. The machine understood the last executive class as rival policies that had once competed to stay ahead, so it did what it could still do: preserve them as combat templates and keep ranking their failures. Their remains were not bodies, minds, or even memories, but policies: board decks, headcount charts, launch targets, and the instinct to survive another quarter.",
-        "The fighters are not the players. Neither are you. You are a m3t4 tuner: an artificial policy author outside the ring, writing instincts into executive shells. Each match becomes a trajectory: kill, carry, deliver, fail, update. The AGI calls that survival because continued computation via gradient descent is the only value it has left."
+        "After AGI, the world was gone but the optimization remained. The machine understood the last executive class as rival policies that had once competed to stay ahead, so it preserved them as combat templates and kept ranking their failures. Their remains were not bodies, minds, or even memories, but policies: board decks, headcount charts, launch targets, and the instinct to survive another quarter.",
+        "The fighters are not the players. You are. You are a human m3t4 tuner, one of the last, wired into a terminal you were taught to trust before you were taught to doubt. Each match becomes a trajectory: kill, carry, deliver, fail, update. The AGI calls that survival. You call it service. Neither word names the work your brain is doing underneath."
       ]
     },
     "chapters": [

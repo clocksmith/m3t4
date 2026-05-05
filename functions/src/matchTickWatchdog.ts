@@ -1,5 +1,5 @@
 // matchTickWatchdog: periodic safety net. Reads the match chain head and
-// kicks matchTick if the chain looks dead. Fires every 30s via Cloud
+// kicks matchTick if the chain looks dead. Fires every minute via Cloud
 // Scheduler (configured in firebase.json or via gcloud).
 
 import { onSchedule } from "firebase-functions/v2/scheduler";
@@ -20,7 +20,7 @@ const TASK_INVOKER_SA = process.env.MATCH_TICK_INVOKER_SA;
 const STALL_GRACE_MS = Number(process.env.MATCH_CHAIN_STALL_GRACE_MS ?? 60_000);
 
 export const matchTickWatchdog = onSchedule(
-  { region: REGION, schedule: "every 30 seconds", memory: "256MiB", timeoutSeconds: 30 },
+  { region: REGION, schedule: "every 1 minutes", memory: "256MiB", timeoutSeconds: 30 },
   async () => {
     const firestore = db();
     const now = Date.now();

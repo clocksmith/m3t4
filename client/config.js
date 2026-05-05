@@ -26,6 +26,6 @@ window.__M3T4_FIREBASE_CONFIG__ = {
 };
 window.__M3T4_FIREBASE__ = window.__M3T4_FIREBASE_CONFIG__;
 window.__M3T4_FIREBASE_REGION__ = "us-central1";
-window.__M3T4_USE_FIREBASE_FEED__ = true;
+window.__M3T4_USE_FIREBASE_FEED__ = false;
 window.__M3T4_USE_P2P_MESH__ = true;
-window.__M3T4_USE_STATIC_MATCHES__ = false;
+window.__M3T4_USE_STATIC_MATCHES__ = true;

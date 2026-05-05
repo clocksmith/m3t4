@@ -1215,10 +1215,6 @@ function installConsoleHelper(client) {
       const { loadReceiptLog } = await import("./receipt-log.js");
       return loadReceiptLog(options);
     },
-    replayArchive: async (options = {}) => {
-      const { loadRecentReplays } = await import("./replay-archive.js");
-      return loadRecentReplays(options);
-    },
     tileArchive: async (options = {}) => {
       const { fetchTileManifest } = await import("./tile-archive.js");
       return fetchTileManifest(options);

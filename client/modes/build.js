@@ -2,7 +2,11 @@
 // Each side (P1 blue, P2 purple) can independently be:
 //   BUILD   — local editable knobs + budget + hallucination
 //   PRESET  — pick any of the 16 curated preset bots
-// The canonical sim runs server-side; the browser receives sanitized frames.
+//   HUMAN   — drive the fighter directly via WASD+F (P1) or P/L/;/'+[ (P2)
+// The canonical sim runs server-side and the browser receives sanitized
+// frames whenever both sides are non-HUMAN. As soon as either side is
+// HUMAN the canvas switches to a local stepper sim — sandbox only, never
+// promoted to the ranked feed.
 
 import {
   MIN_CLEAN_SPEND,
@@ -21,6 +25,15 @@ import {
   stateSpent,
 } from "../lib/build-config.js";
 import { createFrameRenderer, W, H } from "../render/index.js";
+import {
+  createStepperWorld,
+  stepWorld,
+  worldToFrame,
+  runBrainForWorld,
+  compileBrain,
+  STAGES as SIM_STAGES,
+  STRATEGIES,
+} from "../sim/index.js";
 import { renderSliderEditor } from "../lib/slider-editor.js";
 import { escapeHtml } from "../ui/html.js";
 import { buttonHtml } from "../ui/actions.js";
@@ -109,7 +122,7 @@ const slotStates = [initialSlotState(), initialSlotState()];
 // switches P1 to PRESET; P2 starts in PRESET mode and uses its pointer
 // immediately for the opening matchup.
 const slotPresetNames = [randomPresetName(), randomPresetName()];
-const modes = ["user", "preset"]; // "user" | "preset"; no browser-executed brain.
+const modes = ["user", "preset"]; // "user" | "preset" | "human" — human runs locally only.
 
 // --- remote preview playback ---
 const SIM_HZ = 120;
@@ -147,6 +160,17 @@ let previewDirty = false;
 let previewError = "";
 let previewRequestId = 0;
 let previewEditVersion = 0;
+
+// Local stepper world for HUMAN-controlled matches. Whenever either side
+// is in HUMAN mode the canvas runs a local sim driven by readKeyboard()
+// rather than the server preview. Brains for non-human sides are compiled
+// once per match-start and reused until the next reset.
+let localWorld = null;
+const localBrains = [null, null];
+let localPlayedAtMs = 0;
+let localTickAccumMs = 0;
+const LOCAL_STEP_MS = 1000 / SIM_HZ;
+const LOCAL_MAX_CATCHUP_TICKS = 240;
 
 function stageLabel(id) {
   return STAGES[id]?.name ?? id;
@@ -308,7 +332,7 @@ export function mount(root, { setStatus }) {
     <div class="page build-page">
       ${pageHeaderHtml({
         title: "Tune",
-        subtitle: "server preview · not ranked until sent live",
+        subtitle: previewSubtitle(),
       })}
       ${contextCardHtml({
         className: "build-context-card",
@@ -330,7 +354,7 @@ export function mount(root, { setStatus }) {
         <section class="panel canvas-panel">
           <canvas id="test-canvas" class="u-canvas-fill" width="${W}" height="${H}" tabindex="0"></canvas>
           <div class="build-preview-stats" aria-live="polite">
-            <div class="build-preview-copy tight">server test fight</div>
+            <div class="build-preview-copy tight" id="build-preview-copy">${escapeHtml(previewCopy())}</div>
             ${statListHtml([
               { label: "P1", id: "build-stat-p1" },
               { label: "P2", id: "build-stat-p2" },
@@ -380,6 +404,10 @@ export function mount(root, { setStatus }) {
   // Stash the listener so unmount can detach it.
   mountMediaHandler = () => narrowMq?.removeEventListener("change", setBuildFoldState);
 
+  addEventListener("keydown", onKeyDown);
+  addEventListener("keyup", onKeyUp);
+  addEventListener("blur", onBlur);
+
   renderAllKnobs();
   applyModeVisibility(0);
   applyModeVisibility(1);
@@ -399,6 +427,7 @@ export function unmount() {
   removeEventListener("keyup", onKeyUp);
   removeEventListener("blur", onBlur);
   keyset.clear();
+  teardownLocalWorld();
   if (mountMediaHandler) { mountMediaHandler(); mountMediaHandler = null; }
 }
 
@@ -435,10 +464,10 @@ function playerPanelHtml(slot) {
         </summary>
 
       <div class="player-mode-row" role="radiogroup" aria-label="${label} mode">
-        ${["user","preset"].map((v) => `
+        ${["user","preset","human"].map((v) => `
           <label class="mode-pill ${v === mode ? "is-active" : ""}" data-mode="${v}">
             <input type="radio" name="slot${slot}-mode" value="${v}" ${v === mode ? "checked" : ""}>
-            <span>${v === "user" ? "BUILD" : "PRESET"}</span>
+            <span>${v === "user" ? "BUILD" : v === "preset" ? "PRESET" : "HUMAN"}</span>
           </label>`).join("")}
       </div>
 
@@ -459,8 +488,8 @@ function playerPanelHtml(slot) {
         </div>
 
         <div class="player-human-hint" data-mode-detail="human" hidden>
-          <div class="player-human-quip">MANUAL CONTROL REVOKED.</div>
-          <div class="player-human-keys tight">The browser may watch. It may not think.</div>
+          <div class="player-human-quip">CARBON INPUT STANDBY.</div>
+          <div class="player-human-keys tight"></div>
         </div>
       </div>
 
@@ -678,6 +707,8 @@ function applyModeVisibility(slot) {
   } else {
     updateSlot(slot);
   }
+
+  refreshPreviewCopy();
 }
 
 function refocusCanvas() { keyset.clear(); testCanvas?.focus(); }
@@ -785,6 +816,7 @@ function loadPresetIntoSliders(slot, name) {
 function labelForSlot(idx) {
   const mode = modes[idx];
   if (mode === "preset") return `${slotPresetNames[idx]}`;
+  if (mode === "human") return `HUMAN ${idx === 0 ? "P1" : "P2"}`;
   return `BUILD ${idx === 0 ? "P1" : "P2"}`;
 }
 
@@ -795,6 +827,92 @@ function sidePayload(slot) {
   return { kind: "user", config: slotConfig(slot) };
 }
 
+function slotIsHuman(slot) { return modes[slot] === "human"; }
+function hasHuman() { return slotIsHuman(0) || slotIsHuman(1); }
+
+function previewSubtitle() {
+  return hasHuman()
+    ? "local sandbox · keyboard input · not ranked"
+    : "server preview · not ranked until sent live";
+}
+function previewCopy() {
+  return hasHuman() ? "local sandbox" : "server test fight";
+}
+function refreshPreviewCopy() {
+  const subtitleEl = document.querySelector(".build-page .page-subtitle");
+  if (subtitleEl) subtitleEl.textContent = previewSubtitle();
+  const copyEl = document.getElementById("build-preview-copy");
+  if (copyEl) copyEl.textContent = previewCopy();
+}
+
+function brainConfigForSlot(slot) {
+  if (modes[slot] === "preset") {
+    const cfg = STRATEGIES[slotPresetNames[slot]];
+    if (!cfg) throw new Error(`unknown preset: ${slotPresetNames[slot]}`);
+    return cfg;
+  }
+  return slotConfig(slot, { runtimeId: true });
+}
+
+function freshLocalSeed() {
+  return (Math.random() * 0xffffffff) >>> 0;
+}
+
+function teardownLocalWorld() {
+  localWorld = null;
+  localBrains[0] = null;
+  localBrains[1] = null;
+}
+
+function startLocalWorld({ newSeed = false } = {}) {
+  const seed = newSeed || !localWorld ? freshLocalSeed() : (previewResult?.seed ?? freshLocalSeed());
+  const stage = SIM_STAGES[stageId] ?? SIM_STAGES.datacenter;
+  localBrains[0] = slotIsHuman(0) ? null : compileBrain(brainConfigForSlot(0));
+  localBrains[1] = slotIsHuman(1) ? null : compileBrain(brainConfigForSlot(1));
+  localWorld = createStepperWorld({ stage, seed });
+  localPlayedAtMs = performance.now();
+  localTickAccumMs = 0;
+  previewStage = stage;
+  previewLabels = { p1: labelForSlot(0), p2: labelForSlot(1) };
+  previewResult = { seed, ticks: 0, winner: -1, finalScore: [0, 0] };
+  previewFrames = [];
+  previewStride = 1;
+  previewLoading = false;
+  previewError = "";
+  previewDirty = false;
+}
+
+function actionForSlot(slot) {
+  if (slotIsHuman(slot)) return readKeyboard(slot);
+  return runBrainForWorld(localWorld, localBrains[slot], slot);
+}
+
+function stepLocalSim(nowMs) {
+  if (!localWorld) return null;
+  if (localWorld.matchWinner !== -1) return worldToFrame(localWorld);
+  let dt = nowMs - localPlayedAtMs;
+  localPlayedAtMs = nowMs;
+  if (!Number.isFinite(dt) || dt < 0) dt = 0;
+  localTickAccumMs += dt;
+  let stepsTaken = 0;
+  while (
+    localTickAccumMs >= LOCAL_STEP_MS &&
+    stepsTaken < LOCAL_MAX_CATCHUP_TICKS &&
+    localWorld.matchWinner === -1
+  ) {
+    const actA = actionForSlot(0);
+    const actB = actionForSlot(1);
+    stepWorld(localWorld, actA, actB);
+    localTickAccumMs -= LOCAL_STEP_MS;
+    stepsTaken++;
+  }
+  if (localTickAccumMs > LOCAL_STEP_MS * LOCAL_MAX_CATCHUP_TICKS) {
+    localTickAccumMs = LOCAL_STEP_MS * LOCAL_MAX_CATCHUP_TICKS;
+  }
+  if (previewResult) previewResult.ticks = localWorld.tick;
+  return worldToFrame(localWorld);
+}
+
 function markPreviewDirty() {
   previewEditVersion++;
   previewDirty = true;
@@ -802,8 +920,23 @@ function markPreviewDirty() {
 }
 
 async function requestPreview({ newSeed = false } = {}) {
+  // Bump request id so any in-flight server response is ignored.
   const requestId = ++previewRequestId;
   const requestEditVersion = previewEditVersion;
+
+  if (hasHuman()) {
+    try {
+      startLocalWorld({ newSeed });
+    } catch (e) {
+      teardownLocalWorld();
+      previewLoading = false;
+      previewError = e?.message ?? String(e);
+    }
+    updatePreviewHud();
+    return;
+  }
+
+  teardownLocalWorld();
   previewLoading = true;
   previewDirty = false;
   previewError = "";
@@ -847,12 +980,13 @@ function loopTest() {
   if (testRenderer) {
     paintHumanSliderNoise(0);
     paintHumanSliderNoise(1);
-    const frame = currentPreviewFrame();
-    if (frame) {
-      testRenderer.drawFrame(previewStage, frame, previewLabels);
+    let frame;
+    if (localWorld) {
+      frame = stepLocalSim(performance.now());
     } else {
-      testRenderer.drawFrame(previewStage, emptyFrame(), previewLabels);
+      frame = currentPreviewFrame();
     }
+    testRenderer.drawFrame(previewStage, frame ?? emptyFrame(), previewLabels);
     updatePreviewHud(frame);
   }
   testRafId = requestAnimationFrame(loopTest);
@@ -888,6 +1022,24 @@ function updatePreviewBriefing(frame = currentPreviewFrame()) {
   setBuildStat("build-brief-p1", labelForSlot(0));
   setBuildStat("build-brief-p2", labelForSlot(1));
   setBriefWinnerState(-1);
+
+  if (localWorld) {
+    const score = `${localWorld.fighters[0].score}-${localWorld.fighters[1].score}`;
+    const rounds = `${localWorld.fighters[0].rounds}-${localWorld.fighters[1].rounds}`;
+    if (localWorld.matchWinner !== -1) {
+      const winner = localWorld.matchWinner;
+      const name = winner === 0 ? previewLabels.p1 : previewLabels.p2;
+      setBuildStat("build-brief-result", `${name} wins · ${score}`);
+      setBriefWinnerState(winner);
+    } else {
+      setBuildStat("build-brief-result", `live · rounds ${rounds} · score ${score}`);
+    }
+    setBuildStat(
+      "build-brief-meta",
+      `${stageLabel(stageId)} · seed ${previewResult?.seed ?? "—"} · tick ${localWorld.tick}`
+    );
+    return;
+  }
 
   if (previewLoading) {
     setBuildStat("build-brief-result", "simulating on server");
@@ -942,6 +1094,20 @@ function updatePreviewStats(frame = currentPreviewFrame()) {
   setBuildStat("build-stat-stage", stageId);
   setBuildStat("build-stat-seed", previewResult?.seed ?? "—");
   setBuildStat("build-stat-frames", previewFrames.length ? `${previewFrames.length} @ ${previewStride}f` : "—");
+
+  if (localWorld) {
+    const score = `${localWorld.fighters[0].score}-${localWorld.fighters[1].score}`;
+    setBuildStat("build-stat-server", "local");
+    setBuildStat("build-stat-tick", `${localWorld.tick} / live`);
+    if (localWorld.matchWinner !== -1) {
+      const winner = localWorld.matchWinner;
+      const name = winner === 0 ? previewLabels.p1 : previewLabels.p2;
+      setBuildStat("build-stat-result", `${name} wins ${score}`);
+    } else {
+      setBuildStat("build-stat-result", `live ${score}`);
+    }
+    return;
+  }
 
   if (previewLoading) {
     setBuildStat("build-stat-server", "simulating");

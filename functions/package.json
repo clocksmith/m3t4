@@ -7,21 +7,21 @@
     "node": "22"
   },
   "scripts": {
-    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "bundle": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/index.js --external:firebase-admin --external:firebase-admin/* --external:firebase-functions --external:firebase-functions/* --external:@google-cloud/tasks --external:@google-cloud/tasks/* --banner:js=\"import { createRequire as __cr } from 'module'; const require = __cr(import.meta.url);\"",
+    "build": "npm run typecheck && npm run bundle",
     "serve": "npm run build && firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log"
   },
   "dependencies": {
-    "@m3t4/sim": "file:../sim",
-    "@m3t4/match-engine": "file:../match-engine",
-    "firebase-admin": "^13.8.0",
-    "firebase-functions": "^6.0.0",
     "@google-cloud/tasks": "^5.5.0",
-    "@m3t4/plasma-lab": "file:../plasma-lab"
+    "firebase-admin": "^13.8.0",
+    "firebase-functions": "^6.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "esbuild": "^0.28.0",
     "typescript": "^5.4.0"
   },
   "private": true

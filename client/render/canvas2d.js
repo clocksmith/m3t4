@@ -51,11 +51,20 @@ function fighterPalette(side) {
   };
 }
 
+// footY = frame-pixel y where the visible feet touch ground in standing
+// poses (measured from each sheet's idle/run frames). The renderer aligns
+// this to f.y + STATS.bodyH/2 so visible feet sit on the floor instead of
+// overhanging it. handBiasX/Y nudges the shared weapon-anchor table to
+// match each character's actual hand pixels (sama runs slightly narrower,
+// mark wider, etc.). All four sheets are 64×64 with feet at y≈62-63.
 const CHARACTER_SPRITES = [
   ["sama", {
     url: "assets/chars/sama/monastic_infra/sprite.png",
     frameW: 64,
     frameH: 64,
+    footY: 62,
+    handBiasX: 0,
+    handBiasY: 0,
     anims: spriteAnims(),
     weaponAnchors: weaponAnchors(),
   }],
@@ -63,6 +72,9 @@ const CHARACTER_SPRITES = [
     url: "assets/chars/darrius/legal_department_midnight/sprite.png",
     frameW: 64,
     frameH: 64,
+    footY: 62,
+    handBiasX: 0,
+    handBiasY: 0,
     anims: spriteAnims(),
     weaponAnchors: weaponAnchors(),
   }],
@@ -70,6 +82,9 @@ const CHARACTER_SPRITES = [
     url: "assets/chars/demis/chalk_and_static/sprite.png",
     frameW: 64,
     frameH: 64,
+    footY: 63,
+    handBiasX: 1,
+    handBiasY: 0,
     anims: spriteAnims(),
     weaponAnchors: weaponAnchors(),
   }],
@@ -77,6 +92,9 @@ const CHARACTER_SPRITES = [
     url: "assets/chars/mark/wellness_berserker/sprite.png",
     frameW: 64,
     frameH: 64,
+    footY: 63,
+    handBiasX: 2,
+    handBiasY: 0,
     anims: spriteAnims(),
     weaponAnchors: weaponAnchors(),
   }],
@@ -220,21 +238,28 @@ function spriteAnims() {
   };
 }
 
+// Anchor x is offset from f.x (positive = forward of facing); anchor y is
+// offset from f.y (negative = above center). Tuned against the current
+// 64×64 sheets where the visible character spans ~y4-63, hands sit at
+// hip band (frame y≈42, i.e. anchor y≈+10), and the body bbox is x22-41
+// (so a hand reaching forward sits at frame x≈40-44, anchor x≈8-12).
+// Per-anim deltas mirror the original table's intent: arms raised on
+// jump/swing, dropped on KO, lifted overhead on carry.
 function weaponAnchors() {
   const a = (x, y, angleBias = 0) => ({ x, y, angleBias });
   return {
-    idle:      [a(11, -17, -0.03), a(12, -17, -0.02), a(11, -16, -0.03), a(10, -17, -0.04)],
-    run:       [a(13, -15, -0.04), a(11, -16, -0.02), a(9, -17, 0), a(11, -16, -0.02), a(13, -15, -0.04), a(10, -16, -0.02)],
-    jump:      [a(10, -14, -0.1), a(12, -19, -0.16)],
-    fall:      [a(12, -17, 0.06), a(11, -14, 0.1)],
-    wallSlide: [a(9, -14, 0.08), a(9, -15, 0.08)],
-    dive:      [a(15, -13, 0.18), a(17, -11, 0.2)],
-    swing:     [a(8, -18, 0.02), a(12, -19, -0.04), a(14, -21, -0.08), a(15, -22, -0.1), a(13, -18, -0.06), a(10, -16, 0)],
-    hit:       [a(6, -17, 0.2), a(5, -15, 0.24), a(8, -16, 0.12)],
-    ko:        [a(3, -10, 0.35), a(1, -4, 0.55), a(6, 9, 0.8), a(6, 11, 0.8)],
-    carry:     [a(9, -24, -0.45), a(10, -25, -0.45)],
-    taunt:     [a(8, -19, -0.25), a(7, -21, -0.35), a(8, -19, -0.25), a(10, -17, -0.08)],
-    victory:   [a(10, -20, -0.2), a(11, -22, -0.25), a(11, -21, -0.22), a(9, -19, -0.15)],
+    idle:      [a(10, 10, -0.03), a(11, 10, -0.02), a(10, 11, -0.03), a( 9, 10, -0.04)],
+    run:       [a(12, 11, -0.04), a(10, 10, -0.02), a( 8,  9,  0.00), a(10, 10, -0.02), a(12, 11, -0.04), a( 9, 10, -0.02)],
+    jump:      [a(11,  4, -0.10), a(13, -2, -0.16)],
+    fall:      [a(11, 10,  0.06), a(10, 13,  0.10)],
+    wallSlide: [a( 8, 12,  0.08), a( 8, 11,  0.08)],
+    dive:      [a(16,  2,  0.18), a(18,  4,  0.20)],
+    swing:     [a( 9,  6,  0.02), a(13,  2, -0.04), a(16, -2, -0.08), a(18, -4, -0.10), a(15,  2, -0.06), a(11,  6,  0.00)],
+    hit:       [a( 5, 10,  0.20), a( 4, 12,  0.24), a( 7, 11,  0.12)],
+    ko:        [a( 3, 18,  0.35), a( 1, 24,  0.55), a( 6, 28,  0.80), a( 6, 28,  0.80)],
+    carry:     [a( 8, -6, -0.45), a( 9, -7, -0.45)],
+    taunt:     [a( 7,  2, -0.25), a( 6,  0, -0.35), a( 7,  2, -0.25), a( 9,  6, -0.08)],
+    victory:   [a( 9,  4, -0.20), a(10,  2, -0.25), a(10,  3, -0.22), a( 8,  6, -0.15)],
   };
 }
 
@@ -595,9 +620,17 @@ function drawSpriteFighter(ctx, f, side, frame) {
   const sx = frameIdx * state.kit.frameW;
   const sy = anim.row * state.kit.frameH;
 
+  // Align visible feet (frame-y = footY) with the body bbox bottom
+  // (f.y + bodyH/2). Positive shift moves the sprite down; the default
+  // footY = frameH centers the sprite on f.y as before.
+  const renderW = state.kit.frameW;
+  const renderH = state.kit.frameH;
+  const footY = state.kit.footY ?? renderH;
+  const verticalShift = STATS.bodyH / 2 + renderH / 2 - footY;
+
   ctx.save();
   ctx.imageSmoothingEnabled = false;
-  ctx.translate(Math.round(f.x), Math.round(f.y));
+  ctx.translate(Math.round(f.x), Math.round(f.y) + verticalShift);
   // Source sheets face camera-right. Facing left is a horizontal flip.
   // Wall-slide art should face the contacted wall, not whatever the brain was
   // aiming at that tick. Do not flip Y; canvas Y grows downward and a Y flip
@@ -605,8 +638,6 @@ function drawSpriteFighter(ctx, f, side, frame) {
   const renderFacing = animName === "wallSlide" && f.wall ? f.wall : f.facing;
   state.pose = { animName, frameIdx, renderFacing };
   if (renderFacing < 0) ctx.scale(-1, 1);
-  const renderW = state.kit.frameW;
-  const renderH = state.kit.frameH;
   ctx.drawImage(
     img,
     sx, sy, state.kit.frameW, state.kit.frameH,
@@ -738,9 +769,15 @@ function weaponBasePoint(f, side, active) {
       frameIdx: pose?.frameIdx ?? 0,
     };
   }
+  // Match the sprite renderer's footY-driven vertical translation so the
+  // weapon follows the body when the sprite is shifted up/down to align
+  // feet with the floor. handBiasX/Y nudge per character.
+  const kit = state.kit;
+  const footY = kit.footY ?? kit.frameH;
+  const verticalShift = STATS.bodyH / 2 + kit.frameH / 2 - footY;
   return {
-    x: f.x + anchor.x * facing,
-    y: f.y + anchor.y,
+    x: f.x + (anchor.x + (kit.handBiasX ?? 0)) * facing,
+    y: f.y + verticalShift + anchor.y + (kit.handBiasY ?? 0),
     facing,
     angleBias: anchor.angleBias ?? 0,
     animName: pose.animName,

@@ -17,7 +17,7 @@
 // beyond a public STUN. Symmetric-NAT peers may fail to connect; a TURN
 // relay is the planned fix.
 
-import { firebase, httpsCallable } from "./firebase-client.js";
+import { firebase, httpsCallable, signInAnonymously } from "./firebase-client.js";
 
 const ICE_GATHER_TIMEOUT_MS = 5_000;
 const PAIR_TIMEOUT_MS = 30_000;
@@ -41,8 +41,23 @@ function defaultIceServers() {
 async function ensureSignalAuth() {
   const fb = firebase();
   if (!fb) throw new Error("Firebase not configured");
+  // Already authenticated (Google / handle / anon). Use that session.
   if (fb.auth.currentUser) return fb;
-  throw new Error("sign in first for P2P");
+  // No session yet: silently sign the visitor in anonymously so the
+  // signaling callable has a uid. The visitor sees no sign-in flow.
+  // Requires Anonymous Auth to be enabled on the Firebase project; if
+  // it is disabled the SDK throws auth/operation-not-allowed and we
+  // surface a clear hint instead of the raw Firebase code.
+  try {
+    await signInAnonymously(fb.auth);
+  } catch (err) {
+    const code = String(err?.code ?? "");
+    if (code === "auth/operation-not-allowed" || code === "auth/admin-restricted-operation") {
+      throw new Error("P2P unavailable: enable Anonymous Auth in Firebase, or sign in first");
+    }
+    throw new Error(`P2P sign-in failed: ${err?.message ?? code}`);
+  }
+  return fb;
 }
 
 async function callSignal(fb, op, payload) {

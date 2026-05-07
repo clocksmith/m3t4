@@ -19,7 +19,7 @@ window.__M3T4_FEATURES__ = FEATURES;
 
 const appEl = document.getElementById("app");
 const navLinks = Array.from(document.querySelectorAll("#topnav nav a"));
-const whoamiEl = document.getElementById("whoami");
+const accountEl = document.getElementById("account");
 const statusEl = document.getElementById("status");
 
 const router = createPathRouter({
@@ -44,22 +44,66 @@ function migrateLegacyHash() {
   window.history.replaceState(null, "", target + window.location.search);
 }
 
-function renderWhoami() {
+function accountInitial(u) {
+  const source = (u?.handle || u?.uid || "?").trim();
+  const ch = source.replace(/^[@_-]+/, "").charAt(0);
+  return ch ? ch.toUpperCase() : "?";
+}
+
+// Top-right profile control. Anonymous → small "sign in" pill that
+// routes to /roster (the existing identity surface). Signed-in →
+// circular avatar showing the handle initial; clicking opens a popover
+// with the current handle, a roster shortcut, and sign-out.
+function renderAccount() {
   const u = auth.user();
   if (u) {
     window.__M3T4_COMPUTE_ACCOUNT_UID__ = u.uid ?? null;
     window.__M3T4_COMPUTE_ACCOUNT_HANDLE__ = u.handle ?? null;
-    whoamiEl.innerHTML = `<span>${u.handle ? "@" + u.handle : u.uid}</span>  <a href="#" id="signout">sign out</a>`;
-    document.getElementById("signout")?.addEventListener("click", (e) => {
-      e.preventDefault();
-      auth.signOut();
-      renderWhoami();
-    });
+    accountEl.dataset.state = "user";
+    accountEl.innerHTML = `
+      <button type="button" class="account-trigger" id="account-trigger" aria-haspopup="true" aria-expanded="false" title="Open account menu">
+        <span class="account-initial" aria-hidden="true">${accountInitial(u)}</span>
+        <span class="visually-hidden">Account menu</span>
+      </button>
+      <div class="account-menu" id="account-menu" role="menu" hidden>
+        <div class="account-menu-handle">${u.handle ? "@" + u.handle : u.uid}</div>
+        <a class="account-menu-item" href="/roster" role="menuitem">Roster</a>
+        <button type="button" class="account-menu-item" id="account-signout" role="menuitem">Sign out</button>
+      </div>`;
+    bindAccountMenu();
   } else {
     window.__M3T4_COMPUTE_ACCOUNT_UID__ = null;
     window.__M3T4_COMPUTE_ACCOUNT_HANDLE__ = null;
-    whoamiEl.innerHTML = `<a href="/roster">sign in</a>`;
+    accountEl.dataset.state = "anon";
+    accountEl.innerHTML = `<a class="account-signin" href="/roster" title="Sign in to claim a handle and stable">sign in</a>`;
   }
+}
+
+function bindAccountMenu() {
+  const trigger = document.getElementById("account-trigger");
+  const menu = document.getElementById("account-menu");
+  const signout = document.getElementById("account-signout");
+  if (!trigger || !menu) return;
+  const close = () => {
+    menu.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+  };
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const open = menu.hidden;
+    menu.hidden = !open;
+    trigger.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  document.addEventListener("click", (e) => {
+    if (!accountEl.contains(e.target)) close();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") close();
+  });
+  signout?.addEventListener("click", () => {
+    auth.signOut();
+    renderAccount();
+  });
 }
 
 async function loadFeatures() {
@@ -120,8 +164,8 @@ function installLinkInterceptor() {
   });
 }
 
-auth.onChange(renderWhoami);
-renderWhoami();
+auth.onChange(renderAccount);
+renderAccount();
 router.syncNavVisibility();
 installLinkInterceptor();
 

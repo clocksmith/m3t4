@@ -222,14 +222,98 @@ a:hover {
   border-bottom-color: var(--ui-red);
 }
 
-.whoami {
+/* --- account control (top-right profile dot or sign-in pill) --- */
+.account {
   margin-left: auto;
-  color: var(--ui-text-subtle);
+  position: relative;
   font-size: 12px;
 }
 
-.whoami a {
+.account .account-signin {
   color: var(--ui-blue);
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  background: var(--ui-bg-soft);
+}
+
+.account-trigger {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--ui-border);
+  background: linear-gradient(160deg, rgba(239, 68, 68, 0.18), rgba(56, 189, 248, 0.12));
+  color: var(--ui-text);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.account-trigger:hover {
+  border-color: var(--ui-red);
+}
+
+.account-initial {
+  line-height: 1;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.account-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 180px;
+  padding: 6px 0;
+  background: var(--ui-bg-soft);
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+}
+
+.account-menu-handle {
+  padding: 6px 14px 8px;
+  color: var(--ui-text);
+  font-weight: 600;
+  border-bottom: 1px solid var(--ui-border);
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+
+.account-menu-item {
+  display: block;
+  padding: 8px 14px;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: var(--ui-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.account-menu-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ui-red);
 }
 
 /* --- main content area --- */
@@ -280,7 +364,11 @@ a:hover {
     right: 0;
     bottom: 0;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    /* auto-fit so the bar doesn't silently squash if a 6th tab appears.
+     * Items can shrink to 64px floor; beyond that, items marked
+     * data-nav="overflow" should be hidden (rule below) and a "more"
+     * trigger surfaced. With 5 short labels they fit naturally. */
+    grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
     gap: 0;
     min-height: calc(var(--mobile-nav-h) + env(safe-area-inset-bottom));
     padding: 0 0 env(safe-area-inset-bottom);
@@ -329,15 +417,20 @@ a:hover {
     display: none;
   }
 
-  .whoami {
+  .account {
     margin-left: auto;
     min-width: 0;
     max-width: 46vw;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     text-align: right;
     font-size: 11px;
+  }
+
+  .account-menu {
+    /* Anchor the popover to the right edge of the viewport on phones so
+     * narrow trigger placement doesn't push the menu off-screen. */
+    right: 8px;
+    left: auto;
+    min-width: 220px;
   }
 
   #bottom {

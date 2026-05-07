@@ -11,6 +11,7 @@ import {
 import { status as getStatus } from "./lib/api.js";
 import { auth } from "./lib/auth.js";
 import { initAnalytics, trackPageView } from "./lib/analytics.js";
+import { escapeHtml } from "./ui/html.js";
 
 initAnalytics();
 
@@ -39,6 +40,11 @@ const router = createPathRouter({
 function migrateLegacyHash() {
   const hash = window.location.hash.replace(/^#/, "").split("?")[0];
   if (!hash) return;
+  const isRouteHash =
+    Object.hasOwn(LEGACY_HASH, hash) ||
+    Object.hasOwn(MODES, hash) ||
+    Object.hasOwn(OPTIONAL_MODE_LOADERS, hash);
+  if (!isRouteHash) return;
   const canonical = LEGACY_HASH[hash] ?? hash;
   const target = routeToPath(canonical);
   window.history.replaceState(null, "", target + window.location.search);
@@ -50,6 +56,12 @@ function accountInitial(u) {
   return ch ? ch.toUpperCase() : "?";
 }
 
+// Tracks listeners attached for the current account-menu render so a
+// subsequent renderAccount() (e.g. on auth change) tears them down
+// before binding a fresh set. Without this, document-level listeners
+// stack up on every re-render.
+let accountListeners = null;
+
 // Top-right profile control. Anonymous → small "sign in" pill that
 // routes to /roster (the existing identity surface). Signed-in →
 // circular avatar showing the handle initial; clicking opens a popover
@@ -57,16 +69,17 @@ function accountInitial(u) {
 function renderAccount() {
   const u = auth.user();
   if (u) {
+    const label = u.handle ? `@${u.handle}` : u.uid;
     window.__M3T4_COMPUTE_ACCOUNT_UID__ = u.uid ?? null;
     window.__M3T4_COMPUTE_ACCOUNT_HANDLE__ = u.handle ?? null;
     accountEl.dataset.state = "user";
     accountEl.innerHTML = `
       <button type="button" class="account-trigger" id="account-trigger" aria-haspopup="true" aria-expanded="false" title="Open account menu">
-        <span class="account-initial" aria-hidden="true">${accountInitial(u)}</span>
+        <span class="account-initial" aria-hidden="true">${escapeHtml(accountInitial(u))}</span>
         <span class="visually-hidden">Account menu</span>
       </button>
       <div class="account-menu" id="account-menu" role="menu" hidden>
-        <div class="account-menu-handle">${u.handle ? "@" + u.handle : u.uid}</div>
+        <div class="account-menu-handle">${escapeHtml(label)}</div>
         <a class="account-menu-item" href="/roster" role="menuitem">Roster</a>
         <button type="button" class="account-menu-item" id="account-signout" role="menuitem">Sign out</button>
       </div>`;
@@ -76,10 +89,20 @@ function renderAccount() {
     window.__M3T4_COMPUTE_ACCOUNT_HANDLE__ = null;
     accountEl.dataset.state = "anon";
     accountEl.innerHTML = `<a class="account-signin" href="/roster" title="Sign in to claim a handle and stable">sign in</a>`;
+    if (accountListeners) {
+      try { accountListeners.abort(); } catch {}
+      accountListeners = null;
+    }
   }
 }
 
 function bindAccountMenu() {
+  if (accountListeners) {
+    try { accountListeners.abort(); } catch {}
+  }
+  accountListeners = new AbortController();
+  const { signal } = accountListeners;
+
   const trigger = document.getElementById("account-trigger");
   const menu = document.getElementById("account-menu");
   const signout = document.getElementById("account-signout");
@@ -93,17 +116,21 @@ function bindAccountMenu() {
     const open = menu.hidden;
     menu.hidden = !open;
     trigger.setAttribute("aria-expanded", open ? "true" : "false");
-  });
+  }, { signal });
   document.addEventListener("click", (e) => {
     if (!accountEl.contains(e.target)) close();
-  });
+  }, { signal });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") close();
-  });
+  }, { signal });
+  menu.addEventListener("click", (e) => {
+    const item = e.target instanceof Element ? e.target.closest(".account-menu-item") : null;
+    if (item) close();
+  }, { signal });
   signout?.addEventListener("click", () => {
     auth.signOut();
     renderAccount();
-  });
+  }, { signal });
 }
 
 async function loadFeatures() {

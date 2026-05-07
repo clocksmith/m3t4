@@ -55,8 +55,8 @@ function defaultParams(overrides: Partial<Params> = {}): Params {
 
 // --- Tests ---
 
-test("BEHAVIOR_VERSION is 23", () => {
-  assert.equal(BEHAVIOR_VERSION, 23);
+test("BEHAVIOR_VERSION is 24", () => {
+  assert.equal(BEHAVIOR_VERSION, 24);
 });
 
 test("createBrainState initializes neutral with empty buffers", () => {
@@ -363,6 +363,36 @@ test("platform intent prefers an equally reachable step that progresses toward t
   const action = runParamBrain(obs, defaultParams({ lift: 0, shipRate: 1, discipline: 1 }), state);
   assert.equal(action.right, true, "carrier should pick the forward platform, not the first equal-cost platform");
   assert.notEqual(action.left, true, "carrier should not drift back toward the lower-progress platform");
+});
+
+test("objective navigation wall-jumps at vertical blockers instead of walking into them", () => {
+  const obs = baseObs({
+    tick: 200,
+    self: { ...baseObs().self, hasToken: true, x: 440, y: 612, onGround: true },
+    opp: { ...baseObs().opp, x: 1040, y: 612 },
+    token: { exists: true, x: 440, y: 560, carrier: 0, dwellT: 0 },
+    goal: { exists: true, x: 760, y: 584, label: "RUNWAY", timer: 8 },
+    platforms: [
+      { x: 56, y: 640, w: 1168, h: 80, solid: true },
+      { x: 456, y: 452, w: 34, h: 188, solid: true },
+      { x: 560, y: 414, w: 160, h: 14, solid: false },
+    ],
+    dx: 600, absDx: 600, dy: 0,
+  });
+  const state = createBrainState(0);
+  state.mode = "objective";
+  state.substate = "deliver";
+  state.modeEnterTick = 190;
+  state.deliveryPlan = {
+    tactic: "direct",
+    startedAt: 190,
+    expiresAt: 230,
+    score: 1,
+  };
+
+  const action = runParamBrain(obs, defaultParams({ lift: 0, networking: 0.5 }), state);
+  assert.equal(action.right, true, "carrier should drive into the wall-jump face");
+  assert.equal(action.up, true, "carrier should jump when close to the blocker");
 });
 
 test("parry is silent at zero and counter-swings only in foil windows", () => {

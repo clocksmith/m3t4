@@ -5,6 +5,8 @@ export const STAGE_DATACENTER = {
     name: "Datacenter",
     platforms: [
         { x: 56, y: 640, w: 1168, h: 80, solid: true },
+        { x: 456, y: 452, w: 34, h: 188, solid: true }, // server stack
+        { x: 790, y: 452, w: 34, h: 188, solid: true }, // server stack
         { x: 110, y: 524, w: 200, h: 14, solid: false },
         { x: 970, y: 524, w: 200, h: 14, solid: false },
         { x: 560, y: 414, w: 160, h: 14, solid: false },
@@ -25,6 +27,8 @@ export const STAGE_BOARDROOM = {
     name: "Boardroom",
     platforms: [
         { x: 56, y: 640, w: 1168, h: 80, solid: true },
+        { x: 346, y: 486, w: 34, h: 154, solid: true }, // table support
+        { x: 900, y: 486, w: 34, h: 154, solid: true }, // table support
         { x: 380, y: 480, w: 520, h: 16, solid: false }, // long central table
         { x: 150, y: 340, w: 220, h: 14, solid: false },
         { x: 910, y: 340, w: 220, h: 14, solid: false },
@@ -43,6 +47,8 @@ export const STAGE_DEMODAY = {
     name: "Demo Day",
     platforms: [
         { x: 56, y: 640, w: 1168, h: 80, solid: true },
+        { x: 312, y: 500, w: 34, h: 140, solid: true }, // speaker tower
+        { x: 934, y: 500, w: 34, h: 140, solid: true }, // speaker tower
         { x: 400, y: 540, w: 480, h: 14, solid: false }, // central stage
         { x: 100, y: 420, w: 180, h: 14, solid: false },
         { x: 1000, y: 420, w: 180, h: 14, solid: false },

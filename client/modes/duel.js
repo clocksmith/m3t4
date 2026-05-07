@@ -968,7 +968,12 @@ async function beginP2P(role, sessionId) {
     });
     state.p2p = handle;
   } catch (e) {
-    setP2PStatus(`P2P error: ${e?.message ?? e}`);
+    const message = String(e?.message ?? e);
+    if (/sign in (first|required)/i.test(message)) {
+      setP2PStatus(message);
+    } else {
+      setP2PStatus(`P2P error: ${message}`);
+    }
   }
 }
 

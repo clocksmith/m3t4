@@ -297,8 +297,20 @@ function isTypingTarget(el) {
   const t = el.tagName;
   return t === "INPUT" || t === "TEXTAREA" || t === "SELECT" || el.isContentEditable;
 }
+function startPrompt() {
+  if (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches) {
+    return "tap to fight";
+  }
+  return "press space to fight";
+}
 function onKeyDown(e) {
   if (isTypingTarget(e.target)) return;
+  if (e.code === "Space") {
+    e.preventDefault();
+    requestPreview({ newSeed: true });
+    refocusCanvas();
+    return;
+  }
   keyset.add(e.code);
   if (GAME_KEYS.has(e.code)) e.preventDefault();
 }
@@ -376,6 +388,13 @@ export function mount(root, { setStatus }) {
   const rendererId = ++rendererMountId;
   testCanvas = root.querySelector("#test-canvas");
   void attachTestRenderer(rendererId, testCanvas);
+
+  // Tap the canvas to (re)run a fresh test fight; mirrors the spacebar
+  // shortcut for touch users.
+  testCanvas.addEventListener("click", () => {
+    requestPreview({ newSeed: true });
+    refocusCanvas();
+  });
 
   wireSlot(root, 0);
   wireSlot(root, 1);
@@ -1003,8 +1022,8 @@ function emptyFrame() {
   return {
     tick: 0,
     roundStartTick: 0,
-    p0: { x: 300, y: 590, vx: 0, vy: 0, facing: 1, onGround: true, wall: 0, stun: 0, swipeT: 0, diveT: 0, lastClashTick: -9999, dead: false },
-    p1: { x: 980, y: 590, vx: 0, vy: 0, facing: -1, onGround: true, wall: 0, stun: 0, swipeT: 0, diveT: 0, lastClashTick: -9999, dead: false },
+    p0: { x: 300, y: 612, vx: 0, vy: 0, facing: 1, onGround: true, wall: 0, stun: 0, swipeT: 0, diveT: 0, lastClashTick: -9999, dead: false },
+    p1: { x: 980, y: 612, vx: 0, vy: 0, facing: -1, onGround: true, wall: 0, stun: 0, swipeT: 0, diveT: 0, lastClashTick: -9999, dead: false },
     token: { exists: false, x: 0, y: 0, carrier: -1, dwellT: 0 },
     goal: { exists: false, x: 0, y: 0, label: "", timer: 0 },
     scoreboard: [0, 0],
@@ -1052,7 +1071,7 @@ function updatePreviewBriefing(frame = currentPreviewFrame()) {
     return;
   }
   if (!frame) {
-    setBuildStat("build-brief-result", "press test fight");
+    setBuildStat("build-brief-result", startPrompt());
     setBuildStat("build-brief-meta", `${stageLabel(stageId)} · seed —`);
     return;
   }
@@ -1124,7 +1143,7 @@ function updatePreviewStats(frame = currentPreviewFrame()) {
   if (!frame) {
     setBuildStat("build-stat-server", "ready");
     setBuildStat("build-stat-tick", "—");
-    setBuildStat("build-stat-result", "press test fight");
+    setBuildStat("build-stat-result", startPrompt());
     return;
   }
 

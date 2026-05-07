@@ -569,7 +569,7 @@ function p2pPanelHtml() {
   }
   return `
     <div class="duel-p2p-warning tight">
-      signaling requires sign-in. lockstep waits for peer input. STUN only; some NATs will not pair.
+      lockstep waits for peer input. STUN only; some NATs will not pair.
     </div>
     <div class="duel-p2p-row">
       ${buttonHtml({ id: "duel-p2p-host", text: "host", attrs: { title: "Create a session and share the invite link" } })}

@@ -162,6 +162,7 @@ async function tryEnterFullscreen(target) {
 function localOwnsSide(side) {
   if (!state) return false;
   if (state.spectating || state.p2p?.spectator) return false;
+  if (state.world && state.world.matchWinner === -1) return false;
   if (state.subMode === "p2p") return side === state.hostSide;
   return true;
 }
@@ -169,6 +170,7 @@ function localOwnsSide(side) {
 function localOwnsStage() {
   if (!state) return false;
   if (state.spectating || state.p2p?.spectator) return false;
+  if (state.world && state.world.matchWinner === -1) return false;
   if (state.subMode === "p2p") return state.hostSide === 0;
   return true;
 }
@@ -203,6 +205,10 @@ function freshState() {
     spectating: false,
     spectatorFrame: null,
     lastSpectatorFrameTick: -1,
+    peerLatencyMs: null,
+    peerLatencyAt: 0,
+    streamAgeMs: null,
+    streamAgeAt: 0,
     statusMsg: "",
     cosmetics: [defaultCosmetics(0), defaultCosmetics(1)],
   };
@@ -294,6 +300,14 @@ function clearRemoteInputs() {
   state.waitingRemoteTick = null;
 }
 
+function syncLocalP2PSetupToPeer({ includeStage = false } = {}) {
+  if (!state || state.subMode !== "p2p" || !state.p2p?.linked || state.p2p?.spectator) return;
+  state.p2p.broadcastCosmetic?.(state.hostSide, state.cosmetics[state.hostSide]);
+  if (includeStage && state.hostSide === 0) {
+    state.p2p.broadcastStage?.(state.stageId);
+  }
+}
+
 function pruneRemoteInputs(currentTick) {
   if (!state || state.remoteInputs.size <= REMOTE_INPUT_BUFFER_LIMIT) return;
   for (const tick of state.remoteInputs.keys()) {
@@ -357,6 +371,7 @@ function startMatch() {
     state.p2p.postSpectatorFrame?.(worldToFrame(state.world));
   }
   syncPlayClass();
+  renderCharacterSelect();
   refreshHud();
 }
 
@@ -484,7 +499,26 @@ function refreshHud(frame = state.world ? worldToFrame(state.world) : emptyFrame
   setText("duel-stat-score", score);
   setText("duel-stat-rounds", rounds);
   setText("duel-stat-seed", state.seed ? String(state.seed) : "—");
+  setText("duel-stat-link", linkStatText());
   setText("duel-status", duelStatusText());
+}
+
+function formatMs(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  return `${Math.round(ms)}ms`;
+}
+
+function linkStatText() {
+  if (!state || state.subMode !== "p2p") return "local";
+  const now = Date.now();
+  if (state.spectating || state.p2p?.spectator) {
+    if (!Number.isFinite(state.streamAgeMs) || now - state.streamAgeAt > 4_000) return "stream —";
+    return `stream ${formatMs(state.streamAgeMs)}`;
+  }
+  if (!state.p2p) return "offline";
+  if (!state.p2p.linked) return "pairing";
+  if (!Number.isFinite(state.peerLatencyMs) || now - state.peerLatencyAt > 4_000) return "rtt —";
+  return `rtt ${formatMs(state.peerLatencyMs)}`;
 }
 
 function startPrompt() {
@@ -718,6 +752,7 @@ function statsListHtml() {
       <span class="stat"><span class="stat-label">score</span><span class="stat-value" id="duel-stat-score">0-0</span></span>
       <span class="stat"><span class="stat-label">rounds</span><span class="stat-value" id="duel-stat-rounds">0-0</span></span>
       <span class="stat"><span class="stat-label">seed</span><span class="stat-value" id="duel-stat-seed">—</span></span>
+      <span class="stat"><span class="stat-label">link</span><span class="stat-value" id="duel-stat-link">local</span></span>
       <span class="stat duel-status"><span class="stat-label">status</span><span class="stat-value" id="duel-status">${escapeHtml(startPrompt())}</span></span>
     </div>`;
 }
@@ -864,6 +899,7 @@ function bindControls() {
     state.statusMsg = "";
     clearRemoteInputs();
     syncPlayClass();
+    renderCharacterSelect();
     refreshHud();
     refocusCanvas();
     if (state.subMode === "p2p" && state.p2p?.linked && typeof state.p2p.broadcastStage === "function") {
@@ -879,6 +915,7 @@ function bindControls() {
     state.statusMsg = "";
     clearRemoteInputs();
     syncPlayClass();
+    renderCharacterSelect();
     refreshHud();
     refocusCanvas();
   });
@@ -893,6 +930,7 @@ function bindControls() {
     state.statusMsg = "";
     clearRemoteInputs();
     syncPlayClass();
+    renderCharacterSelect();
     refreshHud();
     refocusCanvas();
   });
@@ -904,6 +942,7 @@ function bindControls() {
     clearRemoteInputs();
     clearTouchInput();
     syncPlayClass();
+    renderCharacterSelect();
     refreshHud();
   });
 
@@ -1087,6 +1126,10 @@ async function beginP2P(role, sessionId) {
   state.spectating = false;
   state.spectatorFrame = null;
   state.lastSpectatorFrameTick = -1;
+  state.peerLatencyMs = null;
+  state.peerLatencyAt = 0;
+  state.streamAgeMs = null;
+  state.streamAgeAt = 0;
   state.world = null;
   state.brainP2 = null;
   clearRemoteInputs();
@@ -1111,6 +1154,7 @@ async function beginP2P(role, sessionId) {
           return;
         }
         setP2PStatus(role === "host" ? "P2 joined" : "joined host");
+        state.statusMsg = role === "host" ? "P2 joined · press fight" : "joined host · waiting for fight";
         // Defensive UI refresh: keysHtml + character panel are only
         // re-rendered via explicit calls (the render loop reads labels
         // every frame, but the surrounding control DOM doesn't). After
@@ -1118,11 +1162,8 @@ async function beginP2P(role, sessionId) {
         // seat copy.
         refreshKeysHint();
         renderCharacterSelect();
-        // Start a match when both sides are linked. Host generates the
-        // seed + stage in startMatch and broadcasts via handle.broadcastMatch.
-        if (role === "host") {
-          startMatch();
-        }
+        syncLocalP2PSetupToPeer({ includeStage: role === "host" });
+        refreshHud();
       },
       onMatch: ({ seed, stageId, cosmetics }) => {
         if (role === "host") return;
@@ -1152,10 +1193,21 @@ async function beginP2P(role, sessionId) {
         state.accumMs = 0;
         state.statusMsg = "fight";
         syncPlayClass();
+        renderCharacterSelect();
         refreshHud();
       },
       onRemoteInput: (tick, input) => {
         bufferRemoteInput(tick, input);
+      },
+      onLatency: (ms) => {
+        state.peerLatencyMs = ms;
+        state.peerLatencyAt = Date.now();
+        refreshHud();
+      },
+      onStreamAge: (ms) => {
+        state.streamAgeMs = ms;
+        state.streamAgeAt = Date.now();
+        refreshHud(state.spectatorFrame ?? emptyFrame());
       },
       onCosmetic: (side, cosmetic) => {
         // Remote owner of `side` updated their character/weapon. Apply
@@ -1167,6 +1219,7 @@ async function beginP2P(role, sessionId) {
         if (localOwnsSide(side)) return;
         state.cosmetics[side] = normalizeCosmetics(cosmetic, side);
         renderCharacterSelect();
+        refreshHud();
       },
       onStage: (stageId) => {
         // Host changed the stage; non-host clients (joiner + late
@@ -1174,6 +1227,7 @@ async function beginP2P(role, sessionId) {
         if (state.subMode !== "p2p") return;
         if (localOwnsStage()) return;
         if (!STAGE_IDS.includes(stageId)) return;
+        if (state.world && state.world.matchWinner === -1) return;
         state.stageId = stageId;
         const stageSelEl = document.getElementById("duel-stage");
         if (stageSelEl) stageSelEl.value = stageId;
@@ -1199,9 +1253,13 @@ async function beginP2P(role, sessionId) {
       state.hostSide = 0;
       state.statusMsg = "spectating";
       setP2PStatus("spectating");
+    } else if (handle.linked) {
+      syncLocalP2PSetupToPeer({ includeStage: role === "host" });
     }
     refreshKeysHint();
+    renderCharacterSelect();
     syncPlayClass();
+    refreshHud(state.spectatorFrame ?? undefined);
   } catch (e) {
     const message = String(e?.message ?? e);
     if (/sign in (first|required)/i.test(message)) {
@@ -1298,6 +1356,7 @@ function switchSubMode(value) {
   clearRemoteInputs();
   clearTouchInput();
   syncPlayClass();
+  renderCharacterSelect();
   // Tear down any running p2p session if leaving p2p mode.
   if (value !== "p2p" && state.p2p?.stop) {
     try { state.p2p.stop(); } catch {}

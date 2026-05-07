@@ -17,7 +17,7 @@ const SESSION_TTL_MS = 5 * 60_000;
 const MAX_CANDIDATES_PER_POST = 8;
 
 export const webrtcSignal = onCall(
-  { region: REGION, memory: "256MiB", timeoutSeconds: 15 },
+  { region: REGION, memory: "256MiB", timeoutSeconds: 15, invoker: "public" },
   async (req) => {
     const auth = req.auth;
     if (!auth?.uid) throw new HttpsError("unauthenticated", "sign in required");

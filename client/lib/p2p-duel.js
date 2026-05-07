@@ -52,8 +52,21 @@ async function ensureSignalAuth() {
 
 async function callSignal(fb, op, payload) {
   const fn = httpsCallable(fb.functions, "webrtcSignal");
-  const res = await fn({ op, ...payload });
-  return res.data;
+  try {
+    const res = await fn({ op, ...payload });
+    return res.data;
+  } catch (err) {
+    const code = String(err?.code ?? "internal").replace(/^functions\//, "");
+    const message = String(err?.message ?? "signaling failed");
+    if (code === "internal" && message === "internal") {
+      const e = new Error("signaling service unavailable");
+      e.code = code;
+      throw e;
+    }
+    const e = new Error(message);
+    e.code = code;
+    throw e;
+  }
 }
 
 function waitIceGathering(pc) {

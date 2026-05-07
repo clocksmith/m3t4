@@ -68,7 +68,7 @@ async function callSignal(fb, op, payload) {
   } catch (err) {
     const code = String(err?.code ?? "internal").replace(/^functions\//, "");
     const message = String(err?.message ?? "signaling failed");
-    if (code === "internal" && message === "internal") {
+    if (code === "internal" && /^internal$/i.test(message)) {
       const e = new Error("signaling service unavailable");
       e.code = code;
       throw e;

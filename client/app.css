@@ -4,6 +4,10 @@
   padding: 0;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 /* Visual language single source of truth.
    UI chrome uses this token block. Game art assets use theming/visual-theme.v1.json.
    JS templates should use classes or CSS vars from here, not hardcoded colors. */

@@ -965,6 +965,12 @@ async function beginP2P(role, sessionId) {
     setP2PStatus("P2P unavailable in this build");
     return;
   }
+  // Force the sub-mode to p2p so labels, character panel, control
+  // hints, and the actionFor branch all switch off vs-AI / hot-seat
+  // copy. Without this, an in-flight vs-AI render state can persist
+  // through a paired channel because every UI gating selector reads
+  // state.subMode, not state.p2p.
+  if (state.subMode !== "p2p") switchSubMode("p2p");
   if (state.p2p?.stop) {
     try { state.p2p.stop(); } catch {}
   }
@@ -972,6 +978,8 @@ async function beginP2P(role, sessionId) {
   state.spectating = false;
   state.spectatorFrame = null;
   state.lastSpectatorFrameTick = -1;
+  state.world = null;
+  state.brainP2 = null;
   clearRemoteInputs();
   state.hostSide = role === "host" ? 0 : 1;
   clearP2PShare();
@@ -994,6 +1002,13 @@ async function beginP2P(role, sessionId) {
           return;
         }
         setP2PStatus(role === "host" ? "P2 joined" : "joined host");
+        // Defensive UI refresh: keysHtml + character panel are only
+        // re-rendered via explicit calls (the render loop reads labels
+        // every frame, but the surrounding control DOM doesn't). After
+        // pairing we want both sides to visibly drop any vs-AI / hot-
+        // seat copy.
+        refreshKeysHint();
+        renderCharacterSelect();
         // Start a match when both sides are linked. Host generates the
         // seed + stage in startMatch and broadcasts via handle.broadcastMatch.
         if (role === "host") {

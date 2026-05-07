@@ -4192,8 +4192,16 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* --- duel page --- */
+.duel-workbench {
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+  align-items: start;
+}
+
 .duel-page .canvas-panel {
   position: relative;
+  min-width: 0;
 }
 
 .duel-controls {
@@ -4650,6 +4658,41 @@ input[type="range"]::-moz-range-thumb {
   .duel-stats .duel-status {
     margin-left: 0;
     width: 100%;
+  }
+}
+
+@media (min-width: 980px) {
+  .duel-workbench {
+    grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+  }
+
+  .duel-context-card {
+    position: sticky;
+    top: 68px;
+    max-height: calc(100svh - 110px);
+    overflow: auto;
+    padding: 12px;
+  }
+
+  .duel-workbench .duel-character-select {
+    grid-template-columns: 1fr;
+  }
+
+  .duel-workbench .duel-fighter-slot {
+    padding: 8px;
+  }
+
+  .duel-workbench .duel-body-portrait {
+    width: 34px;
+  }
+
+  .duel-workbench .duel-weapon-option {
+    min-height: 44px;
+  }
+
+  .duel-workbench .duel-p2p-row input[type="text"] {
+    flex: 1 1 180px;
+    min-width: 0;
   }
 }
 

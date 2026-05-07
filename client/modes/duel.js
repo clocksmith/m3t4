@@ -601,7 +601,7 @@ function p2pPanelHtml() {
   }
   return `
     <div class="duel-p2p-warning tight">
-      first joiner plays P2. later joiners spectate. STUN only; some NATs will not pair.
+      same link: first visitor plays P2, later visitors spectate. STUN only.
     </div>
     <div class="duel-p2p-row">
       ${buttonHtml({ id: "duel-p2p-host", text: "host", attrs: { title: "Create a session and share the invite link" } })}
@@ -689,16 +689,18 @@ export function mount(root, ctx = {}) {
         title: "Duel",
         subtitle: "play a match yourself · sandbox only · not ranked",
       })}
-      ${contextCardHtml({
-        className: "duel-context-card",
-        body: controlsCardHtml(),
-        autoHeight: true,
-      })}
-      <section class="panel canvas-panel">
-        <canvas id="duel-canvas" class="u-canvas-fill" width="${W}" height="${H}" tabindex="0"></canvas>
-        ${statsListHtml()}
-        ${touchControlsHtml()}
-      </section>
+      <div class="duel-workbench">
+        ${contextCardHtml({
+          className: "duel-context-card",
+          body: controlsCardHtml(),
+          autoHeight: true,
+        })}
+        <section class="panel canvas-panel">
+          <canvas id="duel-canvas" class="u-canvas-fill" width="${W}" height="${H}" tabindex="0"></canvas>
+          ${statsListHtml()}
+          ${touchControlsHtml()}
+        </section>
+      </div>
     </div>`;
 
   state.page = root.querySelector(".duel-page");
@@ -1090,11 +1092,18 @@ function handleP2PStatus(text) {
   const match = /^code:\s*(.+)$/i.exec(String(text || ""));
   if (match) {
     const sessionId = match[1].trim();
+    updateBrowserInviteUrl(sessionId);
     renderP2PShare(sessionId);
     setP2PStatus("magic link ready");
     return;
   }
   setP2PStatus(text);
+}
+
+function updateBrowserInviteUrl(sessionId) {
+  if (!sessionId || !window.history?.replaceState) return;
+  const url = duelShareUrl(sessionId);
+  window.history.replaceState(window.history.state, "", url);
 }
 
 function renderP2PShare(sessionId) {

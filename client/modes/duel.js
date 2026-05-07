@@ -578,7 +578,7 @@ function p2pPanelHtml() {
       ${buttonHtml({ id: "duel-p2p-join", text: "join", attrs: { title: "Join an existing session" } })}
     </div>
     <div class="duel-p2p-share" id="duel-p2p-share" hidden></div>
-    <div class="duel-p2p-status tight" id="duel-p2p-status">offline</div>`;
+    <div class="duel-p2p-status tight" id="duel-p2p-status">ready: host or paste invite link</div>`;
 }
 
 function controlCardHtml({ role, owner, keyboard, touch = false, remote = false }) {

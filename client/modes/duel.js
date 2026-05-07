@@ -352,7 +352,7 @@ function step(nowMs) {
       const remoteAct = state.remoteInputs.get(tick);
       if (!remoteAct) {
         state.waitingRemoteTick = tick;
-        state.statusMsg = `waiting for peer input @${tick}`;
+        state.statusMsg = `waiting for ${state.hostSide === 0 ? "P2" : "host"} input @${tick}`;
         break;
       }
       state.remoteInputs.delete(tick);
@@ -416,8 +416,8 @@ function labels() {
   if (state.subMode === "hot-seat") return { p1: "P1", p2: "P2", cosmetics };
   if (state.spectating || state.p2p?.spectator) return { p1: "host", p2: "player", cosmetics };
   return state.hostSide === 0
-    ? { p1: "you", p2: "remote", cosmetics }
-    : { p1: "remote", p2: "you", cosmetics };
+    ? { p1: "you", p2: "P2", cosmetics }
+    : { p1: "host", p2: "you", cosmetics };
 }
 
 // --- HUD ---
@@ -644,9 +644,10 @@ function keysHtml() {
   const owner = paired
     ? "you on this device"
     : "host is P1, joiner is P2";
+  const peerRole = paired && state.hostSide === 0 ? "P2" : "host";
   return `
     ${controlCardHtml({ role, owner, keyboard: "W/A/S/D + F", touch: true })}
-    ${controlCardHtml({ role: "peer", owner: "their device", keyboard: "their W/A/S/D + F or touch", remote: true })}`;
+    ${controlCardHtml({ role: paired ? peerRole : "peer", owner: "their device", keyboard: "their W/A/S/D + F or touch", remote: true })}`;
 }
 
 function statsListHtml() {
@@ -992,7 +993,7 @@ async function beginP2P(role, sessionId) {
           refreshHud(state.spectatorFrame ?? emptyFrame());
           return;
         }
-        setP2PStatus("linked");
+        setP2PStatus(role === "host" ? "P2 joined" : "joined host");
         // Start a match when both sides are linked. Host generates the
         // seed + stage in startMatch and broadcasts via handle.broadcastMatch.
         if (role === "host") {

@@ -4184,3 +4184,128 @@ input[type="range"]::-moz-range-thumb {
     justify-content: flex-start;
   }
 }
+
+/* --- duel page --- */
+.duel-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.duel-mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.duel-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.duel-row label.tight {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ui-text-subtle);
+}
+
+.duel-row select,
+.duel-p2p-row input[type="text"] {
+  background: var(--ui-bg-soft);
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font: inherit;
+  min-width: 160px;
+}
+
+.duel-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  font-size: 12px;
+  color: var(--ui-text-soft);
+}
+
+.duel-keys b {
+  color: var(--ui-red);
+  letter-spacing: 0.06em;
+}
+
+.duel-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.duel-stats .stat {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 60px;
+}
+
+.duel-stats .stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ui-text-subtle);
+}
+
+.duel-stats .stat-value {
+  font-size: 14px;
+  color: var(--ui-text);
+}
+
+.duel-stats .duel-status {
+  margin-left: auto;
+}
+
+.duel-p2p-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px dashed var(--ui-border);
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.04);
+  width: 100%;
+}
+
+.duel-p2p-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.duel-p2p-divider {
+  color: var(--ui-text-subtle);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.duel-p2p-status {
+  color: var(--ui-text-subtle);
+}
+
+.duel-p2p-warning {
+  color: var(--ui-red);
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .duel-stats .duel-status {
+    margin-left: 0;
+    width: 100%;
+  }
+}

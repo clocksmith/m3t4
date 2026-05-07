@@ -372,7 +372,6 @@ function makeSpectatorHandle(sessionId, teardown) {
 
 function makeHandle(sessionId, channel, teardown, options = {}) {
   const fb = options.fb ?? null;
-  const spectatorPeers = options.spectatorPeers ?? null;
   const handle = {
     sessionId,
     linked: false,
@@ -402,7 +401,6 @@ function makeHandle(sessionId, channel, teardown, options = {}) {
         cosmetics: Array.isArray(cosmetics) ? cosmetics : undefined,
       };
       if (handle.linked && channel?.readyState === "open") sendJson(channel, msg);
-      sendJsonToSpectators(spectatorPeers, msg);
       // Mirror to Firestore so spectators that join after pairing get
       // the match parameters even though they aren't on the data
       // channel. Best-effort.
@@ -419,21 +417,10 @@ function makeHandle(sessionId, channel, teardown, options = {}) {
     },
     postSpectatorFrame(frame) {
       if (!fb || !frame) return;
-      sendJsonToSpectators(spectatorPeers, { type: "frame", frame });
       callSignal(fb, "postFrame", { sessionId, frame }).catch(() => {});
     },
   };
   return handle;
-}
-
-function sendJsonToSpectators(spectatorPeers, msg) {
-  if (!spectatorPeers) return;
-  for (const peer of spectatorPeers.values()) {
-    const channel = peer.channel;
-    if (!peer.linked || channel?.readyState !== "open") continue;
-    if ((channel.bufferedAmount ?? 0) > MAX_BUFFERED_SPECTATOR_BYTES) continue;
-    sendJson(channel, msg);
-  }
 }
 
 function handleRemoteMessage(raw, { onMatch, onFrame, onRemoteInput }) {

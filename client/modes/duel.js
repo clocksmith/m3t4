@@ -38,6 +38,7 @@ const SIM_HZ = 120;
 const STEP_MS = 1000 / SIM_HZ;
 const MAX_CATCHUP_TICKS = 240;
 const STAGE_IDS = Object.keys(STAGES);
+const P2P_SPECTATOR_FRAME_STRIDE = 12;
 
 const KEY_MAP = [
   { left: "KeyA", right: "KeyD", up: "KeyW", down: "KeyS", act: "KeyF",
@@ -151,6 +152,9 @@ function freshState() {
     lastRemoteTick: -1,
     waitingRemoteTick: null,
     hostSide: 0,      // 0 = P1, 1 = P2 (for p2p, assigned when pairing)
+    spectating: false,
+    spectatorFrame: null,
+    lastSpectatorFrameTick: -1,
     statusMsg: "",
     cosmetics: [defaultCosmetics(0), defaultCosmetics(1)],
   };
@@ -267,6 +271,11 @@ function freshSeed() {
 function startMatch() {
   if (!state) return;
   if (state.subMode === "p2p") {
+    if (state.spectating || state.p2p?.spectator) {
+      state.statusMsg = "spectating host match";
+      refreshHud(state.spectatorFrame ?? emptyFrame());
+      return;
+    }
     if (!state.p2p?.linked) {
       state.world = null;
       state.statusMsg = state.p2p ? "waiting for opponent…" : "host or join first";
@@ -289,11 +298,15 @@ function startMatch() {
     : null;
   state.playedAtMs = performance.now();
   state.accumMs = 0;
+  state.spectating = false;
+  state.spectatorFrame = null;
+  state.lastSpectatorFrameTick = -1;
   state.statusMsg = state.subMode === "p2p" && !state.p2p?.linked
     ? "waiting for opponent…"
     : "fight";
   if (state.p2p?.linked && typeof state.p2p.broadcastMatch === "function") {
     state.p2p.broadcastMatch({ seed: state.seed, stageId: state.stageId, cosmetics: selectedCosmetics() });
+    state.p2p.postSpectatorFrame?.(worldToFrame(state.world));
   }
   syncPlayClass();
   refreshHud();
@@ -365,11 +378,24 @@ function loop() {
   if (!state || !state.running) return;
   if (state.renderer) {
     const stage = SIM_STAGES[state.stageId] ?? SIM_STAGES.datacenter;
-    const frame = step(performance.now()) ?? emptyFrame();
+    const frame = (state.subMode === "p2p" && (state.spectating || state.p2p?.spectator))
+      ? (state.spectatorFrame ?? emptyFrame())
+      : (step(performance.now()) ?? emptyFrame());
+    maybePostSpectatorFrame(frame);
     state.renderer.drawFrame(stage, frame, labels());
     refreshHud(frame);
   }
   state.rafId = requestAnimationFrame(loop);
+}
+
+function maybePostSpectatorFrame(frame) {
+  if (state.subMode !== "p2p" || state.hostSide !== 0 || state.p2p?.spectator) return;
+  if (!state.p2p?.linked || !state.world || !frame) return;
+  const tick = Number(frame.tick ?? -1);
+  if (!Number.isInteger(tick) || tick < 0) return;
+  if (tick === state.lastSpectatorFrameTick || tick % P2P_SPECTATOR_FRAME_STRIDE !== 0) return;
+  state.lastSpectatorFrameTick = tick;
+  state.p2p.postSpectatorFrame?.(frame);
 }
 
 function emptyFrame() {
@@ -388,6 +414,7 @@ function labels() {
   const cosmetics = selectedCosmetics();
   if (state.subMode === "vs-ai") return { p1: "you", p2: state.presetName, cosmetics };
   if (state.subMode === "hot-seat") return { p1: "P1", p2: "P2", cosmetics };
+  if (state.spectating || state.p2p?.spectator) return { p1: "host", p2: "player", cosmetics };
   return state.hostSide === 0
     ? { p1: "you", p2: "remote", cosmetics }
     : { p1: "remote", p2: "you", cosmetics };
@@ -397,9 +424,13 @@ function labels() {
 function refreshHud(frame = state.world ? worldToFrame(state.world) : emptyFrame()) {
   const score = state.world
     ? `${state.world.fighters[0].score}-${state.world.fighters[1].score}`
+    : Array.isArray(frame?.scoreboard)
+      ? `${frame.scoreboard[0] ?? 0}-${frame.scoreboard[1] ?? 0}`
     : "0-0";
   const rounds = state.world
     ? `${state.world.fighters[0].rounds}-${state.world.fighters[1].rounds}`
+    : Array.isArray(frame?.rounds)
+      ? `${frame.rounds[0] ?? 0}-${frame.rounds[1] ?? 0}`
     : "0-0";
   setText("duel-stat-tick", String(frame?.tick ?? 0));
   setText("duel-stat-score", score);
@@ -419,6 +450,7 @@ function startPrompt() {
 }
 
 function duelStatusText() {
+  if (state.spectating || state.p2p?.spectator) return state.statusMsg || "spectating";
   if (!state.world) return state.statusMsg || startPrompt();
   if (state.world.matchWinner !== -1) {
     const w = state.world.matchWinner;
@@ -569,7 +601,7 @@ function p2pPanelHtml() {
   }
   return `
     <div class="duel-p2p-warning tight">
-      lockstep waits for peer input. STUN only; some NATs will not pair.
+      first joiner plays P2. later joiners spectate. STUN only; some NATs will not pair.
     </div>
     <div class="duel-p2p-row">
       ${buttonHtml({ id: "duel-p2p-host", text: "host", attrs: { title: "Create a session and share the invite link" } })}
@@ -601,6 +633,11 @@ function keysHtml() {
     return `
       ${controlCardHtml({ role: "P1", owner: "local player", keyboard: "W/A/S/D + F", touch: true })}
       ${controlCardHtml({ role: "P2", owner: "same device", keyboard: "P/L/;/' + [", remote: true })}`;
+  }
+  if (state.spectating || state.p2p?.spectator) {
+    return `
+      ${controlCardHtml({ role: "spectator", owner: "watching this match", keyboard: "no controls", remote: true })}
+      ${controlCardHtml({ role: "players", owner: "host + P2", keyboard: "their W/A/S/D + F or touch", remote: true })}`;
   }
   const paired = !!state.p2p;
   const role = state.hostSide === 1 ? "P2" : "P1";
@@ -745,6 +782,8 @@ function bindControls() {
     if (!STAGE_IDS.includes(stageSel.value)) return;
     state.stageId = stageSel.value;
     state.world = null;
+    state.spectating = false;
+    state.spectatorFrame = null;
     state.statusMsg = "";
     clearRemoteInputs();
     syncPlayClass();
@@ -755,6 +794,8 @@ function bindControls() {
   presetSel?.addEventListener("change", () => {
     state.presetName = presetSel.value;
     state.world = null;
+    state.spectating = false;
+    state.spectatorFrame = null;
     state.statusMsg = "";
     clearRemoteInputs();
     syncPlayClass();
@@ -767,6 +808,8 @@ function bindControls() {
   });
   document.getElementById("duel-reset")?.addEventListener("click", () => {
     state.world = null;
+    state.spectating = false;
+    state.spectatorFrame = null;
     state.statusMsg = "";
     clearRemoteInputs();
     syncPlayClass();
@@ -775,6 +818,8 @@ function bindControls() {
   });
   document.getElementById("duel-touch-setup")?.addEventListener("click", () => {
     state.world = null;
+    state.spectating = false;
+    state.spectatorFrame = null;
     state.statusMsg = "";
     clearRemoteInputs();
     clearTouchInput();
@@ -833,6 +878,8 @@ function bindCharacterSelect() {
     }
 
     state.world = null;
+    state.spectating = false;
+    state.spectatorFrame = null;
     state.statusMsg = "";
     clearRemoteInputs();
     syncPlayClass();
@@ -921,6 +968,9 @@ async function beginP2P(role, sessionId) {
     try { state.p2p.stop(); } catch {}
   }
   state.p2p = null;
+  state.spectating = false;
+  state.spectatorFrame = null;
+  state.lastSpectatorFrameTick = -1;
   clearRemoteInputs();
   state.hostSide = role === "host" ? 0 : 1;
   clearP2PShare();
@@ -931,7 +981,17 @@ async function beginP2P(role, sessionId) {
       role,
       sessionId,
       onStatus: (msg) => handleP2PStatus(msg),
-      onLink: () => {
+      onLink: (link = {}) => {
+        if (link.spectator) {
+          state.spectating = true;
+          state.hostSide = 0;
+          setP2PStatus("spectating");
+          state.statusMsg = "spectating";
+          refreshKeysHint();
+          syncPlayClass();
+          refreshHud(state.spectatorFrame ?? emptyFrame());
+          return;
+        }
         setP2PStatus("linked");
         // Start a match when both sides are linked. Host generates the
         // seed + stage in startMatch and broadcasts via handle.broadcastMatch.
@@ -951,6 +1011,14 @@ async function beginP2P(role, sessionId) {
         }
         state.cosmetics = normalizeCosmeticsPair(cosmetics);
         renderCharacterSelect();
+        if (state.spectating || state.p2p?.spectator) {
+          state.seed = seed;
+          state.world = null;
+          state.statusMsg = "spectating";
+          syncPlayClass();
+          refreshHud(state.spectatorFrame ?? emptyFrame());
+          return;
+        }
         const stage = SIM_STAGES[state.stageId] ?? SIM_STAGES.datacenter;
         state.seed = seed;
         state.world = createStepperWorld({ stage, seed, chars: selectedCharacters() });
@@ -964,9 +1032,29 @@ async function beginP2P(role, sessionId) {
       onRemoteInput: (tick, input) => {
         bufferRemoteInput(tick, input);
       },
+      onFrame: (frame) => {
+        state.spectating = true;
+        state.spectatorFrame = frame;
+        state.statusMsg = "spectating";
+        syncPlayClass();
+        refreshHud(frame);
+      },
+      onSpectatorLink: () => {
+        if (!state.world || !state.p2p?.linked) return;
+        state.p2p.broadcastMatch?.({ seed: state.seed, stageId: state.stageId, cosmetics: selectedCosmetics() });
+        state.p2p.postSpectatorFrame?.(worldToFrame(state.world));
+      },
       onClose: () => setP2PStatus("disconnected"),
     });
     state.p2p = handle;
+    if (handle.spectator) {
+      state.spectating = true;
+      state.hostSide = 0;
+      state.statusMsg = "spectating";
+      setP2PStatus("spectating");
+    }
+    refreshKeysHint();
+    syncPlayClass();
   } catch (e) {
     const message = String(e?.message ?? e);
     if (/sign in (first|required)/i.test(message)) {
@@ -1049,6 +1137,9 @@ function switchSubMode(value) {
   if (value !== "p2p") clearP2PShare();
   refreshKeysHint();
   state.world = null;
+  state.spectating = false;
+  state.spectatorFrame = null;
+  state.lastSpectatorFrameTick = -1;
   state.statusMsg = "";
   clearRemoteInputs();
   clearTouchInput();
@@ -1057,7 +1148,7 @@ function switchSubMode(value) {
   if (value !== "p2p" && state.p2p?.stop) {
     try { state.p2p.stop(); } catch {}
     state.p2p = null;
-    setP2PStatus("offline");
+    setP2PStatus("ready: host or paste invite link");
   }
   refreshHud();
   refocusCanvas();
@@ -1069,7 +1160,7 @@ function refreshKeysHint() {
 }
 
 function syncPlayClass() {
-  const playing = !!state?.world;
+  const playing = !!state?.world || !!state?.spectating;
   state?.page?.classList.toggle("is-playing", playing);
   document.body.classList.toggle("duel-match-active", playing);
 }

@@ -5,7 +5,9 @@
 // until a data channel opens. From there:
 //
 //   1. Host broadcasts the match parameters (seed + stageId + public
-//      cosmetics) once both sides are linked.
+//      cosmetics) once both sides are linked. Later joiners on the same
+//      link become read-only spectators and receive those match
+//      parameters plus streamed render frames.
 //   2. Each peer reads its local keyboard for the current sim tick and
 //      forwards {tick,input} to the other peer over the data channel.
 //   3. The duel loop only advances a tick after the matching remote
@@ -79,6 +81,10 @@ async function callSignal(fb, op, payload) {
   }
 }
 
+function playerSlotTaken(sessionData) {
+  return !!sessionData?.answer?.sdp;
+}
+
 function waitIceGathering(pc) {
   if (pc.iceGatheringState === "complete") return Promise.resolve();
   return new Promise((resolve) => {
@@ -129,18 +135,20 @@ export async function startP2PDuel({
   onStatus = () => {},
   onLink = () => {},
   onMatch = () => {},
+  onFrame = () => {},
   onRemoteInput = () => {},
+  onSpectatorLink = () => {},
   onClose = () => {},
 }) {
   if (!isP2PSupported()) throw new Error("P2P not supported in this environment");
   const fb = await ensureSignalAuth();
 
   if (role === "host") {
-    return runHost(fb, { onStatus, onLink, onMatch, onRemoteInput, onClose });
+    return runHost(fb, { onStatus, onLink, onMatch, onRemoteInput, onSpectatorLink, onClose });
   }
   if (role === "join") {
     if (!joinSessionId) throw new Error("session code required to join");
-    return runGuest(fb, joinSessionId, { onStatus, onLink, onMatch, onRemoteInput, onClose });
+    return runGuest(fb, joinSessionId, { onStatus, onLink, onMatch, onFrame, onRemoteInput, onClose });
   }
   throw new Error(`unknown p2p role: ${role}`);
 }
@@ -158,7 +166,8 @@ async function runHost(fb, { onStatus, onLink, onMatch, onRemoteInput, onClose }
   const handle = makeHandle(sessionId, channel, () => {
     try { pc.close(); } catch {}
     if (handle._unsub) try { handle._unsub(); } catch {}
-  });
+  }, { fb });
+  handle.role = "host";
 
   channel.onopen = () => {
     handle.linked = true;
@@ -216,8 +225,19 @@ async function runHost(fb, { onStatus, onLink, onMatch, onRemoteInput, onClose }
   return handle;
 }
 
-async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onRemoteInput, onClose }) {
+async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onRemoteInput, onClose }) {
   onStatus("connecting…");
+  const { doc, getDoc, onSnapshot } = await import(
+    "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
+  );
+  const sessionRef = doc(fb.firestore, "webrtc", sessionId);
+  const initial = await getDoc(sessionRef);
+  if (!initial.exists()) throw new Error("session not found");
+  const data = initial.data();
+  if (playerSlotTaken(data)) {
+    return runSpectator(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onRemoteInput, onClose });
+  }
+
   const pc = new RTCPeerConnection({ iceServers: defaultIceServers() });
 
   const handlePromise = new Promise((resolve) => {
@@ -233,7 +253,7 @@ async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onRemoteInpu
         onStatus("linked");
         onLink();
       };
-      channel.onmessage = (e) => handleRemoteMessage(e.data, { onMatch, onRemoteInput });
+      channel.onmessage = (e) => handleRemoteMessage(e.data, { onMatch, onFrame, onRemoteInput });
       channel.onclose = () => { handle.linked = false; onClose(); };
       resolve(handle);
     };
@@ -247,13 +267,6 @@ async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onRemoteInpu
     }).catch(() => {});
   };
 
-  const { doc, getDoc, onSnapshot } = await import(
-    "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
-  );
-  const sessionRef = doc(fb.firestore, "webrtc", sessionId);
-  const initial = await getDoc(sessionRef);
-  if (!initial.exists()) throw new Error("session not found");
-  const data = initial.data();
   if (!data?.offer) {
     onStatus("no offer yet — wait for host");
   }
@@ -302,17 +315,76 @@ async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onRemoteInpu
   return handle;
 }
 
-function makeHandle(sessionId, channel, teardown) {
+async function runSpectator(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onClose }) {
+  onStatus("joining as spectator…");
+  const { doc, getDoc, onSnapshot } = await import(
+    "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
+  );
+  const sessionRef = doc(fb.firestore, "webrtc", sessionId);
+  const initial = await getDoc(sessionRef);
+  if (!initial.exists()) throw new Error("session not found");
+
+  let lastFrameAt = 0;
+  let lastInitKey = "";
+  const applySpectatorState = (data = {}) => {
+    const init = data.spectatorInit;
+    if (init) {
+      const initKey = JSON.stringify(init);
+      if (initKey !== lastInitKey) {
+        lastInitKey = initKey;
+        onMatch({ seed: init.seed, stageId: init.stageId, cosmetics: init.cosmetics });
+      }
+    }
+    const frameAt = Number(data.spectatorFrameAt ?? 0);
+    if (data.spectatorFrame && frameAt >= lastFrameAt) {
+      lastFrameAt = frameAt;
+      onFrame(data.spectatorFrame);
+    }
+  };
+
+  const handle = makeSpectatorHandle(sessionId, () => {
+    if (handle._unsub) try { handle._unsub(); } catch {}
+    onClose();
+  });
+  handle.linked = true;
+  onStatus("spectating");
+  onLink({ spectator: true });
+  applySpectatorState(initial.data());
+  handle._unsub = onSnapshot(sessionRef, (snap) => applySpectatorState(snap.data()));
+  return handle;
+}
+
+function makeSpectatorHandle(sessionId, teardown) {
+  return {
+    sessionId,
+    linked: true,
+    role: "spectator",
+    spectator: true,
+    stop() {
+      teardown?.();
+      this.linked = false;
+    },
+    sendInput() {},
+    broadcastMatch() {},
+    postSpectatorFrame() {},
+  };
+}
+
+function makeHandle(sessionId, channel, teardown, options = {}) {
+  const fb = options.fb ?? null;
+  const spectatorPeers = options.spectatorPeers ?? null;
   const handle = {
     sessionId,
     linked: false,
+    role: "peer",
+    spectator: false,
     stop() {
-      try { channel.close(); } catch {}
+      try { channel?.close?.(); } catch {}
       teardown?.();
       handle.linked = false;
     },
     sendInput(tick, input) {
-      if (!handle.linked || channel.readyState !== "open") return;
+      if (!handle.linked || channel?.readyState !== "open") return;
       // 4-byte tick tag + 1-byte input bitmask. The duel loop consumes
       // only the input whose tick matches the world tick it is about to
       // simulate.
@@ -323,21 +395,48 @@ function makeHandle(sessionId, channel, teardown) {
       try { channel.send(buf); } catch {}
     },
     broadcastMatch({ seed, stageId, cosmetics }) {
-      if (!handle.linked || channel.readyState !== "open") return;
-      try {
-        channel.send(JSON.stringify({
-          type: "match",
-          seed: seed >>> 0,
-          stageId: String(stageId ?? ""),
-          cosmetics: Array.isArray(cosmetics) ? cosmetics : undefined,
-        }));
-      } catch {}
+      const msg = {
+        type: "match",
+        seed: seed >>> 0,
+        stageId: String(stageId ?? ""),
+        cosmetics: Array.isArray(cosmetics) ? cosmetics : undefined,
+      };
+      if (handle.linked && channel?.readyState === "open") sendJson(channel, msg);
+      sendJsonToSpectators(spectatorPeers, msg);
+      // Mirror to Firestore so spectators that join after pairing get
+      // the match parameters even though they aren't on the data
+      // channel. Best-effort.
+      if (fb) {
+        callSignal(fb, "postFrame", {
+          sessionId,
+          init: {
+            seed: seed >>> 0,
+            stageId: String(stageId ?? ""),
+            cosmetics: Array.isArray(cosmetics) ? cosmetics : undefined,
+          },
+        }).catch(() => {});
+      }
+    },
+    postSpectatorFrame(frame) {
+      if (!fb || !frame) return;
+      sendJsonToSpectators(spectatorPeers, { type: "frame", frame });
+      callSignal(fb, "postFrame", { sessionId, frame }).catch(() => {});
     },
   };
   return handle;
 }
 
-function handleRemoteMessage(raw, { onMatch, onRemoteInput }) {
+function sendJsonToSpectators(spectatorPeers, msg) {
+  if (!spectatorPeers) return;
+  for (const peer of spectatorPeers.values()) {
+    const channel = peer.channel;
+    if (!peer.linked || channel?.readyState !== "open") continue;
+    if ((channel.bufferedAmount ?? 0) > MAX_BUFFERED_SPECTATOR_BYTES) continue;
+    sendJson(channel, msg);
+  }
+}
+
+function handleRemoteMessage(raw, { onMatch, onFrame, onRemoteInput }) {
   if (raw instanceof ArrayBuffer) {
     const view = new Uint8Array(raw);
     if (view.length < 5) return;
@@ -351,6 +450,9 @@ function handleRemoteMessage(raw, { onMatch, onRemoteInput }) {
     try { msg = JSON.parse(raw); } catch { return; }
     if (msg && msg.type === "match" && Number.isFinite(msg.seed)) {
       onMatch({ seed: msg.seed >>> 0, stageId: msg.stageId, cosmetics: msg.cosmetics });
+    }
+    if (msg && msg.type === "frame" && msg.frame) {
+      onFrame?.(msg.frame);
     }
   }
 }

@@ -17,7 +17,7 @@
 // beyond a public STUN. Symmetric-NAT peers may fail to connect; a TURN
 // relay is the planned fix.
 
-import { firebase, httpsCallable, signInAnonymously } from "./firebase-client.js";
+import { firebase, httpsCallable } from "./firebase-client.js";
 
 const ICE_GATHER_TIMEOUT_MS = 5_000;
 const PAIR_TIMEOUT_MS = 30_000;
@@ -42,12 +42,7 @@ async function ensureSignalAuth() {
   const fb = firebase();
   if (!fb) throw new Error("Firebase not configured");
   if (fb.auth.currentUser) return fb;
-  try {
-    await signInAnonymously(fb.auth);
-  } catch {
-    throw new Error("sign in first for P2P");
-  }
-  return fb;
+  throw new Error("sign in first for P2P");
 }
 
 async function callSignal(fb, op, payload) {

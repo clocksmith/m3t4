@@ -33,6 +33,7 @@ test("top navigation keeps home on the logo without a start tab", () => {
   assert.match(html, /<a href="\/" class="logo" title="Go home">/);
   assert.doesNotMatch(html, /data-route="intro" data-nav="primary"/);
   assert.doesNotMatch(html, /data-route="roster" data-nav="primary"/);
+  assert.doesNotMatch(html, /data-route="compute" data-nav="primary"/);
   assert.match(html, /data-route="duel" data-nav="primary"/);
   assert.doesNotMatch(html, />start<\/a>/);
   assert.doesNotMatch(html, /id="nav-more"/);
@@ -41,8 +42,11 @@ test("top navigation keeps home on the logo without a start tab", () => {
 
 test("account control replaces the inline whoami link", () => {
   const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
   assert.match(html, /id="account"/);
   assert.doesNotMatch(html, /id="whoami"/);
+  assert.match(app, /href="\/roster"/);
+  assert.match(app, /href="\/compute"/);
 });
 
 test("about copy excludes stale ranked and compute CTA copy", () => {

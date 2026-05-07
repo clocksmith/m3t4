@@ -85,6 +85,14 @@ function playerSlotTaken(sessionData) {
   return !!sessionData?.answer?.sdp;
 }
 
+function packDescription(desc) {
+  if (!desc) return null;
+  return {
+    type: String(desc.type ?? ""),
+    sdp: String(desc.sdp ?? ""),
+  };
+}
+
 function waitIceGathering(pc) {
   if (pc.iceGatheringState === "complete") return Promise.resolve();
   return new Promise((resolve) => {
@@ -212,7 +220,7 @@ async function runHost(fb, { onStatus, onLink, onMatch, onRemoteInput, onClose }
   await waitIceGathering(pc);
   await callSignal(fb, "post", {
     sessionId, role: "offerer",
-    payload: { offer: pc.localDescription, purpose: "duel" },
+    payload: { offer: packDescription(pc.localDescription), purpose: "duel" },
   });
 
   setTimeout(() => {
@@ -287,7 +295,7 @@ async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onR
     await waitIceGathering(pc);
     await callSignal(fb, "post", {
       sessionId, role: "answerer",
-      payload: { answer: pc.localDescription },
+      payload: { answer: packDescription(pc.localDescription) },
     });
   };
 

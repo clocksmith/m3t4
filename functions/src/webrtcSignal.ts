@@ -65,9 +65,11 @@ export const webrtcSignal = onCall(
       }
       const update: Record<string, unknown> = {};
       if (payload.offer) {
+        const offer = sanitizeDescription(payload.offer, "offer");
+        if (!offer) throw new HttpsError("invalid-argument", "invalid offer");
         update.offer = {
-          type: String(payload.offer.type ?? ""),
-          sdp: String(payload.offer.sdp ?? ""),
+          type: offer.type,
+          sdp: offer.sdp,
           peerId: String(payload.peerId ?? auth.uid),
           target: String(payload.target ?? ""),
           purpose: String(payload.purpose ?? "spectate"),
@@ -79,9 +81,11 @@ export const webrtcSignal = onCall(
         if (snap.data()?.answer?.sdp && snap.data()?.answer?.postedBy !== auth.uid) {
           throw new HttpsError("failed-precondition", "player slot already taken");
         }
+        const answer = sanitizeDescription(payload.answer, "answer");
+        if (!answer) throw new HttpsError("invalid-argument", "invalid answer");
         update.answer = {
-          type: String(payload.answer.type ?? ""),
-          sdp: String(payload.answer.sdp ?? ""),
+          type: answer.type,
+          sdp: answer.sdp,
           peerId: String(payload.peerId ?? auth.uid),
           postedBy: auth.uid,
           postedAt: now,
@@ -157,6 +161,15 @@ export const webrtcSignal = onCall(
     throw new HttpsError("invalid-argument", `unknown op: ${op}`);
   },
 );
+
+function sanitizeDescription(desc: unknown, expectedType: "offer" | "answer"): { type: string; sdp: string } | null {
+  if (!desc || typeof desc !== "object") return null;
+  const d = desc as Record<string, unknown>;
+  const type = String(d.type ?? "");
+  const sdp = String(d.sdp ?? "");
+  if (type !== expectedType || !sdp || sdp.length > 128_000) return null;
+  return { type, sdp };
+}
 
 function sanitizeSpectatorFrame(frame: unknown): Record<string, unknown> | null {
   if (!frame || typeof frame !== "object") return null;

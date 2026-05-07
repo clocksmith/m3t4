@@ -431,6 +431,10 @@ function makeHandle(sessionId, channel, teardown, options = {}) {
   return handle;
 }
 
+function sendJson(channel, value) {
+  try { channel.send(JSON.stringify(value)); } catch {}
+}
+
 function handleRemoteMessage(raw, { onMatch, onFrame, onRemoteInput }) {
   if (raw instanceof ArrayBuffer) {
     const view = new Uint8Array(raw);

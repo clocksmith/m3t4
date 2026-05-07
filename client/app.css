@@ -237,6 +237,8 @@ a:hover {
   border-radius: 999px;
   padding: 4px 12px;
   background: var(--ui-bg-soft);
+  font: inherit;
+  cursor: pointer;
 }
 
 .account-trigger {
@@ -364,10 +366,10 @@ a:hover {
     right: 0;
     bottom: 0;
     display: grid;
-    /* auto-fit so the bar doesn't silently squash if a 6th tab appears.
+    /* auto-fit so the bar doesn't silently squash if another tab appears.
      * Items can shrink to 64px floor; beyond that, items marked
      * data-nav="overflow" should be hidden (rule below) and a "more"
-     * trigger surfaced. With 5 short labels they fit naturally. */
+     * trigger surfaced. */
     grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
     gap: 0;
     min-height: calc(var(--mobile-nav-h) + env(safe-area-inset-bottom));

@@ -63,9 +63,9 @@ function accountInitial(u) {
 let accountListeners = null;
 
 // Top-right profile control. Anonymous → small "sign in" pill that
-// routes to /roster (the existing identity surface). Signed-in →
-// circular avatar showing the handle initial; clicking opens a popover
-// with the current handle, a roster shortcut, and sign-out.
+// opens the profile menu. Signed-in → circular avatar showing the handle
+// initial. The menu owns account-adjacent routes so the primary nav can
+// stay focused on play/watch/help surfaces.
 function renderAccount() {
   const u = auth.user();
   if (u) {
@@ -81,6 +81,7 @@ function renderAccount() {
       <div class="account-menu" id="account-menu" role="menu" hidden>
         <div class="account-menu-handle">${escapeHtml(label)}</div>
         <a class="account-menu-item" href="/roster" role="menuitem">Roster</a>
+        <a class="account-menu-item" href="/compute" role="menuitem">Compute</a>
         <button type="button" class="account-menu-item" id="account-signout" role="menuitem">Sign out</button>
       </div>`;
     bindAccountMenu();
@@ -88,11 +89,14 @@ function renderAccount() {
     window.__M3T4_COMPUTE_ACCOUNT_UID__ = null;
     window.__M3T4_COMPUTE_ACCOUNT_HANDLE__ = null;
     accountEl.dataset.state = "anon";
-    accountEl.innerHTML = `<a class="account-signin" href="/roster" title="Sign in to claim a handle and stable">sign in</a>`;
-    if (accountListeners) {
-      try { accountListeners.abort(); } catch {}
-      accountListeners = null;
-    }
+    accountEl.innerHTML = `
+      <button type="button" class="account-signin" id="account-trigger" aria-haspopup="true" aria-expanded="false" title="Open profile menu">sign in</button>
+      <div class="account-menu" id="account-menu" role="menu" hidden>
+        <div class="account-menu-handle">profile</div>
+        <a class="account-menu-item" href="/roster" role="menuitem">Roster / sign in</a>
+        <a class="account-menu-item" href="/compute" role="menuitem">Compute</a>
+      </div>`;
+    bindAccountMenu();
   }
 }
 

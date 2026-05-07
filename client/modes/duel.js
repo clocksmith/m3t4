@@ -164,6 +164,12 @@ function isTypingTarget(el) {
 }
 function onKeyDown(e) {
   if (!state || isTypingTarget(e.target)) return;
+  if (e.code === "Space" && (!state.world || state.world.matchWinner !== -1)) {
+    e.preventDefault();
+    startMatch();
+    refocusCanvas();
+    return;
+  }
   state.keyset.add(e.code);
   if (GAME_KEYS.has(e.code)) e.preventDefault();
 }
@@ -369,8 +375,8 @@ function loop() {
 function emptyFrame() {
   return {
     tick: 0, roundStartTick: 0,
-    p0: { x: 300, y: 590, vx: 0, vy: 0, facing: 1, onGround: true, wall: 0, stun: 0, swipeT: 0, diveT: 0, lastClashTick: -9999, dead: false },
-    p1: { x: 980, y: 590, vx: 0, vy: 0, facing: -1, onGround: true, wall: 0, stun: 0, swipeT: 0, diveT: 0, lastClashTick: -9999, dead: false },
+    p0: { x: 300, y: 612, vx: 0, vy: 0, facing: 1, onGround: true, wall: 0, stun: 0, swipeT: 0, diveT: 0, lastClashTick: -9999, dead: false },
+    p1: { x: 980, y: 612, vx: 0, vy: 0, facing: -1, onGround: true, wall: 0, stun: 0, swipeT: 0, diveT: 0, lastClashTick: -9999, dead: false },
     token: { exists: false, x: 0, y: 0, carrier: -1, dwellT: 0 },
     goal: { exists: false, x: 0, y: 0, label: "", timer: 0 },
     scoreboard: [0, 0],
@@ -402,11 +408,21 @@ function refreshHud(frame = state.world ? worldToFrame(state.world) : emptyFrame
   setText("duel-status", duelStatusText());
 }
 
+function startPrompt() {
+  // Coarse pointer = touch-first device; show tap copy. Desktop falls
+  // through to spacebar copy. Cached lookups would be brittle if the
+  // user drags between displays, so we re-check on each call (cheap).
+  if (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches) {
+    return "tap to fight";
+  }
+  return "press space to fight";
+}
+
 function duelStatusText() {
-  if (!state.world) return state.statusMsg || "press fight to start";
+  if (!state.world) return state.statusMsg || startPrompt();
   if (state.world.matchWinner !== -1) {
     const w = state.world.matchWinner;
-    return `${w === 0 ? labels().p1 : labels().p2} wins`;
+    return `${w === 0 ? labels().p1 : labels().p2} wins · ${startPrompt()} again`;
   }
   return state.statusMsg || "fight";
 }
@@ -603,7 +619,7 @@ function statsListHtml() {
       <span class="stat"><span class="stat-label">score</span><span class="stat-value" id="duel-stat-score">0-0</span></span>
       <span class="stat"><span class="stat-label">rounds</span><span class="stat-value" id="duel-stat-rounds">0-0</span></span>
       <span class="stat"><span class="stat-label">seed</span><span class="stat-value" id="duel-stat-seed">—</span></span>
-      <span class="stat duel-status"><span class="stat-label">status</span><span class="stat-value" id="duel-status">press fight</span></span>
+      <span class="stat duel-status"><span class="stat-label">status</span><span class="stat-value" id="duel-status">${escapeHtml(startPrompt())}</span></span>
     </div>`;
 }
 
@@ -654,6 +670,15 @@ export function mount(root, ctx = {}) {
   refreshKeysHint();
   bindControls();
   applyJoinLinkFromLocation();
+
+  // Tap the canvas to start a fresh match when nothing is running.
+  // Mirrors the spacebar shortcut for touch users.
+  state.canvas.addEventListener("click", () => {
+    if (!state.world || state.world.matchWinner !== -1) {
+      startMatch();
+    }
+    refocusCanvas();
+  });
 
   addEventListener("keydown", onKeyDown);
   addEventListener("keyup", onKeyUp);

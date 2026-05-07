@@ -4265,6 +4265,44 @@ input[type="range"]::-moz-range-thumb {
   font-weight: 800;
 }
 
+.duel-fighter-owner {
+  grid-column: 2;
+  color: var(--ui-text-subtle);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.duel-fighter-slot.is-readonly {
+  background: rgba(15, 23, 42, 0.18);
+  opacity: 0.92;
+}
+
+.duel-fighter-readonly {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  color: var(--ui-text-subtle);
+}
+
+.duel-fighter-readonly .duel-body-portrait {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+}
+
+.duel-fighter-readonly-meta {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+#duel-stage:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .duel-body-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

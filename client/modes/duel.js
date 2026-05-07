@@ -125,6 +125,54 @@ function selectedCharacters() {
   }));
 }
 
+// True when the device is a touch-first device held in landscape.
+// Used to gate auto-fullscreen and the matching CSS rules.
+function isLandscapeCoarse() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(pointer: coarse) and (orientation: landscape)").matches;
+}
+
+// Opportunistically enter fullscreen on the duel page and lock the
+// orientation to landscape so the bottom-bar UI hides on phones. Both
+// requestFullscreen and screen.orientation.lock require a user gesture
+// — call this from a click/touch handler. Best-effort; quietly ignores
+// browsers that don't support either API (Safari iOS in particular).
+async function tryEnterFullscreen(target) {
+  if (typeof document === "undefined") return;
+  if (document.fullscreenElement) return;
+  const el = target ?? document.documentElement;
+  try {
+    if (typeof el.requestFullscreen === "function") {
+      await el.requestFullscreen({ navigationUI: "hide" });
+    } else if (typeof el.webkitRequestFullscreen === "function") {
+      el.webkitRequestFullscreen();
+    }
+  } catch {}
+  try {
+    if (typeof screen !== "undefined" && screen.orientation && typeof screen.orientation.lock === "function") {
+      await screen.orientation.lock("landscape");
+    }
+  } catch {}
+}
+
+// Ownership: in vs-AI / hot-seat the local user picks both sides; in
+// p2p only the side this client controls is editable. Spectators can't
+// edit either side. Drives both the rendered UI (read-only vs editable)
+// and the click handler (ignore clicks on the other side).
+function localOwnsSide(side) {
+  if (!state) return false;
+  if (state.spectating || state.p2p?.spectator) return false;
+  if (state.subMode === "p2p") return side === state.hostSide;
+  return true;
+}
+
+function localOwnsStage() {
+  if (!state) return false;
+  if (state.spectating || state.p2p?.spectator) return false;
+  if (state.subMode === "p2p") return state.hostSide === 0;
+  return true;
+}
+
 // --- module state ---
 let state = null; // populated by mount()
 
@@ -492,37 +540,50 @@ function subModeRowHtml() {
 
 function characterSelectHtml() {
   const cosmetics = selectedCosmetics();
-  return cosmetics.map((cosmetic, side) => `
-    <div class="duel-fighter-slot" data-side="${side}">
+  return cosmetics.map((cosmetic, side) => {
+    const editable = localOwnsSide(side);
+    const ownerHint = state.subMode === "p2p"
+      ? (editable ? "you" : "remote")
+      : "";
+    const headHint = ownerHint ? `<span class="duel-fighter-owner tight">${escapeHtml(ownerHint)}</span>` : "";
+    return `
+    <div class="duel-fighter-slot${editable ? "" : " is-readonly"}" data-side="${side}">
       <div class="duel-fighter-head">
         <span class="duel-fighter-kicker">P${side + 1}</span>
         <strong>${escapeHtml(bodyLabel(cosmetic.body))}</strong>
         <span>${escapeHtml(weaponLabel(cosmetic.body, cosmetic.weapon))}</span>
+        ${headHint}
       </div>
-      <div class="duel-body-grid" aria-label="P${side + 1} character select">
-        ${BODY_IDS.map((body) => {
-          const selected = body === cosmetic.body;
-          return `
-            <button type="button" class="duel-body-option${selected ? " is-selected" : ""}" data-side="${side}" data-body="${escapeHtml(body)}" title="${escapeHtml(bodyMeta(body))}">
-              ${bodyPortraitHtml(body)}
-              <span>${escapeHtml(bodyLabel(body))}</span>
-            </button>`;
-        }).join("")}
-      </div>
-      <div class="duel-weapon-grid" aria-label="P${side + 1} weapon select">
-        ${weaponEntriesForBody(cosmetic.body).map((weapon) => {
-          const selected = weapon.id === cosmetic.weapon;
-          return `
-            <button type="button" class="duel-weapon-option${selected ? " is-selected" : ""}" data-side="${side}" data-weapon="${escapeHtml(weapon.id)}">
-              ${weaponOptionVisualHtml(cosmetic.body, weapon)}
-              <span class="duel-weapon-copy">
-                <span class="duel-weapon-name">${escapeHtml(weaponLabel(cosmetic.body, weapon.id))}</span>
-                <span class="duel-weapon-meta">${escapeHtml(weaponMeta(cosmetic.body, weapon.id))}</span>
-              </span>
-            </button>`;
-        }).join("")}
-      </div>
-    </div>`).join("");
+      ${editable ? `
+        <div class="duel-body-grid" aria-label="P${side + 1} character select">
+          ${BODY_IDS.map((body) => {
+            const selected = body === cosmetic.body;
+            return `
+              <button type="button" class="duel-body-option${selected ? " is-selected" : ""}" data-side="${side}" data-body="${escapeHtml(body)}" title="${escapeHtml(bodyMeta(body))}">
+                ${bodyPortraitHtml(body)}
+                <span>${escapeHtml(bodyLabel(body))}</span>
+              </button>`;
+          }).join("")}
+        </div>
+        <div class="duel-weapon-grid" aria-label="P${side + 1} weapon select">
+          ${weaponEntriesForBody(cosmetic.body).map((weapon) => {
+            const selected = weapon.id === cosmetic.weapon;
+            return `
+              <button type="button" class="duel-weapon-option${selected ? " is-selected" : ""}" data-side="${side}" data-weapon="${escapeHtml(weapon.id)}">
+                ${weaponOptionVisualHtml(cosmetic.body, weapon)}
+                <span class="duel-weapon-copy">
+                  <span class="duel-weapon-name">${escapeHtml(weaponLabel(cosmetic.body, weapon.id))}</span>
+                  <span class="duel-weapon-meta">${escapeHtml(weaponMeta(cosmetic.body, weapon.id))}</span>
+                </span>
+              </button>`;
+          }).join("")}
+        </div>` : `
+        <div class="duel-fighter-readonly tight" aria-label="P${side + 1} locked to remote selection">
+          ${bodyPortraitHtml(cosmetic.body)}
+          <span class="duel-fighter-readonly-meta">picked by ${escapeHtml(ownerHint || "peer")}</span>
+        </div>`}
+    </div>`;
+  }).join("");
 }
 
 function bodyPortraitHtml(body) {
@@ -712,10 +773,15 @@ export function mount(root, ctx = {}) {
   applyJoinLinkFromLocation();
 
   // Tap the canvas to start a fresh match when nothing is running.
-  // Mirrors the spacebar shortcut for touch users.
+  // Mirrors the spacebar shortcut for touch users. We also opportunistic-
+  // ally enter fullscreen here because the click counts as the user
+  // gesture browsers require for requestFullscreen().
   state.canvas.addEventListener("click", () => {
     if (!state.world || state.world.matchWinner !== -1) {
       startMatch();
+    }
+    if (isLandscapeCoarse()) {
+      void tryEnterFullscreen(state.page);
     }
     refocusCanvas();
   });
@@ -783,6 +849,14 @@ function bindControls() {
   const stageSel = document.getElementById("duel-stage");
   stageSel?.addEventListener("change", () => {
     if (!STAGE_IDS.includes(stageSel.value)) return;
+    // In P2P only the host owns stage selection. Reject the change on
+    // non-host clients (revert the select to the previous value) so
+    // both peers stay aligned without a fight over who picked.
+    if (!localOwnsStage()) {
+      stageSel.value = state.stageId;
+      setP2PStatus("only the host picks the stage");
+      return;
+    }
     state.stageId = stageSel.value;
     state.world = null;
     state.spectating = false;
@@ -792,6 +866,9 @@ function bindControls() {
     syncPlayClass();
     refreshHud();
     refocusCanvas();
+    if (state.subMode === "p2p" && state.p2p?.linked && typeof state.p2p.broadcastStage === "function") {
+      state.p2p.broadcastStage(state.stageId);
+    }
   });
   const presetSel = document.getElementById("duel-preset");
   presetSel?.addEventListener("change", () => {
@@ -869,6 +946,9 @@ function bindCharacterSelect() {
     if (!button) return;
     const side = Number(button.dataset.side);
     if (!Number.isInteger(side) || side < 0 || side > 1) return;
+    // P2P ownership: only the owner of this side can change its
+    // character/weapon. The other side is read-only on this client.
+    if (!localOwnsSide(side)) return;
 
     if (bodyButton) {
       const body = BODY_IDS.includes(bodyButton.dataset.body) ? bodyButton.dataset.body : defaultCosmetics(side).body;
@@ -889,12 +969,25 @@ function bindCharacterSelect() {
     renderCharacterSelect();
     refreshHud();
     refocusCanvas();
+    // Mirror to peer + spectators so their UI reflects the change.
+    if (state.subMode === "p2p" && state.p2p?.linked && typeof state.p2p.broadcastCosmetic === "function") {
+      state.p2p.broadcastCosmetic(side, state.cosmetics[side]);
+    }
   });
 }
 
 function renderCharacterSelect() {
   const el = document.getElementById("duel-character-select");
   if (el) el.innerHTML = characterSelectHtml();
+  syncStageOwnership();
+}
+
+function syncStageOwnership() {
+  const sel = document.getElementById("duel-stage");
+  if (!sel) return;
+  const owned = localOwnsStage();
+  sel.disabled = !owned;
+  sel.title = owned ? "" : "host picks the stage";
 }
 
 function joinCodeFromParts(search, hash) {
@@ -1063,6 +1156,28 @@ async function beginP2P(role, sessionId) {
       },
       onRemoteInput: (tick, input) => {
         bufferRemoteInput(tick, input);
+      },
+      onCosmetic: (side, cosmetic) => {
+        // Remote owner of `side` updated their character/weapon. Apply
+        // locally without re-broadcasting (which would loop). The
+        // non-owned side is read-only on this client by design, so the
+        // user can't accidentally fight the remote selection.
+        if (side !== 0 && side !== 1) return;
+        if (state.subMode !== "p2p") return;
+        if (localOwnsSide(side)) return;
+        state.cosmetics[side] = normalizeCosmetics(cosmetic, side);
+        renderCharacterSelect();
+      },
+      onStage: (stageId) => {
+        // Host changed the stage; non-host clients (joiner + late
+        // spectators) mirror it. Host-side ignores its own echo.
+        if (state.subMode !== "p2p") return;
+        if (localOwnsStage()) return;
+        if (!STAGE_IDS.includes(stageId)) return;
+        state.stageId = stageId;
+        const stageSelEl = document.getElementById("duel-stage");
+        if (stageSelEl) stageSelEl.value = stageId;
+        refreshHud();
       },
       onFrame: (frame) => {
         state.spectating = true;

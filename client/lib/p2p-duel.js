@@ -144,6 +144,8 @@ export async function startP2PDuel({
   onLink = () => {},
   onMatch = () => {},
   onFrame = () => {},
+  onCosmetic = () => {},
+  onStage = () => {},
   onRemoteInput = () => {},
   onSpectatorLink = () => {},
   onClose = () => {},
@@ -152,16 +154,16 @@ export async function startP2PDuel({
   const fb = await ensureSignalAuth();
 
   if (role === "host") {
-    return runHost(fb, { onStatus, onLink, onMatch, onRemoteInput, onSpectatorLink, onClose });
+    return runHost(fb, { onStatus, onLink, onMatch, onCosmetic, onStage, onRemoteInput, onSpectatorLink, onClose });
   }
   if (role === "join") {
     if (!joinSessionId) throw new Error("session code required to join");
-    return runGuest(fb, joinSessionId, { onStatus, onLink, onMatch, onFrame, onRemoteInput, onClose });
+    return runGuest(fb, joinSessionId, { onStatus, onLink, onMatch, onFrame, onCosmetic, onStage, onRemoteInput, onClose });
   }
   throw new Error(`unknown p2p role: ${role}`);
 }
 
-async function runHost(fb, { onStatus, onLink, onMatch, onRemoteInput, onClose }) {
+async function runHost(fb, { onStatus, onLink, onMatch, onCosmetic, onStage, onRemoteInput, onClose }) {
   onStatus("creating session…");
   const session = await callSignal(fb, "create", {});
   const sessionId = session.sessionId;
@@ -182,7 +184,7 @@ async function runHost(fb, { onStatus, onLink, onMatch, onRemoteInput, onClose }
     onStatus("linked");
     onLink();
   };
-  channel.onmessage = (ev) => handleRemoteMessage(ev.data, { onMatch, onRemoteInput });
+  channel.onmessage = (ev) => handleRemoteMessage(ev.data, { onMatch, onCosmetic, onStage, onRemoteInput });
   channel.onclose = () => { handle.linked = false; onClose(); };
 
   pc.onicecandidate = (ev) => {
@@ -233,7 +235,7 @@ async function runHost(fb, { onStatus, onLink, onMatch, onRemoteInput, onClose }
   return handle;
 }
 
-async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onRemoteInput, onClose }) {
+async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onCosmetic, onStage, onRemoteInput, onClose }) {
   onStatus("connecting…");
   const { doc, getDoc, onSnapshot } = await import(
     "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
@@ -261,7 +263,7 @@ async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onR
         onStatus("linked");
         onLink();
       };
-      channel.onmessage = (e) => handleRemoteMessage(e.data, { onMatch, onFrame, onRemoteInput });
+      channel.onmessage = (e) => handleRemoteMessage(e.data, { onMatch, onFrame, onCosmetic, onStage, onRemoteInput });
       channel.onclose = () => { handle.linked = false; onClose(); };
       resolve(handle);
     };
@@ -427,6 +429,20 @@ function makeHandle(sessionId, channel, teardown, options = {}) {
       if (!fb || !frame) return;
       callSignal(fb, "postFrame", { sessionId, frame }).catch(() => {});
     },
+    broadcastCosmetic(side, cosmetic) {
+      const slot = side === 1 ? 1 : 0;
+      const msg = {
+        type: "cosmetic",
+        side: slot,
+        body: typeof cosmetic?.body === "string" ? cosmetic.body : "",
+        weapon: typeof cosmetic?.weapon === "string" ? cosmetic.weapon : "",
+      };
+      if (handle.linked && channel?.readyState === "open") sendJson(channel, msg);
+    },
+    broadcastStage(stageId) {
+      const msg = { type: "stage", stageId: String(stageId ?? "") };
+      if (handle.linked && channel?.readyState === "open") sendJson(channel, msg);
+    },
   };
   return handle;
 }
@@ -435,7 +451,7 @@ function sendJson(channel, value) {
   try { channel.send(JSON.stringify(value)); } catch {}
 }
 
-function handleRemoteMessage(raw, { onMatch, onFrame, onRemoteInput }) {
+function handleRemoteMessage(raw, { onMatch, onFrame, onCosmetic, onStage, onRemoteInput }) {
   if (raw instanceof ArrayBuffer) {
     const view = new Uint8Array(raw);
     if (view.length < 5) return;
@@ -443,15 +459,23 @@ function handleRemoteMessage(raw, { onMatch, onFrame, onRemoteInput }) {
     onRemoteInput(tick, unpackInput(view[4]));
     return;
   }
-  // JSON control messages (match start, etc.) come over the same channel.
+  // JSON control messages (match start, cosmetics, stage, etc.) come
+  // over the same channel.
   if (typeof raw === "string") {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
-    if (msg && msg.type === "match" && Number.isFinite(msg.seed)) {
-      onMatch({ seed: msg.seed >>> 0, stageId: msg.stageId, cosmetics: msg.cosmetics });
+    if (!msg || typeof msg !== "object") return;
+    if (msg.type === "match" && Number.isFinite(msg.seed)) {
+      onMatch?.({ seed: msg.seed >>> 0, stageId: msg.stageId, cosmetics: msg.cosmetics });
     }
-    if (msg && msg.type === "frame" && msg.frame) {
+    if (msg.type === "frame" && msg.frame) {
       onFrame?.(msg.frame);
+    }
+    if (msg.type === "cosmetic" && (msg.side === 0 || msg.side === 1)) {
+      onCosmetic?.(msg.side, { body: msg.body, weapon: msg.weapon });
+    }
+    if (msg.type === "stage" && typeof msg.stageId === "string") {
+      onStage?.(msg.stageId);
     }
   }
 }

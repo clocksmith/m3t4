@@ -61,6 +61,9 @@ function spawnFlipForRound(openingSpawnFlip, roundIndex) {
 function clamp(v, lo, hi) {
     return v < lo ? lo : v > hi ? hi : v;
 }
+function isVerticalWallPlatform(p) {
+    return p.solid && p.h >= STATS.bodyH && p.w <= STATS.bodyW * 3;
+}
 function mix32(x) {
     x >>>= 0;
     x ^= x >>> 16;
@@ -332,6 +335,7 @@ function tickFighter(f, opp, input, w) {
     f.vy += GRAVITY * STEP;
     const hw = STATS.bodyW * 0.5;
     const hh = STATS.bodyH * 0.5;
+    const prevX = f.x;
     const prevY = f.y;
     f.x += f.vx * STEP;
     f.wall = 0;
@@ -355,6 +359,43 @@ function tickFighter(f, opp, input, w) {
                 f.vy = toward(f.vy, -STATS.climbSpeed, 3600 * STEP);
             else
                 f.vy = Math.min(f.vy, WALL_SLIDE);
+        }
+    }
+    for (const plat of w.stage.platforms) {
+        if (!isVerticalWallPlatform(plat))
+            continue;
+        const bodyTop = f.y - hh;
+        const bodyBot = f.y + hh;
+        const overlapsY = bodyBot > plat.y + 2 && bodyTop < plat.y + plat.h - 2;
+        if (!overlapsY)
+            continue;
+        const leftFace = plat.x;
+        const rightFace = plat.x + plat.w;
+        const crossedLeftFace = prevX + hw <= leftFace && f.x + hw > leftFace && f.x - hw < rightFace;
+        const crossedRightFace = prevX - hw >= rightFace && f.x - hw < rightFace && f.x + hw > leftFace;
+        if (crossedLeftFace) {
+            f.x = leftFace - hw;
+            f.vx = Math.min(f.vx, 0);
+            if (!f.onGround && input.right) {
+                f.wall = 1;
+                if (input.up)
+                    f.vy = toward(f.vy, -STATS.climbSpeed, 3600 * STEP);
+                else
+                    f.vy = Math.min(f.vy, WALL_SLIDE);
+            }
+            break;
+        }
+        if (crossedRightFace) {
+            f.x = rightFace + hw;
+            f.vx = Math.max(f.vx, 0);
+            if (!f.onGround && input.left) {
+                f.wall = -1;
+                if (input.up)
+                    f.vy = toward(f.vy, -STATS.climbSpeed, 3600 * STEP);
+                else
+                    f.vy = Math.min(f.vy, WALL_SLIDE);
+            }
+            break;
         }
     }
     f.y += f.vy * STEP;

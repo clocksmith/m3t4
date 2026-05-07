@@ -21,7 +21,9 @@ import { GOAL_DWELL_RADIUS, GOAL_DWELL_S, KILL_RESPAWN_S, GRAVITY, RESPAWN_INVUL
 // of always camping the final goal line.
 // v23: carriers briefly remember same-goal direct delivery failures, so a
 // failed route cannot be re-picked immediately after a bait/fight cancel.
-export const BEHAVIOR_VERSION = 23;
+// v24: stage-local vertical walls are treated as wall-jump route blockers
+// instead of normal landing platforms.
+export const BEHAVIOR_VERSION = 24;
 // ---------- Opp-model buffer sizing ----------
 //
 // Bounded ring: max 16 entries per stream, hard decay at 240 ticks (2 s).
@@ -218,6 +220,9 @@ function deriveSignals(obs, params, state) {
     };
 }
 // ---------- Platform helpers ----------
+function isVerticalWallPlatform(p) {
+    return p.solid && p.h >= STATS.bodyH && p.w <= STATS.bodyW * 3;
+}
 function climbStep(obs, targetY) {
     let best = null;
     let bestScore = Infinity;
@@ -274,6 +279,8 @@ function buildNavSurfaces(obs) {
     const surfaces = [];
     let floorAdded = false;
     for (const p of obs.platforms) {
+        if (isVerticalWallPlatform(p))
+            continue;
         const usableW = p.w - NAV_MARGIN * 2;
         if (usableW <= STATS.bodyW)
             continue;
@@ -493,7 +500,67 @@ function directJumpReachable(obs, tx, ty, lift, forceEligible = false) {
     const airControl = STATS.speed * usefulAirTime * (0.45 + lift * 0.35);
     return dx <= plumbLine || dx <= airControl;
 }
+function blockingVerticalWall(obs, tx) {
+    const sx = obs.self.x;
+    const dir = tx >= sx ? 1 : -1;
+    let best = null;
+    let bestDist = Infinity;
+    for (const p of obs.platforms) {
+        if (!isVerticalWallPlatform(p))
+            continue;
+        const left = p.x;
+        const right = p.x + p.w;
+        const between = dir > 0
+            ? sx + STATS.bodyW * 0.5 <= left && tx >= right
+            : sx - STATS.bodyW * 0.5 >= right && tx <= left;
+        if (!between)
+            continue;
+        const bodyTop = obs.self.y - STATS.bodyH * 0.5;
+        const bodyBot = obs.self.y + STATS.bodyH * 0.5;
+        if (bodyBot <= p.y + 2 || bodyTop >= p.y + p.h - 2)
+            continue;
+        const dist = dir > 0 ? left - sx : sx - right;
+        if (dist >= 0 && dist < bestDist) {
+            best = p;
+            bestDist = dist;
+        }
+    }
+    return best;
+}
+function driveAroundVerticalWall(obs, tx, wall) {
+    if (obs.self.wall !== 0) {
+        return { left: obs.self.wall > 0, right: obs.self.wall < 0, up: true };
+    }
+    const dir = tx >= obs.self.x ? 1 : -1;
+    const faceX = dir > 0
+        ? wall.x - STATS.bodyW * 0.5 - 4
+        : wall.x + wall.w + STATS.bodyW * 0.5 + 4;
+    const dx = faceX - obs.self.x;
+    const close = Math.abs(dx) < 42;
+    if (obs.self.onGround) {
+        return {
+            left: dx < -8 || (close && dir < 0),
+            right: dx > 8 || (close && dir > 0),
+            up: close,
+        };
+    }
+    return {
+        left: dir < 0,
+        right: dir > 0,
+        up: obs.self.vy < 220,
+    };
+}
+function wallRouteToward(obs, tx) {
+    if (obs.self.wall !== 0) {
+        return { left: obs.self.wall > 0, right: obs.self.wall < 0, up: true };
+    }
+    const wall = blockingVerticalWall(obs, tx);
+    return wall ? driveAroundVerticalWall(obs, tx, wall) : null;
+}
 function navigateTo(obs, tx, ty, params, forceDirectJumpEligible = false) {
+    const wallRoute = wallRouteToward(obs, tx);
+    if (wallRoute)
+        return wallRoute;
     if (ty > obs.self.y + 80) {
         const dx = tx - obs.self.x;
         return { left: dx < -10, right: dx > 10, down: true };
@@ -710,6 +777,9 @@ function runNeutralMode(obs, params, state, sig) {
         obs.self.lastClashTick < 0 &&
         obs.self.lastKillTick < 0;
     if (noTokenIdle) {
+        const wallRoute = wallRouteToward(obs, obs.opp.x);
+        if (wallRoute)
+            return wallRoute;
         return {
             left: sig.absDir < 0,
             right: sig.absDir > 0,
@@ -734,6 +804,11 @@ function runNeutralMode(obs, params, state, sig) {
     if (sig.altitudeOff < -80)
         down = true;
     const takeFreeSwing = sig.canSwing && sig.freeSwing;
+    if (move === sig.absDir) {
+        const wallRoute = wallRouteToward(obs, obs.opp.x);
+        if (wallRoute)
+            return { ...wallRoute, action: takeFreeSwing };
+    }
     return {
         left: move < 0,
         right: move > 0,
@@ -869,6 +944,9 @@ function runOffenseMode(obs, params, state, sig) {
         jump = true;
     if (sig.altitudeOff < -80)
         down = true;
+    const pressWallRoute = sub !== "bait" ? wallRouteToward(obs, obs.opp.x) : null;
+    if (pressWallRoute)
+        return pressWallRoute;
     // Dive as mobility when above opp (press substate only).
     if (sub === "press" && !obs.self.onGround &&
         obs.self.y < obs.opp.y - 40 && obs.self.diveCD <= 0 &&
@@ -963,6 +1041,11 @@ function runZoneMode(obs, params, sig) {
         return { left: obs.self.wall < 0, right: obs.self.wall > 0, up: true };
     }
     const zoneStrike = sig.canSwing && (sig.freeSwing || sig.oppRecovering);
+    if (move === sig.predDir) {
+        const wallRoute = wallRouteToward(obs, obs.opp.x);
+        if (wallRoute)
+            return { ...wallRoute, action: zoneStrike };
+    }
     return {
         left: move < 0, right: move > 0, up: jump, down,
         action: zoneStrike,

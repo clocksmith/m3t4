@@ -4,19 +4,18 @@
 // answer, both peers exchange ICE candidates through the signaling doc
 // until a data channel opens. From there:
 //
-//   1. Host broadcasts the match seed once both sides are linked.
-//   2. Each peer reads its local keyboard each tick and forwards the
-//      input bitmask to the other peer over the data channel. The remote
-//      side applies the latest received input to the non-local fighter.
-//   3. The deterministic stepper sim (createStepperWorld) consumes the
-//      same seed + same input stream on both ends, producing identical
-//      worlds. No per-tick handshake / no rollback — the inputs stream
-//      ahead of consumption with the sim's natural input-delay buffer.
+//   1. Host broadcasts the match parameters (seed + stageId + public
+//      cosmetics) once both sides are linked.
+//   2. Each peer reads its local keyboard for the current sim tick and
+//      forwards {tick,input} to the other peer over the data channel.
+//   3. The duel loop only advances a tick after the matching remote
+//      input for that same tick has arrived. That keeps both peers on
+//      the same deterministic input stream at the cost of pausing under
+//      network jitter.
 //
-// This is intentionally simple. No prediction, no rollback, no NAT
-// traversal beyond a public STUN. Two peers behind symmetric NATs may
-// fail to connect — that's a known limitation we'll address with a
-// TURN relay later.
+// Other known limitations: no prediction, no rollback, no NAT traversal
+// beyond a public STUN. Symmetric-NAT peers may fail to connect; a TURN
+// relay is the planned fix.
 
 import { firebase, httpsCallable, signInAnonymously } from "./firebase-client.js";
 
@@ -39,10 +38,15 @@ function defaultIceServers() {
   return [{ urls: "stun:stun.l.google.com:19302" }];
 }
 
-async function ensureAnonAuth() {
+async function ensureSignalAuth() {
   const fb = firebase();
   if (!fb) throw new Error("Firebase not configured");
-  if (!fb.auth.currentUser) await signInAnonymously(fb.auth);
+  if (fb.auth.currentUser) return fb;
+  try {
+    await signInAnonymously(fb.auth);
+  } catch {
+    throw new Error("sign in first for P2P");
+  }
   return fb;
 }
 
@@ -86,39 +90,39 @@ function unpackInput(byte) {
   };
 }
 
-// startP2PDuel({ role, sessionId, onStatus, onLink, onSeed, onRemoteInput, onClose })
+// startP2PDuel({ role, sessionId, onStatus, onLink, onMatch, onRemoteInput, onClose })
 //   role          - "host" or "join"
 //   sessionId     - required when role==="join", the code shared by host
 //   onStatus(msg) - human-readable progress messages
 //   onLink()      - both peers connected, data channel open
-//   onSeed(seed)  - guest-only: receives host's seed
-//   onRemoteInput(input) - the latest input received from the remote peer
+//   onMatch({ seed, stageId, cosmetics }) - guest-only: receives host's match parameters
+//   onRemoteInput(tick, input) - input received from the remote peer for a sim tick
 //   onClose()     - data channel closed
 //
-// Returns { stop(), sendInput(tick, input), broadcastSeed(seed), sessionId, linked }.
+// Returns { stop(), sendInput(tick, input), broadcastMatch({seed, stageId, cosmetics}), sessionId, linked }.
 export async function startP2PDuel({
   role,
   sessionId: joinSessionId,
   onStatus = () => {},
   onLink = () => {},
-  onSeed = () => {},
+  onMatch = () => {},
   onRemoteInput = () => {},
   onClose = () => {},
 }) {
   if (!isP2PSupported()) throw new Error("P2P not supported in this environment");
-  const fb = await ensureAnonAuth();
+  const fb = await ensureSignalAuth();
 
   if (role === "host") {
-    return runHost(fb, { onStatus, onLink, onSeed, onRemoteInput, onClose });
+    return runHost(fb, { onStatus, onLink, onMatch, onRemoteInput, onClose });
   }
   if (role === "join") {
     if (!joinSessionId) throw new Error("session code required to join");
-    return runGuest(fb, joinSessionId, { onStatus, onLink, onSeed, onRemoteInput, onClose });
+    return runGuest(fb, joinSessionId, { onStatus, onLink, onMatch, onRemoteInput, onClose });
   }
   throw new Error(`unknown p2p role: ${role}`);
 }
 
-async function runHost(fb, { onStatus, onLink, onSeed, onRemoteInput, onClose }) {
+async function runHost(fb, { onStatus, onLink, onMatch, onRemoteInput, onClose }) {
   onStatus("creating session…");
   const session = await callSignal(fb, "create", {});
   const sessionId = session.sessionId;
@@ -138,7 +142,7 @@ async function runHost(fb, { onStatus, onLink, onSeed, onRemoteInput, onClose })
     onStatus("linked");
     onLink();
   };
-  channel.onmessage = (ev) => handleRemoteMessage(ev.data, { onSeed, onRemoteInput });
+  channel.onmessage = (ev) => handleRemoteMessage(ev.data, { onMatch, onRemoteInput });
   channel.onclose = () => { handle.linked = false; onClose(); };
 
   pc.onicecandidate = (ev) => {
@@ -168,7 +172,7 @@ async function runHost(fb, { onStatus, onLink, onSeed, onRemoteInput, onClose })
     }
   });
 
-  onStatus(`code: ${sessionId.slice(0, 8)} (full code in console)`);
+  onStatus(`code: ${sessionId}`);
   console.info("[p2p-duel] session code:", sessionId);
 
   const offer = await pc.createOffer();
@@ -189,7 +193,7 @@ async function runHost(fb, { onStatus, onLink, onSeed, onRemoteInput, onClose })
   return handle;
 }
 
-async function runGuest(fb, sessionId, { onStatus, onLink, onSeed, onRemoteInput, onClose }) {
+async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onRemoteInput, onClose }) {
   onStatus("connecting…");
   const pc = new RTCPeerConnection({ iceServers: defaultIceServers() });
 
@@ -206,7 +210,7 @@ async function runGuest(fb, sessionId, { onStatus, onLink, onSeed, onRemoteInput
         onStatus("linked");
         onLink();
       };
-      channel.onmessage = (e) => handleRemoteMessage(e.data, { onSeed, onRemoteInput });
+      channel.onmessage = (e) => handleRemoteMessage(e.data, { onMatch, onRemoteInput });
       channel.onclose = () => { handle.linked = false; onClose(); };
       resolve(handle);
     };
@@ -286,37 +290,44 @@ function makeHandle(sessionId, channel, teardown) {
     },
     sendInput(tick, input) {
       if (!handle.linked || channel.readyState !== "open") return;
-      // 1 byte tick-tag (mod 256) + 1 byte input bitmask. The receiver
-      // treats the latest packed input as the remote's current state.
-      // Tick is informational; the sim uses input freshness, not echo.
-      const buf = new Uint8Array(2);
-      buf[0] = tick & 0xff;
-      buf[1] = packInput(input);
+      // 4-byte tick tag + 1-byte input bitmask. The duel loop consumes
+      // only the input whose tick matches the world tick it is about to
+      // simulate.
+      const buf = new Uint8Array(5);
+      const view = new DataView(buf.buffer);
+      view.setUint32(0, tick >>> 0);
+      buf[4] = packInput(input);
       try { channel.send(buf); } catch {}
     },
-    broadcastSeed(seed) {
+    broadcastMatch({ seed, stageId, cosmetics }) {
       if (!handle.linked || channel.readyState !== "open") return;
       try {
-        channel.send(JSON.stringify({ type: "seed", seed: seed >>> 0 }));
+        channel.send(JSON.stringify({
+          type: "match",
+          seed: seed >>> 0,
+          stageId: String(stageId ?? ""),
+          cosmetics: Array.isArray(cosmetics) ? cosmetics : undefined,
+        }));
       } catch {}
     },
   };
   return handle;
 }
 
-function handleRemoteMessage(raw, { onSeed, onRemoteInput }) {
+function handleRemoteMessage(raw, { onMatch, onRemoteInput }) {
   if (raw instanceof ArrayBuffer) {
     const view = new Uint8Array(raw);
-    if (view.length < 2) return;
-    onRemoteInput(unpackInput(view[1]));
+    if (view.length < 5) return;
+    const tick = new DataView(raw).getUint32(0);
+    onRemoteInput(tick, unpackInput(view[4]));
     return;
   }
-  // JSON control messages (seed, etc.) come over the same channel.
+  // JSON control messages (match start, etc.) come over the same channel.
   if (typeof raw === "string") {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
-    if (msg && msg.type === "seed" && Number.isFinite(msg.seed)) {
-      onSeed(msg.seed >>> 0);
+    if (msg && msg.type === "match" && Number.isFinite(msg.seed)) {
+      onMatch({ seed: msg.seed >>> 0, stageId: msg.stageId, cosmetics: msg.cosmetics });
     }
   }
 }

@@ -29,6 +29,9 @@ import { escapeHtml } from "../ui/html.js";
 import { buttonHtml } from "../ui/actions.js";
 import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
 import presetRanking from "../data/preset-ranking.v1.json" with { type: "json" };
+import rosterCatalog from "../content/roster-catalog.v1.json" with { type: "json" };
+import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
+import { BODY_PORTRAIT_SHEETS, BODY_VARIANTS } from "../content/character-presentation.js";
 import { startP2PDuel, isP2PSupported } from "../lib/p2p-duel.js";
 
 const SIM_HZ = 120;
@@ -46,11 +49,80 @@ const GAME_KEYS = new Set([
   "KeyA", "KeyD", "KeyW", "KeyS", "KeyF",
   "KeyL", "Quote", "KeyP", "Semicolon", "BracketLeft",
 ]);
+const EMPTY_INPUT = Object.freeze({ left: false, right: false, up: false, down: false, action: false });
+const REMOTE_INPUT_BUFFER_LIMIT = 720;
 
 const SUB_MODES = ["vs-ai", "hot-seat", "p2p"];
 
 const PRESET_NAMES = (presetRanking.rows ?? []).map((r) => r.name ?? r);
 const DEFAULT_PRESET = PRESET_NAMES[0] ?? "standby";
+const BODY_IDS = rosterCatalog.bodies ?? [];
+const PLAYER_PALETTES = [
+  { col: "#6ee7b7", trim: "#d1fae5", shadow: "#047857" },
+  { col: "#fb923c", trim: "#fed7aa", shadow: "#9a3412" },
+];
+
+function weaponEntriesForBody(body) {
+  return (rosterCatalog.weapons?.[body] ?? []).filter((weapon) => weapon.available);
+}
+
+function availableWeaponIds(body) {
+  const ids = weaponEntriesForBody(body).map((weapon) => weapon.id).filter(Boolean);
+  return ids.length ? ids : [""];
+}
+
+function defaultCosmetics(side) {
+  const body = BODY_IDS[((side % BODY_IDS.length) + BODY_IDS.length) % BODY_IDS.length] ?? "sama";
+  return { body, weapon: availableWeaponIds(body)[0] };
+}
+
+function normalizeCosmetics(value, side) {
+  const fallback = defaultCosmetics(side);
+  const body = BODY_IDS.includes(value?.body) ? value.body : fallback.body;
+  const weapons = availableWeaponIds(body);
+  const weapon = weapons.includes(value?.weapon) ? value.weapon : weapons[0];
+  return { body, weapon };
+}
+
+function normalizeCosmeticsPair(value) {
+  const pair = Array.isArray(value) ? value : [];
+  return [normalizeCosmetics(pair[0], 0), normalizeCosmetics(pair[1], 1)];
+}
+
+function selectedCosmetics() {
+  return normalizeCosmeticsPair(state?.cosmetics);
+}
+
+function bodyCopy(body) {
+  const variant = BODY_VARIANTS[body];
+  return gameCopy.characters?.[body]?.[variant] ?? {};
+}
+
+function bodyLabel(body) {
+  return bodyCopy(body).name ?? body;
+}
+
+function bodyMeta(body) {
+  return bodyCopy(body).label ?? bodyCopy(body).combatFantasy ?? body;
+}
+
+function weaponLabel(body, weapon) {
+  return gameCopy.weapons?.[body]?.[weapon]?.name ?? weapon;
+}
+
+function weaponMeta(body, weapon) {
+  return gameCopy.weapons?.[body]?.[weapon]?.class ?? "weapon";
+}
+
+function selectedCharacters() {
+  return selectedCosmetics().map((cosmetic, side) => ({
+    name: bodyLabel(cosmetic.body),
+    label: weaponLabel(cosmetic.body, cosmetic.weapon),
+    ...PLAYER_PALETTES[side],
+    body: cosmetic.body,
+    weapon: cosmetic.weapon,
+  }));
+}
 
 // --- module state ---
 let state = null; // populated by mount()
@@ -72,9 +144,12 @@ function freshState() {
     playedAtMs: 0,
     accumMs: 0,
     p2p: null,        // populated when p2p sub-mode is active
-    remoteInput: { left: false, right: false, up: false, down: false, action: false },
+    remoteInputs: new Map(),
+    lastRemoteTick: -1,
+    waitingRemoteTick: null,
     hostSide: 0,      // 0 = P1, 1 = P2 (for p2p, assigned when pairing)
     statusMsg: "",
+    cosmetics: [defaultCosmetics(0), defaultCosmetics(1)],
   };
 }
 
@@ -106,6 +181,40 @@ function readKeyboard(slot) {
   };
 }
 
+function normalizeInput(input = EMPTY_INPUT) {
+  return {
+    left: input.left === true,
+    right: input.right === true,
+    up: input.up === true,
+    down: input.down === true,
+    action: input.action === true,
+  };
+}
+
+function clearRemoteInputs() {
+  if (!state) return;
+  state.remoteInputs.clear();
+  state.lastRemoteTick = -1;
+  state.waitingRemoteTick = null;
+}
+
+function pruneRemoteInputs(currentTick) {
+  if (!state || state.remoteInputs.size <= REMOTE_INPUT_BUFFER_LIMIT) return;
+  for (const tick of state.remoteInputs.keys()) {
+    if (tick < currentTick) state.remoteInputs.delete(tick);
+    if (state.remoteInputs.size <= REMOTE_INPUT_BUFFER_LIMIT) break;
+  }
+}
+
+function bufferRemoteInput(tick, input) {
+  if (!state || !Number.isInteger(tick) || tick < 0) return;
+  const currentTick = state.world?.tick ?? 0;
+  if (tick < currentTick) return;
+  state.remoteInputs.set(tick, normalizeInput(input));
+  state.lastRemoteTick = Math.max(state.lastRemoteTick, tick);
+  pruneRemoteInputs(currentTick);
+}
+
 // --- sim wiring ---
 function freshSeed() {
   return (Math.random() * 0xffffffff) >>> 0;
@@ -113,9 +222,23 @@ function freshSeed() {
 
 function startMatch() {
   if (!state) return;
+  if (state.subMode === "p2p") {
+    if (!state.p2p?.linked) {
+      state.world = null;
+      state.statusMsg = state.p2p ? "waiting for opponent…" : "host or join first";
+      refreshHud();
+      return;
+    }
+    if (state.hostSide !== 0) {
+      state.statusMsg = "waiting for host match";
+      refreshHud();
+      return;
+    }
+  }
   const stage = SIM_STAGES[state.stageId] ?? SIM_STAGES.datacenter;
+  clearRemoteInputs();
   state.seed = freshSeed();
-  state.world = createStepperWorld({ stage, seed: state.seed });
+  state.world = createStepperWorld({ stage, seed: state.seed, chars: selectedCharacters() });
   state.brainP2 = state.subMode === "vs-ai"
     ? compileBrain(STRATEGIES[state.presetName] ?? STRATEGIES[DEFAULT_PRESET])
     : null;
@@ -124,8 +247,8 @@ function startMatch() {
   state.statusMsg = state.subMode === "p2p" && !state.p2p?.linked
     ? "waiting for opponent…"
     : "fight";
-  if (state.p2p?.linked && typeof state.p2p.broadcastSeed === "function") {
-    state.p2p.broadcastSeed(state.seed);
+  if (state.p2p?.linked && typeof state.p2p.broadcastMatch === "function") {
+    state.p2p.broadcastMatch({ seed: state.seed, stageId: state.stageId, cosmetics: selectedCosmetics() });
   }
   refreshHud();
 }
@@ -140,7 +263,7 @@ function actionFor(slot) {
   }
   // p2p: local human drives one side, remote input drives the other.
   if (slot === state.hostSide) return readKeyboard(0);
-  return state.remoteInput;
+  return EMPTY_INPUT;
 }
 
 function step(nowMs) {
@@ -156,15 +279,30 @@ function step(nowMs) {
     steps < MAX_CATCHUP_TICKS &&
     state.world.matchWinner === -1
   ) {
-    const actA = actionFor(0);
-    const actB = actionFor(1);
-    if (state.p2p?.linked && state.subMode === "p2p") {
-      // Send local input to the remote peer each tick. The peer mirrors
-      // and applies it on their side. Simple input-broadcast lockstep —
-      // the host's seed makes both sims deterministic from the same
-      // start, so identical input streams produce identical worlds.
-      const localAct = state.hostSide === 0 ? actA : actB;
-      state.p2p.sendInput(state.world.tick, localAct);
+    let actA;
+    let actB;
+    if (state.subMode === "p2p") {
+      if (!state.p2p?.linked) {
+        state.statusMsg = "waiting for opponent…";
+        break;
+      }
+      const tick = state.world.tick >>> 0;
+      const localAct = readKeyboard(0);
+      state.p2p.sendInput(tick, localAct);
+      const remoteAct = state.remoteInputs.get(tick);
+      if (!remoteAct) {
+        state.waitingRemoteTick = tick;
+        state.statusMsg = `waiting for peer input @${tick}`;
+        break;
+      }
+      state.remoteInputs.delete(tick);
+      state.waitingRemoteTick = null;
+      state.statusMsg = "fight";
+      actA = state.hostSide === 0 ? localAct : remoteAct;
+      actB = state.hostSide === 1 ? localAct : remoteAct;
+    } else {
+      actA = actionFor(0);
+      actB = actionFor(1);
     }
     stepWorld(state.world, actA, actB);
     state.accumMs -= STEP_MS;
@@ -200,9 +338,12 @@ function emptyFrame() {
 }
 
 function labels() {
-  if (state.subMode === "vs-ai") return { p1: "you", p2: state.presetName };
-  if (state.subMode === "hot-seat") return { p1: "P1", p2: "P2" };
-  return state.hostSide === 0 ? { p1: "you", p2: "remote" } : { p1: "remote", p2: "you" };
+  const cosmetics = selectedCosmetics();
+  if (state.subMode === "vs-ai") return { p1: "you", p2: state.presetName, cosmetics };
+  if (state.subMode === "hot-seat") return { p1: "P1", p2: "P2", cosmetics };
+  return state.hostSide === 0
+    ? { p1: "you", p2: "remote", cosmetics }
+    : { p1: "remote", p2: "you", cosmetics };
 }
 
 // --- HUD ---
@@ -221,7 +362,7 @@ function refreshHud(frame = state.world ? worldToFrame(state.world) : emptyFrame
 }
 
 function duelStatusText() {
-  if (!state.world) return "press fight to start";
+  if (!state.world) return state.statusMsg || "press fight to start";
   if (state.world.matchWinner !== -1) {
     const w = state.world.matchWinner;
     return `${w === 0 ? labels().p1 : labels().p2} wins`;
@@ -260,10 +401,85 @@ function subModeRowHtml() {
     </div>`;
 }
 
+function characterSelectHtml() {
+  const cosmetics = selectedCosmetics();
+  return cosmetics.map((cosmetic, side) => `
+    <div class="duel-fighter-slot" data-side="${side}">
+      <div class="duel-fighter-head">
+        <span class="duel-fighter-kicker">P${side + 1}</span>
+        <strong>${escapeHtml(bodyLabel(cosmetic.body))}</strong>
+        <span>${escapeHtml(weaponLabel(cosmetic.body, cosmetic.weapon))}</span>
+      </div>
+      <div class="duel-body-grid" aria-label="P${side + 1} character select">
+        ${BODY_IDS.map((body) => {
+          const selected = body === cosmetic.body;
+          return `
+            <button type="button" class="duel-body-option${selected ? " is-selected" : ""}" data-side="${side}" data-body="${escapeHtml(body)}" title="${escapeHtml(bodyMeta(body))}">
+              ${bodyPortraitHtml(body)}
+              <span>${escapeHtml(bodyLabel(body))}</span>
+            </button>`;
+        }).join("")}
+      </div>
+      <div class="duel-weapon-grid" aria-label="P${side + 1} weapon select">
+        ${weaponEntriesForBody(cosmetic.body).map((weapon) => {
+          const selected = weapon.id === cosmetic.weapon;
+          return `
+            <button type="button" class="duel-weapon-option${selected ? " is-selected" : ""}" data-side="${side}" data-weapon="${escapeHtml(weapon.id)}">
+              ${weaponOptionVisualHtml(cosmetic.body, weapon)}
+              <span class="duel-weapon-copy">
+                <span class="duel-weapon-name">${escapeHtml(weaponLabel(cosmetic.body, weapon.id))}</span>
+                <span class="duel-weapon-meta">${escapeHtml(weaponMeta(cosmetic.body, weapon.id))}</span>
+              </span>
+            </button>`;
+        }).join("")}
+      </div>
+    </div>`).join("");
+}
+
+function bodyPortraitHtml(body) {
+  const url = BODY_PORTRAIT_SHEETS[body];
+  const style = url ? ` style="background-image:url('${escapeHtml(url)}')"` : "";
+  return `<span class="duel-body-portrait"${style} aria-hidden="true"></span>`;
+}
+
+function weaponOptionVisualHtml(body, weapon) {
+  const spriteStyle = weaponSpriteStyle(body, weapon.asset);
+  return `
+    <span class="duel-weapon-visual" aria-hidden="true">
+      <span class="duel-weapon-sprite${spriteStyle ? "" : " is-missing"}"${spriteStyle ? ` style="${spriteStyle}"` : ""}></span>
+    </span>`;
+}
+
+function weaponSpriteStyle(body, asset) {
+  if (!asset?.url) return "";
+  const cols = Math.max(1, Number(asset.cols ?? 1) || 1);
+  const cell = Math.max(0, Number(asset.cell ?? 0) || 0);
+  const rows = weaponSheetRows(body, asset, cols);
+  const col = cell % cols;
+  const row = Math.floor(cell / cols);
+  const x = cols > 1 ? (col / (cols - 1)) * 100 : 0;
+  const y = rows > 1 ? (row / (rows - 1)) * 100 : 0;
+  return [
+    `background-image:url('${escapeHtml(asset.url)}')`,
+    `background-size:${cols * 100}% ${rows * 100}%`,
+    `background-position:${x}% ${y}%`,
+  ].join(";");
+}
+
+function weaponSheetRows(body, asset, cols) {
+  const maxCell = weaponEntriesForBody(body)
+    .filter((weapon) => weapon.asset?.url === asset.url)
+    .reduce((max, weapon) => Math.max(max, Number(weapon.asset?.cell ?? 0) || 0), Number(asset.cell ?? 0) || 0);
+  return Math.max(1, Math.floor(maxCell / cols) + 1);
+}
+
 function controlsCardHtml() {
   return `
     <div class="duel-controls">
       ${subModeRowHtml()}
+      <div class="duel-character-select" id="duel-character-select">
+        ${characterSelectHtml()}
+      </div>
 
       <div class="duel-row">
         <label class="tight">stage
@@ -295,12 +511,16 @@ function p2pPanelHtml() {
     return `<div class="duel-p2p-warning">P2P needs WebRTC + Firebase. Check your config.js.</div>`;
   }
   return `
+    <div class="duel-p2p-warning tight">
+      signaling requires sign-in. lockstep waits for peer input. STUN only; some NATs will not pair.
+    </div>
     <div class="duel-p2p-row">
-      ${buttonHtml({ id: "duel-p2p-host", text: "host", attrs: { title: "Create a session and share the code" } })}
+      ${buttonHtml({ id: "duel-p2p-host", text: "host", attrs: { title: "Create a session and share the invite link" } })}
       <span class="duel-p2p-divider">or</span>
-      <input type="text" id="duel-p2p-code" placeholder="paste code" autocomplete="off" spellcheck="false" />
+      <input type="text" id="duel-p2p-code" placeholder="paste invite link" autocomplete="off" spellcheck="false" />
       ${buttonHtml({ id: "duel-p2p-join", text: "join", attrs: { title: "Join an existing session" } })}
     </div>
+    <div class="duel-p2p-share" id="duel-p2p-share" hidden></div>
     <div class="duel-p2p-status tight" id="duel-p2p-status">offline</div>`;
 }
 
@@ -343,6 +563,7 @@ export function mount(root, ctx = {}) {
       ${contextCardHtml({
         className: "duel-context-card",
         body: controlsCardHtml(),
+        autoHeight: true,
       })}
       <section class="panel canvas-panel">
         <canvas id="duel-canvas" class="u-canvas-fill" width="${W}" height="${H}" tabindex="0"></canvas>
@@ -354,10 +575,12 @@ export function mount(root, ctx = {}) {
   void attachRenderer(state.canvas);
   refreshKeysHint();
   bindControls();
+  applyJoinLinkFromLocation();
 
   addEventListener("keydown", onKeyDown);
   addEventListener("keyup", onKeyUp);
   addEventListener("blur", onBlur);
+  addEventListener("hashchange", onHashChange);
 
   state.running = true;
   loop();
@@ -368,6 +591,7 @@ export function unmount() {
   removeEventListener("keydown", onKeyDown);
   removeEventListener("keyup", onKeyUp);
   removeEventListener("blur", onBlur);
+  removeEventListener("hashchange", onHashChange);
   if (state) {
     state.running = false;
     if (state.rafId) cancelAnimationFrame(state.rafId);
@@ -379,6 +603,10 @@ export function unmount() {
     state.p2p = null;
   }
   state = null;
+}
+
+function onHashChange() {
+  applyJoinLinkFromLocation();
 }
 
 async function attachRenderer(canvas) {
@@ -411,6 +639,8 @@ function bindControls() {
     if (!STAGE_IDS.includes(stageSel.value)) return;
     state.stageId = stageSel.value;
     state.world = null;
+    state.statusMsg = "";
+    clearRemoteInputs();
     refreshHud();
     refocusCanvas();
   });
@@ -418,6 +648,8 @@ function bindControls() {
   presetSel?.addEventListener("change", () => {
     state.presetName = presetSel.value;
     state.world = null;
+    state.statusMsg = "";
+    clearRemoteInputs();
     refreshHud();
     refocusCanvas();
   });
@@ -427,11 +659,98 @@ function bindControls() {
   });
   document.getElementById("duel-reset")?.addEventListener("click", () => {
     state.world = null;
+    state.statusMsg = "";
+    clearRemoteInputs();
     refreshHud();
     refocusCanvas();
   });
 
+  bindCharacterSelect();
   bindP2PControls();
+}
+
+function bindCharacterSelect() {
+  const el = document.getElementById("duel-character-select");
+  el?.addEventListener("click", (event) => {
+    const bodyButton = event.target instanceof Element ? event.target.closest(".duel-body-option") : null;
+    const weaponButton = event.target instanceof Element ? event.target.closest(".duel-weapon-option") : null;
+    const button = bodyButton ?? weaponButton;
+    if (!button) return;
+    const side = Number(button.dataset.side);
+    if (!Number.isInteger(side) || side < 0 || side > 1) return;
+
+    if (bodyButton) {
+      const body = BODY_IDS.includes(bodyButton.dataset.body) ? bodyButton.dataset.body : defaultCosmetics(side).body;
+      state.cosmetics[side] = normalizeCosmetics({ body, weapon: availableWeaponIds(body)[0] }, side);
+    } else if (weaponButton) {
+      const current = normalizeCosmetics(state.cosmetics[side], side);
+      const weapons = availableWeaponIds(current.body);
+      const weapon = weapons.includes(weaponButton.dataset.weapon) ? weaponButton.dataset.weapon : current.weapon;
+      state.cosmetics[side] = normalizeCosmetics({ ...current, weapon }, side);
+    }
+
+    state.world = null;
+    state.statusMsg = "";
+    clearRemoteInputs();
+    renderCharacterSelect();
+    refreshHud();
+    refocusCanvas();
+  });
+}
+
+function renderCharacterSelect() {
+  const el = document.getElementById("duel-character-select");
+  if (el) el.innerHTML = characterSelectHtml();
+}
+
+function joinCodeFromParts(search, hash) {
+  const fromSearch = new URLSearchParams(search || "").get("join");
+  if (fromSearch) return fromSearch.trim();
+
+  const rawHash = String(hash || "").replace(/^#/, "").trim();
+  if (!rawHash) return "";
+  const hashParams = new URLSearchParams(rawHash.startsWith("?") ? rawHash.slice(1) : rawHash);
+  const fromHash = hashParams.get("join");
+  if (fromHash) return fromHash.trim();
+  if (!rawHash.includes("=") && rawHash.length > 8) return rawHash;
+  return "";
+}
+
+function normalizeJoinCode(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  try {
+    const url = new URL(text, window.location.origin);
+    const code = joinCodeFromParts(url.search, url.hash);
+    if (code) return code;
+  } catch {}
+  if (text.startsWith("#") || text.startsWith("?")) {
+    const code = joinCodeFromParts(text.startsWith("?") ? text : "", text.startsWith("#") ? text : "");
+    if (code) return code;
+  }
+  return text;
+}
+
+function joinCodeFromLocation() {
+  return normalizeJoinCode(`${window.location.search}${window.location.hash}`);
+}
+
+function duelShareUrl(sessionId) {
+  const url = new URL("/duel", window.location.origin);
+  url.hash = `join=${encodeURIComponent(sessionId)}`;
+  return url.toString();
+}
+
+function applyJoinLinkFromLocation() {
+  if (!state) return;
+  const code = joinCodeFromLocation();
+  if (!code) return;
+  if (state.subMode !== "p2p") switchSubMode("p2p");
+  const codeInp = document.getElementById("duel-p2p-code");
+  if (codeInp) codeInp.value = code;
+  state.statusMsg = "join link ready";
+  setP2PStatus("link loaded — sign in, then join");
+  refreshHud();
 }
 
 function bindP2PControls() {
@@ -440,9 +759,9 @@ function bindP2PControls() {
   const codeInp = document.getElementById("duel-p2p-code");
   hostBtn?.addEventListener("click", () => beginP2P("host"));
   joinBtn?.addEventListener("click", () => {
-    const code = (codeInp?.value || "").trim();
+    const code = normalizeJoinCode(codeInp?.value || "");
     if (!code) {
-      setP2PStatus("paste a code first");
+      setP2PStatus("paste a link first");
       return;
     }
     beginP2P("join", code);
@@ -457,34 +776,47 @@ async function beginP2P(role, sessionId) {
   if (state.p2p?.stop) {
     try { state.p2p.stop(); } catch {}
   }
+  state.p2p = null;
+  clearRemoteInputs();
   state.hostSide = role === "host" ? 0 : 1;
+  clearP2PShare();
   setP2PStatus(role === "host" ? "creating session…" : "connecting…");
   try {
     const handle = await startP2PDuel({
       role,
       sessionId,
-      onStatus: (msg) => setP2PStatus(msg),
+      onStatus: (msg) => handleP2PStatus(msg),
       onLink: () => {
         setP2PStatus("linked");
         // Start a match when both sides are linked. Host generates the
-        // seed in startMatch and broadcasts via handle.broadcastSeed.
+        // seed + stage in startMatch and broadcasts via handle.broadcastMatch.
         if (role === "host") {
           startMatch();
         }
       },
-      onSeed: (seed) => {
-        // Guest receives host's seed; mirror world creation.
+      onMatch: ({ seed, stageId, cosmetics }) => {
+        if (role === "host") return;
+        // Guest mirrors host's match parameters so both worlds start
+        // from the same seed *and* the same stage.
+        clearRemoteInputs();
+        if (stageId && STAGE_IDS.includes(stageId)) {
+          state.stageId = stageId;
+          const stageSel = document.getElementById("duel-stage");
+          if (stageSel) stageSel.value = stageId;
+        }
+        state.cosmetics = normalizeCosmeticsPair(cosmetics);
+        renderCharacterSelect();
         const stage = SIM_STAGES[state.stageId] ?? SIM_STAGES.datacenter;
         state.seed = seed;
-        state.world = createStepperWorld({ stage, seed });
+        state.world = createStepperWorld({ stage, seed, chars: selectedCharacters() });
         state.brainP2 = null;
         state.playedAtMs = performance.now();
         state.accumMs = 0;
         state.statusMsg = "fight";
         refreshHud();
       },
-      onRemoteInput: (input) => {
-        state.remoteInput = input;
+      onRemoteInput: (tick, input) => {
+        bufferRemoteInput(tick, input);
       },
       onClose: () => setP2PStatus("disconnected"),
     });
@@ -499,16 +831,75 @@ function setP2PStatus(text) {
   if (el) el.textContent = text;
 }
 
+function handleP2PStatus(text) {
+  const match = /^code:\s*(.+)$/i.exec(String(text || ""));
+  if (match) {
+    const sessionId = match[1].trim();
+    renderP2PShare(sessionId);
+    setP2PStatus("magic link ready");
+    return;
+  }
+  setP2PStatus(text);
+}
+
+function renderP2PShare(sessionId) {
+  const el = document.getElementById("duel-p2p-share");
+  if (!el || !sessionId) return;
+  const url = duelShareUrl(sessionId);
+  el.hidden = false;
+  el.innerHTML = `
+    <label class="duel-p2p-link-label">invite link
+      <input type="text" id="duel-p2p-link" readonly value="${escapeHtml(url)}" />
+    </label>
+    ${buttonHtml({ id: "duel-p2p-copy-link", text: "copy link", attrs: { title: "Copy the invite link" } })}`;
+  document.getElementById("duel-p2p-copy-link")?.addEventListener("click", () => {
+    void copyP2PLink(url);
+  });
+}
+
+function clearP2PShare() {
+  const el = document.getElementById("duel-p2p-share");
+  if (!el) return;
+  el.hidden = true;
+  el.innerHTML = "";
+}
+
+async function copyP2PLink(url) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+      setP2PStatus("link copied");
+      return;
+    }
+  } catch {}
+  const input = document.getElementById("duel-p2p-link");
+  if (input?.select) {
+    input.select();
+    try {
+      document.execCommand("copy");
+      setP2PStatus("link copied");
+      return;
+    } catch {}
+  }
+  setP2PStatus("copy failed — select the link");
+}
+
 function switchSubMode(value) {
   if (!SUB_MODES.includes(value)) return;
   state.subMode = value;
   document.querySelectorAll(".duel-mode-row .mode-pill").forEach((p) => {
     p.classList.toggle("is-active", p.dataset.submode === value);
   });
+  document.querySelectorAll('input[name="duel-submode"]').forEach((inp) => {
+    inp.checked = inp.value === value;
+  });
   document.getElementById("duel-preset-row").hidden = value !== "vs-ai";
   document.getElementById("duel-p2p-row").hidden = value !== "p2p";
+  if (value !== "p2p") clearP2PShare();
   refreshKeysHint();
   state.world = null;
+  state.statusMsg = "";
+  clearRemoteInputs();
   // Tear down any running p2p session if leaving p2p mode.
   if (value !== "p2p" && state.p2p?.stop) {
     try { state.p2p.stop(); } catch {}

@@ -81,6 +81,8 @@ export const STAGES = {
     name: "Datacenter",
     platforms: [
       { x: 56, y: 640, w: 1168, h: 80, solid: true },
+      { x: 456, y: 452, w: 34, h: 188, solid: true },
+      { x: 790, y: 452, w: 34, h: 188, solid: true },
       { x: 110, y: 524, w: 200, h: 14, solid: false },
       { x: 970, y: 524, w: 200, h: 14, solid: false },
       { x: 470, y: 414, w: 340, h: 14, solid: false },
@@ -101,6 +103,8 @@ export const STAGES = {
     name: "Boardroom",
     platforms: [
       { x: 56, y: 640, w: 1168, h: 80, solid: true },
+      { x: 346, y: 486, w: 34, h: 154, solid: true },
+      { x: 900, y: 486, w: 34, h: 154, solid: true },
       { x: 380, y: 480, w: 520, h: 16, solid: false },
       { x: 150, y: 340, w: 220, h: 14, solid: false },
       { x: 910, y: 340, w: 220, h: 14, solid: false },
@@ -119,6 +123,8 @@ export const STAGES = {
     name: "Demo Day",
     platforms: [
       { x: 56, y: 640, w: 1168, h: 80, solid: true },
+      { x: 312, y: 500, w: 34, h: 140, solid: true },
+      { x: 934, y: 500, w: 34, h: 140, solid: true },
       { x: 400, y: 540, w: 480, h: 14, solid: false },
       { x: 100, y: 420, w: 180, h: 14, solid: false },
       { x: 1000, y: 420, w: 180, h: 14, solid: false },

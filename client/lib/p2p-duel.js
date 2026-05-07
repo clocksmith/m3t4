@@ -23,6 +23,8 @@ import { firebase, httpsCallable, signInAnonymously } from "./firebase-client.js
 
 const ICE_GATHER_TIMEOUT_MS = 5_000;
 const PAIR_TIMEOUT_MS = 30_000;
+const PING_INTERVAL_MS = 1_000;
+const PING_STALE_MS = 5_000;
 
 export function isP2PSupported() {
   if (typeof window === "undefined") return false;
@@ -146,6 +148,8 @@ export async function startP2PDuel({
   onFrame = () => {},
   onCosmetic = () => {},
   onStage = () => {},
+  onLatency = () => {},
+  onStreamAge = () => {},
   onRemoteInput = () => {},
   onSpectatorLink = () => {},
   onClose = () => {},
@@ -154,16 +158,16 @@ export async function startP2PDuel({
   const fb = await ensureSignalAuth();
 
   if (role === "host") {
-    return runHost(fb, { onStatus, onLink, onMatch, onCosmetic, onStage, onRemoteInput, onSpectatorLink, onClose });
+    return runHost(fb, { onStatus, onLink, onMatch, onCosmetic, onStage, onLatency, onRemoteInput, onSpectatorLink, onClose });
   }
   if (role === "join") {
     if (!joinSessionId) throw new Error("session code required to join");
-    return runGuest(fb, joinSessionId, { onStatus, onLink, onMatch, onFrame, onCosmetic, onStage, onRemoteInput, onClose });
+    return runGuest(fb, joinSessionId, { onStatus, onLink, onMatch, onFrame, onCosmetic, onStage, onLatency, onStreamAge, onRemoteInput, onClose });
   }
   throw new Error(`unknown p2p role: ${role}`);
 }
 
-async function runHost(fb, { onStatus, onLink, onMatch, onCosmetic, onStage, onRemoteInput, onClose }) {
+async function runHost(fb, { onStatus, onLink, onMatch, onCosmetic, onStage, onLatency, onRemoteInput, onClose }) {
   onStatus("creating session…");
   const session = await callSignal(fb, "create", {});
   const sessionId = session.sessionId;
@@ -176,16 +180,17 @@ async function runHost(fb, { onStatus, onLink, onMatch, onCosmetic, onStage, onR
   const handle = makeHandle(sessionId, channel, () => {
     try { pc.close(); } catch {}
     if (handle._unsub) try { handle._unsub(); } catch {}
-  }, { fb });
+  }, { fb, onLatency });
   handle.role = "host";
 
   channel.onopen = () => {
     handle.linked = true;
+    handle.startLatencyProbe();
     onStatus("linked");
     onLink();
   };
-  channel.onmessage = (ev) => handleRemoteMessage(ev.data, { onMatch, onCosmetic, onStage, onRemoteInput });
-  channel.onclose = () => { handle.linked = false; onClose(); };
+  channel.onmessage = (ev) => handleRemoteMessage(ev.data, { handle, onMatch, onCosmetic, onStage, onRemoteInput });
+  channel.onclose = () => { handle.linked = false; handle.stopLatencyProbe(); onClose(); };
 
   pc.onicecandidate = (ev) => {
     if (!ev.candidate) return;
@@ -235,7 +240,7 @@ async function runHost(fb, { onStatus, onLink, onMatch, onCosmetic, onStage, onR
   return handle;
 }
 
-async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onCosmetic, onStage, onRemoteInput, onClose }) {
+async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onCosmetic, onStage, onLatency, onStreamAge, onRemoteInput, onClose }) {
   onStatus("connecting…");
   const { doc, getDoc, onSnapshot } = await import(
     "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
@@ -245,7 +250,7 @@ async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onC
   if (!initial.exists()) throw new Error("session not found");
   const data = initial.data();
   if (playerSlotTaken(data)) {
-    return runSpectator(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onRemoteInput, onClose });
+    return runSpectator(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onStreamAge, onClose });
   }
 
   const pc = new RTCPeerConnection({ iceServers: defaultIceServers() });
@@ -257,14 +262,15 @@ async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onC
       const handle = makeHandle(sessionId, channel, () => {
         try { pc.close(); } catch {}
         if (handle._unsub) try { handle._unsub(); } catch {}
-      });
+      }, { onLatency });
       channel.onopen = () => {
         handle.linked = true;
+        handle.startLatencyProbe();
         onStatus("linked");
         onLink();
       };
-      channel.onmessage = (e) => handleRemoteMessage(e.data, { onMatch, onFrame, onCosmetic, onStage, onRemoteInput });
-      channel.onclose = () => { handle.linked = false; onClose(); };
+      channel.onmessage = (e) => handleRemoteMessage(e.data, { handle, onMatch, onFrame, onCosmetic, onStage, onRemoteInput });
+      channel.onclose = () => { handle.linked = false; handle.stopLatencyProbe(); onClose(); };
       resolve(handle);
     };
   });
@@ -325,7 +331,7 @@ async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onC
   return handle;
 }
 
-async function runSpectator(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onClose }) {
+async function runSpectator(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onStreamAge, onClose }) {
   onStatus("joining as spectator…");
   const { doc, getDoc, onSnapshot } = await import(
     "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
@@ -348,6 +354,7 @@ async function runSpectator(fb, sessionId, { onStatus, onLink, onMatch, onFrame,
     const frameAt = Number(data.spectatorFrameAt ?? 0);
     if (data.spectatorFrame && frameAt >= lastFrameAt) {
       lastFrameAt = frameAt;
+      if (frameAt > 0) onStreamAge?.(Math.max(0, Date.now() - frameAt));
       onFrame(data.spectatorFrame);
     }
   };
@@ -382,15 +389,41 @@ function makeSpectatorHandle(sessionId, teardown) {
 
 function makeHandle(sessionId, channel, teardown, options = {}) {
   const fb = options.fb ?? null;
+  const onLatency = options.onLatency ?? (() => {});
+  const pendingPings = new Map();
+  let pingTimer = 0;
   const handle = {
     sessionId,
     linked: false,
     role: "peer",
     spectator: false,
+    latencyMs: null,
+    lastLatencyAt: 0,
+    _channel: channel,
+    _pendingPings: pendingPings,
     stop() {
       try { channel?.close?.(); } catch {}
+      handle.stopLatencyProbe();
       teardown?.();
       handle.linked = false;
+    },
+    startLatencyProbe() {
+      sendPing();
+      if (pingTimer) return;
+      pingTimer = setInterval(sendPing, PING_INTERVAL_MS);
+    },
+    stopLatencyProbe() {
+      if (pingTimer) clearInterval(pingTimer);
+      pingTimer = 0;
+      pendingPings.clear();
+    },
+    recordLatency(ms) {
+      if (!Number.isFinite(ms) || ms < 0) return;
+      handle.latencyMs = handle.latencyMs === null
+        ? ms
+        : (handle.latencyMs * 0.72) + (ms * 0.28);
+      handle.lastLatencyAt = Date.now();
+      onLatency(Math.round(handle.latencyMs));
     },
     sendInput(tick, input) {
       if (!handle.linked || channel?.readyState !== "open") return;
@@ -444,6 +477,19 @@ function makeHandle(sessionId, channel, teardown, options = {}) {
       if (handle.linked && channel?.readyState === "open") sendJson(channel, msg);
     },
   };
+
+  function sendPing() {
+    if (!handle.linked || channel?.readyState !== "open") return;
+    const now = nowMs();
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    pendingPings.set(id, now);
+    const cutoff = now - PING_STALE_MS;
+    for (const [key, sentAt] of pendingPings) {
+      if (sentAt < cutoff) pendingPings.delete(key);
+    }
+    sendJson(channel, { type: "ping", id });
+  }
+
   return handle;
 }
 
@@ -451,7 +497,14 @@ function sendJson(channel, value) {
   try { channel.send(JSON.stringify(value)); } catch {}
 }
 
-function handleRemoteMessage(raw, { onMatch, onFrame, onCosmetic, onStage, onRemoteInput }) {
+function nowMs() {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now();
+  }
+  return Date.now();
+}
+
+function handleRemoteMessage(raw, { handle, onMatch, onFrame, onCosmetic, onStage, onRemoteInput }) {
   if (raw instanceof ArrayBuffer) {
     const view = new Uint8Array(raw);
     if (view.length < 5) return;
@@ -476,6 +529,16 @@ function handleRemoteMessage(raw, { onMatch, onFrame, onCosmetic, onStage, onRem
     }
     if (msg.type === "stage" && typeof msg.stageId === "string") {
       onStage?.(msg.stageId);
+    }
+    if (msg.type === "ping" && typeof msg.id === "string") {
+      sendJson(handle?._channel, { type: "pong", id: msg.id });
+    }
+    if (msg.type === "pong" && typeof msg.id === "string" && handle?._pendingPings) {
+      const sentAt = handle._pendingPings.get(msg.id);
+      if (Number.isFinite(sentAt)) {
+        handle._pendingPings.delete(msg.id);
+        handle.recordLatency?.(nowMs() - sentAt);
+      }
     }
   }
 }

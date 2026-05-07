@@ -4186,6 +4186,10 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* --- duel page --- */
+.duel-page .canvas-panel {
+  position: relative;
+}
+
 .duel-controls {
   display: flex;
   flex-direction: column;
@@ -4403,16 +4407,40 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .duel-keys {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
   font-size: 12px;
   color: var(--ui-text-soft);
 }
 
 .duel-keys b {
+  display: block;
   color: var(--ui-red);
   letter-spacing: 0.06em;
+}
+
+.duel-key-card {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.duel-key-card span {
+  overflow-wrap: anywhere;
+}
+
+.duel-key-card.is-remote {
+  opacity: 0.82;
+}
+
+.duel-touch-hint {
+  display: none;
+  color: var(--ui-blue);
 }
 
 .duel-stats {
@@ -4507,6 +4535,107 @@ input[type="range"]::-moz-range-thumb {
   font-size: 12px;
 }
 
+.duel-touch-controls,
+.duel-touch-setup {
+  display: none;
+}
+
+.duel-touch-controls {
+  width: 100%;
+  max-width: 720px;
+  margin-inline: auto;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 4px 0;
+  touch-action: none;
+  user-select: none;
+}
+
+.duel-touch-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 58px);
+  grid-template-rows: repeat(3, 48px);
+  gap: 6px;
+}
+
+.duel-touch-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.duel-touch-control {
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.72);
+  color: var(--ui-text);
+  font: 800 10px/1 ui-monospace, Menlo, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.duel-touch-control.is-pressed {
+  background: rgba(239, 68, 68, 0.42);
+  border-color: var(--ui-red);
+  color: #fff;
+}
+
+.duel-touch-control.is-up {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.duel-touch-control.is-left {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.duel-touch-control.is-down {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.duel-touch-control.is-right {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.duel-touch-control.is-action {
+  width: 92px;
+  height: 92px;
+  border-radius: 999px;
+}
+
+.duel-touch-setup {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 4;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.36);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.82);
+  color: var(--ui-text);
+  font: 800 10px/1 ui-monospace, Menlo, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@media (pointer: coarse) {
+  .duel-touch-hint {
+    display: inline;
+  }
+
+  .duel-touch-controls {
+    display: flex;
+  }
+}
+
 @media (max-width: 640px) {
   .duel-character-select {
     grid-template-columns: 1fr;
@@ -4515,5 +4644,110 @@ input[type="range"]::-moz-range-thumb {
   .duel-stats .duel-status {
     margin-left: 0;
     width: 100%;
+  }
+}
+
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 520px) {
+  body.duel-match-active {
+    overflow: hidden;
+  }
+
+  body.duel-match-active #topnav,
+  body.duel-match-active #bottom {
+    display: none;
+  }
+
+  body.duel-match-active #app {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    padding: 0;
+    margin: 0;
+    background: var(--ui-bg);
+    overflow: hidden;
+  }
+
+  .duel-page.is-playing {
+    width: 100vw;
+    height: 100dvh;
+  }
+
+  .duel-page.is-playing .page-header-row,
+  .duel-page.is-playing .duel-context-card {
+    display: none;
+  }
+
+  .duel-page.is-playing .canvas-panel {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    background: #000;
+  }
+
+  .duel-page.is-playing .canvas-panel .u-canvas-fill {
+    width: min(100vw, calc(100dvh * 16 / 9)) !important;
+    height: min(100dvh, calc(100vw * 9 / 16)) !important;
+    max-width: none;
+  }
+
+  .duel-page.is-playing .duel-stats {
+    position: absolute;
+    z-index: 3;
+    top: max(8px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
+    right: auto;
+    max-width: min(58vw, 420px);
+    padding: 6px 8px;
+    gap: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 6px;
+    background: rgba(4, 4, 4, 0.58);
+    pointer-events: none;
+  }
+
+  .duel-page.is-playing .duel-stats .stat {
+    min-width: 42px;
+  }
+
+  .duel-page.is-playing .duel-stats .stat-label {
+    font-size: 8px;
+  }
+
+  .duel-page.is-playing .duel-stats .stat-value {
+    font-size: 11px;
+  }
+
+  .duel-page.is-playing .duel-touch-controls {
+    position: absolute;
+    z-index: 4;
+    inset: auto max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    max-width: none;
+    padding: 0;
+    pointer-events: none;
+  }
+
+  .duel-page.is-playing .duel-touch-control,
+  .duel-page.is-playing .duel-touch-setup {
+    pointer-events: auto;
+  }
+
+  .duel-page.is-playing .duel-touch-pad {
+    grid-template-columns: repeat(3, 54px);
+    grid-template-rows: repeat(3, 44px);
+  }
+
+  .duel-page.is-playing .duel-touch-control.is-action {
+    width: 92px;
+    height: 92px;
+  }
+
+  .duel-page.is-playing .duel-touch-setup {
+    display: block;
   }
 }

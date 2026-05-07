@@ -133,6 +133,9 @@ function freshState() {
     stageId: STAGE_IDS.includes("datacenter") ? "datacenter" : STAGE_IDS[0],
     presetName: DEFAULT_PRESET,
     keyset: new Set(),
+    touchPointers: new Map(),
+    touchInput: { ...EMPTY_INPUT },
+    page: null,
     canvas: null,
     renderer: null,
     rendererId: 0,
@@ -169,7 +172,9 @@ function onKeyUp(e) {
   state.keyset.delete(e.code);
 }
 function onBlur() {
-  if (state) state.keyset.clear();
+  if (!state) return;
+  state.keyset.clear();
+  clearTouchInput();
 }
 function readKeyboard(slot) {
   const k = KEY_MAP[slot];
@@ -179,6 +184,39 @@ function readKeyboard(slot) {
     up: ks.has(k.up), down: ks.has(k.down),
     action: ks.has(k.act),
   };
+}
+
+function readLocalInput() {
+  const keys = readKeyboard(0);
+  const touch = state.touchInput ?? EMPTY_INPUT;
+  return {
+    left: keys.left || touch.left,
+    right: keys.right || touch.right,
+    up: keys.up || touch.up,
+    down: keys.down || touch.down,
+    action: keys.action || touch.action,
+  };
+}
+
+function updateTouchInput() {
+  if (!state) return;
+  const active = new Set(state.touchPointers.values());
+  state.touchInput = {
+    left: active.has("left"),
+    right: active.has("right"),
+    up: active.has("up"),
+    down: active.has("down"),
+    action: active.has("action"),
+  };
+  document.querySelectorAll(".duel-touch-control").forEach((button) => {
+    button.classList.toggle("is-pressed", active.has(button.dataset.touchAction));
+  });
+}
+
+function clearTouchInput() {
+  if (!state) return;
+  state.touchPointers.clear();
+  updateTouchInput();
 }
 
 function normalizeInput(input = EMPTY_INPUT) {
@@ -226,6 +264,7 @@ function startMatch() {
     if (!state.p2p?.linked) {
       state.world = null;
       state.statusMsg = state.p2p ? "waiting for opponent…" : "host or join first";
+      syncPlayClass();
       refreshHud();
       return;
     }
@@ -250,19 +289,21 @@ function startMatch() {
   if (state.p2p?.linked && typeof state.p2p.broadcastMatch === "function") {
     state.p2p.broadcastMatch({ seed: state.seed, stageId: state.stageId, cosmetics: selectedCosmetics() });
   }
+  syncPlayClass();
   refreshHud();
 }
 
 function actionFor(slot) {
   if (state.subMode === "vs-ai") {
-    if (slot === 0) return readKeyboard(0);
+    if (slot === 0) return readLocalInput();
     return runBrainForWorld(state.world, state.brainP2, 1);
   }
   if (state.subMode === "hot-seat") {
+    if (slot === 0) return readLocalInput();
     return readKeyboard(slot);
   }
   // p2p: local human drives one side, remote input drives the other.
-  if (slot === state.hostSide) return readKeyboard(0);
+  if (slot === state.hostSide) return readLocalInput();
   return EMPTY_INPUT;
 }
 
@@ -287,7 +328,7 @@ function step(nowMs) {
         break;
       }
       const tick = state.world.tick >>> 0;
-      const localAct = readKeyboard(0);
+      const localAct = readLocalInput();
       state.p2p.sendInput(tick, localAct);
       const remoteAct = state.remoteInputs.get(tick);
       if (!remoteAct) {
@@ -524,17 +565,35 @@ function p2pPanelHtml() {
     <div class="duel-p2p-status tight" id="duel-p2p-status">offline</div>`;
 }
 
+function controlCardHtml({ role, owner, keyboard, touch = false, remote = false }) {
+  return `
+    <span class="duel-key-card${remote ? " is-remote" : ""}">
+      <b>${escapeHtml(role)}</b>
+      <span>${escapeHtml(owner)}</span>
+      <span>${escapeHtml(keyboard)}</span>
+      ${touch ? `<span class="duel-touch-hint">touch D-pad + strike</span>` : ""}
+    </span>`;
+}
+
 function keysHtml() {
   if (state.subMode === "vs-ai") {
-    return `<span class="tight"><b>YOU</b> ${escapeHtml(KEY_MAP[0].moveHint)} · strike <b>${escapeHtml(KEY_MAP[0].strikeHint)}</b></span>`;
+    return `
+      ${controlCardHtml({ role: "P1", owner: "you", keyboard: "W/A/S/D + F", touch: true })}
+      ${controlCardHtml({ role: "P2", owner: "AI opponent", keyboard: "no local controls", remote: true })}`;
   }
   if (state.subMode === "hot-seat") {
     return `
-      <span class="tight"><b>P1</b> ${escapeHtml(KEY_MAP[0].moveHint)} · strike <b>${escapeHtml(KEY_MAP[0].strikeHint)}</b></span>
-      <span class="tight"><b>P2</b> ${escapeHtml(KEY_MAP[1].moveHint)} · strike <b>${escapeHtml(KEY_MAP[1].strikeHint)}</b></span>`;
+      ${controlCardHtml({ role: "P1", owner: "local player", keyboard: "W/A/S/D + F", touch: true })}
+      ${controlCardHtml({ role: "P2", owner: "same device", keyboard: "P/L/;/' + [", remote: true })}`;
   }
-  // p2p — local user always plays with P1 keys regardless of side
-  return `<span class="tight"><b>YOU</b> ${escapeHtml(KEY_MAP[0].moveHint)} · strike <b>${escapeHtml(KEY_MAP[0].strikeHint)}</b></span>`;
+  const paired = !!state.p2p;
+  const role = state.hostSide === 1 ? "P2" : "P1";
+  const owner = paired
+    ? "you on this device"
+    : "host is P1, joiner is P2";
+  return `
+    ${controlCardHtml({ role, owner, keyboard: "W/A/S/D + F", touch: true })}
+    ${controlCardHtml({ role: "peer", owner: "their device", keyboard: "their W/A/S/D + F or touch", remote: true })}`;
 }
 
 function statsListHtml() {
@@ -546,6 +605,22 @@ function statsListHtml() {
       <span class="stat"><span class="stat-label">seed</span><span class="stat-value" id="duel-stat-seed">—</span></span>
       <span class="stat duel-status"><span class="stat-label">status</span><span class="stat-value" id="duel-status">press fight</span></span>
     </div>`;
+}
+
+function touchControlsHtml() {
+  return `
+    <div class="duel-touch-controls" id="duel-touch-controls" aria-label="touch controls">
+      <div class="duel-touch-pad" aria-label="move">
+        <button type="button" class="duel-touch-control is-up" data-touch-action="up" aria-label="jump">UP</button>
+        <button type="button" class="duel-touch-control is-left" data-touch-action="left" aria-label="move left">LEFT</button>
+        <button type="button" class="duel-touch-control is-down" data-touch-action="down" aria-label="drop">DOWN</button>
+        <button type="button" class="duel-touch-control is-right" data-touch-action="right" aria-label="move right">RIGHT</button>
+      </div>
+      <div class="duel-touch-actions" aria-label="actions">
+        <button type="button" class="duel-touch-control is-action" data-touch-action="action" aria-label="strike">STRIKE</button>
+      </div>
+    </div>
+    <button type="button" class="duel-touch-setup" id="duel-touch-setup">setup</button>`;
 }
 
 // --- mode lifecycle ---
@@ -568,10 +643,13 @@ export function mount(root, ctx = {}) {
       <section class="panel canvas-panel">
         <canvas id="duel-canvas" class="u-canvas-fill" width="${W}" height="${H}" tabindex="0"></canvas>
         ${statsListHtml()}
+        ${touchControlsHtml()}
       </section>
     </div>`;
 
+  state.page = root.querySelector(".duel-page");
   state.canvas = root.querySelector("#duel-canvas");
+  document.body.classList.add("duel-mounted");
   void attachRenderer(state.canvas);
   refreshKeysHint();
   bindControls();
@@ -583,6 +661,7 @@ export function mount(root, ctx = {}) {
   addEventListener("hashchange", onHashChange);
 
   state.running = true;
+  syncPlayClass();
   loop();
   refreshHud();
 }
@@ -597,11 +676,13 @@ export function unmount() {
     if (state.rafId) cancelAnimationFrame(state.rafId);
     state.renderer?.destroy();
     state.renderer = null;
+    clearTouchInput();
     if (state.p2p?.stop) {
       try { state.p2p.stop(); } catch {}
     }
     state.p2p = null;
   }
+  document.body.classList.remove("duel-mounted", "duel-match-active");
   state = null;
 }
 
@@ -641,6 +722,7 @@ function bindControls() {
     state.world = null;
     state.statusMsg = "";
     clearRemoteInputs();
+    syncPlayClass();
     refreshHud();
     refocusCanvas();
   });
@@ -650,6 +732,7 @@ function bindControls() {
     state.world = null;
     state.statusMsg = "";
     clearRemoteInputs();
+    syncPlayClass();
     refreshHud();
     refocusCanvas();
   });
@@ -661,12 +744,47 @@ function bindControls() {
     state.world = null;
     state.statusMsg = "";
     clearRemoteInputs();
+    syncPlayClass();
     refreshHud();
     refocusCanvas();
+  });
+  document.getElementById("duel-touch-setup")?.addEventListener("click", () => {
+    state.world = null;
+    state.statusMsg = "";
+    clearRemoteInputs();
+    clearTouchInput();
+    syncPlayClass();
+    refreshHud();
   });
 
   bindCharacterSelect();
   bindP2PControls();
+  bindTouchControls();
+}
+
+function bindTouchControls() {
+  const el = document.getElementById("duel-touch-controls");
+  if (!el) return;
+
+  const releasePointer = (event) => {
+    if (!state) return;
+    state.touchPointers.delete(event.pointerId);
+    updateTouchInput();
+  };
+
+  el.addEventListener("pointerdown", (event) => {
+    const button = event.target instanceof Element ? event.target.closest(".duel-touch-control") : null;
+    const action = button?.dataset.touchAction;
+    if (!action) return;
+    event.preventDefault();
+    try { button.setPointerCapture?.(event.pointerId); } catch {}
+    state.touchPointers.set(event.pointerId, action);
+    updateTouchInput();
+  });
+  el.addEventListener("pointerup", releasePointer);
+  el.addEventListener("pointercancel", releasePointer);
+  el.addEventListener("lostpointercapture", releasePointer);
+  el.addEventListener("contextmenu", (event) => event.preventDefault());
 }
 
 function bindCharacterSelect() {
@@ -692,6 +810,7 @@ function bindCharacterSelect() {
     state.world = null;
     state.statusMsg = "";
     clearRemoteInputs();
+    syncPlayClass();
     renderCharacterSelect();
     refreshHud();
     refocusCanvas();
@@ -780,6 +899,7 @@ async function beginP2P(role, sessionId) {
   clearRemoteInputs();
   state.hostSide = role === "host" ? 0 : 1;
   clearP2PShare();
+  refreshKeysHint();
   setP2PStatus(role === "host" ? "creating session…" : "connecting…");
   try {
     const handle = await startP2PDuel({
@@ -813,6 +933,7 @@ async function beginP2P(role, sessionId) {
         state.playedAtMs = performance.now();
         state.accumMs = 0;
         state.statusMsg = "fight";
+        syncPlayClass();
         refreshHud();
       },
       onRemoteInput: (tick, input) => {
@@ -900,6 +1021,8 @@ function switchSubMode(value) {
   state.world = null;
   state.statusMsg = "";
   clearRemoteInputs();
+  clearTouchInput();
+  syncPlayClass();
   // Tear down any running p2p session if leaving p2p mode.
   if (value !== "p2p" && state.p2p?.stop) {
     try { state.p2p.stop(); } catch {}
@@ -913,6 +1036,12 @@ function switchSubMode(value) {
 function refreshKeysHint() {
   const el = document.getElementById("duel-keys");
   if (el) el.innerHTML = keysHtml();
+}
+
+function syncPlayClass() {
+  const playing = !!state?.world;
+  state?.page?.classList.toggle("is-playing", playing);
+  document.body.classList.toggle("duel-match-active", playing);
 }
 
 function refocusCanvas() {

@@ -942,9 +942,23 @@ function applyJoinLinkFromLocation() {
   if (state.subMode !== "p2p") switchSubMode("p2p");
   const codeInp = document.getElementById("duel-p2p-code");
   if (codeInp) codeInp.value = code;
-  state.statusMsg = "join link ready";
-  setP2PStatus("link loaded — sign in, then join");
+  // Skip auto-join if a session is already in progress (the user
+  // either pasted a link mid-pair or hashchange fired during a live
+  // session). The duplicate-join would tear the channel down.
+  if (state.p2p) {
+    state.statusMsg = "session active — stop first to join a different link";
+    setP2PStatus("session active");
+    refreshHud();
+    return;
+  }
+  state.statusMsg = "joining…";
+  setP2PStatus("joining…");
   refreshHud();
+  // Auto-join: ensureSignalAuth in p2p-duel.js handles the sign-in
+  // (transparent anonymous if needed). If Anonymous Auth is disabled
+  // on the project, beginP2P surfaces a clear "enable Anonymous Auth
+  // or sign in first" hint via setP2PStatus.
+  void beginP2P("join", code);
 }
 
 function bindP2PControls() {

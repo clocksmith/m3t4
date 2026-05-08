@@ -19,10 +19,16 @@
 // beyond a public STUN. Symmetric-NAT peers may fail to connect; a TURN
 // relay is the planned fix.
 
-import { firebase, httpsCallable, signInAnonymously } from "./firebase-client.js";
-import { ensureIceServers, iceServers as currentIceServers } from "./ice-config.js";
+import { firebase } from "./firebase-client.js";
+import { ensureIceServers, iceServers } from "./ice-config.js";
+import {
+  ensureAnonAuth,
+  callSignal,
+  waitIceGathering,
+  packDescription,
+  loadFirestore,
+} from "./webrtc-signaling.js";
 
-const ICE_GATHER_TIMEOUT_MS = 5_000;
 // Bumped from 30s — invitations frequently take longer than that to
 // deliver and act on (Slack/SMS round-trip, friend grabbing their
 // laptop, etc.). 5 minutes matches the Firestore session TTL so the
@@ -44,78 +50,8 @@ export function isP2PSupported() {
   return !!fb;
 }
 
-function defaultIceServers() {
-  // Use the shared ICE config (STUN + TURN if configured server-side).
-  // Falls back to STUN-only if the fetch hasn't completed yet — callers
-  // await ensureIceServers() before constructing peer connections.
-  return currentIceServers();
-}
-
-async function ensureSignalAuth() {
-  const fb = firebase();
-  if (!fb) throw new Error("Firebase not configured");
-  // Already authenticated (Google / handle / anon). Use that session.
-  if (fb.auth.currentUser) return fb;
-  // No session yet: silently sign the visitor in anonymously so the
-  // signaling callable has a uid. The visitor sees no sign-in flow.
-  // Requires Anonymous Auth to be enabled on the Firebase project; if
-  // it is disabled the SDK throws auth/operation-not-allowed and we
-  // surface a clear hint instead of the raw Firebase code.
-  try {
-    await signInAnonymously(fb.auth);
-  } catch (err) {
-    const code = String(err?.code ?? "");
-    if (code === "auth/operation-not-allowed" || code === "auth/admin-restricted-operation") {
-      throw new Error("P2P unavailable: enable Anonymous Auth in Firebase, or sign in first");
-    }
-    throw new Error(`P2P sign-in failed: ${err?.message ?? code}`);
-  }
-  return fb;
-}
-
-async function callSignal(fb, op, payload) {
-  const fn = httpsCallable(fb.functions, "webrtcSignal");
-  try {
-    const res = await fn({ op, ...payload });
-    return res.data;
-  } catch (err) {
-    const code = String(err?.code ?? "internal").replace(/^functions\//, "");
-    const message = String(err?.message ?? "signaling failed");
-    if (code === "internal" && /^internal$/i.test(message)) {
-      const e = new Error("signaling service unavailable");
-      e.code = code;
-      throw e;
-    }
-    const e = new Error(message);
-    e.code = code;
-    throw e;
-  }
-}
-
 function playerSlotTaken(sessionData) {
   return !!sessionData?.answer?.sdp;
-}
-
-function packDescription(desc) {
-  if (!desc) return null;
-  return {
-    type: String(desc.type ?? ""),
-    sdp: String(desc.sdp ?? ""),
-  };
-}
-
-function waitIceGathering(pc) {
-  if (pc.iceGatheringState === "complete") return Promise.resolve();
-  return new Promise((resolve) => {
-    const timeout = setTimeout(resolve, ICE_GATHER_TIMEOUT_MS);
-    pc.addEventListener("icegatheringstatechange", function onChange() {
-      if (pc.iceGatheringState === "complete") {
-        clearTimeout(timeout);
-        pc.removeEventListener("icegatheringstatechange", onChange);
-        resolve();
-      }
-    });
-  });
 }
 
 function packInput(input) {
@@ -167,7 +103,7 @@ export async function startP2PDuel({
   onClose = () => {},
 }) {
   if (!isP2PSupported()) throw new Error("P2P not supported in this environment");
-  const fb = await ensureSignalAuth();
+  const fb = await ensureAnonAuth();
   // Pull TURN/STUN config before any RTCPeerConnection so symmetric-NAT
   // peers have a relay candidate available. Best-effort — failure
   // degrades to the STUN fallback returned by iceServers().
@@ -207,7 +143,7 @@ async function runHost(fb, { reuseSessionId, onStatus, onLink, onMatch, onCosmet
   }
   if (!sessionId) throw new Error("no sessionId from webrtcSignal create");
 
-  const pc = new RTCPeerConnection({ iceServers: defaultIceServers() });
+  const pc = new RTCPeerConnection({ iceServers: iceServers() });
   const channel = pc.createDataChannel("duel", { ordered: true });
   channel.binaryType = "arraybuffer";
 
@@ -240,9 +176,7 @@ async function runHost(fb, { reuseSessionId, onStatus, onLink, onMatch, onCosmet
     }).catch(() => {});
   };
 
-  const { doc, onSnapshot } = await import(
-    "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
-  );
+  const { doc, onSnapshot } = await loadFirestore();
   const sessionRef = doc(fb.firestore, "webrtc", sessionId);
   handle._unsub = onSnapshot(sessionRef, async (snap) => {
     const data = snap.data();
@@ -258,7 +192,18 @@ async function runHost(fb, { reuseSessionId, onStatus, onLink, onMatch, onCosmet
       }
     }
     if (Number.isFinite(data.spectatorLastSeenAt)) {
-      handle.lastSpectatorPingAt = Number(data.spectatorLastSeenAt) || 0;
+      const next = Number(data.spectatorLastSeenAt) || 0;
+      const previous = handle.lastSpectatorPingAt || 0;
+      handle.lastSpectatorPingAt = next;
+      // Stale-to-fresh transition means a Firestore-only spectator just
+      // arrived (or came back after >20s of silence). Tell the duel
+      // layer so it can rebroadcast the match init + post a fresh frame
+      // immediately rather than waiting for the next match start.
+      const wasFresh = previous > 0 && Date.now() - previous < 20_000;
+      const isFresh = next > 0 && Date.now() - next < 20_000;
+      if (isFresh && !wasFresh) {
+        try { onSpectatorLink(); } catch {}
+      }
     }
   });
 
@@ -285,9 +230,7 @@ async function runHost(fb, { reuseSessionId, onStatus, onLink, onMatch, onCosmet
 
 async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onCosmetic, onAlias, onStage, onLatency, onStreamAge, onRemoteInput, onClose }) {
   onStatus("connecting…");
-  const { doc, getDoc, onSnapshot } = await import(
-    "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
-  );
+  const { doc, getDoc, onSnapshot } = await loadFirestore();
   const sessionRef = doc(fb.firestore, "webrtc", sessionId);
   let initial;
   try {
@@ -307,7 +250,7 @@ async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onC
     return runSpectator(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onStreamAge, onClose });
   }
 
-  const pc = new RTCPeerConnection({ iceServers: defaultIceServers() });
+  const pc = new RTCPeerConnection({ iceServers: iceServers() });
 
   const handlePromise = new Promise((resolve) => {
     pc.ondatachannel = (ev) => {
@@ -425,9 +368,7 @@ async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onC
 
 async function runSpectator(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onStreamAge, onClose }) {
   onStatus("joining as spectator…");
-  const { doc, getDoc, onSnapshot } = await import(
-    "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
-  );
+  const { doc, getDoc, onSnapshot } = await loadFirestore();
   const sessionRef = doc(fb.firestore, "webrtc", sessionId);
   const initial = await getDoc(sessionRef);
   if (!initial.exists()) {

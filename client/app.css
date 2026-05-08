@@ -4617,6 +4617,13 @@ input[type="range"]::-moz-range-thumb {
   margin-top: 2px;
 }
 
+/* Two-state P2P panel: idle (host/join visible) vs is-active (stop/new
+   + share visible). Toggling the class swaps which block renders so
+   the panel doesn't carry empty hidden rows in either state. */
+#duel-p2p-panel .duel-p2p-active { display: none; }
+#duel-p2p-panel.is-active .duel-p2p-idle { display: none; }
+#duel-p2p-panel.is-active .duel-p2p-active { display: block; }
+
 .duel-p2p-takeover {
   display: flex;
   flex-wrap: wrap;

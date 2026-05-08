@@ -19,13 +19,14 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { db, COLLECTIONS } from "./firestore.js";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHmac } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 
 const REGION = "us-central1";
 const SESSION_TTL_MS = 5 * 60_000;
 const MAX_CANDIDATES_PER_POST = 8;
 const SPECTATOR_FRAME_MAX_BYTES = 4096;
+const TURN_CRED_TTL_SEC = 24 * 60 * 60; // 24h — covers the longest plausible session
 
 export const webrtcSignal = onCall(
   { region: REGION, memory: "256MiB", timeoutSeconds: 15, invoker: "public" },
@@ -158,6 +159,37 @@ export const webrtcSignal = onCall(
       return { ok: true };
     }
 
+    if (op === "spectatorPing") {
+      // A duel spectator (Firestore-only viewer; the paired player uses
+      // the data channel and doesn't need this) pings every ~10s while
+      // they're watching. The host reads `spectatorLastSeenAt` from its
+      // existing onSnapshot subscription and only mirrors frames at
+      // 10fps when the timestamp is fresh — saves the unconditional
+      // write loop when nobody is watching from a third browser.
+      const sessionId = String(req.data?.sessionId ?? "");
+      if (!sessionId) throw new HttpsError("invalid-argument", "sessionId required");
+      const ref = firestore.collection(COLLECTIONS.webrtc).doc(sessionId);
+      const snap = await ref.get();
+      if (!snap.exists) throw new HttpsError("not-found", "session not found");
+      const expiresAt = Number(snap.data()?.expiresAt ?? 0);
+      if (expiresAt && expiresAt <= now) {
+        throw new HttpsError("deadline-exceeded", "session expired");
+      }
+      await ref.set({ spectatorLastSeenAt: now }, { merge: true });
+      return { ok: true, ts: now };
+    }
+
+    if (op === "iceServers") {
+      // Returns the ICE server config for clients to use in RTCPeerConnection.
+      // STUN-only by default; if TURN_REALM + TURN_SECRET env vars are set
+      // we also return a TURN entry with short-term credentials per the
+      // time-windowed shared-secret pattern (username = expiry:uid,
+      // credential = HMAC-SHA1(secret, username), base64). 24h expiry
+      // covers the longest reasonable session and lets the same creds be
+      // cached across the page.
+      return { iceServers: buildIceServers(auth.uid) };
+    }
+
     if (op === "reuse") {
       // Host-only path used when the host's tab is reloaded. Wipes the
       // pairing slots (offer/answer/ICE) on the existing session doc and
@@ -230,6 +262,40 @@ function sanitizeSpectatorInit(init: unknown): Record<string, unknown> | null {
     out.aliases = aliasesRaw.map((a) => typeof a === "string" ? a.slice(0, 32) : "");
   }
   return out;
+}
+
+type IceServer = { urls: string | string[]; username?: string; credential?: string };
+
+function buildIceServers(uid: string): IceServer[] {
+  const stunUrls = (process.env.STUN_URLS ?? "stun:stun.l.google.com:19302")
+    .split(",").map((s) => s.trim()).filter(Boolean);
+  const servers: IceServer[] = [{ urls: stunUrls.length === 1 ? stunUrls[0] : stunUrls }];
+  const turnUrlsRaw = (process.env.TURN_URLS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const secret = process.env.TURN_SECRET;
+  if (turnUrlsRaw.length && secret) {
+    const expiry = Math.floor(Date.now() / 1000) + TURN_CRED_TTL_SEC;
+    const username = `${expiry}:${uid || "anon"}`;
+    const credential = createHmac("sha1", secret).update(username).digest("base64");
+    servers.push({
+      urls: turnUrlsRaw.length === 1 ? turnUrlsRaw[0] : turnUrlsRaw,
+      username,
+      credential,
+    });
+  } else if (turnUrlsRaw.length) {
+    // Static-credential mode (TURN_USER + TURN_PASS) for providers that
+    // don't support REST. Less secure — anyone with the page can grab
+    // them — but workable for low-traffic projects.
+    const user = process.env.TURN_USER;
+    const pass = process.env.TURN_PASS;
+    if (user && pass) {
+      servers.push({
+        urls: turnUrlsRaw.length === 1 ? turnUrlsRaw[0] : turnUrlsRaw,
+        username: user,
+        credential: pass,
+      });
+    }
+  }
+  return servers;
 }
 
 function sanitizeCandidate(candidate: unknown): Record<string, unknown> | null {

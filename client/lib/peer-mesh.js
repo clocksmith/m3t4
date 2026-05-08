@@ -16,8 +16,15 @@
 // path.
 
 import { firebase, httpsCallable, signInAnonymously } from "./firebase-client.js";
+import { ensureIceServers, iceServers as currentIceServers } from "./ice-config.js";
 
 const MAX_FANOUT = 4;        // children per node — tree fans out fast
+// Hard cap on tree depth. Each level adds ~hop latency, and unlimited
+// depth lets pathological cases (sparse arrival, churn) build long
+// chains. With MAX_FANOUT=4 this allows 1+4+16+64+256 = 341 spectators
+// at depth 4 — plenty of headroom for current scale, and bounded
+// latency at ~4 × hop.
+const MAX_DEPTH = 4;
 const JOIN_TIMEOUT_MS = 4_000;
 const PEER_HEARTBEAT_MS = 30_000;
 const ICE_GATHER_TIMEOUT_MS = 5_000;
@@ -40,7 +47,7 @@ async function callSignal(fb, op, payload) {
 }
 
 function defaultIceServers() {
-  return [{ urls: "stun:stun.l.google.com:19302" }];
+  return currentIceServers();
 }
 
 // Public entry point.
@@ -73,8 +80,17 @@ export async function joinMesh({ matchId, onPayload, onMatchDoc, onError }) {
     heartbeatTimer: null,
     matchDoc: null,
     role: "joining",
+    depth: 0,
+    // Set of peerIds we know are downstream of us (children + their
+    // children). Filtered out when picking an upstream candidate so we
+    // don't form cycles after a rebalance — a node whose upstream dies
+    // will look for a NEW upstream, and must not pick its own descendant.
+    descendants: new Set(),
     stopped: false,
   };
+  // Best-effort TURN/STUN config fetch before any RTCPeerConnection is
+  // created. STUN-only fallback applies if signaling is unreachable.
+  await ensureIceServers().catch(() => {});
 
   try {
     await joinAsConsumer(ctx);
@@ -113,9 +129,31 @@ async function listAvailablePeers(ctx) {
     limit(8),
   );
   const snap = await getDocs(q);
+  const stale = Date.now() - PEER_HEARTBEAT_MS * 3;
   return snap.docs
     .map((d) => d.data())
-    .filter((p) => p.peerId && p.peerId !== ctx.peerId);
+    .filter((p) => {
+      if (!p.peerId || p.peerId === ctx.peerId) return false;
+      // Reject stale advertisements (no heartbeat for ~90s = peer's tab
+      // closed without dropping presence).
+      if (Number(p.lastSeenAt ?? 0) < stale) return false;
+      const peerDepth = Number(p.depth ?? 0);
+      // Don't pick a peer whose depth is already at the cap (joining
+      // them would push us over MAX_DEPTH).
+      if (peerDepth >= MAX_DEPTH - 1) return false;
+      // Cycle avoidance after a rebalance. Two complementary checks:
+      //  (a) explicit descendants set — children we know we serve. Used
+      //      as the strong guarantee for the immediate hop.
+      //  (b) depth-monotonic guard — only allow upstreams strictly
+      //      *above* our previous depth. Without this, a node that just
+      //      lost its upstream could pick a sibling that itself is also
+      //      orphaned, and the pair would never make progress. The
+      //      first joiner has ctx.depth=0 so the guard reduces to
+      //      "anything is fine," which is correct for a fresh consumer.
+      if (ctx.descendants.has(p.peerId)) return false;
+      if (ctx.depth > 0 && peerDepth >= ctx.depth) return false;
+      return true;
+    });
 }
 
 async function joinAsConsumer(ctx) {
@@ -146,11 +184,17 @@ async function joinAsConsumer(ctx) {
   channel.onclose = () => {
     if (ctx.stopped) return;
     ctx.onError(new Error("upstream channel closed"));
-    // Try to rejoin via a different peer.
-    setTimeout(() => {
+    // Rebalance: try a different peer; if that fails, fall back to
+    // becoming primary so children downstream of us don't go silent.
+    setTimeout(async () => {
       if (ctx.stopped) return;
       closeUpstream(ctx);
-      joinAsConsumer(ctx).catch(ctx.onError);
+      try {
+        await joinAsConsumer(ctx);
+      } catch (err) {
+        if (ctx.stopped) return;
+        try { await joinAsPrimary(ctx); } catch (e) { ctx.onError(e); }
+      }
     }, 1000);
   };
 
@@ -187,6 +231,11 @@ async function joinAsConsumer(ctx) {
   });
   ctx.upstreamConn = { pc, channel, sessionRef, unsub, sessionId };
 
+  // Track expected depth based on chosen upstream so subsequent peer
+  // pickers (and the depth cap) reflect our position correctly even
+  // before the welcome message arrives.
+  ctx.depth = Math.max(0, Number(upstream.depth ?? 0)) + 1;
+
   // Create offer + post.
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
@@ -222,6 +271,7 @@ function closeUpstream(ctx) {
 
 async function joinAsPrimary(ctx) {
   ctx.role = "primary";
+  ctx.depth = 0;
   // Primary fetches the match doc directly from Firestore.
   const { doc, onSnapshot } = await import(
     "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
@@ -252,10 +302,11 @@ async function advertisePresence(ctx) {
     peerId: ctx.peerId,
     matchId: ctx.matchId,
     role: ctx.role,
+    depth: ctx.depth ?? 0,
     childCount: ctx.childConns.size,
     lastSeenAt: Date.now(),
     createdAt: Date.now(),
-  });
+  }, { merge: true });
 }
 
 async function dropPresence(ctx) {
@@ -299,6 +350,8 @@ async function acceptChild(ctx, sessionId, sessionData) {
   const childPeerId = sessionData.offer?.peerId ?? sessionId;
   const pc = new RTCPeerConnection({ iceServers: defaultIceServers() });
   ctx.childConns.set(childPeerId, { pc, channel: null });
+  // Mark this peer as a descendant for cycle avoidance on rebalance.
+  ctx.descendants.add(childPeerId);
 
   pc.ondatachannel = (ev) => {
     const channel = ev.channel;
@@ -306,12 +359,17 @@ async function acceptChild(ctx, sessionId, sessionData) {
     const conn = ctx.childConns.get(childPeerId);
     if (conn) conn.channel = channel;
     channel.onopen = async () => {
-      // Bring the child up to date.
+      // Bring the child up to date and tell them their depth so they
+      // can include it in their own presence advertisement.
+      try {
+        channel.send(JSON.stringify({ type: "welcome", depth: (ctx.depth ?? 0) + 1 }));
+      } catch {}
       if (ctx.matchDoc) channel.send(JSON.stringify({ type: "matchDoc", matchDoc: ctx.matchDoc }));
       await advertisePresence(ctx);
     };
     channel.onclose = () => {
       ctx.childConns.delete(childPeerId);
+      ctx.descendants.delete(childPeerId);
       advertisePresence(ctx).catch(() => {});
     };
   };
@@ -359,6 +417,17 @@ function handleIncomingPayload(ctx, raw) {
     msg = typeof raw === "string" ? JSON.parse(raw) : JSON.parse(new TextDecoder().decode(raw));
   } catch {
     return;
+  }
+  if (msg.type === "welcome" && Number.isFinite(msg.depth)) {
+    // Authoritative depth from upstream. Update presence so subsequent
+    // peer-pickers see the right value (initial advertise used an
+    // estimate based on the upstream presence row).
+    const next = Number(msg.depth) || 0;
+    if (next !== ctx.depth) {
+      ctx.depth = next;
+      advertisePresence(ctx).catch(() => {});
+    }
+    return; // welcome is bookkeeping only — don't fan out to children
   }
   if (msg.type === "matchDoc" && msg.matchDoc) {
     ctx.matchDoc = msg.matchDoc;

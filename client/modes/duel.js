@@ -171,6 +171,17 @@ function aliasFor(side) {
   return state?.aliases?.[side] ?? "";
 }
 
+// Cosmetics are editable for any locally-owned side (vs-AI lets you
+// dress up the bot, hot-seat lets each chair pick), but the alias for
+// vs-AI side 1 is the preset name selected via the opponent dropdown —
+// renaming it inline would just be confusing, so the alias input is
+// readonly there even though the body/weapon grids stay editable.
+function aliasEditable(side) {
+  if (!localOwnsSide(side)) return false;
+  if (state?.subMode === "vs-ai" && side === 1) return false;
+  return true;
+}
+
 function ownAliasSide() {
   if (!state) return -1;
   if (state.subMode === "p2p") return state.hostSide === 1 ? 1 : 0;
@@ -666,7 +677,8 @@ function characterSelectHtml() {
     const headHint = ownerHint ? `<span class="duel-fighter-owner tight">${escapeHtml(ownerHint)}</span>` : "";
     const alias = aliasFor(side);
     const placeholder = aliasPlaceholderFor(side);
-    const aliasBlock = editable
+    const canEditAlias = aliasEditable(side);
+    const aliasBlock = canEditAlias
       ? `<label class="duel-alias tight">
            <span>alias</span>
            <input type="text" class="duel-alias-input" data-side="${side}" maxlength="${ALIAS_MAX}" value="${escapeHtml(alias)}" placeholder="${escapeHtml(placeholder)}" autocomplete="off" spellcheck="false" />
@@ -790,25 +802,35 @@ function p2pPanelHtml() {
   if (!isP2PSupported()) {
     return `<div class="duel-p2p-warning">P2P needs WebRTC + Firebase. Check your config.js.</div>`;
   }
+  // Two visual states:
+  //  - .is-idle   → host/join controls visible
+  //  - .is-active → stop/new + share + takeover visible
+  // We render both in the DOM (so handlers stay bound across state
+  // flips) and toggle the parent class to hide the irrelevant block via
+  // CSS. That avoids 4 hidden, empty rows always taking vertical space.
   return `
     <div class="duel-p2p-warning tight">
-      same link: first visitor plays P2, later visitors spectate. STUN only.
+      same link: first visitor plays P2, later visitors spectate.
     </div>
-    <div class="duel-p2p-row">
-      ${buttonHtml({ id: "duel-p2p-host", text: "host", attrs: { title: "Create a session and share the invite link" } })}
-      <span class="duel-p2p-divider">or</span>
-      <input type="text" id="duel-p2p-code" placeholder="paste invite link" autocomplete="off" spellcheck="false" />
-      ${buttonHtml({ id: "duel-p2p-join", text: "join", attrs: { title: "Join an existing session" } })}
+    <div class="duel-p2p-idle">
+      <div class="duel-p2p-row">
+        ${buttonHtml({ id: "duel-p2p-host", text: "host", attrs: { title: "Create a session and share the invite link" } })}
+        <span class="duel-p2p-divider">or</span>
+        <input type="text" id="duel-p2p-code" placeholder="paste invite link" autocomplete="off" spellcheck="false" />
+        ${buttonHtml({ id: "duel-p2p-join", text: "join", attrs: { title: "Join an existing session" } })}
+      </div>
     </div>
-    <div class="duel-p2p-row duel-p2p-session-row">
-      ${buttonHtml({ id: "duel-p2p-stop", text: "stop session", attrs: { title: "Tear down the current P2P session", disabled: true } })}
-      ${buttonHtml({ id: "duel-p2p-new", text: "new host", attrs: { title: "Generate a fresh session id (breaks the previous link)" } })}
+    <div class="duel-p2p-active">
+      <div class="duel-p2p-row duel-p2p-session-row">
+        ${buttonHtml({ id: "duel-p2p-stop", text: "stop session", attrs: { title: "Tear down the current P2P session", disabled: true } })}
+        ${buttonHtml({ id: "duel-p2p-new", text: "new host", attrs: { title: "Generate a fresh session id (breaks the previous link)" } })}
+      </div>
+      <div class="duel-p2p-share" id="duel-p2p-share" hidden></div>
     </div>
     <div class="duel-p2p-takeover" id="duel-p2p-takeover" hidden>
       <span class="tight">host has left — take over and host this match?</span>
       ${buttonHtml({ id: "duel-p2p-takeover-btn", variant: "primary", text: "take over", attrs: { title: "Start a fresh host session on this device" } })}
     </div>
-    <div class="duel-p2p-share" id="duel-p2p-share" hidden></div>
     <div class="duel-p2p-status tight" id="duel-p2p-status">ready: host or paste invite link</div>`;
 }
 
@@ -1076,7 +1098,7 @@ function bindAliasInputs() {
     if (!input || !input.classList.contains("duel-alias-input")) return;
     const side = Number(input.dataset.side);
     if (!Number.isInteger(side) || side < 0 || side > 1) return;
-    if (!localOwnsSide(side)) return;
+    if (!aliasEditable(side)) return;
     const value = sanitizeAlias(input.value);
     state.aliases[side] = value;
     if (side === ownAliasSide()) storeAlias(value);
@@ -1285,9 +1307,11 @@ function bindP2PControls() {
     // The peer we tried to join is gone. Take over by hosting fresh —
     // creates a new sessionId, updates the URL, drops the old code from
     // the input so the user doesn't accidentally re-join their own
-    // dead-end link.
+    // dead-end link. We do NOT clear the stored host id here: the new
+    // host's "code:" status will overwrite it once the session is
+    // created. Clearing early would leave a refresh-during-take-over
+    // window with no resume target.
     if (codeInp) codeInp.value = "";
-    storeHostSession("");
     void beginP2P("host");
   });
 }
@@ -1308,11 +1332,20 @@ function hideTakeoverPrompt() {
 
 function syncP2PSessionControls() {
   const stopBtn = document.getElementById("duel-p2p-stop");
-  if (!stopBtn) return;
+  const hostBtn = document.getElementById("duel-p2p-host");
+  const joinBtn = document.getElementById("duel-p2p-join");
+  const codeInp = document.getElementById("duel-p2p-code");
+  const panel = document.getElementById("duel-p2p-panel");
+  const hasSession = !!state?.p2p;
   // Stop is only meaningful while we hold a live (or in-flight) session.
-  // The "new host" button is always usable — it tears down whatever's
-  // running and starts fresh.
-  stopBtn.disabled = !state?.p2p;
+  // Host + join must lock once we hold one — clicking either while
+  // already paired would orphan the live channel mid-session. The
+  // "new host" / "stop" buttons are the explicit way out.
+  if (stopBtn) stopBtn.disabled = !hasSession;
+  if (hostBtn) hostBtn.disabled = hasSession;
+  if (joinBtn) joinBtn.disabled = hasSession;
+  if (codeInp) codeInp.disabled = hasSession;
+  if (panel) panel.classList.toggle("is-active", hasSession);
 }
 
 function stopP2PSession({ reason = "" } = {}) {
@@ -1431,14 +1464,16 @@ async function beginP2P(role, opts) {
           if (stageSel) stageSel.value = stageId;
         }
         state.cosmetics = normalizeCosmeticsPair(cosmetics);
-        // Keep our own owned-side alias; only overwrite the host's side
-        // (and only if the host actually sent one).
+        // Keep our own owned-side alias; mirror whatever the host sent
+        // for the other side. Empty-host-alias is a valid value (means
+        // "no alias set, fall back to placeholder") and must be applied
+        // verbatim — guarding the assignment behind `if (next || …)`
+        // would silently keep stale aliases from a prior match.
         if (Array.isArray(aliases)) {
           const owned = ownAliasSide();
           for (const side of [0, 1]) {
             if (side === owned) continue;
-            const next = sanitizeAlias(aliases[side] ?? "");
-            if (next || state.aliases[side]) state.aliases[side] = next;
+            state.aliases[side] = sanitizeAlias(aliases[side] ?? "");
           }
         }
         renderCharacterSelect();

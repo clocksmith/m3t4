@@ -15,8 +15,13 @@
 // channel opens, signaling is done and Firestore is out of the data
 // path.
 
-import { firebase, httpsCallable, signInAnonymously } from "./firebase-client.js";
-import { ensureIceServers, iceServers as currentIceServers } from "./ice-config.js";
+import { ensureIceServers, iceServers } from "./ice-config.js";
+import {
+  ensureAnonAuth,
+  callSignal,
+  waitIceGathering,
+  loadFirestore,
+} from "./webrtc-signaling.js";
 
 const MAX_FANOUT = 4;        // children per node — tree fans out fast
 // Hard cap on tree depth. Each level adds ~hop latency, and unlimited
@@ -27,27 +32,9 @@ const MAX_FANOUT = 4;        // children per node — tree fans out fast
 const MAX_DEPTH = 4;
 const JOIN_TIMEOUT_MS = 4_000;
 const PEER_HEARTBEAT_MS = 30_000;
-const ICE_GATHER_TIMEOUT_MS = 5_000;
 
 function makePeerId() {
   return "peer-" + crypto.randomUUID().slice(0, 12);
-}
-
-async function ensureAnonAuth() {
-  const fb = firebase();
-  if (!fb) throw new Error("Firebase not configured");
-  if (!fb.auth.currentUser) await signInAnonymously(fb.auth);
-  return fb;
-}
-
-async function callSignal(fb, op, payload) {
-  const fn = httpsCallable(fb.functions, "webrtcSignal");
-  const res = await fn({ op, ...payload });
-  return res.data;
-}
-
-function defaultIceServers() {
-  return currentIceServers();
 }
 
 // Public entry point.
@@ -118,9 +105,7 @@ export async function joinMesh({ matchId, onPayload, onMatchDoc, onError }) {
 }
 
 async function listAvailablePeers(ctx) {
-  const { collection, getDocs, query, where, orderBy, limit } = await import(
-    "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
-  );
+  const { collection, getDocs, query, where, orderBy, limit } = await loadFirestore();
   const peersRef = collection(ctx.fb.firestore, "meshSessions", ctx.matchId, "peers");
   const q = query(
     peersRef,
@@ -151,7 +136,11 @@ async function listAvailablePeers(ctx) {
       //      first joiner has ctx.depth=0 so the guard reduces to
       //      "anything is fine," which is correct for a fresh consumer.
       if (ctx.descendants.has(p.peerId)) return false;
-      if (ctx.depth > 0 && peerDepth >= ctx.depth) return false;
+      // Allow same-depth peers (siblings) on rebalance — two orphaned
+      // siblings rejoining at the same time both have ctx.depth=N and
+      // peerDepth=N, and rejecting both would deadlock the rebalance.
+      // We only forbid going *deeper* into the tree.
+      if (ctx.depth > 0 && peerDepth > ctx.depth) return false;
       return true;
     });
 }
@@ -170,7 +159,7 @@ async function joinAsConsumer(ctx) {
   const sessionId = session.sessionId;
   if (!sessionId) throw new Error("no sessionId from webrtcSignal create");
 
-  const pc = new RTCPeerConnection({ iceServers: defaultIceServers() });
+  const pc = new RTCPeerConnection({ iceServers: iceServers() });
   const channel = pc.createDataChannel("mesh", { ordered: true });
   channel.binaryType = "arraybuffer";
 
@@ -208,9 +197,7 @@ async function joinAsConsumer(ctx) {
   };
 
   // Subscribe for the answerer's reply.
-  const { doc, onSnapshot } = await import(
-    "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
-  );
+  const { doc, onSnapshot } = await loadFirestore();
   const sessionRef = doc(ctx.fb.firestore, "webrtc", sessionId);
   const unsub = onSnapshot(sessionRef, async (snap) => {
     const data = snap.data();
@@ -273,9 +260,7 @@ async function joinAsPrimary(ctx) {
   ctx.role = "primary";
   ctx.depth = 0;
   // Primary fetches the match doc directly from Firestore.
-  const { doc, onSnapshot } = await import(
-    "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
-  );
+  const { doc, onSnapshot } = await loadFirestore();
   const matchRef = doc(ctx.fb.firestore, "matches", ctx.matchId);
   ctx.upstreamConn = {
     isFirestore: true,
@@ -294,9 +279,7 @@ async function joinAsPrimary(ctx) {
 }
 
 async function advertisePresence(ctx) {
-  const { doc, setDoc } = await import(
-    "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
-  );
+  const { doc, setDoc } = await loadFirestore();
   const ref = doc(ctx.fb.firestore, "meshSessions", ctx.matchId, "peers", ctx.peerId);
   await setDoc(ref, {
     peerId: ctx.peerId,
@@ -310,9 +293,7 @@ async function advertisePresence(ctx) {
 }
 
 async function dropPresence(ctx) {
-  const { doc, deleteDoc } = await import(
-    "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
-  );
+  const { doc, deleteDoc } = await loadFirestore();
   const ref = doc(ctx.fb.firestore, "meshSessions", ctx.matchId, "peers", ctx.peerId);
   await deleteDoc(ref);
 }
@@ -328,9 +309,7 @@ function startHeartbeat(ctx) {
 async function listenForChildren(ctx) {
   // Subscribe to webrtc sessions targeting our peerId. We respond to each
   // by fielding the offer and creating an answer + child data channel.
-  const { collection, query, where, onSnapshot } = await import(
-    "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
-  );
+  const { collection, query, where, onSnapshot } = await loadFirestore();
   const sessionsRef = collection(ctx.fb.firestore, "webrtc");
   const q = query(sessionsRef, where("offer.target", "==", ctx.peerId));
   const unsub = onSnapshot(q, (snap) => {
@@ -348,7 +327,7 @@ async function listenForChildren(ctx) {
 
 async function acceptChild(ctx, sessionId, sessionData) {
   const childPeerId = sessionData.offer?.peerId ?? sessionId;
-  const pc = new RTCPeerConnection({ iceServers: defaultIceServers() });
+  const pc = new RTCPeerConnection({ iceServers: iceServers() });
   ctx.childConns.set(childPeerId, { pc, channel: null });
   // Mark this peer as a descendant for cycle avoidance on rebalance.
   ctx.descendants.add(childPeerId);
@@ -439,16 +418,3 @@ function handleIncomingPayload(ctx, raw) {
   broadcastToChildren(ctx, msg);
 }
 
-function waitIceGathering(pc) {
-  if (pc.iceGatheringState === "complete") return Promise.resolve();
-  return new Promise((resolve) => {
-    const timeout = setTimeout(resolve, ICE_GATHER_TIMEOUT_MS);
-    pc.addEventListener("icegatheringstatechange", function onChange() {
-      if (pc.iceGatheringState === "complete") {
-        clearTimeout(timeout);
-        pc.removeEventListener("icegatheringstatechange", onChange);
-        resolve();
-      }
-    });
-  });
-}

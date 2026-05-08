@@ -158,6 +158,34 @@ export const webrtcSignal = onCall(
       return { ok: true };
     }
 
+    if (op === "reuse") {
+      // Host-only path used when the host's tab is reloaded. Wipes the
+      // pairing slots (offer/answer/ICE) on the existing session doc and
+      // re-extends the TTL so a fresh handshake can run on the same
+      // sessionId — the shareable invite link survives the refresh.
+      const sessionId = String(req.data?.sessionId ?? "");
+      if (!sessionId) throw new HttpsError("invalid-argument", "sessionId required");
+      const ref = firestore.collection(COLLECTIONS.webrtc).doc(sessionId);
+      const snap = await ref.get();
+      if (!snap.exists) throw new HttpsError("not-found", "session not found");
+      if (snap.data()?.createdBy !== auth.uid) {
+        throw new HttpsError("permission-denied", "host only");
+      }
+      const expiresAt = now + SESSION_TTL_MS;
+      await ref.set({
+        offer: null,
+        answer: null,
+        candidatesA: [],
+        candidatesB: [],
+        spectatorFrame: null,
+        spectatorFrameAt: 0,
+        spectatorInit: null,
+        expiresAt,
+        updatedAt: now,
+      }, { merge: true });
+      return { sessionId, expiresAt };
+    }
+
     throw new HttpsError("invalid-argument", `unknown op: ${op}`);
   },
 );
@@ -196,7 +224,12 @@ function sanitizeSpectatorInit(init: unknown): Record<string, unknown> | null {
       weapon: typeof o.weapon === "string" ? o.weapon.slice(0, 32) : null,
     };
   }).filter((x) => x !== null) : [];
-  return { seed, stageId, cosmetics };
+  const aliasesRaw = Array.isArray(i.aliases) ? i.aliases.slice(0, 2) : null;
+  const out: Record<string, unknown> = { seed, stageId, cosmetics };
+  if (aliasesRaw) {
+    out.aliases = aliasesRaw.map((a) => typeof a === "string" ? a.slice(0, 32) : "");
+  }
+  return out;
 }
 
 function sanitizeCandidate(candidate: unknown): Record<string, unknown> | null {

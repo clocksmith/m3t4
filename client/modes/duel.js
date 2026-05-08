@@ -1,8 +1,10 @@
 // Duel — local play surface. Three sub-modes:
 //
-//   vs-AI    : human (P1, WASD+F) vs a preset bot (P2 driven by sim brain)
-//   hot-seat : two humans on one keyboard, P1 WASD+F and P2 P/L/;/'+[
-//   p2p      : two humans on different machines, paired over WebRTC
+//   vs-AI     : human (P1, WASD+F) vs a preset bot (P2 driven by sim brain)
+//   hot-seat  : two humans on one keyboard, P1 WASD+F and P2 O/K/L/;+'
+//               (right-hand mirror of WASD+F, same finger geometry as P1.
+//                UI label: "LOCAL PVP"; the internal id stays "hot-seat")
+//   p2p       : two humans on different machines, paired over WebRTC
 //
 // Reuses the same stepper sim primitives as tune's HUMAN mode
 // (createStepperWorld + stepWorld + readKeyboard). The sim runs locally,
@@ -43,17 +45,27 @@ const P2P_SPECTATOR_FRAME_STRIDE = 12;
 const KEY_MAP = [
   { left: "KeyA", right: "KeyD", up: "KeyW", down: "KeyS", act: "KeyF",
     moveHint: "W/A/S/D", strikeHint: "F" },
-  { left: "KeyL", right: "Quote", up: "KeyP", down: "Semicolon", act: "BracketLeft",
-    moveHint: "P/L/;/'", strikeHint: "[" },
+  // Right-hand mirror of WASD+F so P2 has the same finger geometry as
+  // P1: O/K/L/; for up/left/down/right, ' (apostrophe) for strike.
+  { left: "KeyK", right: "Semicolon", up: "KeyO", down: "KeyL", act: "Quote",
+    moveHint: "O/K/L/;", strikeHint: "'" },
 ];
 const GAME_KEYS = new Set([
   "KeyA", "KeyD", "KeyW", "KeyS", "KeyF",
-  "KeyL", "Quote", "KeyP", "Semicolon", "BracketLeft",
+  "KeyO", "KeyK", "KeyL", "Semicolon", "Quote",
 ]);
 const EMPTY_INPUT = Object.freeze({ left: false, right: false, up: false, down: false, action: false });
 const REMOTE_INPUT_BUFFER_LIMIT = 720;
 
 const SUB_MODES = ["vs-ai", "hot-seat", "p2p"];
+
+const ALIAS_MAX = 18;
+const LS_KEY_ALIAS = "m3t4:duel-alias";
+// sessionStorage (per-tab): set when the local user creates a host
+// session, cleared on explicit stop / submode switch / unmount. Survives
+// a hard refresh of the same tab so we can re-pair the same invite link
+// instead of treating our own URL hash as a foreign join code.
+const SS_KEY_HOST_SESSION = "m3t4:duel-host-session";
 
 const PRESET_NAMES = (presetRanking.rows ?? []).map((r) => r.name ?? r);
 const DEFAULT_PRESET = PRESET_NAMES[0] ?? "standby";
@@ -123,6 +135,69 @@ function selectedCharacters() {
     body: cosmetic.body,
     weapon: cosmetic.weapon,
   }));
+}
+
+function sanitizeAlias(value) {
+  return String(value ?? "")
+    .replace(/[\u0000-\u001f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, ALIAS_MAX);
+}
+
+function loadStoredAlias() {
+  try { return sanitizeAlias(localStorage.getItem(LS_KEY_ALIAS) || ""); } catch { return ""; }
+}
+
+function storeAlias(value) {
+  try {
+    if (value) localStorage.setItem(LS_KEY_ALIAS, value);
+    else localStorage.removeItem(LS_KEY_ALIAS);
+  } catch {}
+}
+
+function loadStoredHostSession() {
+  try { return sessionStorage.getItem(SS_KEY_HOST_SESSION) || ""; } catch { return ""; }
+}
+
+function storeHostSession(sessionId) {
+  try {
+    if (sessionId) sessionStorage.setItem(SS_KEY_HOST_SESSION, sessionId);
+    else sessionStorage.removeItem(SS_KEY_HOST_SESSION);
+  } catch {}
+}
+
+function aliasFor(side) {
+  return state?.aliases?.[side] ?? "";
+}
+
+function ownAliasSide() {
+  if (!state) return -1;
+  if (state.subMode === "p2p") return state.hostSide === 1 ? 1 : 0;
+  return 0;
+}
+
+function aliasPlaceholderFor(side) {
+  if (!state) return `P${side + 1}`;
+  if (state.subMode === "vs-ai") return side === 0 ? "you" : (state.presetName || `P${side + 1}`);
+  if (state.subMode === "hot-seat") return `P${side + 1}`;
+  if (state.spectating || state.p2p?.spectator) return side === 0 ? "host" : "player";
+  if (state.hostSide === side) return "you";
+  return state.hostSide === 0 ? "P2" : "host";
+}
+
+// Place the persisted alias on whichever side the local user owns. In
+// p2p, switching between host and join flips ownAliasSide(); we move
+// the stored alias accordingly so the user's chosen name stays "theirs"
+// and the other side stays empty until the peer broadcasts.
+function placeStoredAliasOnOwnedSide() {
+  if (!state) return;
+  const stored = loadStoredAlias();
+  const owned = ownAliasSide();
+  if (owned !== 0 && owned !== 1) return;
+  if (stored && state.aliases[owned] === "") state.aliases[owned] = stored;
+  const other = 1 - owned;
+  if (state.aliases[other] && state.aliases[other] === stored) state.aliases[other] = "";
 }
 
 // True when the device is a touch-first device held in landscape.
@@ -211,6 +286,7 @@ function freshState() {
     streamAgeAt: 0,
     statusMsg: "",
     cosmetics: [defaultCosmetics(0), defaultCosmetics(1)],
+    aliases: ["", ""],
   };
 }
 
@@ -303,6 +379,7 @@ function clearRemoteInputs() {
 function syncLocalP2PSetupToPeer({ includeStage = false } = {}) {
   if (!state || state.subMode !== "p2p" || !state.p2p?.linked || state.p2p?.spectator) return;
   state.p2p.broadcastCosmetic?.(state.hostSide, state.cosmetics[state.hostSide]);
+  state.p2p.broadcastAlias?.(state.hostSide, state.aliases[state.hostSide] ?? "");
   if (includeStage && state.hostSide === 0) {
     state.p2p.broadcastStage?.(state.stageId);
   }
@@ -367,7 +444,12 @@ function startMatch() {
     ? "waiting for opponent…"
     : "fight";
   if (state.p2p?.linked && typeof state.p2p.broadcastMatch === "function") {
-    state.p2p.broadcastMatch({ seed: state.seed, stageId: state.stageId, cosmetics: selectedCosmetics() });
+    state.p2p.broadcastMatch({
+      seed: state.seed,
+      stageId: state.stageId,
+      cosmetics: selectedCosmetics(),
+      aliases: [...state.aliases],
+    });
     state.p2p.postSpectatorFrame?.(worldToFrame(state.world));
   }
   syncPlayClass();
@@ -475,12 +557,14 @@ function emptyFrame() {
 
 function labels() {
   const cosmetics = selectedCosmetics();
-  if (state.subMode === "vs-ai") return { p1: "you", p2: state.presetName, cosmetics };
-  if (state.subMode === "hot-seat") return { p1: "P1", p2: "P2", cosmetics };
-  if (state.spectating || state.p2p?.spectator) return { p1: "host", p2: "player", cosmetics };
+  const a0 = aliasFor(0);
+  const a1 = aliasFor(1);
+  if (state.subMode === "vs-ai") return { p1: a0 || "you", p2: a1 || state.presetName, cosmetics };
+  if (state.subMode === "hot-seat") return { p1: a0 || "P1", p2: a1 || "P2", cosmetics };
+  if (state.spectating || state.p2p?.spectator) return { p1: a0 || "host", p2: a1 || "player", cosmetics };
   return state.hostSide === 0
-    ? { p1: "you", p2: "P2", cosmetics }
-    : { p1: "host", p2: "you", cosmetics };
+    ? { p1: a0 || "you", p2: a1 || "P2", cosmetics }
+    : { p1: a0 || "host", p2: a1 || "you", cosmetics };
 }
 
 // --- HUD ---
@@ -567,7 +651,7 @@ function subModeRowHtml() {
       ${SUB_MODES.map((m) => `
         <label class="mode-pill ${m === state.subMode ? "is-active" : ""}" data-submode="${m}">
           <input type="radio" name="duel-submode" value="${m}" ${m === state.subMode ? "checked" : ""}>
-          <span>${m === "vs-ai" ? "VS AI" : m === "hot-seat" ? "HOT-SEAT" : "P2P"}</span>
+          <span>${m === "vs-ai" ? "VS AI" : m === "hot-seat" ? "LOCAL PVP" : "P2P"}</span>
         </label>`).join("")}
     </div>`;
 }
@@ -580,6 +664,17 @@ function characterSelectHtml() {
       ? (editable ? "you" : "remote")
       : "";
     const headHint = ownerHint ? `<span class="duel-fighter-owner tight">${escapeHtml(ownerHint)}</span>` : "";
+    const alias = aliasFor(side);
+    const placeholder = aliasPlaceholderFor(side);
+    const aliasBlock = editable
+      ? `<label class="duel-alias tight">
+           <span>alias</span>
+           <input type="text" class="duel-alias-input" data-side="${side}" maxlength="${ALIAS_MAX}" value="${escapeHtml(alias)}" placeholder="${escapeHtml(placeholder)}" autocomplete="off" spellcheck="false" />
+         </label>`
+      : `<div class="duel-alias tight is-readonly">
+           <span>alias</span>
+           <span class="duel-alias-readonly">${escapeHtml(alias || placeholder)}</span>
+         </div>`;
     return `
     <div class="duel-fighter-slot${editable ? "" : " is-readonly"}" data-side="${side}">
       <div class="duel-fighter-head">
@@ -588,6 +683,7 @@ function characterSelectHtml() {
         <span>${escapeHtml(weaponLabel(cosmetic.body, cosmetic.weapon))}</span>
         ${headHint}
       </div>
+      ${aliasBlock}
       ${editable ? `
         <div class="duel-body-grid" aria-label="P${side + 1} character select">
           ${BODY_IDS.map((body) => {
@@ -704,6 +800,14 @@ function p2pPanelHtml() {
       <input type="text" id="duel-p2p-code" placeholder="paste invite link" autocomplete="off" spellcheck="false" />
       ${buttonHtml({ id: "duel-p2p-join", text: "join", attrs: { title: "Join an existing session" } })}
     </div>
+    <div class="duel-p2p-row duel-p2p-session-row">
+      ${buttonHtml({ id: "duel-p2p-stop", text: "stop session", attrs: { title: "Tear down the current P2P session", disabled: true } })}
+      ${buttonHtml({ id: "duel-p2p-new", text: "new host", attrs: { title: "Generate a fresh session id (breaks the previous link)" } })}
+    </div>
+    <div class="duel-p2p-takeover" id="duel-p2p-takeover" hidden>
+      <span class="tight">host has left — take over and host this match?</span>
+      ${buttonHtml({ id: "duel-p2p-takeover-btn", variant: "primary", text: "take over", attrs: { title: "Start a fresh host session on this device" } })}
+    </div>
     <div class="duel-p2p-share" id="duel-p2p-share" hidden></div>
     <div class="duel-p2p-status tight" id="duel-p2p-status">ready: host or paste invite link</div>`;
 }
@@ -727,7 +831,7 @@ function keysHtml() {
   if (state.subMode === "hot-seat") {
     return `
       ${controlCardHtml({ role: "P1", owner: "local player", keyboard: "W/A/S/D + F", touch: true })}
-      ${controlCardHtml({ role: "P2", owner: "same device", keyboard: "P/L/;/' + [", remote: true })}`;
+      ${controlCardHtml({ role: "P2", owner: "same device", keyboard: "O/K/L/; + '", remote: true })}`;
   }
   if (state.spectating || state.p2p?.spectator) {
     return `
@@ -778,6 +882,7 @@ function touchControlsHtml() {
 export function mount(root, ctx = {}) {
   ctx.setStatus?.("duel");
   state = freshState();
+  placeStoredAliasOnOwnedSide();
 
   root.innerHTML = `
     <div class="page duel-page">
@@ -847,6 +952,11 @@ export function unmount() {
       try { state.p2p.stop(); } catch {}
     }
     state.p2p = null;
+    // SPA navigate-away: drop the per-tab host session id so coming
+    // back to /duel later starts clean. A full page refresh skips this
+    // unmount entirely, so the stored id survives there (which is the
+    // whole point — it's what powers the resume-host flow).
+    storeHostSession("");
   }
   document.body.classList.remove("duel-mounted", "duel-match-active");
   state = null;
@@ -947,8 +1057,44 @@ function bindControls() {
   });
 
   bindCharacterSelect();
+  bindAliasInputs();
   bindP2PControls();
   bindTouchControls();
+}
+
+function bindAliasInputs() {
+  const el = document.getElementById("duel-character-select");
+  if (!el) return;
+  // Event delegation: the alias inputs are re-rendered whenever the
+  // character panel refreshes, but #duel-character-select stays put, so
+  // a single listener on the parent survives across re-renders. Using
+  // 'input' fires per keystroke; we update state + broadcast immediately
+  // since the payload is tiny and JSON-serialized over the same channel
+  // as cosmetic changes.
+  el.addEventListener("input", (event) => {
+    const input = event.target instanceof HTMLInputElement ? event.target : null;
+    if (!input || !input.classList.contains("duel-alias-input")) return;
+    const side = Number(input.dataset.side);
+    if (!Number.isInteger(side) || side < 0 || side > 1) return;
+    if (!localOwnsSide(side)) return;
+    const value = sanitizeAlias(input.value);
+    state.aliases[side] = value;
+    if (side === ownAliasSide()) storeAlias(value);
+    refreshHud();
+    if (state.subMode === "p2p" && state.p2p?.linked && typeof state.p2p.broadcastAlias === "function") {
+      state.p2p.broadcastAlias(side, value);
+    }
+  });
+  el.addEventListener("blur", (event) => {
+    const input = event.target instanceof HTMLInputElement ? event.target : null;
+    if (!input || !input.classList.contains("duel-alias-input")) return;
+    const side = Number(input.dataset.side);
+    if (!Number.isInteger(side) || side < 0 || side > 1) return;
+    // Re-canonicalize on blur (collapses whitespace, trims) so the
+    // rendered value matches what gets stored / broadcast.
+    const value = sanitizeAlias(input.value);
+    if (input.value !== value) input.value = value;
+  }, true);
 }
 
 function bindTouchControls() {
@@ -1083,6 +1229,18 @@ function applyJoinLinkFromLocation() {
     refreshHud();
     return;
   }
+  // If the URL hash is *our own* prior host session id (i.e. the user
+  // refreshed the host tab), don't auto-join our own link — re-open it
+  // as host instead, reusing the same sessionId via the signaling
+  // "reuse" op so the friend's pasted link still works.
+  const ownHost = loadStoredHostSession();
+  if (ownHost && ownHost === code) {
+    state.statusMsg = "resuming host…";
+    setP2PStatus("resuming host…");
+    refreshHud();
+    void beginP2P("host", { reuseSessionId: code });
+    return;
+  }
   state.statusMsg = "joining…";
   setP2PStatus("joining…");
   refreshHud();
@@ -1090,13 +1248,16 @@ function applyJoinLinkFromLocation() {
   // (transparent anonymous if needed). If Anonymous Auth is disabled
   // on the project, beginP2P surfaces a clear "enable Anonymous Auth
   // or sign in first" hint via setP2PStatus.
-  void beginP2P("join", code);
+  void beginP2P("join", { sessionId: code });
 }
 
 function bindP2PControls() {
   const hostBtn = document.getElementById("duel-p2p-host");
   const joinBtn = document.getElementById("duel-p2p-join");
   const codeInp = document.getElementById("duel-p2p-code");
+  const stopBtn = document.getElementById("duel-p2p-stop");
+  const newBtn = document.getElementById("duel-p2p-new");
+  const takeoverBtn = document.getElementById("duel-p2p-takeover-btn");
   hostBtn?.addEventListener("click", () => beginP2P("host"));
   joinBtn?.addEventListener("click", () => {
     const code = normalizeJoinCode(codeInp?.value || "");
@@ -1104,15 +1265,102 @@ function bindP2PControls() {
       setP2PStatus("paste a link first");
       return;
     }
-    beginP2P("join", code);
+    beginP2P("join", { sessionId: code });
+  });
+  stopBtn?.addEventListener("click", () => stopP2PSession({ reason: "stopped" }));
+  newBtn?.addEventListener("click", () => {
+    // Tear down current host/join (if any) and start a brand-new host
+    // session. The previous invite link becomes orphaned — that's the
+    // explicit point of "new host" vs "stop session".
+    if (state.p2p?.stop) {
+      try { state.p2p.stop(); } catch {}
+    }
+    state.p2p = null;
+    storeHostSession("");
+    hideTakeoverPrompt();
+    void beginP2P("host");
+  });
+  takeoverBtn?.addEventListener("click", () => {
+    hideTakeoverPrompt();
+    // The peer we tried to join is gone. Take over by hosting fresh —
+    // creates a new sessionId, updates the URL, drops the old code from
+    // the input so the user doesn't accidentally re-join their own
+    // dead-end link.
+    if (codeInp) codeInp.value = "";
+    storeHostSession("");
+    void beginP2P("host");
   });
 }
 
-async function beginP2P(role, sessionId) {
+function showTakeoverPrompt(message) {
+  const el = document.getElementById("duel-p2p-takeover");
+  if (!el) return;
+  const msg = el.querySelector(".tight");
+  if (msg && message) msg.textContent = message;
+  el.hidden = false;
+}
+
+function hideTakeoverPrompt() {
+  const el = document.getElementById("duel-p2p-takeover");
+  if (!el) return;
+  el.hidden = true;
+}
+
+function syncP2PSessionControls() {
+  const stopBtn = document.getElementById("duel-p2p-stop");
+  if (!stopBtn) return;
+  // Stop is only meaningful while we hold a live (or in-flight) session.
+  // The "new host" button is always usable — it tears down whatever's
+  // running and starts fresh.
+  stopBtn.disabled = !state?.p2p;
+}
+
+function stopP2PSession({ reason = "" } = {}) {
+  if (!state) return;
+  if (state.p2p?.stop) {
+    try { state.p2p.stop(); } catch {}
+  }
+  state.p2p = null;
+  state.spectating = false;
+  state.spectatorFrame = null;
+  state.lastSpectatorFrameTick = -1;
+  state.peerLatencyMs = null;
+  state.peerLatencyAt = 0;
+  state.streamAgeMs = null;
+  state.streamAgeAt = 0;
+  state.world = null;
+  state.brainP2 = null;
+  clearRemoteInputs();
+  storeHostSession("");
+  clearP2PShare();
+  hideTakeoverPrompt();
+  // Drop any join/host code from the address bar so a future refresh
+  // doesn't auto-rejoin the now-dead session.
+  if (typeof window !== "undefined" && window.history?.replaceState) {
+    try {
+      const url = new URL(window.location.href);
+      url.hash = "";
+      url.searchParams.delete("join");
+      window.history.replaceState(window.history.state, "", url.toString());
+    } catch {}
+  }
+  const codeInp = document.getElementById("duel-p2p-code");
+  if (codeInp) codeInp.value = "";
+  setP2PStatus(reason || "ready: host or paste invite link");
+  syncP2PSessionControls();
+  syncPlayClass();
+  refreshKeysHint();
+  renderCharacterSelect();
+  refreshHud();
+}
+
+async function beginP2P(role, opts) {
   if (!isP2PSupported()) {
     setP2PStatus("P2P unavailable in this build");
     return;
   }
+  const sessionId = typeof opts === "string" ? opts : (opts?.sessionId ?? "");
+  const reuseSessionId = (opts && typeof opts === "object" ? opts.reuseSessionId : "") || "";
   // Force the sub-mode to p2p so labels, character panel, control
   // hints, and the actionFor branch all switch off vs-AI / hot-seat
   // copy. Without this, an in-flight vs-AI render state can persist
@@ -1134,13 +1382,20 @@ async function beginP2P(role, sessionId) {
   state.brainP2 = null;
   clearRemoteInputs();
   state.hostSide = role === "host" ? 0 : 1;
+  placeStoredAliasOnOwnedSide();
   clearP2PShare();
+  hideTakeoverPrompt();
   refreshKeysHint();
-  setP2PStatus(role === "host" ? "creating session…" : "connecting…");
+  renderCharacterSelect();
+  syncP2PSessionControls();
+  setP2PStatus(role === "host"
+    ? (reuseSessionId ? "resuming session…" : "creating session…")
+    : "connecting…");
   try {
     const handle = await startP2PDuel({
       role,
       sessionId,
+      reuseSessionId,
       onStatus: (msg) => handleP2PStatus(msg),
       onLink: (link = {}) => {
         if (link.spectator) {
@@ -1165,7 +1420,7 @@ async function beginP2P(role, sessionId) {
         syncLocalP2PSetupToPeer({ includeStage: role === "host" });
         refreshHud();
       },
-      onMatch: ({ seed, stageId, cosmetics }) => {
+      onMatch: ({ seed, stageId, cosmetics, aliases }) => {
         if (role === "host") return;
         // Guest mirrors host's match parameters so both worlds start
         // from the same seed *and* the same stage.
@@ -1176,6 +1431,16 @@ async function beginP2P(role, sessionId) {
           if (stageSel) stageSel.value = stageId;
         }
         state.cosmetics = normalizeCosmeticsPair(cosmetics);
+        // Keep our own owned-side alias; only overwrite the host's side
+        // (and only if the host actually sent one).
+        if (Array.isArray(aliases)) {
+          const owned = ownAliasSide();
+          for (const side of [0, 1]) {
+            if (side === owned) continue;
+            const next = sanitizeAlias(aliases[side] ?? "");
+            if (next || state.aliases[side]) state.aliases[side] = next;
+          }
+        }
         renderCharacterSelect();
         if (state.spectating || state.p2p?.spectator) {
           state.seed = seed;
@@ -1221,6 +1486,18 @@ async function beginP2P(role, sessionId) {
         renderCharacterSelect();
         refreshHud();
       },
+      onAlias: (side, alias) => {
+        // Remote owner of `side` set their alias. Mirror it locally so
+        // their nameplate reads "Bob" instead of "host"/"P2", and so
+        // that this client re-broadcasts it correctly to spectators on
+        // the next match start.
+        if (side !== 0 && side !== 1) return;
+        if (state.subMode !== "p2p") return;
+        if (localOwnsSide(side)) return;
+        state.aliases[side] = sanitizeAlias(alias);
+        renderCharacterSelect();
+        refreshHud();
+      },
       onStage: (stageId) => {
         // Host changed the stage; non-host clients (joiner + late
         // spectators) mirror it. Host-side ignores its own echo.
@@ -1242,12 +1519,23 @@ async function beginP2P(role, sessionId) {
       },
       onSpectatorLink: () => {
         if (!state.world || !state.p2p?.linked) return;
-        state.p2p.broadcastMatch?.({ seed: state.seed, stageId: state.stageId, cosmetics: selectedCosmetics() });
+        state.p2p.broadcastMatch?.({
+          seed: state.seed,
+          stageId: state.stageId,
+          cosmetics: selectedCosmetics(),
+          aliases: [...state.aliases],
+        });
         state.p2p.postSpectatorFrame?.(worldToFrame(state.world));
       },
       onClose: () => setP2PStatus("disconnected"),
     });
     state.p2p = handle;
+    if (role === "host" && handle.sessionId) {
+      // Persist the host id so a refresh of this tab can re-pair the
+      // same invite link via the signaling "reuse" op instead of the
+      // page treating its own URL hash as a foreign join code.
+      storeHostSession(handle.sessionId);
+    }
     if (handle.spectator) {
       state.spectating = true;
       state.hostSide = 0;
@@ -1256,17 +1544,32 @@ async function beginP2P(role, sessionId) {
     } else if (handle.linked) {
       syncLocalP2PSetupToPeer({ includeStage: role === "host" });
     }
+    syncP2PSessionControls();
     refreshKeysHint();
     renderCharacterSelect();
     syncPlayClass();
     refreshHud(state.spectatorFrame ?? undefined);
   } catch (e) {
     const message = String(e?.message ?? e);
-    if (/sign in (first|required)/i.test(message)) {
+    const code = String(e?.code ?? "");
+    state.p2p = null;
+    if (code === "host-gone") {
+      // Joiner hit a session whose host is no longer reachable. Offer
+      // an explicit take-over rather than leaving them to figure out
+      // why "join" timed out.
       setP2PStatus(message);
+      showTakeoverPrompt(role === "host"
+        ? "session is gone — start a fresh host?"
+        : "host has left — take over and host this match?");
+    } else if (/sign in (first|required)/i.test(message)) {
+      setP2PStatus(message);
+    } else if (code === "pair-timeout") {
+      setP2PStatus("pairing timed out — try again or take over");
+      showTakeoverPrompt("nobody joined in time — start a fresh host?");
     } else {
       setP2PStatus(`P2P error: ${message}`);
     }
+    syncP2PSessionControls();
   }
 }
 
@@ -1279,9 +1582,15 @@ function handleP2PStatus(text) {
   const match = /^code:\s*(.+)$/i.exec(String(text || ""));
   if (match) {
     const sessionId = match[1].trim();
+    // Save as soon as the session id is known so a refresh that happens
+    // before the data channel ever opens still has the id available for
+    // the reuse path. (We also save again in beginP2P after the handle
+    // resolves; the redundancy is intentional.)
+    storeHostSession(sessionId);
     updateBrowserInviteUrl(sessionId);
     renderP2PShare(sessionId);
     setP2PStatus("magic link ready");
+    syncP2PSessionControls();
     return;
   }
   setP2PStatus(text);
@@ -1355,14 +1664,24 @@ function switchSubMode(value) {
   state.statusMsg = "";
   clearRemoteInputs();
   clearTouchInput();
+  // Drop any aliases that came from a peer (or hot-seat side 2) so the
+  // new mode starts from a clean slate; the persisted local alias is
+  // reapplied to whichever side the user now owns.
+  state.aliases = ["", ""];
+  placeStoredAliasOnOwnedSide();
   syncPlayClass();
   renderCharacterSelect();
   // Tear down any running p2p session if leaving p2p mode.
-  if (value !== "p2p" && state.p2p?.stop) {
-    try { state.p2p.stop(); } catch {}
+  if (value !== "p2p") {
+    if (state.p2p?.stop) {
+      try { state.p2p.stop(); } catch {}
+    }
     state.p2p = null;
+    storeHostSession("");
+    hideTakeoverPrompt();
     setP2PStatus("ready: host or paste invite link");
   }
+  syncP2PSessionControls();
   refreshHud();
   refocusCanvas();
 }

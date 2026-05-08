@@ -22,7 +22,17 @@
 import { firebase, httpsCallable, signInAnonymously } from "./firebase-client.js";
 
 const ICE_GATHER_TIMEOUT_MS = 5_000;
-const PAIR_TIMEOUT_MS = 30_000;
+// Bumped from 30s — invitations frequently take longer than that to
+// deliver and act on (Slack/SMS round-trip, friend grabbing their
+// laptop, etc.). 5 minutes matches the Firestore session TTL so the
+// client gives up at the same time as the server-side cleanup.
+const PAIR_TIMEOUT_MS = 5 * 60_000;
+// Once the guest has POSTed an answer to the session doc, the host's
+// data channel should open within seconds; if it doesn't, the host's
+// RTCPeerConnection is dead (host tab was closed, or the host already
+// hit its own pair timeout earlier) and there's no point waiting the
+// full PAIR_TIMEOUT_MS.
+const ANSWER_LINK_TIMEOUT_MS = 15_000;
 const PING_INTERVAL_MS = 1_000;
 const PING_STALE_MS = 5_000;
 
@@ -134,19 +144,22 @@ function unpackInput(byte) {
 //   sessionId     - required when role==="join", the code shared by host
 //   onStatus(msg) - human-readable progress messages
 //   onLink()      - both peers connected, data channel open
-//   onMatch({ seed, stageId, cosmetics }) - guest-only: receives host's match parameters
+//   onMatch({ seed, stageId, cosmetics, aliases }) - guest-only: receives host's match parameters
+//   onAlias(side, alias) - peer changed their alias for the given side
 //   onRemoteInput(tick, input) - input received from the remote peer for a sim tick
 //   onClose()     - data channel closed
 //
-// Returns { stop(), sendInput(tick, input), broadcastMatch({seed, stageId, cosmetics}), sessionId, linked }.
+// Returns { stop(), sendInput(tick, input), broadcastMatch({seed, stageId, cosmetics, aliases}), sessionId, linked }.
 export async function startP2PDuel({
   role,
   sessionId: joinSessionId,
+  reuseSessionId,
   onStatus = () => {},
   onLink = () => {},
   onMatch = () => {},
   onFrame = () => {},
   onCosmetic = () => {},
+  onAlias = () => {},
   onStage = () => {},
   onLatency = () => {},
   onStreamAge = () => {},
@@ -158,19 +171,37 @@ export async function startP2PDuel({
   const fb = await ensureSignalAuth();
 
   if (role === "host") {
-    return runHost(fb, { onStatus, onLink, onMatch, onCosmetic, onStage, onLatency, onRemoteInput, onSpectatorLink, onClose });
+    return runHost(fb, { reuseSessionId, onStatus, onLink, onMatch, onCosmetic, onAlias, onStage, onLatency, onRemoteInput, onSpectatorLink, onClose });
   }
   if (role === "join") {
     if (!joinSessionId) throw new Error("session code required to join");
-    return runGuest(fb, joinSessionId, { onStatus, onLink, onMatch, onFrame, onCosmetic, onStage, onLatency, onStreamAge, onRemoteInput, onClose });
+    return runGuest(fb, joinSessionId, { onStatus, onLink, onMatch, onFrame, onCosmetic, onAlias, onStage, onLatency, onStreamAge, onRemoteInput, onClose });
   }
   throw new Error(`unknown p2p role: ${role}`);
 }
 
-async function runHost(fb, { onStatus, onLink, onMatch, onCosmetic, onStage, onLatency, onRemoteInput, onClose }) {
-  onStatus("creating session…");
-  const session = await callSignal(fb, "create", {});
-  const sessionId = session.sessionId;
+async function runHost(fb, { reuseSessionId, onStatus, onLink, onMatch, onCosmetic, onAlias, onStage, onLatency, onRemoteInput, onClose }) {
+  let sessionId = "";
+  if (reuseSessionId) {
+    onStatus("resuming session…");
+    try {
+      const reused = await callSignal(fb, "reuse", { sessionId: reuseSessionId });
+      sessionId = String(reused?.sessionId ?? "");
+    } catch (err) {
+      // Reuse can fail if the doc was already cleaned up (TTL) or the
+      // current uid doesn't match createdBy (e.g. signed in differently
+      // since the session was created). Fall through to a fresh create
+      // — the friend's old link will break, but at least the host can
+      // get back online.
+      console.warn("[p2p-duel] reuse failed, creating fresh session:", err?.message ?? err);
+      sessionId = "";
+    }
+  }
+  if (!sessionId) {
+    onStatus("creating session…");
+    const session = await callSignal(fb, "create", {});
+    sessionId = session.sessionId;
+  }
   if (!sessionId) throw new Error("no sessionId from webrtcSignal create");
 
   const pc = new RTCPeerConnection({ iceServers: defaultIceServers() });
@@ -189,7 +220,7 @@ async function runHost(fb, { onStatus, onLink, onMatch, onCosmetic, onStage, onL
     onStatus("linked");
     onLink();
   };
-  channel.onmessage = (ev) => handleRemoteMessage(ev.data, { handle, onMatch, onCosmetic, onStage, onRemoteInput });
+  channel.onmessage = (ev) => handleRemoteMessage(ev.data, { handle, onMatch, onCosmetic, onAlias, onStage, onRemoteInput });
   channel.onclose = () => { handle.linked = false; handle.stopLatencyProbe(); onClose(); };
 
   pc.onicecandidate = (ev) => {
@@ -240,14 +271,25 @@ async function runHost(fb, { onStatus, onLink, onMatch, onCosmetic, onStage, onL
   return handle;
 }
 
-async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onCosmetic, onStage, onLatency, onStreamAge, onRemoteInput, onClose }) {
+async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onCosmetic, onAlias, onStage, onLatency, onStreamAge, onRemoteInput, onClose }) {
   onStatus("connecting…");
   const { doc, getDoc, onSnapshot } = await import(
     "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
   );
   const sessionRef = doc(fb.firestore, "webrtc", sessionId);
-  const initial = await getDoc(sessionRef);
-  if (!initial.exists()) throw new Error("session not found");
+  let initial;
+  try {
+    initial = await getDoc(sessionRef);
+  } catch (err) {
+    const e = new Error(`signaling unreachable: ${err?.message ?? err}`);
+    e.code = "signal-down";
+    throw e;
+  }
+  if (!initial.exists()) {
+    const e = new Error("host session not found — they may have left");
+    e.code = "host-gone";
+    throw e;
+  }
   const data = initial.data();
   if (playerSlotTaken(data)) {
     return runSpectator(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onStreamAge, onClose });
@@ -269,7 +311,7 @@ async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onC
         onStatus("linked");
         onLink();
       };
-      channel.onmessage = (e) => handleRemoteMessage(e.data, { handle, onMatch, onFrame, onCosmetic, onStage, onRemoteInput });
+      channel.onmessage = (e) => handleRemoteMessage(e.data, { handle, onMatch, onFrame, onCosmetic, onAlias, onStage, onRemoteInput });
       channel.onclose = () => { handle.linked = false; handle.stopLatencyProbe(); onClose(); };
       resolve(handle);
     };
@@ -286,6 +328,10 @@ async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onC
   if (!data?.offer) {
     onStatus("no offer yet — wait for host");
   }
+
+  // Tracks when we POSTed our answer; the dead-host detector below uses
+  // it to bail early instead of waiting the full PAIR_TIMEOUT_MS.
+  let answerPostedAt = 0;
 
   const setOfferAndAnswer = async (sessionData) => {
     if (!sessionData?.offer || pc.currentRemoteDescription) return;
@@ -305,6 +351,7 @@ async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onC
       sessionId, role: "answerer",
       payload: { answer: packDescription(pc.localDescription) },
     });
+    if (!answerPostedAt) answerPostedAt = Date.now();
   };
 
   // If offer was already there, accept it now.
@@ -322,13 +369,46 @@ async function runGuest(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onC
     }
   });
 
-  // Race: data channel arrives or pairing times out.
-  const handle = await Promise.race([
-    handlePromise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error("pairing timed out")), PAIR_TIMEOUT_MS)),
-  ]);
-  handle._unsub = unsub;
-  return handle;
+  // Race: data channel arrives, dead-host is detected, or overall pair
+  // timeout fires. The host-gone path lets the UI prompt the user to
+  // take over and host themselves instead of waiting fruitlessly.
+  let pairTimer = 0;
+  let liveCheckTimer = 0;
+  const cleanupTimers = () => {
+    if (pairTimer) clearTimeout(pairTimer);
+    if (liveCheckTimer) clearInterval(liveCheckTimer);
+    pairTimer = 0;
+    liveCheckTimer = 0;
+  };
+  try {
+    const handle = await Promise.race([
+      handlePromise,
+      new Promise((_, reject) => {
+        pairTimer = setTimeout(() => {
+          cleanupTimers();
+          const e = new Error("pairing timed out");
+          e.code = "pair-timeout";
+          reject(e);
+        }, PAIR_TIMEOUT_MS);
+        liveCheckTimer = setInterval(() => {
+          if (answerPostedAt && Date.now() - answerPostedAt > ANSWER_LINK_TIMEOUT_MS) {
+            cleanupTimers();
+            const e = new Error("host has left — answer posted with no response");
+            e.code = "host-gone";
+            reject(e);
+          }
+        }, 1_000);
+      }),
+    ]);
+    cleanupTimers();
+    handle._unsub = unsub;
+    return handle;
+  } catch (err) {
+    cleanupTimers();
+    try { unsub?.(); } catch {}
+    try { pc.close(); } catch {}
+    throw err;
+  }
 }
 
 async function runSpectator(fb, sessionId, { onStatus, onLink, onMatch, onFrame, onStreamAge, onClose }) {
@@ -338,7 +418,22 @@ async function runSpectator(fb, sessionId, { onStatus, onLink, onMatch, onFrame,
   );
   const sessionRef = doc(fb.firestore, "webrtc", sessionId);
   const initial = await getDoc(sessionRef);
-  if (!initial.exists()) throw new Error("session not found");
+  if (!initial.exists()) {
+    const e = new Error("host session not found — they may have left");
+    e.code = "host-gone";
+    throw e;
+  }
+  // If the host had been streaming frames but stopped a while ago, the
+  // stream is dead. Don't silently drop the visitor into a "spectating"
+  // state that just shows a frozen frame forever — surface host-gone so
+  // the UI can offer a take-over button.
+  const initialData = initial.data() ?? {};
+  const initialFrameAt = Number(initialData.spectatorFrameAt ?? 0);
+  if (initialFrameAt > 0 && Date.now() - initialFrameAt > 30_000) {
+    const e = new Error("host stream went stale — they may have left");
+    e.code = "host-gone";
+    throw e;
+  }
 
   let lastFrameAt = 0;
   let lastInitKey = "";
@@ -348,7 +443,12 @@ async function runSpectator(fb, sessionId, { onStatus, onLink, onMatch, onFrame,
       const initKey = JSON.stringify(init);
       if (initKey !== lastInitKey) {
         lastInitKey = initKey;
-        onMatch({ seed: init.seed, stageId: init.stageId, cosmetics: init.cosmetics });
+        onMatch({
+          seed: init.seed,
+          stageId: init.stageId,
+          cosmetics: init.cosmetics,
+          aliases: Array.isArray(init.aliases) ? init.aliases : undefined,
+        });
       }
     }
     const frameAt = Number(data.spectatorFrameAt ?? 0);
@@ -383,6 +483,9 @@ function makeSpectatorHandle(sessionId, teardown) {
     },
     sendInput() {},
     broadcastMatch() {},
+    broadcastCosmetic() {},
+    broadcastAlias() {},
+    broadcastStage() {},
     postSpectatorFrame() {},
   };
 }
@@ -436,12 +539,16 @@ function makeHandle(sessionId, channel, teardown, options = {}) {
       buf[4] = packInput(input);
       try { channel.send(buf); } catch {}
     },
-    broadcastMatch({ seed, stageId, cosmetics }) {
+    broadcastMatch({ seed, stageId, cosmetics, aliases }) {
+      const aliasPair = Array.isArray(aliases)
+        ? [String(aliases[0] ?? ""), String(aliases[1] ?? "")]
+        : undefined;
       const msg = {
         type: "match",
         seed: seed >>> 0,
         stageId: String(stageId ?? ""),
         cosmetics: Array.isArray(cosmetics) ? cosmetics : undefined,
+        aliases: aliasPair,
       };
       if (handle.linked && channel?.readyState === "open") sendJson(channel, msg);
       // Mirror to Firestore so spectators that join after pairing get
@@ -454,6 +561,7 @@ function makeHandle(sessionId, channel, teardown, options = {}) {
             seed: seed >>> 0,
             stageId: String(stageId ?? ""),
             cosmetics: Array.isArray(cosmetics) ? cosmetics : undefined,
+            aliases: aliasPair,
           },
         }).catch(() => {});
       }
@@ -469,6 +577,15 @@ function makeHandle(sessionId, channel, teardown, options = {}) {
         side: slot,
         body: typeof cosmetic?.body === "string" ? cosmetic.body : "",
         weapon: typeof cosmetic?.weapon === "string" ? cosmetic.weapon : "",
+      };
+      if (handle.linked && channel?.readyState === "open") sendJson(channel, msg);
+    },
+    broadcastAlias(side, alias) {
+      const slot = side === 1 ? 1 : 0;
+      const msg = {
+        type: "alias",
+        side: slot,
+        alias: String(alias ?? ""),
       };
       if (handle.linked && channel?.readyState === "open") sendJson(channel, msg);
     },
@@ -504,7 +621,7 @@ function nowMs() {
   return Date.now();
 }
 
-function handleRemoteMessage(raw, { handle, onMatch, onFrame, onCosmetic, onStage, onRemoteInput }) {
+function handleRemoteMessage(raw, { handle, onMatch, onFrame, onCosmetic, onAlias, onStage, onRemoteInput }) {
   if (raw instanceof ArrayBuffer) {
     const view = new Uint8Array(raw);
     if (view.length < 5) return;
@@ -519,13 +636,21 @@ function handleRemoteMessage(raw, { handle, onMatch, onFrame, onCosmetic, onStag
     try { msg = JSON.parse(raw); } catch { return; }
     if (!msg || typeof msg !== "object") return;
     if (msg.type === "match" && Number.isFinite(msg.seed)) {
-      onMatch?.({ seed: msg.seed >>> 0, stageId: msg.stageId, cosmetics: msg.cosmetics });
+      onMatch?.({
+        seed: msg.seed >>> 0,
+        stageId: msg.stageId,
+        cosmetics: msg.cosmetics,
+        aliases: Array.isArray(msg.aliases) ? msg.aliases : undefined,
+      });
     }
     if (msg.type === "frame" && msg.frame) {
       onFrame?.(msg.frame);
     }
     if (msg.type === "cosmetic" && (msg.side === 0 || msg.side === 1)) {
       onCosmetic?.(msg.side, { body: msg.body, weapon: msg.weapon });
+    }
+    if (msg.type === "alias" && (msg.side === 0 || msg.side === 1)) {
+      onAlias?.(msg.side, typeof msg.alias === "string" ? msg.alias : "");
     }
     if (msg.type === "stage" && typeof msg.stageId === "string") {
       onStage?.(msg.stageId);

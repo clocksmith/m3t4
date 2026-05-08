@@ -1,4 +1,7 @@
 import { firebase, httpsCallable, signInAnonymously } from "./firebase-client.js";
+import { ensureIceServers } from "./ice-config.js";
+
+const PEER_RETRY_LIMIT = 3;
 
 const OPT_IN_KEY = "m3t4.compute.optIn";
 const CLIENT_ID_KEY = "m3t4.compute.clientId";
@@ -369,7 +372,28 @@ class FirebaseComputeClient {
     if (!this.peerAvailable) throw new Error("WebRTC unavailable");
     const peers = await this.listPeers(work.chunk.kind);
     if (!peers.length) throw new Error("no compute peer available");
-    const peer = peers[0];
+    // Best-effort TURN/STUN refresh; subsequent attemptPeer calls read
+    // the cached list synchronously.
+    await ensureIceServers().catch(() => {});
+    // Multi-peer rebalance: try up to PEER_RETRY_LIMIT candidates before
+    // bubbling the failure up to runChunk so it can fall back to local.
+    // Without this, a single dead/overloaded peer caused every claim to
+    // detour through the local-fallback path even when other peers were
+    // healthy and available.
+    const candidates = peers.slice(0, PEER_RETRY_LIMIT);
+    let lastErr = null;
+    for (const peer of candidates) {
+      try {
+        return await this.attemptPeer(peer, work);
+      } catch (err) {
+        lastErr = err;
+        this.debug.lastPeerError = { message: message(err), peerId: peer.peerId, at: Date.now() };
+      }
+    }
+    throw lastErr || new Error("all candidate compute peers failed");
+  }
+
+  async attemptPeer(peer, work) {
     const fb = await ensureFirebaseAuth();
     const session = await callFunction("webrtcSignal", { op: "create" });
     const pc = new RTCPeerConnection({ iceServers: configuredIceServers() });
@@ -454,10 +478,10 @@ class FirebaseComputeClient {
         peerSubreceipt: result.peerSubreceipt ?? null,
       };
     } finally {
-      if (!done) this.debug.lastPeerError = { message: "peer path fell back", at: Date.now() };
       try { unsub(); } catch {}
       try { channel.close(); } catch {}
       try { pc.close(); } catch {}
+      if (!done) this.debug.lastPeerError = { message: "peer attempt failed", peerId: peer.peerId, at: Date.now() };
     }
   }
 
@@ -490,6 +514,10 @@ class FirebaseComputeClient {
     const fb = await ensureFirebaseAuth();
     const uid = fb.auth.currentUser?.uid;
     if (!uid || !this.workerId) return;
+    // Refresh TURN/STUN config in the background so volunteers behind
+    // symmetric NAT can still pair via relay. Cached for 15m on the
+    // client; the server-side credential lifetime is 24h.
+    ensureIceServers().catch(() => {});
     const { doc, setDoc } = await import(
       "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
     );

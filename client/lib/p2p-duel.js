@@ -20,6 +20,7 @@
 // relay is the planned fix.
 
 import { firebase, httpsCallable, signInAnonymously } from "./firebase-client.js";
+import { ensureIceServers, iceServers as currentIceServers } from "./ice-config.js";
 
 const ICE_GATHER_TIMEOUT_MS = 5_000;
 // Bumped from 30s — invitations frequently take longer than that to
@@ -44,12 +45,10 @@ export function isP2PSupported() {
 }
 
 function defaultIceServers() {
-  if (typeof window === "undefined") return [{ urls: "stun:stun.l.google.com:19302" }];
-  const overrides = window.__M3T4_COMPUTE_ICE_SERVERS__;
-  if (Array.isArray(overrides) && overrides.length > 0) return overrides;
-  const stun = window.__M3T4_COMPUTE_STUN_URLS__;
-  if (Array.isArray(stun) && stun.length > 0) return [{ urls: stun }];
-  return [{ urls: "stun:stun.l.google.com:19302" }];
+  // Use the shared ICE config (STUN + TURN if configured server-side).
+  // Falls back to STUN-only if the fetch hasn't completed yet — callers
+  // await ensureIceServers() before constructing peer connections.
+  return currentIceServers();
 }
 
 async function ensureSignalAuth() {
@@ -169,6 +168,10 @@ export async function startP2PDuel({
 }) {
   if (!isP2PSupported()) throw new Error("P2P not supported in this environment");
   const fb = await ensureSignalAuth();
+  // Pull TURN/STUN config before any RTCPeerConnection so symmetric-NAT
+  // peers have a relay candidate available. Best-effort — failure
+  // degrades to the STUN fallback returned by iceServers().
+  await ensureIceServers().catch(() => {});
 
   if (role === "host") {
     return runHost(fb, { reuseSessionId, onStatus, onLink, onMatch, onCosmetic, onAlias, onStage, onLatency, onRemoteInput, onSpectatorLink, onClose });
@@ -213,6 +216,12 @@ async function runHost(fb, { reuseSessionId, onStatus, onLink, onMatch, onCosmet
     if (handle._unsub) try { handle._unsub(); } catch {}
   }, { fb, onLatency });
   handle.role = "host";
+  // Updated by the host's onSnapshot subscription below from the
+  // spectatorLastSeenAt field that duel spectators ping. Used by the
+  // duel render loop's maybePostSpectatorFrame to skip the 10fps
+  // Firestore write when nobody is watching from a Firestore-only
+  // spectator tab.
+  handle.lastSpectatorPingAt = 0;
 
   channel.onopen = () => {
     handle.linked = true;
@@ -247,6 +256,9 @@ async function runHost(fb, { reuseSessionId, onStatus, onLink, onMatch, onCosmet
       for (const c of data.candidatesB) {
         try { await pc.addIceCandidate(c); } catch {}
       }
+    }
+    if (Number.isFinite(data.spectatorLastSeenAt)) {
+      handle.lastSpectatorPingAt = Number(data.spectatorLastSeenAt) || 0;
     }
   });
 
@@ -459,7 +471,17 @@ async function runSpectator(fb, sessionId, { onStatus, onLink, onMatch, onFrame,
     }
   };
 
+  // Ping the host every 10s so they keep mirroring frames to the
+  // session doc. Without this, the host's cost gate (gated 10fps write
+  // loop) sees us as absent and stops posting frames.
+  let pingTimer = 0;
+  const sendSpectatorPing = () => {
+    callSignal(fb, "spectatorPing", { sessionId }).catch(() => {});
+  };
+
   const handle = makeSpectatorHandle(sessionId, () => {
+    if (pingTimer) clearInterval(pingTimer);
+    pingTimer = 0;
     if (handle._unsub) try { handle._unsub(); } catch {}
     onClose();
   });
@@ -468,6 +490,8 @@ async function runSpectator(fb, sessionId, { onStatus, onLink, onMatch, onFrame,
   onLink({ spectator: true });
   applySpectatorState(initial.data());
   handle._unsub = onSnapshot(sessionRef, (snap) => applySpectatorState(snap.data()));
+  sendSpectatorPing();
+  pingTimer = setInterval(sendSpectatorPing, 10_000);
   return handle;
 }
 
@@ -568,6 +592,15 @@ function makeHandle(sessionId, channel, teardown, options = {}) {
     },
     postSpectatorFrame(frame) {
       if (!fb || !frame) return;
+      // Cost gate: only mirror frames to Firestore when a Firestore-only
+      // spectator pinged within the last 20s. The paired peer reads
+      // frames over the data channel and doesn't need this. The duel
+      // render loop calls postSpectatorFrame at 10fps, so without the
+      // gate a 60s match writes ~600 docs even with zero spectators —
+      // enough to cross the free-tier write cap on a busy day.
+      const last = Number(handle.lastSpectatorPingAt ?? 0);
+      if (last > 0 && Date.now() - last > 20_000) return;
+      if (last === 0) return;
       callSignal(fb, "postFrame", { sessionId, frame }).catch(() => {});
     },
     broadcastCosmetic(side, cosmetic) {

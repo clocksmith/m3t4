@@ -17,6 +17,10 @@ import {
   type StableDoc,
   type StableSlotDoc,
 } from "./stable-public.js";
+import {
+  writePublicBotEvent,
+  writePublicBotProjection,
+} from "./public-bots.js";
 
 const REGION = "us-central1";
 // Reject submissions arriving faster than this per uid. Mirrors the
@@ -109,6 +113,7 @@ export const submitStable = onCall(
 
       const slots = existing?.slots ? [...existing.slots] : [];
       const prev = slots[slotIdx];
+      const eventType = prev?.slotId ? "revised" : "submitted";
       const slot: StableSlotDoc = {
         slotIdx,
         slotId: prev?.slotId ?? `${auth.uid}-${slotIdx}`,
@@ -138,6 +143,8 @@ export const submitStable = onCall(
       });
       tx.set(stableRef, next, { merge: true });
       tx.set(publicRef, publicStableDoc(next), { merge: true });
+      writePublicBotProjection(tx, firestore, next);
+      writePublicBotEvent(tx, firestore, next, slot, eventType, now);
       return { slotId: slot.slotId, handle: requestedHandle };
     });
 

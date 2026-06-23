@@ -86,6 +86,10 @@ Live mode is activated by client config and deployed Functions:
 6. The next `matchTick` is enqueued through Cloud Tasks.
 7. `matchTickWatchdog` is a repair loop only. It kicks the chain if the head is
    stale or missing.
+8. `releaseChampionCandidates`, when enabled, refreshes the generated
+   `system:frontier` stable on cron `0 * * * *` with a scored, diverse named
+   system candidate. The public slot name is generated from a deterministic
+   65,536-name handle space, and each release is recorded in `publicBotEvents`.
 
 This avoids an always-on arena worker while keeping a single authoritative
 match chain.

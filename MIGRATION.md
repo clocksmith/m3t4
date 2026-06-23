@@ -62,6 +62,10 @@ The live chain flow is:
 3. `matchTick` runs the sim, writes a public match doc, updates private/public
    stable state, and enqueues the next tick.
 4. `matchTickWatchdog` repairs stale chain state.
+5. `releaseChampionCandidates` can refresh a generated `system:frontier`
+   stable on cron `0 * * * *` when the release flag is enabled. The default
+   release writes one named system bot from a deterministic 65,536-name handle
+   space and records each release in `publicBotEvents`.
 
 ## Firebase compute path
 

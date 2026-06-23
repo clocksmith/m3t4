@@ -25,6 +25,8 @@ export const COLLECTIONS = {
   matches: "matches",
   stables: "stables",
   publicStables: "publicStables",
+  publicBots: "publicBots",
+  publicBotEvents: "publicBotEvents",
   handles: "handles",
   state: "state",
   // Optional: used by Phase 2 P2P signaling.

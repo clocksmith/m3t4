@@ -9,19 +9,20 @@ import type { StableSummary } from "@m3t4/match-engine";
 import { COLLECTIONS } from "./firestore.js";
 
 export interface ActivePoolOptions {
-  // Stables count as "active" when their lastActiveAt is within this
-  // window. Default 24h.
+  // Stables count as active when their lastActiveAt is inside this window.
   windowMs?: number;
   // Cap on returned size. Pair selection only needs a few hundred to
   // pick a good pair; we don't pull the whole collection.
   limit?: number;
 }
 
+export const DEFAULT_ACTIVE_POOL_MS = 43_200_000;
+
 export async function loadActiveStables(
   firestore: Firestore,
   opts: ActivePoolOptions = {},
 ): Promise<StableSummary[]> {
-  const window = opts.windowMs ?? 24 * 3600_000;
+  const window = opts.windowMs ?? activePoolWindowMs();
   const limit = opts.limit ?? 500;
   const cutoff = Date.now() - window;
 
@@ -60,6 +61,16 @@ export async function loadActiveStables(
   const existingUsers = new Set(out.map((stable) => stable.userId));
   const fallback = systemFallbackStables().filter((stable) => !existingUsers.has(stable.userId));
   return [...out, ...fallback].slice(0, Math.max(2, out.length));
+}
+
+export function activePoolWindowMs(env: NodeJS.ProcessEnv = process.env): number {
+  return positiveIntEnv(env.ACTIVE_POOL_MS, DEFAULT_ACTIVE_POOL_MS);
+}
+
+function positiveIntEnv(raw: string | undefined, fallback: number): number {
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function systemFallbackStables(): StableSummary[] {

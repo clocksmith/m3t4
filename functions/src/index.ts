@@ -3,6 +3,7 @@
 
 export { matchTick } from "./matchTick.js";
 export { matchTickWatchdog } from "./matchTickWatchdog.js";
+export { releaseChampionCandidates } from "./championCandidates.js";
 export { bootstrapMatch } from "./bootstrapMatch.js";
 export { claimHandle } from "./claimHandle.js";
 export {

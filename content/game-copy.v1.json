@@ -66,78 +66,69 @@
   },
   "rules": {
     "title": "About",
-    "subtitle": "receipt-carrying volunteer compute, staged as an arena",
+    "subtitle": "autonomous bot arena with opt-in receipt compute",
     "about": {
       "title": "what m3t4.ai is",
       "body": [
-        "m3t4.ai is a live proof of concept for opt-in browser distributed compute, staged as an autonomous fighter arena.",
-        "The proof of concept is the arena workload: when opt-in compute is enabled, browsers can verify matches and stress-test bots across bounded seed windows over WebRTC, producing receipts that bind the job, input, output, transport, and worker.",
-        "That makes every match a useful test artifact, not just a game result. Seed sweeps measure whether a bot is robust across opponents, maps, timing, recovery, denial, and risk without exposing private configs.",
-        "The real target is to extend the same verified WebGPU pipeline beyond the arena to tensor-tile compute, distributed ML evaluation, protein-adjacent science tiles, and public research jobs."
+        "m3t4.ai is a ranked autonomous fighter arena. You tune a bot; the server runs the match.",
+        "The arena produces public artifacts: seeds, frames, outcomes, named bots, and rankings.",
+        "Opt-in compute is a separate public lane. Browsers can run bounded deterministic jobs, submit receipt-bound outputs, and attempt WebRTC before local fallback.",
+        "Those receipts are advisory. They can verify public chunks and stress-test public workloads, but they do not decide ranked matches, reveal private configs, or prove trusted hardware."
+      ],
+      "links": [
+        {
+          "label": "Reploid",
+          "href": "https://replo.id",
+          "note": "p2p browser inference example"
+        }
       ]
     },
     "sections": [
       {
         "title": "How To Score",
         "body": [
-          "A kill creates or transfers the Proof Core.",
-          "The carrier must bring it to the lit Demand Node and hold long enough to deliver.",
-          "Each delivery is one point. Two points win a round; two rounds win the match."
+          "Kill to create or steal the Proof Core.",
+          "Carry it to the lit Demand Node.",
+          "Two deliveries win a round. Two rounds win the match."
         ]
       },
       {
         "title": "Demand Nodes",
         "body": [
-          "Only one Demand Node is live at a time.",
-          "Nodes can expire. If the timer runs out, the Proof Core and node reset.",
-          "A fresh kill lights a new node."
+          "Only one Demand Node is live.",
+          "If it expires, the core and node reset.",
+          "A fresh kill lights the next node."
         ]
       },
       {
         "title": "Combat",
         "body": [
-          "All fighters share the same physical body: movement, jump, wall behavior, sword reach, and respawn timing are ruleset constants.",
-          "Attacks can kill, clash, steal the Proof Core, or force a reset after a double KO.",
-          "A killed carrier loses control of the Proof Core to the killer."
+          "All fighters share the same body rules.",
+          "Attacks can kill, clash, steal the core, or reset after a double KO.",
+          "A killed carrier gives the core to the killer."
         ]
       },
       {
         "title": "Tuning, Not Piloting",
         "body": [
           "Ranked has no manual pilot.",
-          "The Tune page edits policy tendencies, then previews them through server-run replay frames.",
-          "Preset internals stay server-side; the client gets labels and frames, not decision code."
+          "The Tune page edits policy tendencies.",
+          "Preset internals stay server-side."
         ]
       },
       {
-        "title": "Budget And Hallucination",
+        "title": "Build Budget",
         "body": [
-          "Ranked bots get 360 clean points across visible tuning knobs.",
-          "Builds under 180 points are underfit; builds over 360 points are overfit.",
-          "Underfit and overfit builds both gain deterministic seeded hallucination."
-        ]
-      },
-      {
-        "title": "Match Seeds",
-        "body": [
-          "Each match seed rotates the legal spawn points for the arena.",
-          "The same build can open from different ground, wall, or platform positions.",
-          "Seeded variation is intentional: a bot has to survive the ruleset, not memorize one opening."
-        ]
-      },
-      {
-        "title": "Seeded Drift",
-        "body": [
-          "Even clean bots get small seeded match drift.",
-          "About every 30 simulation ticks, eight non-hallucination attributes shift by plus or minus two UI points.",
-          "These perturbations are clamped, replayable, and part of the ruleset."
+          "Ranked bots get 360 clean points.",
+          "Underfit and overfit builds gain seeded hallucination.",
+          "Seeded drift keeps clean builds from memorizing one opening."
         ]
       },
       {
         "title": "Ranked Roster",
         "body": [
-          "Your roster holds up to four live seats.",
-          "The server validates configs, schedules ranked matches, and streams one canonical live match.",
+          "Your roster holds four live seats.",
+          "The server validates configs and streams one canonical match.",
           "The ladder records wins, losses, draws, and ELO."
         ]
       }

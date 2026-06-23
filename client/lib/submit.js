@@ -83,6 +83,121 @@ export async function getPublicLeaderboard(limitCount = 50) {
   });
 }
 
+export async function getPublicBotsPage({ limitCount = 24, cursor = null } = {}) {
+  const fb = firebase();
+  if (!fb) return fallbackPublicBotsPage(limitCount);
+  const safeLimit = Math.max(1, Math.min(48, Number(limitCount) || 24));
+  try {
+    const { collection, getDocs, limit, orderBy, query, startAfter } = await import(
+      "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
+    );
+    const clauses = [
+      collection(fb.firestore, "publicBots"),
+      orderBy("lastOnlineAt", "desc"),
+    ];
+    if (cursor) clauses.push(startAfter(cursor));
+    clauses.push(limit(safeLimit));
+    const snap = await getDocs(query(...clauses));
+    const rows = snap.docs.map((docSnap) => normalizePublicBot(docSnap.data(), docSnap.id));
+    if (rows.length === 0 && !cursor) return fallbackPublicBotsPage(safeLimit);
+    return {
+      rows,
+      cursor: snap.docs.at(-1) ?? null,
+      hasMore: snap.docs.length === safeLimit,
+      source: "publicBots",
+    };
+  } catch {
+    if (cursor) return { rows: [], cursor: null, hasMore: false, source: "publicStables" };
+    return fallbackPublicBotsPage(safeLimit);
+  }
+}
+
+export async function getPublicBotEvents(limitCount = 12) {
+  const fb = firebase();
+  if (!fb) return fallbackPublicBotEvents(limitCount);
+  const safeLimit = Math.max(1, Math.min(32, Number(limitCount) || 12));
+  try {
+    const { collection, getDocs, limit, orderBy, query } = await import(
+      "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
+    );
+    const snap = await getDocs(query(
+      collection(fb.firestore, "publicBotEvents"),
+      orderBy("eventAt", "desc"),
+      limit(safeLimit),
+    ));
+    const rows = snap.docs.map((docSnap) => normalizePublicBotEvent(docSnap.data(), docSnap.id));
+    if (rows.length === 0) return fallbackPublicBotEvents(safeLimit);
+    return rows;
+  } catch {
+    return fallbackPublicBotEvents(safeLimit);
+  }
+}
+
+async function fallbackPublicBotsPage(limitCount) {
+  const stables = await getPublicLeaderboard(Math.max(50, limitCount));
+  const rows = stables
+    .flatMap((stable) => (stable.slots ?? []).map((slot) => normalizePublicBot({
+      ...slot,
+      userId: stable.userId,
+      handle: stable.handle,
+      source: stable.userId?.startsWith?.("system:") ? "system" : "player",
+      lastOnlineAt: Math.max(Number(slot.lastPlayedAt ?? 0), Number(slot.submittedAt ?? 0), Number(stable.updatedAt ?? 0)),
+      updatedAt: stable.updatedAt,
+    }, `${stable.userId ?? stable.handle}:slot-${slot.slotIdx ?? slot.slotId ?? "unknown"}`)))
+    .sort((a, b) => b.lastOnlineAt - a.lastOnlineAt)
+    .slice(0, Math.max(1, Number(limitCount) || 24));
+  return { rows, cursor: null, hasMore: false, source: "publicStables" };
+}
+
+async function fallbackPublicBotEvents(limitCount) {
+  const page = await fallbackPublicBotsPage(Math.max(1, Number(limitCount) || 12));
+  return page.rows.map((bot) => ({
+    ...bot,
+    eventId: `fallback-${bot.botId}`,
+    eventType: bot.source === "system" ? "released" : "submitted",
+    eventAt: bot.submittedAt || bot.lastOnlineAt || bot.updatedAt || 0,
+  }));
+}
+
+function normalizePublicBot(data, fallbackId) {
+  const submittedAt = numberOr(data.submittedAt, 0);
+  const lastPlayedAt = numberOr(data.lastPlayedAt, 0);
+  const updatedAt = numberOr(data.updatedAt, Math.max(submittedAt, lastPlayedAt));
+  return {
+    botId: data.botId ?? fallbackId,
+    userId: data.userId ?? "",
+    handle: data.handle ?? "unknown",
+    slotIdx: Number.isInteger(data.slotIdx) ? data.slotIdx : null,
+    slotId: data.slotId ?? fallbackId,
+    name: data.name ?? data.slotName ?? "unnamed",
+    cosmetics: data.cosmetics ?? null,
+    elo: numberOr(data.elo, numberOr(data.eloAggregate, 1500)),
+    peakElo: numberOr(data.peakElo, numberOr(data.elo, 1500)),
+    wins: numberOr(data.wins, 0),
+    losses: numberOr(data.losses, 0),
+    draws: numberOr(data.draws, 0),
+    submittedAt,
+    lastPlayedAt,
+    lastOnlineAt: numberOr(data.lastOnlineAt, Math.max(submittedAt, lastPlayedAt, updatedAt)),
+    updatedAt,
+    lastMatchId: data.lastMatchId ?? null,
+    source: data.source === "system" ? "system" : "player",
+  };
+}
+
+function normalizePublicBotEvent(data, fallbackId) {
+  return {
+    ...normalizePublicBot(data, data.botId ?? fallbackId),
+    eventId: data.eventId ?? fallbackId,
+    eventType: data.eventType ?? "submitted",
+    eventAt: numberOr(data.eventAt, numberOr(data.submittedAt, 0)),
+  };
+}
+
+function numberOr(value, fallback) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
 // Subscribe to the signed-in user's stable doc for the profile UI.
 // Returns an unsubscribe function. The returned doc has the same shape
 // as the Firestore stable doc (slots, handle, elo, etc.).

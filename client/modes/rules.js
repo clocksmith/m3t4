@@ -3,6 +3,7 @@
 // to understand the arena and the trust boundary, not the source.
 
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
+import { linkButtonHtml } from "../ui/actions.js";
 import { escapeHtml } from "../ui/html.js";
 import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
 
@@ -42,6 +43,30 @@ function aboutDetailHtml(about) {
     </section>`;
 }
 
+function aboutLinksHtml(about) {
+  const links = Array.isArray(about?.links) ? about.links : [];
+  if (!links.length) return "";
+  return `
+    <section class="rules-related" aria-label="Related projects">
+      ${links.map((link) => `
+        <div class="rules-related-copy">
+          <span>For p2p browser inference</span>
+          <strong>${escapeHtml(link.note ?? "")}</strong>
+        </div>
+        ${linkButtonHtml({
+          href: link.href,
+          text: link.label,
+          variant: "primary",
+          attrs: {
+            target: "_blank",
+            rel: "noopener noreferrer",
+            title: `Open ${link.label}`,
+          },
+        })}
+      `).join("")}
+    </section>`;
+}
+
 export function mount(root, { setStatus }) {
   setStatus("about");
   const rules = gameCopy.rules ?? {};
@@ -57,6 +82,7 @@ export function mount(root, { setStatus }) {
 
       ${aboutCardHtml(rules.about)}
       ${aboutDetailHtml(rules.about)}
+      ${aboutLinksHtml(rules.about)}
 
       <div class="rules-rules-column">
         <div class="rules-section-label">Rules</div>

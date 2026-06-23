@@ -94,6 +94,12 @@ let noiseFrameCounter = 0;
 let running = false;
 let lbTimer = null;
 let leaderboardEl = null;
+let botDirectoryEl = null;
+let botEventsEl = null;
+let botMoreBtn = null;
+let botPageCursor = null;
+let botRows = [];
+let botPageLoading = false;
 let canvas = null;
 
 // Four-state cycle for the compute dash PIP. Each state is a single
@@ -186,8 +192,13 @@ export function mount(root, { setStatus }) {
       })}
       <div class="spectate-grid">
         <aside class="panel lb spectate-side">
-          <h3>Leaderboard</h3>
+          <h3>Stable leaderboard</h3>
           <div id="leaderboard">loading…</div>
+          <div class="live-bots-head">
+            <h3>Named bots</h3>
+            <button id="live-bots-more" type="button" class="live-bots-more">more</button>
+          </div>
+          <div id="live-bots-list" class="live-bots-list">loading…</div>
         </aside>
         <div class="spectate-center">
           <div id="spectate-stage" class="spectate-stage" data-dash-state="1">
@@ -218,13 +229,22 @@ export function mount(root, { setStatus }) {
           ${toggleSwitchHtml({ id: "spectate-audio", label: "Audio", title: "Play sound effects and stage music", checked: audioEnabledStored() })}
         </aside>
       </div>
-      <div class="panel">
-        <h3>Stream</h3>
-        <div id="stream-log" class="tight stream-log"></div>
+      <div class="spectate-feed-grid">
+        <div class="panel">
+          <h3>Stream</h3>
+          <div id="stream-log" class="tight stream-log"></div>
+        </div>
+        <div class="panel">
+          <h3>New bots</h3>
+          <div id="live-bot-events" class="live-bot-events">loading…</div>
+        </div>
       </div>
     </div>`;
   canvas = root.querySelector("#stage-canvas");
   leaderboardEl = root.querySelector("#leaderboard");
+  botDirectoryEl = root.querySelector("#live-bots-list");
+  botEventsEl = root.querySelector("#live-bot-events");
+  botMoreBtn = root.querySelector("#live-bots-more");
   stageWrapper = root.querySelector("#spectate-stage");
   dashWrapper = root.querySelector("#spectate-stage-dash-wrap");
   const rendererId = ++rendererMountId;
@@ -250,11 +270,17 @@ export function mount(root, { setStatus }) {
     setDashState(nextDashState(dashState));
   };
   window.addEventListener("keydown", dashKeyHandler);
+  botMoreBtn?.addEventListener("click", () => { void refreshBotDirectory(); });
   dashState = sanitizeStartupDashState(readStoredDashState());
   applyDashState(dashState);
   connect();
   refreshLeaderboard();
-  lbTimer = setInterval(refreshLeaderboard, 30000);
+  void refreshBotDirectory({ reset: true });
+  void refreshBotEvents();
+  lbTimer = setInterval(() => {
+    refreshLeaderboard();
+    void refreshBotEvents();
+  }, 30000);
   loop();
 }
 
@@ -339,6 +365,12 @@ export function unmount() {
   if (firebaseFeedStop) { try { firebaseFeedStop(); } catch {} firebaseFeedStop = null; }
   firebaseFeedSeenMatchId = null;
   if (lbTimer) { clearInterval(lbTimer); lbTimer = null; }
+  botPageCursor = null;
+  botRows = [];
+  botPageLoading = false;
+  botDirectoryEl = null;
+  botEventsEl = null;
+  botMoreBtn = null;
   if (rafId) cancelAnimationFrame(rafId);
   if (computeDash) { computeDash.destroy(); computeDash = null; }
   if (dashKeyHandler) { window.removeEventListener("keydown", dashKeyHandler); dashKeyHandler = null; }
@@ -743,8 +775,8 @@ function onEvent(m) {
     audioCharKeys = [cosA?.body ?? null, cosB?.body ?? null];
     audioWeaponKeys = [cosA?.weapon ?? null, cosB?.weapon ?? null];
     renderState.labels = {
-      p1: `@${handleA} [${mt.a?.name ?? "slot"}]`,
-      p2: `@${handleB} [${mt.b?.name ?? "slot"}]`,
+      p1: `@${handleA} [${botNameForMatchSide(mt.a)}]`,
+      p2: `@${handleB} [${botNameForMatchSide(mt.b)}]`,
       nameplates: [`@${handleA}`, `@${handleB}`],
       cosmetics: [cosA, cosB],
     };
@@ -869,7 +901,7 @@ function updateLiveBriefing(match) {
 
 function updateBriefingSide(side, data) {
   const handle = data?.handle ?? (side === 0 ? "p1" : "p2");
-  const name = data?.name ?? "slot";
+  const name = botNameForMatchSide(data);
   const elo = data?.elo ?? "?";
   const binding = bindingForCompetitor(data, side);
   const bindingEl = document.getElementById(`brief-p${side + 1}-binding`);
@@ -1037,6 +1069,104 @@ async function refreshLeaderboard() {
       leaderboardEl.textContent = `offline — ${e.message}`;
     }
   }
+}
+
+async function refreshBotDirectory({ reset = false } = {}) {
+  if (!botDirectoryEl || botPageLoading) return;
+  botPageLoading = true;
+  if (botMoreBtn) botMoreBtn.disabled = true;
+  if (reset) {
+    botPageCursor = null;
+    botRows = [];
+    botDirectoryEl.textContent = "loading…";
+  }
+  try {
+    const page = await (await submitApi()).getPublicBotsPage({
+      limitCount: 12,
+      cursor: botPageCursor,
+    });
+    botPageCursor = page.cursor;
+    botRows = reset ? page.rows : [...botRows, ...page.rows];
+    renderBotDirectory(botRows, page);
+  } catch (e) {
+    botDirectoryEl.textContent = `offline — ${e.message}`;
+  } finally {
+    botPageLoading = false;
+  }
+}
+
+async function refreshBotEvents() {
+  if (!botEventsEl) return;
+  try {
+    const rows = await (await submitApi()).getPublicBotEvents(10);
+    renderBotEvents(rows);
+  } catch (e) {
+    botEventsEl.textContent = `offline — ${e.message}`;
+  }
+}
+
+function renderBotDirectory(rows, page = {}) {
+  if (!botDirectoryEl) return;
+  if (!rows.length) {
+    botDirectoryEl.textContent = "no named bots yet";
+  } else {
+    botDirectoryEl.innerHTML = rows.map((bot) => `
+      <article class="live-bot-row">
+        <div class="live-bot-main">
+          <strong title="${escapeHtml(botTitle(bot))}">${escapeHtml(bot.name)}</strong>
+          <span>@${escapeHtml(bot.handle)}</span>
+        </div>
+        <div class="live-bot-meta">
+          <span>${Math.round(bot.elo)} ELO</span>
+          <span>${Number(bot.wins ?? 0)}-${Number(bot.losses ?? 0)}-${Number(bot.draws ?? 0)}</span>
+        </div>
+      </article>`).join("");
+  }
+  if (botMoreBtn) {
+    botMoreBtn.hidden = page.hasMore === false;
+    botMoreBtn.disabled = page.hasMore === false || botPageLoading;
+    botMoreBtn.textContent = page.hasMore === false ? "all" : "more";
+  }
+}
+
+function renderBotEvents(rows) {
+  if (!botEventsEl) return;
+  if (!rows.length) {
+    botEventsEl.textContent = "no arrivals yet";
+    return;
+  }
+  botEventsEl.innerHTML = rows.map((bot) => `
+    <article class="live-bot-event">
+      <span class="live-bot-event-type">${escapeHtml(eventLabel(bot.eventType))}</span>
+      <strong>${escapeHtml(bot.name)}</strong>
+      <span>@${escapeHtml(bot.handle)}</span>
+      <time>${escapeHtml(formatBotStamp(bot.eventAt || bot.submittedAt || bot.lastOnlineAt))}</time>
+    </article>`).join("");
+}
+
+function botTitle(bot) {
+  const source = bot.source === "system" ? "system" : "player";
+  return `${bot.name} · @${bot.handle} · ${source} · ${Math.round(bot.elo)} ELO`;
+}
+
+function eventLabel(type) {
+  if (type === "released") return "released";
+  if (type === "revised") return "revised";
+  return "online";
+}
+
+function formatBotStamp(ts) {
+  if (!Number.isFinite(ts) || ts <= 0) return "unknown";
+  return new Date(ts).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function botNameForMatchSide(side) {
+  return side?.name ?? side?.slotName ?? "slot";
 }
 
 function renderLeaderboardRows(rows) {
@@ -1243,7 +1373,7 @@ function drawCountdownPortrait(side, x, y, w, h, meta) {
   ctx.fillStyle = cssColor("--ui-text", "#f4f4ff");
   drawLeftFit(`@${meta?.handle ?? (side === 0 ? "p1" : "p2")}`, x + 36, y + h - 28, w - 42, 800, 17);
   ctx.fillStyle = cssColor("--arena-idle-text", "#99a");
-  drawLeftFit(`${meta?.name ?? "slot"} · ${meta?.elo ?? "?"}`, x, y + h - 8, w, 700, 13);
+  drawLeftFit(`${botNameForMatchSide(meta)} · ${meta?.elo ?? "?"}`, x, y + h - 8, w, 700, 13);
   ctx.restore();
 }
 

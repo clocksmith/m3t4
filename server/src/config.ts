@@ -22,6 +22,14 @@ const SERVER_ROLE = process.env.SERVER_ROLE ?? "combined";
 if (!["combined", "api", "worker"].includes(SERVER_ROLE)) {
   throw new Error("SERVER_ROLE must be combined, api, or worker");
 }
+const DEFAULT_ACTIVE_POOL_MS = 43_200_000;
+
+function positiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 export const CONFIG = {
   port: parseInt(process.env.PORT ?? "7777", 10),
@@ -60,7 +68,7 @@ export const CONFIG = {
   // Firehose pacing. The code default is intentionally fast for local
   // smoke runs; .env/prod provisioning pin this to 20000 for real traffic.
   cycleMs: parseInt(process.env.CYCLE_MS ?? "1500", 10), // between-match pause
-  activePoolMs: parseInt(process.env.ACTIVE_POOL_MS ?? "1209600000", 10), // 14 days
+  activePoolMs: positiveIntEnv("ACTIVE_POOL_MS", DEFAULT_ACTIVE_POOL_MS),
 
   // Matchmaking
   eloTolerance: parseInt(process.env.ELO_TOLERANCE ?? "100", 10),

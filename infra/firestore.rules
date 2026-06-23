@@ -61,6 +61,18 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Flat public bot directory and append-only public bot arrival/update feed.
+    // These docs are generated from stable slots and never include configs.
+    match /publicBots/{botId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /publicBotEvents/{eventId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Public replay artifact summaries. These contain hashes and public player
     // refs only; full replay blobs and private configs remain closed below.
     match /publicReplayArtifacts/{matchId} {

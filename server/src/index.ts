@@ -169,7 +169,7 @@ server.listen(CONFIG.port, () => {
     fanout.start();
   }
   if (firehose) {
-    console.log(`  firehose: close-ELO ±${CONFIG.eloTolerance}, active pool ${CONFIG.activePoolMs / 86400000}d`);
+    console.log(`  firehose: close-ELO ±${CONFIG.eloTolerance}, active pool ${CONFIG.activePoolMs}ms`);
     firehose.start().catch((e) => console.error("firehose crashed:", e));
   }
   console.log(`  features: ${JSON.stringify(CONFIG.features)}`);

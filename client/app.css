@@ -1173,6 +1173,123 @@ canvas {
   width: 3.5em;
 }
 
+.live-bots-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.live-bots-head h3 {
+  margin: 0;
+}
+
+.live-bots-more {
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: var(--ui-bg-soft);
+  color: var(--ui-text-soft);
+  font: 700 10px ui-monospace, Menlo, monospace;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.live-bots-more:hover:not(:disabled) {
+  color: var(--ui-text);
+  border-color: var(--ui-blue);
+}
+
+.live-bots-more:disabled {
+  opacity: 0.48;
+  cursor: default;
+}
+
+.live-bots-list,
+.live-bot-events {
+  display: grid;
+  gap: 6px;
+  color: var(--ui-text-soft);
+  font-size: 11px;
+}
+
+.live-bot-row,
+.live-bot-event {
+  min-width: 0;
+  border: 1px solid rgba(58, 58, 90, 0.72);
+  border-radius: 6px;
+  background: rgba(17, 17, 26, 0.72);
+}
+
+.live-bot-row {
+  display: grid;
+  gap: 5px;
+  padding: 7px 8px;
+}
+
+.live-bot-main,
+.live-bot-meta {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.live-bot-main strong,
+.live-bot-main span,
+.live-bot-event strong,
+.live-bot-event span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-bot-main strong,
+.live-bot-event strong {
+  color: var(--ui-text);
+}
+
+.live-bot-main span,
+.live-bot-event span {
+  color: var(--ui-text-subtle);
+}
+
+.live-bot-meta {
+  color: var(--ui-blue);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 10px;
+}
+
+.spectate-feed-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  gap: 14px;
+}
+
+.live-bot-event {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) minmax(0, 0.8fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  font-family: ui-monospace, Menlo, monospace;
+}
+
+.live-bot-event-type {
+  color: var(--ui-purple-bright) !important;
+  text-transform: uppercase;
+  font-size: 9px;
+}
+
+.live-bot-event time {
+  color: var(--ui-text-subtle);
+  white-space: nowrap;
+}
+
 /* --- spectate 3-column layout: leaderboard | centered arena | live stats --- */
 .spectate-grid {
   display: grid;
@@ -1733,6 +1850,15 @@ canvas {
 @media (max-width: 800px) {
   .spectate-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .spectate-feed-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .live-bot-event {
+    grid-template-columns: 68px minmax(0, 1fr);
+  }
+  .live-bot-event time {
+    grid-column: 2 / 3;
   }
   .spectate-center, .spectate-stats, .spectate-grid .lb {
     grid-column: 1 / -1;
@@ -2930,6 +3056,35 @@ input[type="range"]::-moz-range-thumb {
   font-size: 16px;
   line-height: 1.5;
   padding-left: 12px;
+}
+
+.rules-related {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 980px;
+  border: 1px solid var(--ui-border);
+  background: color-mix(in srgb, var(--ui-surface) 86%, var(--ui-purple) 14%);
+  padding: 14px 16px;
+}
+
+.rules-related-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.rules-related-copy span {
+  color: var(--ui-text-subtle);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.rules-related-copy strong {
+  color: var(--ui-text);
+  font-size: 15px;
 }
 
 .compute-witness-panel {

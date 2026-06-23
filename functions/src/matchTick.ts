@@ -19,6 +19,7 @@ import {
   type StableDoc,
   type StableSlotDoc,
 } from "./stable-public.js";
+import { writePublicBotProjection } from "./public-bots.js";
 
 const REGION = "us-central1";
 
@@ -114,11 +115,13 @@ export const matchTick = onRequest(
         publicStableDoc(nextStableA),
         { merge: true },
       );
+      writePublicBotProjection(batch, firestore, nextStableA);
       batch.set(
         firestore.collection(COLLECTIONS.publicStables).doc(match.b.userId),
         publicStableDoc(nextStableB),
         { merge: true },
       );
+      writePublicBotProjection(batch, firestore, nextStableB);
       await batch.commit();
 
       // Schedule the next matchTick at the precise match end time. Cloud

@@ -72,6 +72,15 @@ copy with `npm run sync:client-sim` or `npm run check:client-sim`.
   trusted browser/GPU execution, shared-buffer compute, or fused-kernel compute
   until the docs and implementation actually support those claims.
 
+## Intent-First Operations
+
+- Treat m3t4 intent as ranked arena plus bounded distributed-compute experiments, not broad public compute claims.
+- If the user asks what works, produce a current scoreboard from server state, client build, plasma-lab smoke artifacts, production flags, and docs claim boundary.
+- Do not open public compute intake, change production flags, or claim strict WebRTC proof unless the user explicitly asks for that operation and the smoke artifacts support it.
+- Ranked arena behavior belongs to `server`; advisory compute belongs to `plasma-lab`. Keep those authority boundaries explicit.
+- If deployed status is requested, answer with Firebase/app URL, config state, smoke result, and whether compute flags are enabled or safe-off.
+- For visual/game behavior, verify deterministic sim and browser render state before changing public copy.
+
 ## Plasma-Lab Smoke Tests
 
 - Local sidecar smoke: `npm -w plasma-lab run smoke`

@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { MODES } from "../routes.js";
+import { MODE_LOADERS } from "../routes.js";
 
-test("compute route is exposed in the browser mode registry", () => {
-  assert.ok(MODES.compute);
+test("compute route is exposed as an on-demand browser mode", () => {
+  assert.equal(typeof MODE_LOADERS.compute, "function");
 });

@@ -50,12 +50,12 @@ function aboutLinksHtml(about) {
     <section class="rules-related" aria-label="Related projects">
       ${links.map((link) => `
         <div class="rules-related-copy">
-          <span>For p2p browser inference</span>
+          <span>${escapeHtml(link.kicker ?? "shared browser inference")}</span>
           <strong>${escapeHtml(link.note ?? "")}</strong>
         </div>
         ${linkButtonHtml({
           href: link.href,
-          text: link.label,
+          text: link.cta ?? link.label,
           variant: "primary",
           attrs: {
             target: "_blank",

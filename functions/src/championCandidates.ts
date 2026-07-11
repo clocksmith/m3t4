@@ -31,7 +31,7 @@ const DEFAULT_CANDIDATE_COUNT = 32;
 const DEFAULT_REFERENCE_COUNT = STRATEGY_NAMES.length;
 const DEFAULT_RELEASE_COUNT = 1;
 export const CHAMPION_RELEASE_SCHEDULE = "0 */6 * * *";
-export const CHAMPION_RELEASE_TIMEOUT_SECONDS = 300;
+export const CHAMPION_RELEASE_TIMEOUT_SECONDS = 180;
 
 export const releaseChampionCandidates = onSchedule(
   {

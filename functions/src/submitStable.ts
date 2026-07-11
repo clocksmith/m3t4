@@ -11,6 +11,7 @@ import {
   HANDLE_PATTERN,
   MAX_SLOTS,
   emptyStable,
+  isReservedSystemHandle,
   normalizeStableTotals,
   publicStableDoc,
   sanitizeHandle,
@@ -65,6 +66,9 @@ export const submitStable = onCall(
         "invalid-argument",
         "handle must be 3-20 chars, lowercase letters/digits/underscore",
       );
+    }
+    if (isReservedSystemHandle(requestedHandle)) {
+      throw new HttpsError("invalid-argument", "handle reserved for system candidates");
     }
 
     const slotName = (data.name ?? `slot-${slotIdx}`).slice(0, 32);

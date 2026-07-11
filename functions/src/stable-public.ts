@@ -1,5 +1,6 @@
 export const MAX_SLOTS = 4;
 export const HANDLE_PATTERN = /^[a-z0-9_]{3,20}$/;
+export const SYSTEM_HANDLE_PREFIXES = ["frontier_"] as const;
 
 export interface StableSlotDoc {
   slotIdx?: number;
@@ -33,6 +34,10 @@ export interface StableDoc {
 
 export function sanitizeHandle(input: string): string {
   return String(input).toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 20) || "anon";
+}
+
+export function isReservedSystemHandle(handle: string): boolean {
+  return SYSTEM_HANDLE_PREFIXES.some((prefix) => handle.startsWith(prefix));
 }
 
 export function stableSummary(stable: StableDoc): {

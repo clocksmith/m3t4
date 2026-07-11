@@ -8,6 +8,7 @@ import { db, COLLECTIONS } from "./firestore.js";
 import {
   HANDLE_PATTERN,
   emptyStable,
+  isReservedSystemHandle,
   normalizeStableTotals,
   publicStableDoc,
   sanitizeHandle,
@@ -28,6 +29,9 @@ export const claimHandle = onCall(
         "invalid-argument",
         "handle must be 3-20 chars, lowercase letters/digits/underscore",
       );
+    }
+    if (isReservedSystemHandle(handle)) {
+      throw new HttpsError("invalid-argument", "handle reserved for system candidates");
     }
 
     const firestore = db();

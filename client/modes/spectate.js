@@ -10,7 +10,7 @@
 //     bursts past MAX_BUFFER_FRAMES are trimmed back to the live window
 //     so latency can't grow unbounded after a stall or tab background)
 
-import { WS_ORIGIN, leaderboard } from "../lib/api.js";
+import { WS_ORIGIN, leaderboardPage } from "../lib/api.js";
 import { STAGES } from "../lib/public-sim.js";
 import { createFrameRenderer, W, H } from "../render/index.js";
 import { getComputeClient } from "../lib/compute.js";
@@ -60,6 +60,7 @@ const JITTER_BUFFER_FRAMES = 24;   // ~8 chunks at STRIDE=3 -> ~200ms
 const LIVE_BUFFER_FRAMES = 36;     // target after trimming -> ~300ms
 const MAX_BUFFER_FRAMES = 90;      // hard cap -> ~750ms
 const TELEPORT_PX = 200;           // position jump above this snaps instead of lerps
+const LEADERBOARD_PAGE_SIZE = 25;
 const COUNTDOWN_PORTRAIT_ACCENTS = [
   { accentVar: "--arena-p1", fallback: "#6ee7b7" },
   { accentVar: "--arena-p2", fallback: "#fb923c" },
@@ -94,6 +95,14 @@ let noiseFrameCounter = 0;
 let running = false;
 let lbTimer = null;
 let leaderboardEl = null;
+let leaderboardCountEl = null;
+let leaderboardMoreBtn = null;
+let leaderboardRows = [];
+let leaderboardCursor = null;
+let leaderboardHasMore = false;
+let leaderboardLoading = false;
+let leaderboardSource = null;
+let leaderboardRequestId = 0;
 let botDirectoryEl = null;
 let botEventsEl = null;
 let botMoreBtn = null;
@@ -192,8 +201,12 @@ export function mount(root, { setStatus }) {
       })}
       <div class="spectate-grid">
         <aside class="panel lb spectate-side">
-          <h3>Stable leaderboard</h3>
-          <div id="leaderboard">loading…</div>
+          <div class="leaderboard-head">
+            <h3>Stable leaderboard</h3>
+            <span id="leaderboard-count" class="leaderboard-count" aria-live="polite"></span>
+          </div>
+          <div id="leaderboard" class="leaderboard-scroll" role="region" aria-label="Stable leaderboard rankings" tabindex="0">loading…</div>
+          <button id="leaderboard-more" type="button" class="live-bots-more leaderboard-more" hidden>more</button>
           <div class="live-bots-head">
             <h3>Named bots</h3>
             <button id="live-bots-more" type="button" class="live-bots-more">more</button>
@@ -242,6 +255,8 @@ export function mount(root, { setStatus }) {
     </div>`;
   canvas = root.querySelector("#stage-canvas");
   leaderboardEl = root.querySelector("#leaderboard");
+  leaderboardCountEl = root.querySelector("#leaderboard-count");
+  leaderboardMoreBtn = root.querySelector("#leaderboard-more");
   botDirectoryEl = root.querySelector("#live-bots-list");
   botEventsEl = root.querySelector("#live-bot-events");
   botMoreBtn = root.querySelector("#live-bots-more");
@@ -270,15 +285,20 @@ export function mount(root, { setStatus }) {
     setDashState(nextDashState(dashState));
   };
   window.addEventListener("keydown", dashKeyHandler);
+  leaderboardMoreBtn?.addEventListener("click", () => { void refreshLeaderboard({ append: true }); });
+  leaderboardEl?.addEventListener("scroll", () => {
+    const remaining = leaderboardEl.scrollHeight - leaderboardEl.scrollTop - leaderboardEl.clientHeight;
+    if (remaining <= 32) void refreshLeaderboard({ append: true });
+  });
   botMoreBtn?.addEventListener("click", () => { void refreshBotDirectory(); });
   dashState = sanitizeStartupDashState(readStoredDashState());
   applyDashState(dashState);
   connect();
-  refreshLeaderboard();
+  void refreshLeaderboard({ reset: true });
   void refreshBotDirectory({ reset: true });
   void refreshBotEvents();
   lbTimer = setInterval(() => {
-    refreshLeaderboard();
+    if (leaderboardRows.length <= LEADERBOARD_PAGE_SIZE) void refreshLeaderboard({ reset: true });
     void refreshBotEvents();
   }, 30000);
   loop();
@@ -365,6 +385,15 @@ export function unmount() {
   if (firebaseFeedStop) { try { firebaseFeedStop(); } catch {} firebaseFeedStop = null; }
   firebaseFeedSeenMatchId = null;
   if (lbTimer) { clearInterval(lbTimer); lbTimer = null; }
+  leaderboardRequestId++;
+  leaderboardEl = null;
+  leaderboardCountEl = null;
+  leaderboardMoreBtn = null;
+  leaderboardRows = [];
+  leaderboardCursor = null;
+  leaderboardHasMore = false;
+  leaderboardLoading = false;
+  leaderboardSource = null;
   botPageCursor = null;
   botRows = [];
   botPageLoading = false;
@@ -1057,18 +1086,89 @@ function interpolateFrame(a, b, t) {
   return out;
 }
 
-async function refreshLeaderboard() {
+async function refreshLeaderboard({ append = false, reset = false } = {}) {
+  if (!leaderboardEl || leaderboardLoading) return;
+  if (append && !leaderboardHasMore) return;
+  const requestId = ++leaderboardRequestId;
+  if (reset) {
+    leaderboardCursor = null;
+    leaderboardSource = null;
+  }
+  leaderboardLoading = true;
+  syncLeaderboardMoreButton();
   try {
-    const rows = await leaderboard(10);
-    renderLeaderboardRows(rows);
+    const page = await loadLeaderboardPage({
+      cursor: append ? leaderboardCursor : null,
+      offset: append ? leaderboardRows.length : 0,
+    });
+    if (!leaderboardEl || requestId !== leaderboardRequestId) return;
+    leaderboardRows = append
+      ? mergeLeaderboardRows(leaderboardRows, page.rows)
+      : page.rows;
+    leaderboardCursor = page.cursor;
+    leaderboardHasMore = page.hasMore === true;
+    renderLeaderboardRows(leaderboardRows);
   } catch (e) {
-    try {
-      const rows = await (await submitApi()).getPublicLeaderboard(10);
-      renderLeaderboardRows(rows);
-    } catch {
+    if (requestId === leaderboardRequestId && leaderboardRows.length === 0 && leaderboardEl) {
       leaderboardEl.textContent = `offline — ${e.message}`;
     }
+  } finally {
+    if (requestId !== leaderboardRequestId) return;
+    leaderboardLoading = false;
+    syncLeaderboardMoreButton();
   }
+}
+
+async function loadLeaderboardPage({ cursor, offset }) {
+  if (leaderboardSource === "rest") {
+    return restLeaderboardPage(offset);
+  }
+  if (leaderboardSource === "firebase") {
+    return firebaseLeaderboardPage(cursor);
+  }
+  try {
+    const page = await restLeaderboardPage(offset);
+    leaderboardSource = "rest";
+    return page;
+  } catch {
+    const page = await firebaseLeaderboardPage(cursor);
+    leaderboardSource = "firebase";
+    return page;
+  }
+}
+
+async function restLeaderboardPage(offset) {
+  const page = await leaderboardPage({ limit: LEADERBOARD_PAGE_SIZE, offset });
+  return {
+    rows: page.rows,
+    cursor: offset + page.rows.length,
+    hasMore: page.hasMore === true,
+  };
+}
+
+async function firebaseLeaderboardPage(cursor) {
+  return (await submitApi()).getPublicLeaderboardPage({
+    limitCount: LEADERBOARD_PAGE_SIZE,
+    cursor,
+  });
+}
+
+function mergeLeaderboardRows(currentRows, nextRows) {
+  const seen = new Set(currentRows.map((row) => row.userId));
+  const uniqueNextRows = nextRows.filter((row) => {
+    if (seen.has(row.userId)) return false;
+    seen.add(row.userId);
+    return true;
+  });
+  return [...currentRows, ...uniqueNextRows];
+}
+
+function syncLeaderboardMoreButton() {
+  if (!leaderboardMoreBtn) return;
+  leaderboardMoreBtn.hidden = !leaderboardHasMore;
+  leaderboardMoreBtn.disabled = leaderboardLoading;
+  leaderboardMoreBtn.textContent = leaderboardLoading ? "loading" : "more";
+  leaderboardEl?.setAttribute("aria-busy", String(leaderboardLoading));
 }
 
 async function refreshBotDirectory({ reset = false } = {}) {
@@ -1170,16 +1270,28 @@ function botNameForMatchSide(side) {
 }
 
 function renderLeaderboardRows(rows) {
+  if (!leaderboardEl) return;
+  if (leaderboardCountEl) {
+    leaderboardCountEl.textContent = `${rows.length}${leaderboardHasMore ? "+" : ""}`;
+  }
+  if (rows.length === 0) {
+    leaderboardEl.textContent = "no ranked players yet";
+    return;
+  }
+  const scrollTop = leaderboardEl.scrollTop;
   leaderboardEl.innerHTML = `
     <table>
-      ${rows.map((r, i) => `
-        <tr>
-          <td class="rank">${i + 1}</td>
-          <td class="handle" title="@${escapeHtml(r.handle)}">@${escapeHtml(r.handle)}</td>
-          <td class="elo">${r.eloAggregate}</td>
-          <td class="wl">${r.wins}-${r.losses}</td>
-        </tr>`).join("")}
+      <tbody>
+        ${rows.map((r, i) => `
+          <tr>
+            <td class="rank">${i + 1}</td>
+            <td class="handle" title="@${escapeHtml(r.handle)}">@${escapeHtml(r.handle)}</td>
+            <td class="elo">${r.eloAggregate}</td>
+            <td class="wl">${r.wins}-${r.losses}</td>
+          </tr>`).join("")}
+      </tbody>
     </table>`;
+  leaderboardEl.scrollTop = scrollTop;
 }
 
 function formatDelta(n) {

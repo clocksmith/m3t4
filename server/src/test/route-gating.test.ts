@@ -49,7 +49,7 @@ class MemoryStableStore {
       .map(summarizePublicReplayArtifact);
   }
   async getStable(userId: string): Promise<any> { return this.stables.get(userId) ?? null; }
-  async listActive(): Promise<any[]> { return []; }
+  async listActive(): Promise<any[]> { return Array.from(this.stables.values()); }
   async applyDecay(): Promise<number> { return 0; }
   async createStable(): Promise<any> { return null; }
   async updateStable(): Promise<void> {}
@@ -322,6 +322,51 @@ test("public stable strips configs but owner stable returns private configs", as
   assert.equal(own.body.slots[1].slotIdx, 1);
   assert.deepEqual(own.body.slots[1].config, cfg);
   assert.deepEqual(own.body.slots[1].cosmetics, { body: "mark", weapon: "sunscreen_bottle_club" });
+});
+
+test("leaderboard pages expose every ranked stable in ELO order", async (t) => {
+  const routes: RouteList = [];
+  const store = new MemoryStableStore();
+  const now = Date.now();
+  for (const [index, elo] of [1250, 1500, 1100, 1400, 1300].entries()) {
+    const handle = `player-${index + 1}`;
+    store.setStable(handle, {
+      userId: handle,
+      handle,
+      slots: [{
+        slotId: `slot-${index + 1}`,
+        config: configFromUi({}, 0),
+        name: handle,
+        submittedAt: now,
+        rateLockedUntil: 0,
+        elo,
+        peakElo: elo,
+        wins: index,
+        losses: 0,
+        draws: 0,
+        lastPlayedAt: now,
+      }],
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+  registerCore(routes, store);
+  const srv = await boot(routes);
+  t.after(() => srv.close());
+
+  const first = await req(srv.port, "GET", "/api/leaderboard?limit=2");
+  assert.equal(first.status, 200);
+  assert.deepEqual(first.body.map((row: any) => row.eloAggregate), [1500, 1400]);
+
+  const page = await req(srv.port, "GET", "/api/leaderboard?page=1&limit=2&offset=2");
+  assert.equal(page.status, 200);
+  assert.equal(page.body.total, 5);
+  assert.equal(page.body.hasMore, true);
+  assert.deepEqual(page.body.rows.map((row: any) => row.eloAggregate), [1300, 1250]);
+
+  const tail = await req(srv.port, "GET", "/api/leaderboard?page=1&limit=2&offset=4");
+  assert.equal(tail.body.hasMore, false);
+  assert.deepEqual(tail.body.rows.map((row: any) => row.eloAggregate), [1100]);
 });
 
 test("production internal routes require the internal token", async (t) => {

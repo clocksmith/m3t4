@@ -28,6 +28,17 @@ export async function leaderboard(limit = 50) {
   return handle(await fetch(API_ORIGIN + "/api/leaderboard?limit=" + limit));
 }
 
+export async function leaderboardPage({ limit = 25, offset = 0 } = {}) {
+  const params = new URLSearchParams({
+    page: "1",
+    limit: String(limit),
+    offset: String(offset),
+  });
+  const body = await handle(await fetch(`${API_ORIGIN}/api/leaderboard?${params}`));
+  if (!body || !Array.isArray(body.rows)) throw new Error("invalid leaderboard response");
+  return body;
+}
+
 export async function getStable(uid) {
   return handle(await fetch(API_ORIGIN + "/api/stables/" + encodeURIComponent(uid)));
 }

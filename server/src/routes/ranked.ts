@@ -58,8 +58,21 @@ export function registerRankedRoutes(routes: RouteList, deps: RankedRouteDeps): 
       const rows = active
         .map((st) => stablePublic(st))
         .sort((a, b) => b.eloAggregate - a.eloAggregate);
+      const limit = boundedInteger(url.searchParams.get("limit"), 50, 1, 100);
+      const offset = boundedInteger(url.searchParams.get("offset"), 0, 0, rows.length);
+      const pageRows = rows.slice(offset, offset + limit);
       res.setHeader("cache-control", "public, max-age=20, stale-while-revalidate=40");
-      json(res, 200, rows.slice(0, 50));
+      if (url.searchParams.get("page") === "1") {
+        json(res, 200, {
+          rows: pageRows,
+          offset,
+          limit,
+          total: rows.length,
+          hasMore: offset + pageRows.length < rows.length,
+        });
+      } else {
+        json(res, 200, pageRows);
+      }
       return true;
     }
 
@@ -119,6 +132,12 @@ export function registerRankedRoutes(routes: RouteList, deps: RankedRouteDeps): 
 
     return false;
   });
+}
+
+function boundedInteger(value: string | null, fallback: number, min: number, max: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, Math.trunc(parsed)));
 }
 
 function verifyInternalRequest(

@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   CHAMPION_RELEASE_SCHEDULE,
   CHAMPION_RELEASE_TIMEOUT_SECONDS,
+  CHAMPION_DEFAULT_CANDIDATE_COUNT,
+  CHAMPION_DEFAULT_REFERENCE_COUNT,
   buildChampionRelease,
   championStableDocs,
 } from "./championCandidates.js";
@@ -11,6 +13,8 @@ import { HANDLE_PATTERN, isReservedSystemHandle } from "./stable-public.js";
 test("champion releases use the six-hour production boundary", () => {
   assert.equal(CHAMPION_RELEASE_SCHEDULE, "0 */6 * * *");
   assert.equal(CHAMPION_RELEASE_TIMEOUT_SECONDS, 180);
+  assert.equal(CHAMPION_DEFAULT_CANDIDATE_COUNT, 24);
+  assert.equal(CHAMPION_DEFAULT_REFERENCE_COUNT, 8);
 });
 
 test("a scheduled release creates distinct persistent candidate players", () => {

@@ -1,9 +1,4 @@
-import * as spectate from "./modes/spectate.js";
-import * as build from "./modes/build.js";
-import * as profile from "./modes/profile.js";
 import * as intro from "./modes/intro.js";
-import * as rules from "./modes/rules.js";
-import * as compute from "./modes/compute.js";
 
 export {
   DEFAULT_FEATURES,
@@ -14,14 +9,18 @@ export {
 
 export const MODES = {
   intro,
-  tune: build,
-  live: spectate,
-  roster: profile,
-  compute,
-  rules,
-  about: rules,
 };
 
-export const OPTIONAL_MODE_LOADERS = {
+const loadRules = () => import("./modes/rules.js");
+
+export const MODE_LOADERS = {
+  tune: () => import("./modes/build.js"),
+  live: () => import("./modes/spectate.js"),
+  roster: () => import("./modes/profile.js"),
+  compute: () => import("./modes/compute.js"),
+  rules: loadRules,
+  about: loadRules,
   duel: () => import("./modes/duel.js"),
 };
+
+export const ROUTE_NAMES = [...Object.keys(MODES), ...Object.keys(MODE_LOADERS)];

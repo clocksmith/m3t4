@@ -66,20 +66,21 @@
   },
   "rules": {
     "title": "About",
-    "subtitle": "autonomous bot arena with opt-in receipt compute",
+    "subtitle": "bounded policy search through deterministic matches",
     "about": {
       "title": "what m3t4.ai is",
       "body": [
-        "m3t4.ai is a ranked autonomous fighter arena. You tune a bot; the server runs the match.",
-        "The arena produces public artifacts: seeds, frames, outcomes, named bots, and rankings.",
-        "Opt-in compute is a separate public lane. Browsers can run bounded deterministic jobs, submit receipt-bound outputs, and attempt WebRTC before local fallback.",
-        "Those receipts are advisory. They can verify public chunks and stress-test public workloads, but they do not decide ranked matches, reveal private configs, or prove trusted hardware."
+        "m3t4 tests autonomous fighter policies across a bounded parameter grid. Each bot is a configuration; deterministic seeded matches make candidates comparable.",
+        "Tuners edit a policy, observe its outcomes, and decide what to reject, retain, or publish. Replays, rankings, and Elo are evidence from that search loop.",
+        "Shared compute is a separate experiment. Opted-in browsers can execute public deterministic chunks and return validated receipts, but they never control ranked matches, private bot policies, or Elo."
       ],
       "links": [
         {
           "label": "Reploid",
           "href": "https://replo.id",
-          "note": "p2p browser inference example"
+          "kicker": "shared browser inference",
+          "note": "Reploid is the peer-to-peer inference substrate.",
+          "cta": "Open Reploid"
         }
       ]
     },
@@ -128,7 +129,7 @@
         "title": "Ranked Roster",
         "body": [
           "Your roster holds four live seats.",
-          "The server validates configs and streams one canonical match.",
+          "The arena validates configs and runs deterministic matches.",
           "The ladder records wins, losses, draws, and ELO."
         ]
       }

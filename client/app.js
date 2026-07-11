@@ -4,8 +4,9 @@ import {
   DEFAULT_FEATURES,
   DEFAULT_ROUTE,
   LEGACY_HASH,
+  MODE_LOADERS,
   MODES,
-  OPTIONAL_MODE_LOADERS,
+  ROUTE_NAMES,
   featureForRoute,
 } from "./routes.js";
 import { status as getStatus } from "./lib/api.js";
@@ -28,13 +29,13 @@ const router = createPathRouter({
   navLinks,
   statusEl,
   modes: MODES,
-  optionalModeLoaders: OPTIONAL_MODE_LOADERS,
+  modeLoaders: MODE_LOADERS,
   legacyPaths: LEGACY_HASH,
   defaultMode: DEFAULT_ROUTE,
   features: FEATURES,
   featureForRoute,
   onPageView: trackPageView,
-  preserveSameRoutes: ["live"],
+  preserveSameRoutes: ROUTE_NAMES,
 });
 
 function migrateLegacyHash() {
@@ -42,8 +43,7 @@ function migrateLegacyHash() {
   if (!hash) return;
   const isRouteHash =
     Object.hasOwn(LEGACY_HASH, hash) ||
-    Object.hasOwn(MODES, hash) ||
-    Object.hasOwn(OPTIONAL_MODE_LOADERS, hash);
+    ROUTE_NAMES.includes(hash);
   if (!isRouteHash) return;
   const canonical = LEGACY_HASH[hash] ?? hash;
   const target = routeToPath(canonical);
@@ -200,7 +200,7 @@ renderAccount();
 router.syncNavVisibility();
 installLinkInterceptor();
 
-window.addEventListener("popstate", router.render);
+window.addEventListener("popstate", () => void router.render());
 migrateLegacyHash();
-router.render();
-loadFeatures();
+void router.render();
+void loadFeatures();

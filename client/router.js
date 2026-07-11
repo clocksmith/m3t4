@@ -6,7 +6,7 @@ export function createPathRouter({
   navLinks,
   statusEl,
   modes,
-  optionalModeLoaders = {},
+  modeLoaders = {},
   legacyPaths = {},
   defaultMode = "intro",
   features = {},
@@ -20,9 +20,11 @@ export function createPathRouter({
   }
 
   const preserveSame = new Set(preserveSameRoutes);
+  const modePromises = {};
   let current = null;
   let currentRoute = null;
   let currentPath = null;
+  let renderVersion = 0;
 
   function setStatus(text) {
     if (statusEl) statusEl.textContent = text;
@@ -53,18 +55,32 @@ export function createPathRouter({
     return { rawRoute, name, path: window.location.pathname };
   }
 
-  async function loadOptionalModes() {
-    for (const [route, loader] of Object.entries(optionalModeLoaders)) {
-      if (!routeEnabled(route) || routeModes[route]) continue;
-      routeModes[route] = defineMode(await loader());
+  async function loadMode(route) {
+    if (routeModes[route]) return routeModes[route];
+    const loader = modeLoaders[route];
+    if (!loader || !routeEnabled(route)) return null;
+    if (!modePromises[route]) {
+      modePromises[route] = Promise.resolve()
+        .then(loader)
+        .then((mode) => {
+          routeModes[route] = defineMode(mode);
+          return routeModes[route];
+        })
+        .catch((error) => {
+          delete modePromises[route];
+          throw error;
+        });
     }
+    return modePromises[route];
   }
 
   function activeRouteFor(name) {
-    return name in routeModes && routeEnabled(name) ? name : defaultMode;
+    const known = name in routeModes || name in modeLoaders;
+    return known && routeEnabled(name) ? name : defaultMode;
   }
 
-  function render() {
+  async function render() {
+    const version = ++renderVersion;
     const { rawRoute, name, path } = parseLocation();
     const hasLegacyPath = Object.hasOwn(legacyPaths, rawRoute);
     const canonicalPath = hasLegacyPath && legacyPaths[rawRoute] !== rawRoute
@@ -74,8 +90,20 @@ export function createPathRouter({
       window.history.replaceState(null, "", canonicalPath + window.location.search);
     }
 
-    const activeName = activeRouteFor(name);
-    const mode = routeModes[activeName] ?? routeModes[defaultMode];
+    let activeName = activeRouteFor(name);
+    let mode = routeModes[activeName];
+    if (!mode) {
+      try {
+        mode = await loadMode(activeName);
+      } catch (error) {
+        if (version !== renderVersion) return;
+        console.error(`failed to load route: ${activeName}`, error);
+        setStatus(`${activeName} unavailable`);
+        activeName = defaultMode;
+        mode = routeModes[defaultMode];
+      }
+    }
+    if (version !== renderVersion || !mode) return;
     syncNavActive(activeName);
 
     if (
@@ -98,14 +126,15 @@ export function createPathRouter({
 
   async function refreshRoutes() {
     syncNavVisibility();
-    await loadOptionalModes();
-    const { name } = parseLocation();
+    const { name, path } = parseLocation();
     if (!routeEnabled(name)) {
       window.history.replaceState(null, "", routeToPath(defaultMode));
-      render();
-    } else {
-      render();
+      await render();
+      return;
     }
+    const activeName = activeRouteFor(name);
+    if (current && currentRoute === activeName && currentPath === path) return;
+    await render();
   }
 
   return {

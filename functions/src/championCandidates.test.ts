@@ -10,7 +10,7 @@ import { HANDLE_PATTERN, isReservedSystemHandle } from "./stable-public.js";
 
 test("champion releases use the six-hour production boundary", () => {
   assert.equal(CHAMPION_RELEASE_SCHEDULE, "0 */6 * * *");
-  assert.equal(CHAMPION_RELEASE_TIMEOUT_SECONDS, 300);
+  assert.equal(CHAMPION_RELEASE_TIMEOUT_SECONDS, 180);
 });
 
 test("a scheduled release creates distinct persistent candidate players", () => {

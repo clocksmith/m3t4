@@ -27,27 +27,47 @@ import {
 import { BOT_NAME_SPACE, generatedBotName } from "./bot-names.js";
 
 const REGION = "us-central1";
-const FRONTIER_USER_ID = "system:frontier";
-const FRONTIER_HANDLE = "frontier";
 const DEFAULT_CANDIDATE_COUNT = 32;
 const DEFAULT_REFERENCE_COUNT = STRATEGY_NAMES.length;
 const DEFAULT_RELEASE_COUNT = 1;
+export const CHAMPION_RELEASE_SCHEDULE = "0 */6 * * *";
+export const CHAMPION_RELEASE_TIMEOUT_SECONDS = 300;
 
 export const releaseChampionCandidates = onSchedule(
-  { region: REGION, schedule: "0 * * * *", memory: "1GiB", timeoutSeconds: 60 },
-  async () => {
+  {
+    region: REGION,
+    schedule: CHAMPION_RELEASE_SCHEDULE,
+    memory: "1GiB",
+    timeoutSeconds: CHAMPION_RELEASE_TIMEOUT_SECONDS,
+  },
+  async (event) => {
     if (!envFlag("CHAMPION_RELEASE_ENABLED", false)) {
       logger.info("releaseChampionCandidates skipped; disabled");
       return;
     }
 
-    const now = Date.now();
-    const seed = mix32(now ^ 0x9e3779b9);
+    const now = scheduledReleaseAt(event.scheduleTime);
+    const seed = mix32(hashText(String(now)) ^ 0x9e3779b9);
+    const candidateCount = positiveIntEnv("CHAMPION_FRONTIER_CANDIDATES", DEFAULT_CANDIDATE_COUNT);
+    const referenceCount = positiveIntEnv("CHAMPION_FRONTIER_REFERENCES", DEFAULT_REFERENCE_COUNT);
+    const releaseCount = Math.min(
+      MAX_SLOTS,
+      positiveIntEnv("CHAMPION_RELEASE_SLOTS", DEFAULT_RELEASE_COUNT),
+    );
+    logger.info("releaseChampionCandidates started", {
+      scheduledAt: now,
+      candidateCount,
+      referenceCount,
+      releaseCount,
+    });
+
+    const evaluationStartedAt = Date.now();
     const release = buildChampionRelease({
       seed,
-      candidateCount: positiveIntEnv("CHAMPION_FRONTIER_CANDIDATES", DEFAULT_CANDIDATE_COUNT),
-      referenceCount: positiveIntEnv("CHAMPION_FRONTIER_REFERENCES", DEFAULT_REFERENCE_COUNT),
-      releaseCount: Math.min(MAX_SLOTS, positiveIntEnv("CHAMPION_RELEASE_SLOTS", DEFAULT_RELEASE_COUNT)),
+      releaseId: now.toString(36),
+      candidateCount,
+      referenceCount,
+      releaseCount,
     });
     if (release.selected.length === 0) {
       logger.warn("releaseChampionCandidates found no selected candidates", {
@@ -57,18 +77,23 @@ export const releaseChampionCandidates = onSchedule(
     }
 
     const firestore = db();
-    const stableRef = firestore.collection(COLLECTIONS.stables).doc(FRONTIER_USER_ID);
-    const publicRef = firestore.collection(COLLECTIONS.publicStables).doc(FRONTIER_USER_ID);
-    const stableSnap = await stableRef.get();
-    const existing = stableSnap.exists ? (stableSnap.data() as StableDoc) : null;
-    const stable = frontierStableDoc(existing, release, now);
+    const stables = championStableDocs(release, now);
 
     const batch = firestore.batch();
-    batch.set(stableRef, stable);
-    batch.set(publicRef, publicStableDoc(stable), { merge: true });
-    writePublicBotProjection(batch, firestore, stable);
-    for (const slot of stable.slots) {
-      writePublicBotEvent(batch, firestore, stable, slot, "released", now);
+    for (const stable of stables) {
+      batch.set(firestore.collection(COLLECTIONS.stables).doc(stable.userId), stable);
+      batch.set(
+        firestore.collection(COLLECTIONS.publicStables).doc(stable.userId),
+        publicStableDoc(stable),
+      );
+      batch.set(
+        firestore.collection(COLLECTIONS.handles).doc(stable.handle),
+        { handle: stable.handle, userId: stable.userId, updatedAt: now },
+      );
+      writePublicBotProjection(batch, firestore, stable);
+      for (const slot of stable.slots) {
+        writePublicBotEvent(batch, firestore, stable, slot, "released", now);
+      }
     }
     await batch.commit();
 
@@ -78,13 +103,19 @@ export const releaseChampionCandidates = onSchedule(
       selectedCount: release.selected.length,
       references: release.references,
       nameSpace: BOT_NAME_SPACE,
-      bots: stable.slots.map((slot) => slot.name),
+      evaluationMs: Date.now() - evaluationStartedAt,
+      players: stables.map((stable) => ({
+        userId: stable.userId,
+        handle: stable.handle,
+        bot: stable.slots[0]?.name,
+      })),
     });
   },
 );
 
 export interface ChampionReleaseInput {
   seed: number;
+  releaseId?: string;
   candidateCount: number;
   referenceCount: number;
   releaseCount: number;
@@ -120,42 +151,56 @@ export function buildChampionRelease(input: ChampionReleaseInput): ChampionRelea
   const ranked = assignFrontierRanks(scored);
   const selected = selectDiverse(ranked, input.releaseCount);
   return {
-    releaseId: input.seed.toString(36),
+    releaseId: normalizedReleaseId(input.releaseId, input.seed),
     candidateCount,
     references: references.map((ref) => ref.id),
     selected,
   };
 }
 
-function frontierStableDoc(existing: StableDoc | null, release: ChampionRelease, now: number): StableDoc {
+export function championStableDocs(release: ChampionRelease, now: number): StableDoc[] {
   const usedNames = new Set<string>();
-  const slots: StableSlotDoc[] = release.selected.map((candidate, idx) => ({
-    slotIdx: idx,
-    slotId: `${FRONTIER_USER_ID}-${release.releaseId}-${idx}`,
-    name: uniqueGeneratedName(
-      mix32(hashText(`${release.releaseId}:${candidate.config.id}:${idx}`)),
-      usedNames,
-    ),
-    config: candidate.config,
-    cosmetics: frontierCosmetics(idx),
-    elo: candidateElo(candidate.score),
-    peakElo: candidateElo(candidate.score),
-    wins: 0,
-    losses: 0,
-    draws: 0,
-    lastPlayedAt: 0,
-    submittedAt: now,
-    rateLockedUntil: now,
-  }));
-
-  return normalizeStableTotals({
-    userId: FRONTIER_USER_ID,
-    handle: FRONTIER_HANDLE,
-    slots,
-    lastActiveAt: now,
-    updatedAt: now,
-    createdAt: existing?.createdAt ?? now,
+  return release.selected.map((candidate, idx) => {
+    const userId = `system:frontier:${release.releaseId}:${idx}`;
+    const handle = `frontier_${release.releaseId.slice(-8)}_${idx}`;
+    const elo = candidateElo(candidate.score);
+    const slot: StableSlotDoc = {
+      slotIdx: 0,
+      slotId: `${userId}-0`,
+      name: uniqueGeneratedName(
+        mix32(hashText(`${release.releaseId}:${candidate.config.id}:${idx}`)),
+        usedNames,
+      ),
+      config: candidate.config,
+      cosmetics: frontierCosmetics(idx),
+      elo,
+      peakElo: elo,
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      lastPlayedAt: 0,
+      submittedAt: now,
+      rateLockedUntil: now,
+    };
+    return normalizeStableTotals({
+      userId,
+      handle,
+      slots: [slot],
+      lastActiveAt: now,
+      updatedAt: now,
+      createdAt: now,
+    });
   });
+}
+
+function normalizedReleaseId(value: string | undefined, seed: number): string {
+  const normalized = String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(-10);
+  return normalized || (seed >>> 0).toString(36);
+}
+
+function scheduledReleaseAt(scheduleTime: string | undefined): number {
+  const parsed = Date.parse(scheduleTime ?? "");
+  return Number.isFinite(parsed) ? parsed : Date.now();
 }
 
 function uniqueGeneratedName(seed: number, usedNames: Set<string>): string {

@@ -27,8 +27,8 @@ import {
 import { BOT_NAME_SPACE, generatedBotName } from "./bot-names.js";
 
 const REGION = "us-central1";
-const DEFAULT_CANDIDATE_COUNT = 32;
-const DEFAULT_REFERENCE_COUNT = STRATEGY_NAMES.length;
+export const CHAMPION_DEFAULT_CANDIDATE_COUNT = 24;
+export const CHAMPION_DEFAULT_REFERENCE_COUNT = 8;
 const DEFAULT_RELEASE_COUNT = 1;
 export const CHAMPION_RELEASE_SCHEDULE = "0 */6 * * *";
 export const CHAMPION_RELEASE_TIMEOUT_SECONDS = 180;
@@ -48,8 +48,14 @@ export const releaseChampionCandidates = onSchedule(
 
     const now = scheduledReleaseAt(event.scheduleTime);
     const seed = mix32(hashText(String(now)) ^ 0x9e3779b9);
-    const candidateCount = positiveIntEnv("CHAMPION_FRONTIER_CANDIDATES", DEFAULT_CANDIDATE_COUNT);
-    const referenceCount = positiveIntEnv("CHAMPION_FRONTIER_REFERENCES", DEFAULT_REFERENCE_COUNT);
+    const candidateCount = positiveIntEnv(
+      "CHAMPION_FRONTIER_CANDIDATES",
+      CHAMPION_DEFAULT_CANDIDATE_COUNT,
+    );
+    const referenceCount = positiveIntEnv(
+      "CHAMPION_FRONTIER_REFERENCES",
+      CHAMPION_DEFAULT_REFERENCE_COUNT,
+    );
     const releaseCount = Math.min(
       MAX_SLOTS,
       positiveIntEnv("CHAMPION_RELEASE_SLOTS", DEFAULT_RELEASE_COUNT),

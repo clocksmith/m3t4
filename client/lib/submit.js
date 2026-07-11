@@ -58,29 +58,30 @@ export async function getMyStableOnce() {
 }
 
 export async function getPublicLeaderboard(limitCount = 50) {
+  const page = await getPublicLeaderboardPage({ limitCount });
+  return page.rows;
+}
+
+export async function getPublicLeaderboardPage({ limitCount = 25, cursor = null } = {}) {
   const fb = firebase();
-  if (!fb) return [];
-  const { collection, getDocs, limit, orderBy, query } = await import(
+  if (!fb) return { rows: [], cursor: null, hasMore: false };
+  const safeLimit = Math.max(1, Math.min(100, Number(limitCount) || 25));
+  const { collection, getDocs, limit, orderBy, query, startAfter } = await import(
     "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
   );
-  const q = query(
+  const clauses = [
     collection(fb.firestore, "publicStables"),
     orderBy("eloAggregate", "desc"),
-    limit(Math.max(1, Math.min(100, Number(limitCount) || 50))),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((docSnap) => {
-    const data = docSnap.data();
-    return {
-      userId: data.userId ?? docSnap.id,
-      handle: data.handle ?? docSnap.id,
-      eloAggregate: data.eloAggregate ?? 1000,
-      wins: data.wins ?? 0,
-      losses: data.losses ?? 0,
-      draws: data.draws ?? 0,
-      slots: data.slots ?? [],
-    };
-  });
+  ];
+  if (cursor) clauses.push(startAfter(cursor));
+  clauses.push(limit(safeLimit + 1));
+  const snap = await getDocs(query(...clauses));
+  const visibleDocs = snap.docs.slice(0, safeLimit);
+  return {
+    rows: visibleDocs.map(publicStableRow),
+    cursor: visibleDocs.at(-1) ?? null,
+    hasMore: snap.docs.length > safeLimit,
+  };
 }
 
 export async function getPublicBotsPage({ limitCount = 24, cursor = null } = {}) {
@@ -182,6 +183,19 @@ function normalizePublicBot(data, fallbackId) {
     updatedAt,
     lastMatchId: data.lastMatchId ?? null,
     source: data.source === "system" ? "system" : "player",
+  };
+}
+
+function publicStableRow(docSnap) {
+  const data = docSnap.data();
+  return {
+    userId: data.userId ?? docSnap.id,
+    handle: data.handle ?? docSnap.id,
+    eloAggregate: data.eloAggregate ?? 1000,
+    wins: data.wins ?? 0,
+    losses: data.losses ?? 0,
+    draws: data.draws ?? 0,
+    slots: data.slots ?? [],
   };
 }
 

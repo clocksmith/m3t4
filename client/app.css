@@ -1132,6 +1132,39 @@ canvas {
   overflow-x: hidden;
 }
 
+.leaderboard-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.leaderboard-head h3 {
+  margin: 0 0 10px;
+}
+
+.leaderboard-count {
+  color: var(--ui-text-subtle);
+  font: 700 10px ui-monospace, Menlo, monospace;
+}
+
+.leaderboard-scroll {
+  max-height: 220px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.leaderboard-scroll:focus-visible {
+  outline: 1px solid var(--ui-blue);
+  outline-offset: 3px;
+}
+
+.leaderboard-more {
+  display: block;
+  margin: 8px 0 0 auto;
+}
+
 .lb table {
   width: 100%;
   table-layout: fixed;

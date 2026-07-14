@@ -1,0 +1,4 @@
+interface:
+  display_name: "M3T4 Development"
+  short_description: "Build and validate M3T4 project changes"
+  default_prompt: "Use $m3t4-development to implement and validate this change in M3T4."

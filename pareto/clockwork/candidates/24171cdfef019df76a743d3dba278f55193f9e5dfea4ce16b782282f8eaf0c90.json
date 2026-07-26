@@ -1,0 +1,47 @@
+{
+  "schema": "clockwork.candidate.v1",
+  "contractSetDigest": "sha256:d97c9fc90434bfddb1168d1013ae071af1b995abbdcefa3b4113af811b152384",
+  "challengeDigest": "sha256:6b0f29571d204710d97f18a9cfaee2f79e66e419632fd37c15ca39e9307ad4a2",
+  "candidateKind": "residual-expert",
+  "canonicalGenomeBase64": "eyJiaWFzUTE1IjotMTA5MiwiZW5hYmxlZCI6dHJ1ZSwiZmVhdHVyZVdlaWdodHNRMTUiOlszMTMsOTkxLDczMF0sInN0YXRlRGVjYXlROCI6MTExLCJzdGF0ZVdlaWdodFExNSI6LTM4NX0=",
+  "genome": {
+    "enabled": true,
+    "biasQ15": -1092,
+    "featureWeightsQ15": [
+      313,
+      991,
+      730
+    ],
+    "stateWeightQ15": -385,
+    "stateDecayQ8": 111
+  },
+  "genomeSchemaDigest": "sha256:c5f6742d1d5fbdd21f2bec6b86591bd07d7e5db897e4ae13959fdb286724ee9e",
+  "parentCandidateDigests": [
+    "sha256:dc3320fcfae7beb4a3f4423cdfa0b349ab733bb37cb1999d64eff1a5f56005ca"
+  ],
+  "lineage": {
+    "system": "reploid",
+    "shadowId": "clockwork-seed-7-9",
+    "evidenceDigests": []
+  },
+  "resourceDeclaration": {
+    "canonicalGenomeBytes": 107,
+    "peakStateBytes": 8,
+    "upstreamMutations": 0
+  },
+  "traceClosureDeclaration": {
+    "closed": true,
+    "consumedFeatures": [
+      "baselineProbabilityQ15",
+      "features",
+      "ownState"
+    ],
+    "mutatesUpstream": false
+  },
+  "literalIdentityFallback": true,
+  "createdBy": {
+    "tool": "@m3t4/pareto",
+    "version": "0.1.0"
+  },
+  "candidateDigest": "sha256:24171cdfef019df76a743d3dba278f55193f9e5dfea4ce16b782282f8eaf0c90"
+}

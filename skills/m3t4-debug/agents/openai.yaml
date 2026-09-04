@@ -1,4 +1,4 @@
 interface:
   display_name: "M3T4 Debug"
-  short_description: "Trace and fix M3T4 project failures"
-  default_prompt: "Use $m3t4-debug to reproduce, trace, and fix this failure in M3T4."
+  short_description: "Diagnose a named M3T4 failure"
+  default_prompt: "Use $m3t4-debug to reproduce and diagnose this failure in M3T4; repair it only if requested."

@@ -1,0 +1,78 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font-family: -apple-system, system-ui, sans-serif;
+  min-height: 100vh;
+  /* Firefox + modern spec: thin scrollbars, theme-matched colors. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-border) var(--ui-bg-soft);
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Chrome / Safari / Edge scrollbar styling. Scoped via the universal
+ * selector so every scrollable container in the app — page body,
+ * .grid-3 side panels, .code-export, .stream-log — gets the same
+ * dark-track + accent-thumb treatment instead of the browser default. */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: var(--ui-bg-soft);
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--ui-border);
+  border-radius: 4px;
+  border: 1px solid var(--ui-bg-soft);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-border-soft);
+}
+*::-webkit-scrollbar-corner {
+  background: var(--ui-bg-soft);
+}
+
+/* Side-tinted scrollbars inside each player panel so the P1/P2 accent
+ * carries through the scroll chrome too. */
+.player-panel.is-p1 *::-webkit-scrollbar-thumb {
+  background: var(--ui-blue-ink);
+}
+.player-panel.is-p1 *::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-blue);
+}
+.player-panel.is-p2 *::-webkit-scrollbar-thumb {
+  background: var(--ui-purple-ink);
+}
+.player-panel.is-p2 *::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-purple);
+}
+.player-panel.is-p1 {
+  scrollbar-color: var(--ui-blue-ink) var(--ui-bg-soft);
+}
+.player-panel.is-p2 {
+  scrollbar-color: var(--ui-purple-ink) var(--ui-bg-soft);
+}
+
+a {
+  color: var(--ui-blue);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--ui-purple);
+}

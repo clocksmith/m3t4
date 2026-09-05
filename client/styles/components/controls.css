@@ -1,0 +1,125 @@
+/* --- buttons / inputs --- */
+button,
+select,
+input[type="text"],
+textarea,
+.ui-button {
+  background: var(--ui-surface-2);
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+  border-radius: 0;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+a.buttonish,
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+a.buttonish {
+  background: var(--ui-surface-2);
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+a.buttonish:hover,
+.ui-button:hover {
+  background: var(--ui-hover);
+  color: var(--ui-text);
+}
+
+a.buttonish.primary,
+.ui-button.is-primary {
+  background: var(--ui-blue-ink);
+  border-color: var(--ui-blue);
+}
+
+a.buttonish.primary:hover,
+.ui-button.is-primary:hover,
+.ui-button.is-primary:focus-visible {
+  background: var(--ui-blue);
+}
+
+a.buttonish.danger,
+.ui-button.is-danger {
+  color: var(--ui-red);
+  border-color: var(--ui-red);
+}
+
+a.buttonish.danger:hover,
+a.buttonish.danger:focus-visible,
+.ui-button.is-danger:hover,
+.ui-button.is-danger:focus-visible {
+  background: var(--ui-paint-rgba-239-68-68-0-14);
+  color: var(--ui-text);
+  box-shadow: 0 0 0 1px var(--ui-paint-rgba-239-68-68-0-35);
+}
+
+button,
+.ui-button {
+  cursor: pointer;
+}
+
+button:hover,
+select:hover {
+  background: var(--ui-hover);
+}
+
+button.primary,
+.ui-button.is-primary {
+  background: var(--ui-blue-ink);
+  border-color: var(--ui-blue);
+  color: var(--ui-text);
+}
+
+button.primary:hover,
+.ui-button.is-primary:hover,
+.ui-button.is-primary:focus-visible {
+  background: var(--ui-blue);
+}
+
+button.is-simulating,
+button.is-simulating:disabled,
+.ui-button.is-busy,
+.ui-button.is-busy:disabled {
+  opacity: 1;
+  color: var(--ui-text);
+  background: var(--ui-purple-ink);
+  border-color: var(--ui-purple-bright);
+  animation: build-preview-pulse 520ms ease-in-out infinite alternate;
+}
+
+button.needs-resim,
+.ui-button.needs-resim {
+  color: var(--ui-red);
+  background: var(--ui-surface-2);
+  border-color: var(--ui-red);
+  box-shadow: 0 0 0 1px var(--ui-paint-rgba-239-68-68-0-18);
+}
+
+button.danger,
+.ui-button.is-danger {
+  border-color: var(--ui-red);
+  color: var(--ui-red);
+}
+
+button:disabled,
+.ui-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+textarea {
+  resize: vertical;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+}

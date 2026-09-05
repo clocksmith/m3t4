@@ -1,0 +1,219 @@
+/* UI palette and canvas fallback tokens. Game art stays in theming/. */
+:root {
+  --ui-paint-hex-0e121a: #0e121a;
+  --ui-paint-hex-6ee7b7: #6ee7b7;
+  --ui-paint-hex-fca5a5: #fca5a5;
+  /* Primitive palette */
+  --color-black: #040404;
+  --color-black-soft: #0b0a12;
+  --color-red: #ef4444;
+  --color-red-ink: #b91c1c;
+  --color-blue: #3b82f6;
+  --color-blue-ink: #1d4ed8;
+  --color-purple: #a855f7;
+  --color-purple-ink: #7c3aed;
+
+  /* Semantic UI chrome */
+  --ui-bg: var(--color-black);
+  --ui-bg-soft: var(--color-black-soft);
+  --ui-surface: #11111a;
+  --ui-surface-2: #18182a;
+  --ui-surface-code: #0a0a14;
+  --ui-border: #2a2a45;
+  --ui-border-soft: #3a3a5a;
+  --ui-hover: #25253d;
+  --ui-text: #f4f4ff;
+  --ui-text-soft: #9e9eb8;
+  --ui-text-subtle: #686886;
+  --ui-code-text: #c8e0c8;
+  --ui-success: #6ee7b7;
+  --ui-success-ink: #1e3a2c;
+  --ui-warning: #facc15;
+
+  --ui-red: var(--color-red);
+  --ui-red-ink: var(--color-red-ink);
+  --ui-blue: var(--color-blue);
+  --ui-blue-ink: var(--color-blue-ink);
+  --ui-purple: var(--color-purple);
+  --ui-purple-ink: var(--color-purple-ink);
+  --ui-purple-bright: #c084fc;
+  --ui-pink: #ec4899;
+  --ui-pink-ink: #be185d;
+  --context-card-height: 112px;
+  --context-card-height-mobile: 136px;
+  --meter-track-bg-warn: color-mix(in srgb, var(--ui-red) 18%, black);
+
+  /* Canvas fallback renderer. Full asset palettes belong in theming/. */
+  --arena-bg: #14141e;
+  --arena-sky-top: #141020;
+  --arena-sky-mid: #0e1520;
+  --arena-sky-bottom: #080c14;
+  --arena-platform-solid: #141c28;
+  --arena-platform-soft: #151e2a;
+  --arena-platform-highlight: rgba(255,255,255,0.07);
+  --arena-p1: var(--ui-blue);
+  --arena-p1-trim: #93c5fd;
+  --arena-p1-shadow: var(--ui-blue-ink);
+  /* P2 is purple, not red — red is reserved for hallucination /
+   * over-budget / danger signals across the whole UI. */
+  --arena-p2: var(--ui-purple);
+  --arena-p2-trim: #d8b4fe;
+  --arena-p2-shadow: var(--ui-purple-ink);
+  --arena-goal-normal: #d946ef;
+  --arena-goal-urgent: #ef4444;
+  --arena-token: #ffd700;
+  --arena-token-glow: rgba(255,215,0,0.15);
+  --arena-weapon-glow: rgba(255,255,255,0.18);
+  --arena-weapon-active: #fffaf0;
+  --arena-weapon-dive: #ffe8c0;
+  --arena-weapon-idle: #d8dae0;
+  --arena-weapon-tip-idle: #aab;
+  --arena-hud-text: #fff;
+  --arena-hud-soft: rgba(248,247,244,0.6);
+  --arena-idle-bg: #08080e;
+  --arena-idle-text: #667;
+
+  /* Breakpoint contract:
+   * 640px  = phone chrome / touch ergonomics
+   * 800px  = Live collapses to one column
+   * 900px  = generic tablet stacking + Build fold controls
+   * 1024px = desktop-only bounded Build panels
+   * 1100px = Live three-column to two-column handoff
+   * 1200px = Build three-column to two-column handoff
+   */
+  --mobile-nav-h: 58px;
+  /* Literal paint values used by controls and artwork. Keep these separate from theme roles so extraction does not change dark-mode or illustration colors. */
+  --ui-paint-rgba-58-58-90-0-72: rgba(58, 58, 90, 0.72);
+  --ui-paint-rgba-17-17-26-0-72: rgba(17, 17, 26, 0.72);
+  --ui-paint-rgba-239-68-68-0-18: rgba(239, 68, 68, 0.18);
+  --ui-paint-rgba-56-189-248-0-12: rgba(56, 189, 248, 0.12);
+  --ui-paint-rgba-0-0-0-0-42: rgba(0, 0, 0, 0.42);
+  --ui-paint-rgba-255-255-255-0-04: rgba(255, 255, 255, 0.04);
+  --ui-paint-rgba-255-255-255-0-03: rgba(255, 255, 255, 0.03);
+  --ui-paint-rgba-239-68-68-0-16: rgba(239, 68, 68, 0.16);
+  --ui-paint-rgba-239-68-68-0: rgba(239, 68, 68, 0);
+  --ui-paint-rgba-239-68-68-0-14: rgba(239, 68, 68, 0.14);
+  --ui-paint-rgba-239-68-68-0-35: rgba(239, 68, 68, 0.35);
+  --ui-paint-rgba-239-68-68-0-45: rgba(239, 68, 68, 0.45);
+  --ui-paint-rgba-125-211-252-0-25: rgba(125, 211, 252, 0.25);
+  --ui-paint-hex-111827: #111827;
+  --ui-paint-hex-070b12: #070b12;
+  --ui-paint-rgba-192-132-252-0: rgba(192, 132, 252, 0);
+  --ui-paint-rgba-192-132-252-0-45: rgba(192, 132, 252, 0.45);
+  --ui-paint-rgba-59-130-246-0-2: rgba(59, 130, 246, 0.2);
+  --ui-paint-rgba-168-85-247-0-2: rgba(168, 85, 247, 0.2);
+  --ui-paint-rgba-148-163-184-0-18: rgba(148, 163, 184, 0.18);
+  --ui-paint-rgba-148-163-184-0-08: rgba(148, 163, 184, 0.08);
+  --ui-paint-rgba-239-68-68-0-5: rgba(239, 68, 68, 0.5);
+  --ui-paint-rgba-239-68-68-0-08: rgba(239, 68, 68, 0.08);
+  --ui-paint-rgba-34-197-94-0-5: rgba(34, 197, 94, 0.5);
+  --ui-paint-hex-4ade80: #4ade80;
+  --ui-paint-rgba-34-197-94-0-08: rgba(34, 197, 94, 0.08);
+  --ui-paint-rgba-168-85-247-0-5: rgba(168, 85, 247, 0.5);
+  --ui-paint-hex-c4b5fd: #c4b5fd;
+  --ui-paint-rgba-168-85-247-0-08: rgba(168, 85, 247, 0.08);
+  --ui-paint-rgba-59-130-246-0-5: rgba(59, 130, 246, 0.5);
+  --ui-paint-rgba-59-130-246-0-08: rgba(59, 130, 246, 0.08);
+  --ui-paint-rgba-245-158-11-0-5: rgba(245, 158, 11, 0.5);
+  --ui-paint-hex-fbbf24: #fbbf24;
+  --ui-paint-rgba-245-158-11-0-08: rgba(245, 158, 11, 0.08);
+  --ui-paint-rgba-100-116-139-0-5: rgba(100, 116, 139, 0.5);
+  --ui-paint-hex-94a3b8: #94a3b8;
+  --ui-paint-rgba-100-116-139-0-08: rgba(100, 116, 139, 0.08);
+  --ui-paint-rgba-236-72-153-0-5: rgba(236, 72, 153, 0.5);
+  --ui-paint-hex-f472b6: #f472b6;
+  --ui-paint-rgba-236-72-153-0-08: rgba(236, 72, 153, 0.08);
+  --ui-paint-rgba-14-165-233-0-5: rgba(14, 165, 233, 0.5);
+  --ui-paint-hex-38bdf8: #38bdf8;
+  --ui-paint-rgba-14-165-233-0-08: rgba(14, 165, 233, 0.08);
+  --ui-paint-rgba-100-116-139-0-45: rgba(100, 116, 139, 0.45);
+  --ui-paint-hex-cbd5e1: #cbd5e1;
+  --ui-paint-rgba-59-130-246-0-18: rgba(59, 130, 246, 0.18);
+  --ui-paint-rgba-59-130-246-0-12: rgba(59, 130, 246, 0.12);
+  --ui-paint-rgba-59-130-246-0-06: rgba(59, 130, 246, 0.06);
+  --ui-paint-rgba-34-197-94-0-55: rgba(34, 197, 94, 0.55);
+  --ui-paint-rgba-34-197-94-0-1: rgba(34, 197, 94, 0.1);
+  --ui-paint-rgba-59-130-246-0-22: rgba(59, 130, 246, 0.22);
+  --ui-paint-hex-000: #000;
+  --ui-paint-rgba-15-23-42-0-34: rgba(15, 23, 42, 0.34);
+  --ui-paint-rgba-15-23-42-0-18: rgba(15, 23, 42, 0.18);
+  --ui-paint-rgba-148-163-184-0-28: rgba(148, 163, 184, 0.28);
+  --ui-paint-rgba-59-130-246-0-14: rgba(59, 130, 246, 0.14);
+  --ui-paint-rgba-59-130-246-0-26: rgba(59, 130, 246, 0.26);
+  --ui-paint-rgba-59-130-246-0-28: rgba(59, 130, 246, 0.28);
+  --ui-paint-rgba-15-23-42-0-85: rgba(15, 23, 42, 0.85);
+  --ui-paint-rgba-239-68-68-0-7: rgba(239, 68, 68, 0.7);
+  --ui-paint-rgba-148-163-184-0-22: rgba(148, 163, 184, 0.22);
+  --ui-paint-rgba-15-23-42-0-28: rgba(15, 23, 42, 0.28);
+  --ui-paint-rgba-56-189-248-0-04: rgba(56, 189, 248, 0.04);
+  --ui-paint-rgba-252-165-165-0-08: rgba(252, 165, 165, 0.08);
+  --ui-paint-rgba-148-163-184-0-42: rgba(148, 163, 184, 0.42);
+  --ui-paint-rgba-15-23-42-0-72: rgba(15, 23, 42, 0.72);
+  --ui-paint-rgba-0-0-0-0-32: rgba(0, 0, 0, 0.32);
+  --ui-paint-rgba-239-68-68-0-42: rgba(239, 68, 68, 0.42);
+  --ui-paint-hex-fff: #fff;
+  --ui-paint-rgba-148-163-184-0-36: rgba(148, 163, 184, 0.36);
+  --ui-paint-rgba-15-23-42-0-82: rgba(15, 23, 42, 0.82);
+  --ui-paint-rgba-4-4-4-0-58: rgba(4, 4, 4, 0.58);
+  --ui-paint-hex-030504: #030504;
+  --ui-paint-hex-9cff7a: #9cff7a;
+  --ui-paint-rgba-70-255-140-0-08: rgba(70, 255, 140, 0.08);
+  --ui-paint-rgba-10-16-10-0-0: rgba(10, 16, 10, 0.0);
+  --ui-paint-rgba-0-0-0-0-0: rgba(0, 0, 0, 0.0);
+  --ui-paint-rgba-0-0-0-0-35: rgba(0, 0, 0, 0.35);
+  --ui-paint-rgba-0-0-0-0-85: rgba(0, 0, 0, 0.85);
+  --ui-paint-rgba-156-255-122-0-55: rgba(156, 255, 122, 0.55);
+  --ui-paint-rgba-80-255-120-0-22: rgba(80, 255, 120, 0.22);
+  --ui-paint-hex-57ffa0: #57ffa0;
+  --ui-paint-hex-ff6b6b: #ff6b6b;
+  --ui-paint-hex-60a5fa: #60a5fa;
+  --ui-paint-rgba-96-165-250-0-2: rgba(96, 165, 250, 0.2);
+  --ui-paint-rgba-96-165-250-0-18: rgba(96, 165, 250, 0.18);
+  --ui-paint-rgba-255-107-107-0-2: rgba(255, 107, 107, 0.2);
+  --ui-paint-rgba-255-107-107-0-18: rgba(255, 107, 107, 0.18);
+  --ui-paint-hex-c58bff: #c58bff;
+  --ui-paint-rgba-197-139-255-0-2: rgba(197, 139, 255, 0.2);
+  --ui-paint-rgba-197-139-255-0-18: rgba(197, 139, 255, 0.18);
+  --ui-paint-rgba-96-165-250-0-32: rgba(96, 165, 250, 0.32);
+  --ui-paint-rgba-255-107-107-0-32: rgba(255, 107, 107, 0.32);
+  --ui-paint-rgba-197-139-255-0-32: rgba(197, 139, 255, 0.32);
+  --ui-paint-rgba-255-107-107-0-5: rgba(255, 107, 107, 0.5);
+  --ui-paint-rgba-87-255-160-0-45: rgba(87, 255, 160, 0.45);
+  --ui-paint-rgba-197-139-255-0-48: rgba(197, 139, 255, 0.48);
+  --ui-paint-hex-c8ffd2: #c8ffd2;
+  --ui-paint-hex-a9ff90: #a9ff90;
+  --ui-paint-rgba-224-255-228-0-72: rgba(224, 255, 228, 0.72);
+  --ui-paint-hex-e0ffe4: #e0ffe4;
+  --ui-paint-rgba-156-255-122-0-45: rgba(156, 255, 122, 0.45);
+  --ui-paint-rgba-0-0-0-0-5: rgba(0,0,0,0.5);
+  --ui-paint-rgba-14-18-26-0-78: rgba(14, 18, 26, 0.78);
+  --ui-paint-rgba-255-255-255-0-18: rgba(255, 255, 255, 0.18);
+  --ui-paint-rgba-24-30-42-0-92: rgba(24, 30, 42, 0.92);
+  --ui-paint-rgba-255-255-255-0-1: rgba(255, 255, 255, 0.1);
+  --ui-paint-rgba-255-255-255-0-06: rgba(255, 255, 255, 0.06);
+  --ui-paint-rgba-255-255-255-0-08: rgba(255, 255, 255, 0.08);
+  --ui-paint-rgba-255-255-255-0-02: rgba(255, 255, 255, 0.02);
+  --ui-paint-hex-22c55e: #22c55e;
+  --ui-paint-hex-84cc16: #84cc16;
+  --ui-paint-hex-facc15: #facc15;
+  --ui-paint-hex-f87171: #f87171;
+  --ui-paint-rgba-132-204-22-0-35: rgba(132, 204, 22, 0.35);
+  --ui-paint-rgba-132-204-22-0-08: rgba(132, 204, 22, 0.08);
+  --ui-paint-hex-a3e635: #a3e635;
+  --ui-paint-rgba-255-255-255-0-05: rgba(255, 255, 255, 0.05);
+  --ui-paint-hex-3b82f6: #3b82f6;
+  --ui-paint-rgba-250-204-21-0-25: rgba(250, 204, 21, 0.25);
+  --ui-paint-rgba-248-113-113-0-45: rgba(248, 113, 113, 0.45);
+  --ui-paint-rgba-59-130-246-0-34: rgba(59, 130, 246, 0.34);
+  --ui-paint-hex-bcd7ff: #bcd7ff;
+  --ui-paint-rgba-59-130-246-0-24: rgba(59, 130, 246, 0.24);
+  --ui-paint-rgba-239-68-68-0-34: rgba(239, 68, 68, 0.34);
+  --ui-paint-rgba-239-68-68-0-12: rgba(239, 68, 68, 0.12);
+  --ui-paint-rgba-239-68-68-0-1: rgba(239, 68, 68, 0.1);
+  --ui-paint-rgba-15-23-42-0-9: rgba(15, 23, 42, 0.9);
+  --ui-paint-rgba-148-163-184-0-35: rgba(148, 163, 184, 0.35);
+  --ui-paint-rgba-59-130-246-0-38: rgba(59, 130, 246, 0.38);
+  --ui-paint-rgba-168-85-247-0-35: rgba(168, 85, 247, 0.35);
+  --ui-paint-rgba-59-130-246-0-3: rgba(59, 130, 246, 0.3);
+  --ui-paint-rgba-59-130-246-0-07: rgba(59, 130, 246, 0.07);
+}

@@ -1,0 +1,1114 @@
+/* --- layout helpers --- */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 14px;
+}
+
+@media (max-width: 900px) {
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Build page: 3 columns. Middle (game canvas) gets extra weight so
+ * wider screens give the arena more room; side panels stay a fixed
+ * max-height and scroll their contents internally so they don't grow
+ * to match a tall canvas. On narrow screens the layout collapses.
+ */
+/* Symmetric P1 | canvas | P2. Side panels are static-width at every
+ * viewport ≥ 1200px so P1 (blue) and P2 (purple) always read as a mirror
+ * pair. The canvas (middle column) absorbs the rest of the width.
+ */
+.grid-3 {
+  display: grid;
+  grid-template-columns: 340px minmax(480px, 1fr) 340px;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.build-page .grid-3 {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.grid-3 > .panel {
+  min-height: 0;
+  height: 100%;
+}
+/* Keep the three columns bounded by viewport height on desktop; each
+ * panel scrolls its own overflow so the whole page doesn't scroll. */
+@media (min-width: 1024px) {
+  .build-page .grid-3 > .panel {
+    height: calc(100svh - 202px);
+    max-height: none;
+    overflow-y: auto;
+  }
+}
+
+/* Narrow desktop / tablet: canvas goes full-width on top, player panels
+ * side-by-side and still symmetric below. */
+@media (max-width: 1200px) {
+  .grid-3 {
+    grid-template-columns: 1fr 1fr;
+  }
+  .grid-3 > :nth-child(2) {
+    grid-column: 1 / -1;
+    order: -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .grid-3 {
+    grid-template-columns: 1fr;
+  }
+  .grid-3 > :nth-child(2) {
+    order: 0;
+  }
+}
+
+/* --- collapsible JSON export inside each player panel --- */
+.json-fold {
+  margin-top: 6px;
+}
+.json-fold > summary {
+  cursor: pointer;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ui-text-soft);
+  padding: 4px 0;
+  user-select: none;
+  list-style: none;
+}
+.json-fold > summary::-webkit-details-marker { display: none; }
+.json-fold > summary::before {
+  content: "▸ ";
+  display: inline-block;
+  transition: transform 120ms ease;
+}
+.json-fold[open] > summary::before {
+  transform: rotate(90deg);
+  margin-right: 2px;
+}
+.json-fold > summary:hover { color: var(--ui-text); }
+.json-fold > .code-export { margin-top: 6px; }
+
+/* --- match bar on build (stage + reset + test fight row) --- */
+.match-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.funnel-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.funnel-strip span,
+.intro-mechanic-strip span {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface-code);
+  color: var(--ui-text-soft);
+  padding: 4px 8px;
+}
+
+.funnel-strip span + span::before,
+.intro-mechanic-strip span + span::before {
+  content: "> ";
+  color: var(--ui-text-subtle);
+}
+
+.funnel-strip .is-blue {
+  color: var(--ui-blue);
+  border-color: var(--ui-blue-ink);
+}
+
+.funnel-strip .is-purple {
+  color: var(--ui-purple-bright);
+  border-color: var(--ui-purple-ink);
+}
+
+.funnel-strip .is-red {
+  color: var(--ui-red);
+  border-color: var(--ui-paint-rgba-239-68-68-0-45);
+}
+
+.build-funnel {
+  padding: 0 4px;
+}
+
+.build-install-note {
+  color: var(--ui-text-subtle);
+  margin-top: 2px;
+}
+
+/* Build page header row — title + stage selector + match controls all
+ * on one horizontal line on desktop. Wraps to multiple lines on mobile.
+ * Replaces the old separate .page-header + .match-bar stack. */
+.page-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 0 4px;
+}
+.page-header-row .page-title-stack {
+  margin-right: auto;
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.page-header-row .page-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ui-red);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.page-header-row .page-subtitle {
+  color: var(--ui-text-subtle);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+  max-width: 64ch;
+  white-space: pre-line;
+}
+
+@media (max-width: 640px) {
+  .page-header-row .page-title-stack {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+}
+.page-header-row .inline-control {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.stage-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.page-header-row .stage-picker {
+  max-width: min(100%, 470px);
+}
+.stage-picker-label {
+  color: var(--ui-text-subtle);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.stage-option {
+  width: 128px;
+  height: 46px;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 7px;
+  align-items: center;
+  padding: 5px 7px 5px 5px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  background: var(--ui-surface);
+  color: var(--ui-text-soft);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+.stage-option:hover,
+.stage-option:focus-visible {
+  border-color: var(--ui-purple-ink);
+  color: var(--ui-text);
+  outline: none;
+}
+.stage-option.is-selected {
+  border-color: var(--ui-blue);
+  color: var(--ui-text);
+  background: var(--ui-surface-code);
+}
+.stage-option:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+.stage-option-thumb {
+  position: relative;
+  width: 52px;
+  height: 34px;
+  overflow: hidden;
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+  background:
+    repeating-linear-gradient(90deg, var(--ui-paint-rgba-125-211-252-0-25) 0 2px, transparent 2px 8px),
+    linear-gradient(180deg, var(--ui-paint-hex-111827) 0%, var(--ui-paint-hex-070b12) 100%);
+}
+.stage-option.has-thumb .stage-option-thumb {
+  background-image: var(--stage-thumb);
+  background-position: center;
+  background-size: cover;
+}
+.stage-option.no-thumb .stage-option-thumb::after {
+  content: "DC";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ui-blue);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.stage-option-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+@keyframes build-preview-pulse {
+  from {
+    box-shadow: 0 0 0 var(--ui-paint-rgba-192-132-252-0);
+    filter: brightness(1);
+  }
+  to {
+    box-shadow: 0 0 18px var(--ui-paint-rgba-192-132-252-0-45);
+    filter: brightness(1.22);
+  }
+}
+
+/* Panel-level fold: whole player config collapses to a single compact
+ * row on mobile. Tap the summary to expand. On desktop the summary is
+ * hidden and the panel stays expanded. */
+.player-fold-summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 2px 10px;
+  user-select: none;
+}
+.player-fold-summary::-webkit-details-marker { display: none; }
+.player-fold-summary .player-title {
+  color: var(--slot-accent);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  margin: 0;
+}
+.player-fold-summary .player-fold-badge {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  color: var(--ui-text-soft);
+  padding: 3px 8px;
+  background: var(--ui-surface-code);
+  border: 1px solid var(--ui-border);
+  border-radius: 3px;
+}
+.player-fold-summary .player-fold-chevron {
+  margin-left: auto;
+  color: var(--slot-accent);
+  font-size: 14px;
+  transition: transform 120ms ease;
+}
+details.player-fold[open] > .player-fold-summary .player-fold-chevron {
+  transform: rotate(90deg);
+}
+/* Desktop ≥900px: panel-fold summary hidden, content always shows. */
+@media (min-width: 900px) {
+  .player-fold-summary { display: none; }
+}
+
+/* Build body is now a <details> so mobile can collapse it. Show a
+ * clean, accent-colored chevron summary; hide the native marker. */
+.build-fold-summary {
+  cursor: pointer;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--slot-accent, var(--ui-text-soft));
+  padding: 6px 0;
+  user-select: none;
+  list-style: none;
+  margin-bottom: 6px;
+}
+.build-fold-summary::-webkit-details-marker { display: none; }
+.build-fold-summary::before {
+  content: "▸ ";
+  display: inline-block;
+  transition: transform 120ms ease;
+}
+details.player-build-body[open] > .build-fold-summary::before {
+  transform: rotate(90deg);
+  margin-right: 2px;
+}
+
+/* Desktop: summary hidden; body always shows. Mobile: summary visible
+ * so users can toggle. */
+@media (min-width: 900px) {
+  .build-fold-summary { display: none; }
+}
+
+/* --- symmetric P1/P2 player panels on build --- */
+.player-panel {
+  border-top-width: 3px;
+}
+.player-panel.is-p1 {
+  --slot-accent: var(--ui-blue);
+  --slot-accent-ink: var(--ui-blue-ink);
+  border-top-color: var(--ui-blue);
+}
+.player-panel.is-p2 {
+  --slot-accent: var(--ui-purple);
+  --slot-accent-ink: var(--ui-purple-ink);
+  border-top-color: var(--ui-purple);
+}
+.player-panel .player-title {
+  color: var(--slot-accent);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+}
+.canvas-panel {
+  /* The middle column is also .panel. Keep it neutral and pin the arena
+   * to the top-center while setupCanvas sizes it to the content width. */
+  border-top-color: var(--ui-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 12px 12px;
+}
+
+.canvas-panel .u-canvas-fill {
+  flex: 0 1 auto;
+  display: block;
+  margin-inline: auto;
+  max-width: 100%;
+}
+
+.build-preview-topbar {
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+  display: grid;
+  gap: 6px;
+}
+
+.build-context-card .build-preview-topbar {
+  max-width: none;
+  margin-inline: 0;
+}
+
+.build-preview-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.build-preview-controls .stage-picker {
+  flex: 1 1 320px;
+}
+
+.build-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.build-preview-briefing {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, auto) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 5px 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  background: var(--ui-surface-code);
+}
+
+.build-preview-side {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.build-preview-side.is-p2 {
+  text-align: right;
+}
+
+.build-preview-side-label,
+.build-preview-meta {
+  color: var(--ui-text-subtle);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 9px;
+}
+
+.build-preview-side-label {
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.build-preview-side-name,
+.build-preview-result,
+.build-preview-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.build-preview-side-name {
+  color: var(--ui-text);
+  font-size: 11px;
+}
+
+.build-preview-side.is-p1 .build-preview-side-name {
+  color: var(--ui-blue);
+}
+
+.build-preview-side.is-p2 .build-preview-side-name {
+  color: var(--ui-purple);
+}
+
+.build-preview-center {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  text-align: center;
+}
+
+.build-preview-result {
+  color: var(--ui-text);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.build-preview-side.is-winner .build-preview-side-name,
+.build-preview-side.is-winner .build-preview-side-label {
+  color: var(--ui-text);
+}
+
+.build-preview-side.is-p1.is-winner {
+  text-shadow: 0 0 10px var(--ui-paint-rgba-59-130-246-0-2);
+}
+
+.build-preview-side.is-p2.is-winner {
+  text-shadow: 0 0 10px var(--ui-paint-rgba-168-85-247-0-2);
+}
+
+.build-preview-side.is-loser {
+  opacity: 0.72;
+}
+
+.build-preview-stats {
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+  border-top: 1px solid var(--ui-border);
+  padding-top: 9px;
+}
+
+.build-preview-copy {
+  margin-bottom: 7px;
+  color: var(--ui-text-subtle);
+  font-family: ui-monospace, Menlo, monospace;
+}
+
+.build-preview-stats .stat-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 14px;
+}
+
+.build-preview-stats .stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 2px;
+  border-bottom: 1px dotted var(--ui-border);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+}
+
+.build-preview-stats dt {
+  color: var(--ui-text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.build-preview-stats dd {
+  color: var(--ui-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .build-preview-controls {
+    align-items: stretch;
+  }
+
+  .build-preview-controls .stage-picker,
+  .build-preview-actions {
+    flex: 1 1 100%;
+  }
+
+  .build-preview-actions {
+    margin-left: 0;
+  }
+
+  .build-preview-briefing {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .build-preview-side.is-p2,
+  .build-preview-center {
+    text-align: left;
+  }
+
+  .build-preview-stats .stat-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.player-mode-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.mode-pill {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 6px 8px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface-2);
+  color: var(--ui-text-soft);
+  cursor: pointer;
+  user-select: none;
+}
+.mode-pill input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.mode-pill:hover { background: var(--ui-hover); }
+.mode-pill.is-active {
+  background: var(--slot-accent-ink, var(--ui-blue-ink));
+  color: var(--ui-text);
+  border-color: var(--slot-accent, var(--ui-blue));
+}
+
+.player-mode-detail {
+  height: 132px;
+  margin-bottom: 10px;
+}
+
+.player-mode-detail > [hidden] {
+  display: none !important;
+}
+
+.player-mode-copy,
+.player-human-hint {
+  height: 132px;
+  padding: 14px;
+  background: var(--ui-surface-code);
+  border: 1px dashed var(--slot-accent, var(--ui-border));
+}
+
+.mode-copy-title {
+  color: var(--slot-accent, var(--ui-text));
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+  margin-bottom: 8px;
+}
+
+.mode-copy-body {
+  color: var(--ui-text-soft);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.player-preset-row {
+  height: 132px;
+  padding: 14px;
+  background: var(--ui-surface-code);
+  border: 1px dashed var(--slot-accent, var(--ui-border));
+}
+.player-preset-row select {
+  width: 100%;
+  margin: 4px 0 8px;
+}
+
+.player-preset-row .player-mode-copy {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.player-human-hint {
+  position: relative;
+  overflow: hidden;
+}
+.player-human-quip {
+  color: var(--slot-accent, var(--ui-text));
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  line-height: 1.55;
+  margin-bottom: 10px;
+  white-space: pre-line;
+}
+.player-human-keys {
+  font-family: ui-monospace, Menlo, monospace;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.glitch-line {
+  color: var(--ui-text-soft);
+  white-space: pre-line;
+}
+
+.glitch-line b {
+  color: var(--slot-accent);
+  font-weight: 800;
+}
+
+/* PRESET mode: same layout as BUILD mode, sliders locked. Dims the
+ * whole body and de-saturates the slider track fill so the lock state
+ * reads clearly without changing the shape of the panel. */
+.player-build-body.is-readonly {
+  opacity: 0.85;
+}
+.player-build-body.is-readonly input[type="range"] {
+  cursor: not-allowed;
+  filter: saturate(0.7);
+}
+.player-build-body.is-human-noise {
+  opacity: 0.92;
+}
+.player-build-body.is-human-noise input[type="range"] {
+  filter: saturate(1.25) contrast(1.15);
+}
+.player-build-body.is-human-noise .knob-val {
+  color: var(--ui-red);
+  text-shadow: 1px 0 var(--slot-accent);
+}
+.player-build-body.is-human-noise .knob-val.is-pinned {
+  color: var(--slot-accent);
+  text-shadow: none;
+}
+.player-build-body.is-human-noise .knob-desc::after {
+  content: " / signal disputed";
+  color: var(--ui-red);
+}
+.player-build-body.is-readonly .toolbar button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.player-panel .meter-bar:not(.over) {
+  background: var(--slot-accent, var(--ui-blue));
+}
+
+/* Per-panel knob fill color: overrides the global --ui-blue used by
+ * input[type=range] so each panel's sliders match its side color. */
+.player-panel input[type="range"] {
+  background:
+    linear-gradient(
+      to right,
+      var(--slot-accent) 0%,
+      var(--slot-accent) var(--fill),
+      var(--ui-surface-code) var(--fill),
+      var(--ui-surface-code) 100%
+    );
+}
+.player-panel input[type="range"]::-webkit-slider-thumb {
+  background: var(--slot-accent);
+  border-color: var(--slot-accent-ink);
+}
+.player-panel input[type="range"]::-moz-range-thumb {
+  background: var(--slot-accent);
+  border-color: var(--slot-accent-ink);
+}
+.player-panel input[type="range"]::-moz-range-progress {
+  background: var(--slot-accent);
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.row-loose {
+  gap: 12px;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tight {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  color: var(--ui-text-soft);
+}
+
+.mt-xs {
+  margin-top: 6px;
+}
+
+.mt-sm {
+  margin-top: 8px;
+}
+
+.mb-xs {
+  margin-bottom: 6px;
+}
+
+.mb-sm {
+  margin-bottom: 8px;
+}
+
+.mb-md {
+  margin-bottom: 10px;
+}
+
+.mb-lg {
+  margin-bottom: 12px;
+}
+
+.u-fill {
+  flex: 1;
+}
+
+.u-canvas-fill {
+  width: 100%;
+  max-width: 100%;
+}
+
+.live-test-controls {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  padding-bottom: 2px;
+}
+
+.live-control {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 104px;
+  padding: 4px 6px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface-code);
+}
+
+.live-control span {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.live-control select {
+  min-width: 0;
+  max-width: 160px;
+}
+
+.live-control.role-build {
+  border-color: var(--ui-success);
+  box-shadow: inset 3px 0 0 var(--ui-success);
+}
+
+.live-control.role-preset {
+  border-color: var(--ui-blue);
+  box-shadow: inset 3px 0 0 var(--ui-blue);
+}
+
+.live-control.role-human {
+  border-color: var(--ui-warning);
+  box-shadow: inset 3px 0 0 var(--ui-warning);
+}
+
+.alpha-shell {
+  max-width: 520px;
+  margin: 12vh auto;
+}
+
+body.alpha-locked > #topnav,
+body.alpha-locked > #app,
+body.alpha-locked > #bottom {
+  display: none !important;
+}
+
+#alpha-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--ui-bg);
+  z-index: 9999;
+  overflow: auto;
+}
+
+.toolbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.metric-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.metric-row.loose {
+  margin-bottom: 10px;
+}
+
+.metric-value {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ui-success);
+}
+
+.metric-value.compact {
+  font-size: 14px;
+  color: var(--ui-text-soft);
+}
+
+.metric-value.is-full {
+  color: var(--ui-warning);
+}
+
+.metric-value.is-over {
+  color: var(--ui-red);
+}
+
+.meter-track {
+  position: relative;
+  height: 6px;
+  background: var(--ui-surface-2);
+  margin-bottom: 4px;
+  overflow: visible;
+}
+
+.meter-bar {
+  height: 100%;
+  background: var(--ui-success);
+  width: 0%;
+  transition: width 0.15s;
+}
+
+.meter-track--hallucination {
+  background: var(--meter-track-bg-warn);
+}
+
+.slot-hall-val {
+  color: var(--ui-red);
+}
+
+.slot-hall-bar {
+  background: var(--ui-red);
+}
+
+.code-export {
+  background: var(--ui-surface-code);
+  border: 1px solid var(--ui-border);
+  padding: 10px;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 10.5px;
+  color: var(--ui-code-text);
+  /* Let the JSON grow with its content. The outer Budget panel already
+   * has max-height + overflow-y on wide viewports, so the pre doesn't
+   * need its own scroll container. */
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.stream-log {
+  max-height: 120px;
+  overflow: auto;
+}
+
+.data-table {
+  margin-top: 8px;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table thead {
+  color: var(--ui-text-soft);
+}
+
+/* --- slider (builder) --- */
+.knob {
+  display: grid;
+  grid-template-columns: minmax(90px, 120px) 1fr 48px;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px dotted var(--ui-border);
+}
+
+@media (max-width: 640px) {
+  .knob {
+    grid-template-columns: 1fr 48px;
+  }
+  .knob input[type="range"] {
+    grid-column: 1 / -1;
+  }
+}
+
+.knob:last-child {
+  border-bottom: none;
+}
+
+.knob-name {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+}
+
+.knob-desc {
+  font-size: 10px;
+  color: var(--ui-text-subtle);
+  display: block;
+  margin-top: 2px;
+}
+
+.knob-val {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  color: var(--ui-blue);
+  text-align: right;
+  font-weight: 700;
+}
+
+/* Themed range input. Inactive track matches surface-code (dark),
+ * filled portion is blue. Cross-browser approach: draw the track as a
+ * linear-gradient on the input itself (Chrome/Safari don't expose a
+ * ::progress pseudo), driven by a --fill custom property that JS sets
+ * per slider based on its value.
+ */
+input[type="range"] {
+  --fill: 0%;
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  height: 6px;
+  padding: 0;
+  margin: 0;
+  border-radius: 3px;
+  border: 1px solid var(--ui-border);
+  background:
+    linear-gradient(
+      to right,
+      var(--ui-blue) 0%,
+      var(--ui-blue) var(--fill),
+      var(--ui-surface-code) var(--fill),
+      var(--ui-surface-code) 100%
+    );
+  cursor: pointer;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-runnable-track { height: 6px; background: transparent; border: none; }
+input[type="range"]::-moz-range-track            { height: 6px; background: transparent; border: none; }
+/* Firefox progress portion renders natively — keep it aligned. */
+input[type="range"]::-moz-range-progress         { height: 6px; background: var(--ui-blue); border-radius: 3px; }
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--ui-blue);
+  border: 2px solid var(--ui-blue-ink);
+  border-radius: 50%;
+  margin-top: -5px;
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: var(--ui-blue);
+  border: 2px solid var(--ui-blue-ink);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* --- match hud --- */
+.match-hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.match-hud .side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.match-hud .elo {
+  color: var(--ui-purple);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+}
+
+.match-hud .name {
+  font-weight: 700;
+}
+
+.match-hud .vs {
+  color: var(--ui-text-subtle);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}

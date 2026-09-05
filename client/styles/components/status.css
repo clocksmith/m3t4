@@ -1,0 +1,32 @@
+/* --- footer --- */
+#bottom {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 8px 18px;
+  background: var(--ui-bg-soft);
+  border-top: 1px solid var(--ui-border);
+  font-size: 11px;
+  color: var(--ui-text-subtle);
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* --- error / toast --- */
+.error {
+  color: var(--ui-red);
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.ok {
+  color: var(--ui-blue);
+  font-size: 11px;
+}
+
+.is-ready {
+  background: var(--ui-success-ink);
+  border-color: var(--ui-success);
+}

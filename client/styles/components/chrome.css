@@ -1,0 +1,374 @@
+/* --- header / nav --- */
+#topnav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding: 10px 18px;
+  background: var(--ui-bg-soft);
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.logo {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ui-red);
+  text-transform: lowercase;
+}
+
+.logo-caret {
+  color: var(--ui-text-soft);
+  font-weight: 400;
+}
+
+.tagline {
+  color: var(--ui-text-subtle);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+#topnav nav {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+#topnav nav a {
+  color: var(--ui-text-soft);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  border-bottom: 2px solid transparent;
+}
+
+#topnav nav a[hidden] {
+  display: none !important;
+}
+
+#topnav nav a:hover {
+  color: var(--ui-text);
+}
+
+#topnav nav a.active {
+  color: var(--ui-red);
+  border-bottom-color: var(--ui-red);
+}
+
+/* --- account control (top-right profile dot or sign-in pill) --- */
+.account {
+  margin-left: auto;
+  position: relative;
+  font-size: 12px;
+}
+
+.account .account-signin {
+  color: var(--ui-blue);
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  background: var(--ui-bg-soft);
+  font: inherit;
+  cursor: pointer;
+}
+
+.account-trigger {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--ui-border);
+  background: linear-gradient(160deg, var(--ui-paint-rgba-239-68-68-0-18), var(--ui-paint-rgba-56-189-248-0-12));
+  color: var(--ui-text);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.account-trigger:hover {
+  border-color: var(--ui-red);
+}
+
+.account-initial {
+  line-height: 1;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.account-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 180px;
+  padding: 6px 0;
+  background: var(--ui-bg-soft);
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px var(--ui-paint-rgba-0-0-0-0-42);
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+}
+
+.account-menu-handle {
+  padding: 6px 14px 8px;
+  color: var(--ui-text);
+  font-weight: 600;
+  border-bottom: 1px solid var(--ui-border);
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+
+.account-menu-item {
+  display: block;
+  padding: 8px 14px;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: var(--ui-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.account-menu-item:hover {
+  background: var(--ui-paint-rgba-255-255-255-0-04);
+  color: var(--ui-red);
+}
+
+/* --- main content area --- */
+/* No max-width cap: the dominant surfaces (arena canvas, build editor,
+ * spectator) benefit from filling the viewport on wide/ultrawide
+ * monitors. Text-heavy panels are short enough to read comfortably
+ * even at 2000+px line lengths, and grid layouts cap themselves
+ * where appropriate (e.g. .grid-3's middle column).
+ */
+#app {
+  flex: 1;
+  padding: 16px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  body {
+    padding-bottom: calc(var(--mobile-nav-h) + env(safe-area-inset-bottom));
+  }
+
+  #app {
+    padding: 10px;
+  }
+
+  #topnav {
+    position: sticky;
+    top: 0;
+    z-index: 80;
+    flex-wrap: nowrap;
+    gap: 10px;
+    min-height: 48px;
+    padding: 8px 12px;
+  }
+
+  .brand {
+    min-width: 0;
+  }
+
+  .logo {
+    white-space: nowrap;
+  }
+
+  #topnav nav {
+    position: fixed;
+    z-index: 100;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: grid;
+    /* auto-fit so the bar doesn't silently squash if another tab appears.
+     * Items can shrink to 64px floor; beyond that, items marked
+     * data-nav="overflow" should be hidden (rule below) and a "more"
+     * trigger surfaced. */
+    grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+    gap: 0;
+    min-height: calc(var(--mobile-nav-h) + env(safe-area-inset-bottom));
+    padding: 0 0 env(safe-area-inset-bottom);
+    background: var(--ui-bg-soft);
+    border-top: 1px solid var(--ui-border);
+    box-shadow: 0 -12px 28px var(--ui-paint-rgba-0-0-0-0-42);
+  }
+
+  #topnav nav a {
+    min-width: 0;
+    min-height: var(--mobile-nav-h);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 2px 7px;
+    border-bottom: 0;
+    border-top: 2px solid transparent;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    line-height: 1;
+    text-align: center;
+    text-transform: uppercase;
+    touch-action: manipulation;
+  }
+
+  #topnav nav a:hover {
+    color: var(--ui-text);
+    background: var(--ui-paint-rgba-255-255-255-0-03);
+  }
+
+  #topnav nav a[data-nav="overflow"] {
+    display: none !important;
+  }
+
+  #topnav nav a.active {
+    color: var(--ui-red);
+    border-top-color: var(--ui-red);
+    border-bottom-color: transparent;
+    background:
+      linear-gradient(to bottom, var(--ui-paint-rgba-239-68-68-0-16), var(--ui-paint-rgba-239-68-68-0)),
+      var(--ui-bg-soft);
+  }
+
+  .tagline {
+    display: none;
+  }
+
+  .account {
+    margin-left: auto;
+    min-width: 0;
+    max-width: 46vw;
+    text-align: right;
+    font-size: 11px;
+  }
+
+  .account-menu {
+    /* Anchor the popover to the right edge of the viewport on phones so
+     * narrow trigger placement doesn't push the menu off-screen. */
+    right: 8px;
+    left: auto;
+    min-width: 220px;
+  }
+
+  #bottom {
+    padding: 8px 12px;
+  }
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: calc(100svh - 112px);
+}
+
+.page-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 4px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.page-header h1 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ui-red);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.page-header h1 small {
+  color: var(--ui-text-subtle);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  margin-left: 6px;
+}
+
+.panel {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  padding: 12px;
+}
+
+.panel h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--ui-text-soft);
+  margin-bottom: 8px;
+}
+
+.context-card {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  height: var(--context-card-height);
+  overflow: hidden;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-purple);
+  padding: 14px 16px;
+}
+
+.context-card--auto {
+  height: auto;
+  overflow: visible;
+}
+
+.context-card > * {
+  min-width: 0;
+}
+
+.context-card-kicker {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ui-text-subtle);
+}
+
+.context-card h2 {
+  color: var(--ui-purple);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-card p {
+  color: var(--ui-text-soft);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}

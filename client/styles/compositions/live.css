@@ -1,0 +1,578 @@
+/* --- spectate 3-column layout: leaderboard | centered arena | live stats --- */
+.spectate-grid {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) 240px;
+  gap: 14px;
+  align-items: start;
+}
+
+.spectate-center {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.spectate-center canvas {
+  max-width: 100%;
+  display: block;
+}
+
+/* ----- spectate stage with compute-dash PIP cycle ----- */
+
+.spectate-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-width: 1280px;
+  background: var(--ui-paint-hex-000);
+  overflow: hidden;
+  border-radius: 6px;
+}
+.spectate-stage-canvas-wrap,
+.spectate-stage-dash-wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  transition: top 0.18s ease, left 0.18s ease, width 0.18s ease, height 0.18s ease, opacity 0.18s ease;
+}
+.spectate-stage-canvas-wrap > canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* State 1: battle only. Dash is hidden (also unmounted via JS). */
+.spectate-stage[data-dash-state="1"] .spectate-stage-dash-wrap { display: none; }
+
+/* State 2: compute only. Canvas suppressed via opacity + pointer-events,
+   but kept in the DOM so the WS / renderer keep ticking. */
+.spectate-stage[data-dash-state="2"] .spectate-stage-canvas-wrap {
+  opacity: 0;
+  pointer-events: none;
+}
+.spectate-stage[data-dash-state="2"] .spectate-stage-dash-wrap {
+  inset: 0;
+  z-index: 2;
+}
+
+/* State 3: battle primary, compute PIP bottom-right. Dash shrinks into a
+   16:9 corner card — clamped so narrow stages never have a PIP wider
+   than their stage minus margins. */
+.spectate-stage[data-dash-state="3"] .spectate-stage-dash-wrap {
+  top: auto; left: auto;
+  right: 12px; bottom: 12px;
+  width: min(320px, calc(100% - 24px));
+  aspect-ratio: 16 / 9;
+  height: auto;
+  z-index: 3;
+  box-shadow: 0 6px 24px var(--ui-paint-rgba-0-0-0-0-5);
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+/* State 4: compute primary, battle PIP bottom-right. Canvas shrinks via
+   the wrap's dimensions; the canvas element scales to 100% of the wrap. */
+.spectate-stage[data-dash-state="4"] .spectate-stage-dash-wrap {
+  inset: 0;
+  z-index: 2;
+}
+.spectate-stage[data-dash-state="4"] .spectate-stage-canvas-wrap {
+  top: auto; left: auto;
+  right: 12px; bottom: 12px;
+  width: min(320px, calc(100% - 24px));
+  aspect-ratio: 16 / 9;
+  height: auto;
+  z-index: 3;
+  box-shadow: 0 6px 24px var(--ui-paint-rgba-0-0-0-0-5);
+  border-radius: 6px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.spectate-stats-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.spectate-stats-head h3 {
+  margin: 0;
+}
+.spectate-dash-cycle {
+  background: var(--ui-paint-rgba-14-18-26-0-78);
+  color: var(--ui-text);
+  border: 1px solid var(--ui-paint-rgba-255-255-255-0-18);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.spectate-dash-cycle:hover { background: var(--ui-paint-rgba-24-30-42-0-92); }
+.spectate-dash-cycle .spectate-dash-cycle-label { opacity: 0.7; }
+.spectate-dash-cycle .spectate-dash-cycle-state {
+  font-weight: 700;
+  background: var(--ui-paint-rgba-255-255-255-0-1);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+/* ----- compute dash inner layouts ----- */
+
+.compute-dash {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ui-bg, var(--ui-paint-hex-0e121a));
+  color: var(--ui-text);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+}
+.compute-dash-frame {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  overflow: hidden;
+}
+
+/* Full: 720 mosaic / 280 status / 280 feed */
+.compute-dash-full {
+  grid-template-columns: 720fr 280fr 280fr;
+  gap: 0;
+}
+.compute-dash-mosaic-col,
+.compute-dash-status-col,
+.compute-dash-feed-col {
+  overflow: hidden;
+  padding: 12px;
+  border-right: 1px solid var(--ui-paint-rgba-255-255-255-0-06);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.compute-dash-feed-col { border-right: none; }
+
+/* PIP: one status line + mini mosaic + side column */
+.compute-dash-pip {
+  grid-template-rows: 26px 1fr;
+  gap: 0;
+  font-size: 11px;
+}
+.compute-dash-pip-top {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--ui-paint-rgba-255-255-255-0-08);
+  background: var(--ui-paint-rgba-255-255-255-0-04);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compute-dash-pip-body {
+  display: grid;
+  grid-template-columns: 160fr 160fr;
+  min-height: 0;
+}
+.compute-dash-pip-mosaic {
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.compute-dash-pip-side {
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 6px;
+}
+.compute-dash-pip-event { overflow: hidden; text-overflow: ellipsis; line-height: 1.35; }
+.compute-dash-pip-meta { opacity: 0.7; }
+
+.compute-dash-block {
+  border: 1px solid var(--ui-paint-rgba-255-255-255-0-06);
+  border-radius: 4px;
+  padding: 8px 10px;
+  background: var(--ui-paint-rgba-255-255-255-0-02);
+}
+.compute-dash-title {
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.78;
+  margin-bottom: 6px;
+}
+.compute-dash-kv {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  font-size: 12px;
+}
+.compute-dash-kv dt { opacity: 0.65; }
+.compute-dash-kv dd { margin: 0; }
+
+.compute-dash-progress {
+  position: relative;
+  height: 14px;
+  background: var(--ui-paint-rgba-255-255-255-0-06);
+  border-radius: 999px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+.compute-dash-progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, var(--ui-paint-hex-22c55e), var(--ui-paint-hex-84cc16));
+  transition: width 0.2s ease;
+}
+.compute-dash-progress-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--ui-paint-rgba-0-0-0-0-85);
+  font-weight: 700;
+}
+
+.compute-dash-quorum {
+  width: 100%;
+  font-size: 11px;
+  border-collapse: collapse;
+}
+.compute-dash-quorum th,
+.compute-dash-quorum td { padding: 2px 6px; text-align: left; }
+.compute-dash-quorum tr.ok td:nth-child(2) { color: var(--ui-paint-hex-4ade80); }
+.compute-dash-quorum tr.warn td:nth-child(2) { color: var(--ui-paint-hex-facc15); }
+.compute-dash-quorum tr.err td:nth-child(2) { color: var(--ui-paint-hex-f87171); }
+
+.compute-dash-certificate {
+  border-color: var(--ui-paint-rgba-132-204-22-0-35);
+  background: var(--ui-paint-rgba-132-204-22-0-08);
+}
+.compute-dash-verifier-link {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--ui-paint-hex-a3e635);
+  text-decoration: underline dashed;
+}
+
+.compute-dash-feed { list-style: none; margin: 0; padding: 0; }
+.compute-dash-feed-item { padding: 2px 0; opacity: 0.88; }
+.compute-dash-feed-item.emph { opacity: 1; font-weight: 600; }
+.compute-dash-feed-item code {
+  opacity: 0.6;
+  margin-right: 6px;
+}
+
+.compute-dash-mosaic {
+  display: grid;
+  grid-template-columns: repeat(var(--grid-cols, 8), 1fr);
+  grid-template-rows: repeat(var(--grid-rows, 8), 1fr);
+  gap: 2px;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--ui-paint-rgba-255-255-255-0-02);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.compute-dash-cell-preview {
+  padding: 0;
+  overflow: hidden;
+  background: var(--ui-paint-hex-000);
+}
+.compute-dash-cell-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+  display: block;
+}
+.compute-dash-mosaic-compact {
+  aspect-ratio: 1 / 1;
+  max-width: 150px;
+  max-height: 150px;
+  gap: 1px;
+}
+.compute-dash-mosaic-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  min-height: 100px;
+}
+.compute-dash-cell {
+  background: var(--ui-paint-rgba-255-255-255-0-05);
+  border-radius: 2px;
+  min-width: 0;
+  min-height: 0;
+}
+.compute-dash-cell-accepted { background: linear-gradient(135deg, var(--ui-paint-hex-3b82f6), var(--ui-paint-hex-22c55e)); }
+.compute-dash-cell-pending  { background: var(--ui-paint-rgba-250-204-21-0-25); }
+.compute-dash-cell-rejected { background: var(--ui-paint-rgba-248-113-113-0-45); }
+
+.spectate-side {
+  position: sticky;
+  top: 14px;
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+}
+
+.live-briefing-card {
+  align-content: center;
+  gap: 0;
+}
+
+.live-briefing-sides {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.live-briefing-side {
+  display: grid;
+  min-width: 0;
+  justify-items: start;
+  padding: 10px 14px;
+  background: var(--ui-surface-code);
+  border: 1px solid var(--ui-border);
+  border-left-width: 3px;
+}
+
+.live-briefing-side.is-p1 {
+  border-left-color: var(--ui-blue);
+}
+
+.live-briefing-side.is-p2 {
+  border-left-color: var(--ui-purple);
+}
+
+.live-briefing-binding {
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-start;
+  justify-self: start;
+  gap: 8px;
+  min-height: 50px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.live-briefing-copy {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  flex: 0 1 auto;
+  max-width: min(100%, 24ch);
+}
+
+.live-briefing-identity {
+  display: block;
+  min-width: 0;
+  color: var(--ui-text);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.live-briefing-side.is-p1 .live-briefing-identity {
+  color: var(--ui-blue);
+}
+
+.live-briefing-side.is-p2 .live-briefing-identity {
+  color: var(--ui-purple);
+}
+
+.live-briefing-character,
+.live-briefing-weapon-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-briefing-character,
+.live-briefing-weapon-name {
+  color: var(--ui-text-soft);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+}
+
+.live-briefing-portrait,
+.live-briefing-weapon-tile {
+  display: block;
+  flex: 0 0 auto;
+  background-repeat: no-repeat;
+  background-color: var(--ui-paint-rgba-15-23-42-0-82);
+  border: 1px solid var(--ui-paint-rgba-148-163-184-0-28);
+  image-rendering: pixelated;
+}
+
+.live-briefing-portrait {
+  width: 50px;
+  height: 50px;
+  border-radius: 4px;
+}
+
+.live-briefing-weapon-tile {
+  width: 50px;
+  height: 50px;
+  border-radius: 3px;
+}
+
+.live-briefing-portrait.is-missing,
+.live-briefing-weapon-tile.is-missing {
+  background-image:
+    linear-gradient(135deg,
+      transparent 0 44%,
+      var(--ui-paint-rgba-239-68-68-0-7) 44% 56%,
+      transparent 56% 100%);
+}
+
+.live-briefing-vs {
+  align-self: center;
+  color: var(--ui-red);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.spectate-stats .stat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.spectate-stats .stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 2px;
+  border-bottom: 1px dotted var(--ui-border);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+}
+
+.spectate-stats .stat-row:last-child {
+  border-bottom: none;
+}
+
+.spectate-stats dt {
+  color: var(--ui-text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.spectate-stats dd {
+  color: var(--ui-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  min-width: 0;
+}
+
+.spectate-stats .p1-accent { color: var(--ui-blue); font-weight: 700; }
+.spectate-stats .p2-accent { color: var(--ui-purple); font-weight: 700; }
+
+@media (max-width: 640px) {
+  .context-card {
+    height: var(--context-card-height-mobile);
+    padding: 12px 14px;
+  }
+
+  .context-card--auto {
+    height: auto;
+  }
+
+  .live-briefing-sides {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .live-briefing-side {
+    gap: 3px;
+    padding: 7px 8px;
+  }
+
+  .live-briefing-binding {
+    gap: 6px;
+    min-height: 40px;
+  }
+
+  .live-briefing-copy {
+    max-width: min(100%, 22ch);
+  }
+
+  .live-briefing-portrait {
+    width: 40px;
+    height: 40px;
+  }
+
+  .live-briefing-weapon-tile {
+    width: 40px;
+    height: 40px;
+  }
+
+  .live-briefing-vs {
+    justify-self: stretch;
+    text-align: center;
+  }
+}
+
+@media (max-width: 1100px) {
+  .spectate-grid {
+    grid-template-columns: minmax(0, 1fr) 220px;
+  }
+  .spectate-center { grid-column: 1 / 2; }
+  .spectate-stats { grid-column: 2 / 3; grid-row: 1 / 2; }
+  .spectate-grid .lb { grid-column: 1 / -1; grid-row: 2 / 3; position: static; max-height: none; }
+}
+
+@media (max-width: 800px) {
+  .spectate-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .spectate-feed-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .live-bot-event {
+    grid-template-columns: 68px minmax(0, 1fr);
+  }
+  .live-bot-event time {
+    grid-column: 2 / 3;
+  }
+  .spectate-center, .spectate-stats, .spectate-grid .lb {
+    grid-column: 1 / -1;
+  }
+  .spectate-center { grid-row: 1 / 2; }
+  .spectate-stats { grid-row: 2 / 3; }
+  .spectate-grid .lb { grid-row: 3 / 4; }
+  .spectate-side { position: static; max-height: none; }
+}

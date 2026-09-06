@@ -1,5 +1,3 @@
-import * as intro from "./modes/intro.js";
-
 export {
   DEFAULT_FEATURES,
   DEFAULT_ROUTE,
@@ -7,13 +5,12 @@ export {
   featureForRoute,
 } from "./route-config.js";
 
-export const MODES = {
-  intro,
-};
+export const MODES = {};
 
 const loadRules = () => import("./modes/rules.js");
 
 export const MODE_LOADERS = {
+  intro: () => import("./modes/intro.js"),
   tune: () => import("./modes/build.js"),
   live: () => import("./modes/spectate.js"),
   roster: () => import("./modes/profile.js"),

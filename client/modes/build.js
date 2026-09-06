@@ -1,12 +1,11 @@
-// Build mode — symmetric P1 vs P2 editor + server-rendered deterministic preview.
+// Workshop — editable local matches plus server-held preset previews.
 // Each side (P1 blue, P2 purple) can independently be:
 //   BUILD   — local editable knobs + budget + hallucination
 //   PRESET  — pick any of the 16 curated preset bots
 //   HUMAN   — drive the fighter directly via WASD+F (P1) or P/L/;/'+[ (P2)
-// The canonical sim runs server-side and the browser receives sanitized
-// frames whenever both sides are non-HUMAN. As soon as either side is
-// HUMAN the canvas switches to a local stepper sim — sandbox only, never
-// promoted to the ranked feed.
+// Authored builds run in the local deterministic stepper. Preset-only bot
+// previews use the server boundary; manual matches remain local sandboxes.
+// No Workshop result is promoted to ranked authority.
 
 import {
   MIN_CLEAN_SPEND,
@@ -16,12 +15,11 @@ import {
 } from "../lib/public-sim.js";
 import {
   BUDGET,
-  HARD_CAP,
   KNOBS as SHARED_KNOBS,
   configFromState,
   formatConfigJsonV2,
   remainingCeilingForState,
-  scaledStateFromValues,
+  neutralBuildState,
   stateSpent,
 } from "../lib/build-config.js";
 import { createFrameRenderer, W, H } from "../render/index.js";
@@ -38,7 +36,7 @@ import { renderSliderEditor } from "../lib/slider-editor.js";
 import { escapeHtml } from "../ui/html.js";
 import { buttonHtml } from "../ui/actions.js";
 import { navigateTo } from "../navigate.js";
-import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
+import { contextCardHtml, workshopHeaderHtml, disclosureHtml } from "../ui/shell.js";
 import { statListHtml } from "../ui/stats.js";
 import { simulateBuildPreview } from "../lib/api.js";
 import { auth } from "../lib/auth.js";
@@ -58,79 +56,24 @@ const DEFAULT_PRESET_NAMES = [
 const KNOBS = SHARED_KNOBS.map(([id, label, desc, init]) => ({ id, label, desc, init }));
 
 // --- per-slot state ---
-// Neutral fallback used only if the preset-based generator fails (no
-// presets loaded / compile error). Sums to 360 exactly.
-function neutralSlotState() {
-  const s = {};
-  for (const k of KNOBS) s[k.id] = k.init;
-  return s;
-}
-
 function randomPresetName() {
   const names = (presetRanking.rows ?? DEFAULT_PRESET_NAMES.map((n) => ({ name: n })))
     .map((r) => r.name ?? r);
   return names[Math.floor(Math.random() * names.length)];
 }
 
-function hashString(s) {
-  let h = 2166136261 >>> 0;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619) >>> 0;
-  }
-  return h >>> 0;
-}
-
-function seededUnit(seed, i) {
-  let x = (seed + Math.imul(i + 1, 0x9e3779b9)) >>> 0;
-  x ^= x >>> 16;
-  x = Math.imul(x, 0x7feb352d) >>> 0;
-  x ^= x >>> 15;
-  x = Math.imul(x, 0x846ca68b) >>> 0;
-  x ^= x >>> 16;
-  return (x >>> 0) / 0x100000000;
-}
-
-function presetDisplayState(name) {
-  const seed = hashString(String(name));
-  const values = {};
-  for (let i = 0; i < KNOBS.length; i++) {
-    const k = KNOBS[i];
-    values[k.id] = Math.round(10 + seededUnit(seed, i) * 80);
-  }
-  return scaledStateFromValues(values, BUDGET);
-}
-
-// Fresh BUILD starter: take a random preset as the baseline, convert
-// each native attribute to UI space, and perturb by ±20 points.
-// Produces a unique starter config per page load (and per reset) that
-// always reads as "a real working build, slightly disturbed" instead
-// of the stale hand-authored defaults.
-function perturbedPresetState() {
-  const values = {};
-  for (const k of KNOBS) values[k.id] = k.init + (Math.random() - 0.5) * 40;
-  return scaledStateFromValues(values, HARD_CAP);
-}
-
-// Keep `initialSlotState` as the public factory so existing callers
-// (reset button, mount-time construction) get the new behavior.
-function initialSlotState() { return perturbedPresetState(); }
-
+const initialSlotState = neutralBuildState;
 const slotStates = [initialSlotState(), initialSlotState()];
-// Both slots default to a fresh random preset per refresh. P1 starts
-// in BUILD mode so its preset pointer is only visible if the user
-// switches P1 to PRESET; P2 starts in PRESET mode and uses its pointer
-// immediately for the opening matchup.
 const slotPresetNames = [randomPresetName(), randomPresetName()];
-const modes = ["user", "preset"]; // "user" | "preset" | "human" — human runs locally only.
+const modes = ["user", "user"]; // "user" | "preset" | "human" — human runs locally only.
 
 // --- remote preview playback ---
 const SIM_HZ = 120;
 const STAGE_IDS = Object.keys(STAGES);
 const STAGE_THUMBS = {
-  datacenter: "assets/stages/datacenter/cold_aisle_chapel/ui/preview_thumb.png",
-  boardroom: "assets/stages/boardroom/fiduciary_basement/ui/preview_thumb.png",
-  demoday: "assets/stages/demoday/demo_day_afterparty/ui/preview_thumb.png",
+  datacenter: "/assets/stages/datacenter/cold_aisle_chapel/ui/preview_thumb.png",
+  boardroom: "/assets/stages/boardroom/fiduciary_basement/ui/preview_thumb.png",
+  demoday: "/assets/stages/demoday/demo_day_afterparty/ui/preview_thumb.png",
 };
 const KEY_MAP = [
   { left: "KeyA", right: "KeyD", up: "KeyW", down: "KeyS", act: "KeyF", moveHint: "W/A/S/D", strikeHint: "F" },
@@ -151,7 +94,7 @@ let rendererMountId = 0;
 let mountMediaHandler = null;
 let previewFrames = [];
 let previewStage = STAGES.datacenter;
-let previewLabels = { p1: "BUILD P1", p2: "PRESET" };
+let previewLabels = { p1: "BUILD P1", p2: "BUILD P2" };
 let previewResult = null;
 let previewStride = 2;
 let previewStartedAt = 0;
@@ -161,10 +104,8 @@ let previewError = "";
 let previewRequestId = 0;
 let previewEditVersion = 0;
 
-// Local stepper world for HUMAN-controlled matches. Whenever either side
-// is in HUMAN mode the canvas runs a local sim driven by readKeyboard()
-// rather than the server preview. Brains for non-human sides are compiled
-// once per match-start and reused until the next reset.
+// Local stepper for authored builds and manual play. Compile each bot once
+// per match, and read the keyboard only for human-controlled sides.
 let localWorld = null;
 const localBrains = [null, null];
 let localPlayedAtMs = 0;
@@ -284,13 +225,6 @@ function refreshPresetCopy(slot) {
   if (bodyEl) bodyEl.textContent = copy.body;
 }
 
-const HUMAN_PINNED_KNOBS = new Map([
-  ["burnRate", 100],
-  ["foresight", 0],
-  ["greed", 100],
-  ["discipline", 0],
-]);
-
 // --- keyboard handling ---
 function isTypingTarget(el) {
   if (!el) return false;
@@ -304,7 +238,7 @@ function startPrompt() {
   return "press space to fight";
 }
 function onKeyDown(e) {
-  if (isTypingTarget(e.target)) return;
+  if (isTypingTarget(e.target) || e.target?.closest?.("button, summary, a")) return;
   if (e.code === "Space") {
     e.preventDefault();
     requestPreview({ newSeed: true });
@@ -342,8 +276,7 @@ export function mount(root, { setStatus }) {
   setStatus("tune");
   root.innerHTML = `
     <div class="page build-page">
-      ${pageHeaderHtml({
-        title: "Tune",
+      ${workshopHeaderHtml({
         subtitle: previewSubtitle(),
       })}
       ${contextCardHtml({
@@ -353,8 +286,8 @@ export function mount(root, { setStatus }) {
             <div class="build-preview-controls">
               ${stagePickerHtml()}
               <div class="build-preview-actions">
-                ${buttonHtml({ id: "test-reset", text: "reset match", attrs: { title: "Rewind the test match to tick zero" } })}
-                ${buttonHtml({ id: "test-resim", variant: "primary", text: "test fight", attrs: { title: "Run a deterministic test match against the current build" } })}
+                ${buttonHtml({ id: "test-reset", text: "new matchup", attrs: { title: "Start again with a new random seed" } })}
+                ${buttonHtml({ id: "test-resim", variant: "primary", text: "test fight", attrs: { title: "Test the current fighters using the same seed" } })}
               </div>
             </div>
             ${buildPreviewBriefingHtml()}
@@ -364,19 +297,19 @@ export function mount(root, { setStatus }) {
       <div class="grid-3">
         ${playerPanelHtml(0)}
         <section class="panel canvas-panel">
-          <canvas id="test-canvas" class="u-canvas-fill" width="${W}" height="${H}" tabindex="0"></canvas>
-          <div class="build-preview-stats" aria-live="polite">
+          <canvas id="test-canvas" aria-label="Local fighter test arena. Change traits, then select test fight." class="u-canvas-fill" width="${W}" height="${H}" tabindex="0"></canvas>
+          <div class="build-preview-stats">
             <div class="build-preview-copy tight" id="build-preview-copy">${escapeHtml(previewCopy())}</div>
-            ${statListHtml([
+            ${disclosureHtml({ label: "Match details", body: statListHtml([
               { label: "P1", id: "build-stat-p1" },
               { label: "P2", id: "build-stat-p2" },
               { label: "stage", id: "build-stat-stage" },
-              { label: "server", id: "build-stat-server" },
+              { label: "execution", id: "build-stat-server" },
               { label: "seed", id: "build-stat-seed" },
               { label: "tick", id: "build-stat-tick" },
               { label: "frames", id: "build-stat-frames" },
               { label: "result", id: "build-stat-result" },
-            ])}
+            ]) })}
           </div>
         </section>
         ${playerPanelHtml(1)}
@@ -400,24 +333,19 @@ export function mount(root, { setStatus }) {
   wireSlot(root, 1);
   wireMatchBar(root);
 
-  // Collapse each side's build fold on narrow viewports so the canvas
-  // and mode selector stay primary; leave open on desktop (where the
-  // summary is CSS-hidden and there's no user affordance to reopen).
-  // Listen to the media query so a narrow→wide resize auto-reopens.
-  // Targets both the PANEL-level fold (outer; primary mobile collapse)
-  // and the legacy build-body fold (inner; used when the outer panel is
-  // expanded on mobile to hide just the knob list).
+  // Keep the primary fighter editable on mobile; fold the rival initially.
+  // Both can be opened or closed. Widening reopens the symmetric panels.
   const narrowMq = typeof window !== "undefined"
     ? window.matchMedia("(max-width: 900px)") : null;
   const allFolds = () =>
-    root.querySelectorAll("details.player-fold, details.player-build-body");
+    root.querySelectorAll("details.player-fold");
   const setBuildFoldState = () => {
     allFolds().forEach((d) => {
       if (!narrowMq || !narrowMq.matches) d.open = true;
     });
   };
   allFolds().forEach((d) => {
-    d.open = !(narrowMq && narrowMq.matches);
+    d.open = d.dataset.slot === "0" || !(narrowMq && narrowMq.matches);
   });
   narrowMq?.addEventListener("change", setBuildFoldState);
   // Stash the listener so unmount can detach it.
@@ -439,6 +367,7 @@ export function mount(root, { setStatus }) {
 export function unmount() {
   rendererMountId++;
   testRunning = false;
+  previewRequestId++;
   if (testRafId) cancelAnimationFrame(testRafId);
   testRenderer?.destroy();
   testRenderer = null;
@@ -477,7 +406,7 @@ function playerPanelHtml(slot) {
     <section class="panel player-panel ${sideClass}" data-slot="${slot}">
       <details class="player-fold" open data-slot="${slot}">
         <summary class="player-fold-summary" title="Toggle player ${label} controls">
-          <span class="player-title">${label}</span>
+          <span class="player-title">${label} · ${slot === 0 ? "your fighter" : "rival"}</span>
           <span class="player-fold-badge" data-slot="${slot}">${modeBadge(slot)}</span>
           <span class="player-fold-chevron" aria-hidden="true">▸</span>
         </summary>
@@ -512,8 +441,7 @@ function playerPanelHtml(slot) {
         </div>
       </div>
 
-      <details class="player-build-body" data-section="build" open>
-        <summary class="build-fold-summary" title="Toggle attributes and budget">Attributes &amp; budget</summary>
+      <div class="player-build-body" data-section="build">
         <div class="knobs" data-knobs="${slot}"></div>
 
         <div class="budget-block">
@@ -541,28 +469,28 @@ function playerPanelHtml(slot) {
           <div class="toolbar">
             ${buttonHtml({ className: "slot-reset", attrs: { "data-slot": slot, title: `Discard changes in slot ${Number(slot) + 1}` }, text: "reset" })}
             ${buttonHtml({ className: "slot-randomize", attrs: { "data-slot": slot, title: "Randomize this slot's build" }, text: "randomize" })}
-            ${buttonHtml({ className: "slot-submit", variant: "primary", attrs: { "data-slot": slot, title: "Promote this tuned build into your live roster seat" }, text: "send to live roster" })}
+            ${buttonHtml({ className: "slot-submit", variant: "primary", attrs: { "data-slot": slot, title: "Save this build in a roster seat" }, text: "save fighter" })}
           </div>
-          <div class="build-install-note tight">Preview only until sent live.</div>
+          <div class="build-install-note tight">Local tests are not ranked matches.</div>
           <details class="json-fold">
             <summary title="Toggle JSON config">JSON config</summary>
             <pre class="code-export slot-export" data-slot="${slot}"></pre>
           </details>
         </div>
-      </details>
+      </div>
       </details>
     </section>`;
 }
 
 function buildPreviewBriefingHtml() {
   return `
-    <div class="build-preview-briefing" aria-live="polite">
+    <div class="build-preview-briefing">
       <div class="build-preview-side is-p1" id="build-brief-side-0">
         <span class="build-preview-side-label">P1</span>
         <strong class="build-preview-side-name" id="build-brief-p1">${escapeHtml(labelForSlot(0))}</strong>
       </div>
       <div class="build-preview-center">
-        <div class="build-preview-result" id="build-brief-result">simulating on server</div>
+        <div class="build-preview-result" id="build-brief-result">starting match</div>
         <div class="build-preview-meta" id="build-brief-meta">${escapeHtml(stageLabel(stageId))} · seed —</div>
       </div>
       <div class="build-preview-side is-p2" id="build-brief-side-1">
@@ -604,7 +532,7 @@ function wireMatchBar(root) {
     requestPreview({ newSeed: true }); refocus(); trackBuildAction("reset_match");
   });
   root.querySelector("#test-resim").addEventListener("click", () => {
-    requestPreview({ newSeed: true }); refocus();
+    requestPreview({ newSeed: false }); refocus();
     trackBuildAction("resim");
   });
 }
@@ -633,7 +561,6 @@ function wireSlot(root, slot) {
   const presetSel = panel.querySelector(".slot-preset");
   presetSel.addEventListener("change", () => {
     slotPresetNames[slot] = presetSel.value;
-    loadPresetIntoSliders(slot, presetSel.value);
     renderKnobsForSlot(slot);
     updateSlot(slot);
     refreshPresetCopy(slot);
@@ -699,33 +626,11 @@ function applyModeVisibility(slot) {
   // curated knobs; HUMAN shows corrupted, non-authoritative input.
   const buildBody = panel.querySelector('[data-section="build"]');
 
-  // Readonly lock for PRESET and HUMAN. HUMAN gets its own animated
-  // visual treatment; those slider values are display-only and never
-  // feed the sim, because keyboard input is authoritative in that mode.
-  buildBody.classList.toggle("is-readonly", mode === "preset" || mode === "human");
-  buildBody.classList.toggle("is-human-noise", mode === "human");
-  const sliders = buildBody.querySelectorAll('input[type="range"]');
-  sliders.forEach((inp) => { inp.disabled = mode === "preset" || mode === "human"; });
-
-  // Buttons: disable config mutation in PRESET/HUMAN mode. Preset
-  // internals are server-side; the browser only gets a label.
-  const buttonsToGate = ["slot-reset", "slot-randomize", "slot-submit"];
-  for (const cls of buttonsToGate) {
-    const btn = buildBody.querySelector(`.${cls}`);
-    if (btn) btn.disabled = mode === "preset" || mode === "human";
-  }
-  // In PRESET mode always display the current preset's knob values.
-  if (mode === "preset") {
-    loadPresetIntoSliders(slot, slotPresetNames[slot]);
-    renderKnobsForSlot(slot);
-    updateSlot(slot);
-  } else if (mode === "human") {
-    renderKnobsForSlot(slot);
-    updateSlot(slot);
-    paintHumanSliderNoise(slot);
-  } else {
-    updateSlot(slot);
-  }
+  // Keep the authored build intact across modes. Preset internals are not
+  // client data; keyboard input is not a numerical policy.
+  buildBody.hidden = mode !== "user";
+  renderKnobsForSlot(slot);
+  updateSlot(slot);
 
   refreshPreviewCopy();
 }
@@ -804,32 +709,6 @@ function updateSlot(slot) {
   });
 }
 
-function paintHumanSliderNoise(slot) {
-  if (modes[slot] !== "human") return;
-  const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-  document.querySelectorAll(`input[type=range][data-slot="${slot}"]`).forEach((inp, idx) => {
-    const id = inp.dataset.knob;
-    const pinned = HUMAN_PINNED_KNOBS.get(id);
-    const wave = Math.sin(now * 0.008 + idx * 1.91 + slot * 0.7);
-    const saw = ((Math.floor(now / 90) + idx * 23 + slot * 11) % 101) / 100;
-    const chaotic = Math.round(Math.max(0, Math.min(100, ((wave + 1) * 34) + (saw * 32))));
-    const displayValue = pinned ?? chaotic;
-    inp.value = String(displayValue);
-    inp.style.setProperty("--fill", `${displayValue}%`);
-    inp.classList.toggle("is-pinned", pinned !== undefined);
-    const display = document.querySelector(`[data-val="${id}"][data-slot="${slot}"]`);
-    if (display) {
-      display.textContent = String(displayValue);
-      display.classList.toggle("is-pinned", pinned !== undefined);
-    }
-  });
-}
-
-// --- preset → knob sync ---
-function loadPresetIntoSliders(slot, name) {
-  slotStates[slot] = presetDisplayState(name);
-}
-
 // ==================== REMOTE PREVIEW LOOP ====================
 
 function labelForSlot(idx) {
@@ -848,14 +727,15 @@ function sidePayload(slot) {
 
 function slotIsHuman(slot) { return modes[slot] === "human"; }
 function hasHuman() { return slotIsHuman(0) || slotIsHuman(1); }
+function usesLocalPreview() { return hasHuman() || modes.every((mode) => mode === "user"); }
 
 function previewSubtitle() {
   return hasHuman()
     ? "local sandbox · keyboard input · not ranked"
-    : "server preview · not ranked until sent live";
+    : usesLocalPreview() ? "Tune a fighter. Win the proof. Ship it home. · local sandbox" : "server preset preview · not ranked";
 }
 function previewCopy() {
-  return hasHuman() ? "local sandbox" : "server test fight";
+  return usesLocalPreview() ? "Kill → collect the Proof Core → deliver. Two deliveries win a round; two rounds win the match." : "server test fight · not ranked";
 }
 function refreshPreviewCopy() {
   const subtitleEl = document.querySelector(".build-page .page-subtitle");
@@ -884,7 +764,7 @@ function teardownLocalWorld() {
 }
 
 function startLocalWorld({ newSeed = false } = {}) {
-  const seed = newSeed || !localWorld ? freshLocalSeed() : (previewResult?.seed ?? freshLocalSeed());
+  const seed = newSeed ? freshLocalSeed() : (previewResult?.seed ?? freshLocalSeed());
   const stage = SIM_STAGES[stageId] ?? SIM_STAGES.datacenter;
   localBrains[0] = slotIsHuman(0) ? null : compileBrain(brainConfigForSlot(0));
   localBrains[1] = slotIsHuman(1) ? null : compileBrain(brainConfigForSlot(1));
@@ -943,7 +823,7 @@ async function requestPreview({ newSeed = false } = {}) {
   const requestId = ++previewRequestId;
   const requestEditVersion = previewEditVersion;
 
-  if (hasHuman()) {
+  if (usesLocalPreview()) {
     try {
       startLocalWorld({ newSeed });
     } catch (e) {
@@ -997,8 +877,6 @@ function startLoop() {
 function loopTest() {
   if (!testRunning) return;
   if (testRenderer) {
-    paintHumanSliderNoise(0);
-    paintHumanSliderNoise(1);
     let frame;
     if (localWorld) {
       frame = stepLocalSim(performance.now());
@@ -1051,11 +929,11 @@ function updatePreviewBriefing(frame = currentPreviewFrame()) {
       setBuildStat("build-brief-result", `${name} wins · ${score}`);
       setBriefWinnerState(winner);
     } else {
-      setBuildStat("build-brief-result", `live · rounds ${rounds} · score ${score}`);
+      setBuildStat("build-brief-result", previewDirty ? "traits changed · test again" : `rounds ${rounds} · score ${score}`);
     }
     setBuildStat(
       "build-brief-meta",
-      `${stageLabel(stageId)} · seed ${previewResult?.seed ?? "—"} · tick ${localWorld.tick}`
+      `${stageLabel(stageId)} · local sandbox`
     );
     return;
   }
@@ -1167,7 +1045,7 @@ function updatePreviewStats(frame = currentPreviewFrame()) {
 
 function setBuildStat(id, value) {
   const el = document.getElementById(id);
-  if (el) el.textContent = String(value);
+  if (el && el.textContent !== String(value)) el.textContent = String(value);
 }
 
 function updatePreviewControls() {

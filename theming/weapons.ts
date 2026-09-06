@@ -85,10 +85,10 @@ export const WEAPON_KITS: WeaponKit[] = [
   { id: "mark.epic",    characterId: "mark",    rarity: "epic",  status: "preview", sprite: emptyWeaponSprite(), trail: { color: "#a78bfa", width: 4, ttl: 0.18 } },
 
   // ---------------- Legendaries (preview — visible, not yet available) -------
-  { id: "sama.legendary",    characterId: "sama",    rarity: "legendary",  status: "preview", sprite: emptyWeaponSprite(), trail: { color: "#f472b6", width: 5, ttl: 0.2 } },
-  { id: "darrius.legendary", characterId: "darrius", rarity: "legendary",  status: "preview", sprite: emptyWeaponSprite(), trail: { color: "#f472b6", width: 5, ttl: 0.2 } },
-  { id: "demis.legendary",   characterId: "demis",   rarity: "legendary",  status: "preview", sprite: emptyWeaponSprite(), trail: { color: "#f472b6", width: 5, ttl: 0.2 } },
-  { id: "mark.legendary",    characterId: "mark",    rarity: "legendary",  status: "preview", sprite: emptyWeaponSprite(), trail: { color: "#f472b6", width: 5, ttl: 0.2 } },
+  { id: "sama.legendary",    characterId: "sama",    rarity: "legendary",  status: "preview", sprite: emptyWeaponSprite(), trail: { color: "#38bdf8", width: 5, ttl: 0.2 } },
+  { id: "darrius.legendary", characterId: "darrius", rarity: "legendary",  status: "preview", sprite: emptyWeaponSprite(), trail: { color: "#38bdf8", width: 5, ttl: 0.2 } },
+  { id: "demis.legendary",   characterId: "demis",   rarity: "legendary",  status: "preview", sprite: emptyWeaponSprite(), trail: { color: "#38bdf8", width: 5, ttl: 0.2 } },
+  { id: "mark.legendary",    characterId: "mark",    rarity: "legendary",  status: "preview", sprite: emptyWeaponSprite(), trail: { color: "#38bdf8", width: 5, ttl: 0.2 } },
 ];
 
 export const WEAPONS_BY_ID: Record<string, WeaponKit> =

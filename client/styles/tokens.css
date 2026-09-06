@@ -24,7 +24,7 @@
   --ui-hover: #25253d;
   --ui-text: #f4f4ff;
   --ui-text-soft: #9e9eb8;
-  --ui-text-subtle: #686886;
+  --ui-text-subtle: #9393ad;
   --ui-code-text: #c8e0c8;
   --ui-success: #6ee7b7;
   --ui-success-ink: #1e3a2c;
@@ -37,8 +37,9 @@
   --ui-purple: var(--color-purple);
   --ui-purple-ink: var(--color-purple-ink);
   --ui-purple-bright: #c084fc;
-  --ui-pink: #ec4899;
-  --ui-pink-ink: #be185d;
+  --ui-accent: #38bdf8;
+  --ui-control-height: 44px;
+  --ui-radius: 6px;
   --context-card-height: 112px;
   --context-card-height-mobile: 136px;
   --meter-track-bg-warn: color-mix(in srgb, var(--ui-red) 18%, black);
@@ -59,7 +60,7 @@
   --arena-p2: var(--ui-purple);
   --arena-p2-trim: #d8b4fe;
   --arena-p2-shadow: var(--ui-purple-ink);
-  --arena-goal-normal: #d946ef;
+  --arena-goal-normal: #38bdf8;
   --arena-goal-urgent: #ef4444;
   --arena-token: #ffd700;
   --arena-token-glow: rgba(255,215,0,0.15);
@@ -120,9 +121,6 @@
   --ui-paint-rgba-100-116-139-0-5: rgba(100, 116, 139, 0.5);
   --ui-paint-hex-94a3b8: #94a3b8;
   --ui-paint-rgba-100-116-139-0-08: rgba(100, 116, 139, 0.08);
-  --ui-paint-rgba-236-72-153-0-5: rgba(236, 72, 153, 0.5);
-  --ui-paint-hex-f472b6: #f472b6;
-  --ui-paint-rgba-236-72-153-0-08: rgba(236, 72, 153, 0.08);
   --ui-paint-rgba-14-165-233-0-5: rgba(14, 165, 233, 0.5);
   --ui-paint-hex-38bdf8: #38bdf8;
   --ui-paint-rgba-14-165-233-0-08: rgba(14, 165, 233, 0.08);

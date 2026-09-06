@@ -216,9 +216,9 @@
 }
 
 .ui-chip.is-runtime-webgpu {
-  border-color: var(--ui-paint-rgba-236-72-153-0-5);
-  color: var(--ui-paint-hex-f472b6);
-  background: var(--ui-paint-rgba-236-72-153-0-08);
+  border-color: var(--ui-paint-rgba-14-165-233-0-5);
+  color: var(--ui-accent);
+  background: var(--ui-paint-rgba-14-165-233-0-08);
 }
 
 .ui-chip.is-runtime-webrtc {

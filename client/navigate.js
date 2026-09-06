@@ -1,5 +1,4 @@
 export function routeToPath(route) {
-  if (route === "intro") return "/";
   if (!route) return "/";
   if (route.startsWith("/")) return route.replace(/\/+$/, "") || "/";
   return `/${route}`;

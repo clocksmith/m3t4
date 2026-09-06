@@ -1114,7 +1114,8 @@ class LazyFirebaseComputeClient {
     this.actual = null;
     this.loading = null;
     this.listeners = new Map();
-    this.load();
+    this.matchPhase = "intermission";
+    this.loadError = null;
   }
 
   snapshot() {
@@ -1126,7 +1127,7 @@ class LazyFirebaseComputeClient {
       workerFeatureEnabled: firebaseComputeEnabled(),
       enabled: false,
       mode: "quiet",
-      state: "loading firebase compute",
+      state: this.loadError ? `firebase compute load failed: ${this.loadError}` : this.loading ? "loading firebase compute" : "idle",
       workerId: null,
       workerSessionId: null,
       clientId: null,
@@ -1171,20 +1172,36 @@ class LazyFirebaseComputeClient {
     if (!this.loading) {
       this.loading = import("./firebase-compute.js").then((mod) => {
         this.actual = mod.getFirebaseComputeClient();
+        this.actual.setMatchPhase?.(this.matchPhase);
+        this.loadError = null;
         installConsoleHelper(this.actual);
         return this.actual;
+      }).catch((error) => {
+        this.loading = null;
+        this.loadError = message(error);
+        throw error;
       });
     }
     return this.loading;
   }
 
-  async maybeAutoStart(...args) { return (await this.load()).maybeAutoStart(...args); }
+  async maybeAutoStart(...args) {
+    // Firebase's existing opt-in encoding is "true" (the legacy HTTP client
+    // uses "1"). A spectator without consent must not load a donation SDK.
+    let optedIn = false;
+    try { optedIn = localStorage.getItem(OPT_IN_KEY) === "true"; } catch {}
+    if (!optedIn) return;
+    return (await this.load()).maybeAutoStart(...args);
+  }
   async start(...args) { return (await this.load()).start(...args); }
   async stop(...args) { return (await this.load()).stop(...args); }
   destroy(...args) { if (this.actual?.destroy) return this.actual.destroy(...args); }
-  setMode(...args) { void this.load().then((client) => client.setMode(...args)); }
-  setPolicy(...args) { void this.load().then((client) => client.setPolicy(...args)); }
-  setMatchPhase(...args) { void this.load().then((client) => client.setMatchPhase?.(...args)); }
+  setMode(...args) { void this.load().then((client) => client.setMode(...args)).catch(() => {}); }
+  setPolicy(...args) { void this.load().then((client) => client.setPolicy(...args)).catch(() => {}); }
+  setMatchPhase(phase) {
+    this.matchPhase = phase;
+    this.actual?.setMatchPhase?.(phase);
+  }
   recordFrame(...args) { if (this.actual?.recordFrame) this.actual.recordFrame(...args); }
   async fetchMyReceipts(...args) { return (await this.load()).fetchMyReceipts(...args); }
   async fetchPublicSummary(...args) { return (await this.load()).fetchPublicSummary(...args); }

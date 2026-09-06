@@ -44,3 +44,12 @@ test('literal paint values belong to tokens, not component and page rules', () =
 test('page entries use stylesheets instead of inline stylesheet forks', () => {
   for (const file of ["client/index.html"]) assert.doesNotMatch(read(file), /<style(?:\s|>)/i, file);
 });
+
+test('UI and weapon effects do not reintroduce pink accent paint', () => {
+  for (const file of [TOKEN_FILE, 'client/render/canvas2d.js', 'theming/weapons.ts']) {
+    assert.doesNotMatch(clean(read(file)), /#(?:ec4899|be185d|f472b6|d946ef)\b|--ui-pink|\bhotpink\b/i);
+  }
+  const theme = JSON.parse(read('theming/visual-theme.v1.json'));
+  // Generation's magenta chroma-key and natural skin descriptions are not UI accents.
+  assert.doesNotMatch(JSON.stringify(theme.weaponVisuals), /#(?:ec4899|be185d|f472b6|d946ef)\b/i);
+});

@@ -5,7 +5,7 @@
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
 import { linkButtonHtml } from "../ui/actions.js";
 import { escapeHtml } from "../ui/html.js";
-import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
+import { contextCardHtml, pageHeaderHtml, disclosureHtml } from "../ui/shell.js";
 
 function sectionHtml(section) {
   const body = Array.isArray(section.body) ? section.body : [];
@@ -81,8 +81,6 @@ export function mount(root, { setStatus }) {
       })}
 
       ${aboutCardHtml(rules.about)}
-      ${aboutDetailHtml(rules.about)}
-      ${aboutLinksHtml(rules.about)}
 
       <div class="rules-rules-column">
         <div class="rules-section-label">Rules</div>
@@ -90,6 +88,7 @@ export function mount(root, { setStatus }) {
           ${sections.map(sectionHtml).join("")}
         </section>
       </div>
+      ${disclosureHtml({ label: "Under the hood · policy search & compute", body: aboutDetailHtml(rules.about) + aboutLinksHtml(rules.about) })}
     </div>`;
 }
 

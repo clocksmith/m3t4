@@ -1,19 +1,26 @@
 export const W = 1280;
 export const H = 720;
 
+export function canvasSurfaceSize(cssWidth, deviceDpr = 1) {
+  const cssW = Math.max(1, Math.round(cssWidth));
+  const cssH = Math.round(cssW * H / W);
+  // Pixel art stays on an integer logical grid. A small canvas does not
+  // need a full 2560×1440 backing store simply because the phone has high DPR.
+  const dpr = Math.max(1, Math.min(2, Math.round(cssW * Math.min(deviceDpr || 1, 2) / W)));
+  return { cssW, cssH, dpr, width: W * dpr, height: H * dpr };
+}
+
 export function setupCanvasSurface(canvas, { onResize = null } = {}) {
   function resize() {
-    const dpr = Math.min(devicePixelRatio || 1, 2);
     const parent = canvas.parentElement;
     const parentW = parent ? parentContentWidth(parent) : Infinity;
-    const viewportW = document.documentElement.clientWidth - 40;
-    const cssW = Math.max(160, Math.min(parentW || viewportW, viewportW));
-    const cssH = cssW * (H / W);
-    canvas.width = Math.round(W * dpr);
-    canvas.height = Math.round(H * dpr);
-    canvas.style.width = Math.round(cssW) + "px";
-    canvas.style.height = Math.round(cssH) + "px";
-    onResize?.({ dpr, width: canvas.width, height: canvas.height, cssW, cssH });
+    const viewportW = document.documentElement.clientWidth;
+    const size = canvasSurfaceSize(Math.min(parentW || viewportW, viewportW), devicePixelRatio);
+    if (canvas.width !== size.width) canvas.width = size.width;
+    if (canvas.height !== size.height) canvas.height = size.height;
+    canvas.style.width = size.cssW + "px";
+    canvas.style.height = size.cssH + "px";
+    onResize?.(size);
   }
 
   window.addEventListener("resize", resize);

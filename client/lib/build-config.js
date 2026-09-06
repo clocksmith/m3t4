@@ -53,10 +53,20 @@ export function scaledStateFromValues(values, cap = BUDGET) {
     return clamp(Math.round(finiteNumber(raw, init)), 0, 100);
   });
   const total = rawValues.reduce((sum, value) => sum + value, 0) || 1;
-  const scale = Math.min(1, cap / total);
+  const target = Math.min(total, Math.max(0, Math.floor(finiteNumber(cap, BUDGET))));
+  const scale = target / total;
+  const scaled = rawValues.map((value, index) => ({ index, exact: value * scale, value: Math.floor(value * scale) }));
+  // Independent rounding could exceed the hard cap and break initial rendering.
+  // Allocate remaining points by fractional remainder, with stable index ties.
+  let remaining = target - scaled.reduce((sum, row) => sum + row.value, 0);
+  for (const row of [...scaled].sort((a, b) => (b.exact - b.value) - (a.exact - a.value) || a.index - b.index)) {
+    if (remaining <= 0 || row.value >= rawValues[row.index]) continue;
+    row.value++;
+    remaining--;
+  }
   const state = {};
-  rawValues.forEach((value, index) => {
-    state[KNOBS[index][0]] = clamp(Math.round(value * scale), 0, 100);
+  scaled.forEach(({ value, index }) => {
+    state[KNOBS[index][0]] = value;
   });
   return state;
 }

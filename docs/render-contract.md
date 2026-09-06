@@ -8,7 +8,7 @@ This file documents the presentation/runtime bridge. It is intentionally outside
 - `content/game-copy.v1.json`: copy and fiction only: names, labels, HUD strings, voice lines, objective nouns.
 - `config/presentation-selection.v1.json`: selected IDs only.
 - `data/preset-ranking.v1.json`: generated balance/build data, not theme.
-- `client/app.css :root`: UI chrome and fallback canvas tokens only: black/red/blue/purple primitives, semantic UI colors, and temporary arena fallback colors.
+- `client/styles/tokens.css`: UI chrome and fallback canvas tokens. Cyan navigation/objectives, blue/violet fighters, red danger, and semantic surfaces.
 - `plasma-lab` compute work: advisory sidecar work only. It must not block
   render, own the frame budget, mutate ranked state, or consume private render
   buffers unless a later Plasma derived-compute contract explicitly declares
@@ -22,9 +22,15 @@ game rules or product configuration.
 
 ## UI Visual Language
 
-`client/app.css` is the single source of truth for app chrome colors and reusable UI classes. Mode templates should not use inline `style` attributes or hardcoded hex values. Use semantic classes such as `panel`, `row`, `toolbar`, `metric-value`, `code-export`, and the CSS variables declared in `:root`.
+`client/app.css` composes tokens, primitives, shared components, and mode layouts. Paint lives in `client/styles/tokens.css`; shared controls and page chrome live in `client/styles/components/`. The shared HTML helpers live in `client/ui/`, and Workshop/Roster use the same `client/lib/slider-editor.js`. Inline styles are only for data-dependent artwork cells and meter fills, not alternate themes.
 
-The fallback canvas renderer may read `--arena-*` tokens from `client/app.css` until the full manifest resolver consumes `theming/visual-theme.v1.json`. Authored art, stage palettes, sprites, and generated prompts still belong in `theming/`.
+The fallback canvas renderer reads `--arena-*` tokens from `client/styles/tokens.css`. Authored art, stage palettes, sprites, and generated prompts still belong in `theming/`.
+
+## Browser verification and asset delivery
+
+Run `npx playwright install chromium`, then `npm run test:ui`. The smoke serves the actual client locally, blocks external services, and checks local fights, archive replay, route navigation, trait preservation, save handoff, and desktop/tablet/phone-width layouts. It checks all four sprite sheets at native 64×64 cells, including mirrored run/idle and wall-facing slides. Screenshots and a JSON report go to the printed temporary directory. This is headless browser evidence, not physical-device, signed-in, ranked, or P2P qualification.
+
+Sprite sheets remain lossless PNG. Stage layers prefer existing WebP derivatives with PNG fallback, requested on first draw and reused afterward. Canvas backing resolution uses an integer logical scale sized to the display. Firebase Hosting revalidates code/config and bounds mutable artwork caching; it does not publish test fixtures or unused source packs. No immutable cache promise is made for unversioned asset names.
 
 ## Renderer Must Consume
 

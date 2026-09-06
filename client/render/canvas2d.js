@@ -1,3 +1,4 @@
+import { imageState, loadImage } from "./image-assets.js";
 // Shared canvas renderer. Takes a TraceFrame (from sim) + stage and draws
 // the scene. Used by both Spectate (server frames) and Practice (local).
 
@@ -169,30 +170,30 @@ const OBJECTIVE_IMAGES = {
 };
 
 const DATACENTER_PACK = {
-  sky: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/sky.png"),
-  farParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/far_parallax.png"),
-  midParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/mid_parallax.png"),
-  nearParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/near_parallax.png"),
+  sky: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/sky.webp", "assets/stages/datacenter/cold_aisle_chapel/layers/sky.png"),
+  farParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/far_parallax.webp", "assets/stages/datacenter/cold_aisle_chapel/layers/far_parallax.png"),
+  midParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/mid_parallax.webp", "assets/stages/datacenter/cold_aisle_chapel/layers/mid_parallax.png"),
+  nearParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/near_parallax.webp", "assets/stages/datacenter/cold_aisle_chapel/layers/near_parallax.png"),
   platform: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/platform.png"),
   platformEdge: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/platform_edge.png"),
   wall: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/wall.png"),
 };
 
 const BOARDROOM_PACK = {
-  sky: imageState("assets/stages/boardroom/fiduciary_basement/layers/sky.png"),
-  farParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/far_parallax.png"),
-  midParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/mid_parallax.png"),
-  nearParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/near_parallax.png"),
+  sky: imageState("assets/stages/boardroom/fiduciary_basement/layers/sky.webp", "assets/stages/boardroom/fiduciary_basement/layers/sky.png"),
+  farParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/far_parallax.webp", "assets/stages/boardroom/fiduciary_basement/layers/far_parallax.png"),
+  midParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/mid_parallax.webp", "assets/stages/boardroom/fiduciary_basement/layers/mid_parallax.png"),
+  nearParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/near_parallax.webp", "assets/stages/boardroom/fiduciary_basement/layers/near_parallax.png"),
   platform: imageState("assets/stages/boardroom/fiduciary_basement/textures/platform.png"),
   platformEdge: imageState("assets/stages/boardroom/fiduciary_basement/textures/platform_edge.png"),
   wall: imageState("assets/stages/boardroom/fiduciary_basement/textures/wall.png"),
 };
 
 const DEMODAY_PACK = {
-  sky: imageState("assets/stages/demoday/demo_day_afterparty/layers/sky.png"),
-  farParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/far_parallax.png"),
-  midParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/mid_parallax.png"),
-  nearParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/near_parallax.png"),
+  sky: imageState("assets/stages/demoday/demo_day_afterparty/layers/sky.webp", "assets/stages/demoday/demo_day_afterparty/layers/sky.png"),
+  farParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/far_parallax.webp", "assets/stages/demoday/demo_day_afterparty/layers/far_parallax.png"),
+  midParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/mid_parallax.webp", "assets/stages/demoday/demo_day_afterparty/layers/mid_parallax.png"),
+  nearParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/near_parallax.webp", "assets/stages/demoday/demo_day_afterparty/layers/near_parallax.png"),
   platform: imageState("assets/stages/demoday/demo_day_afterparty/textures/platform.png"),
   platformEdge: imageState("assets/stages/demoday/demo_day_afterparty/textures/platform_edge.png"),
   wall: imageState("assets/stages/demoday/demo_day_afterparty/textures/wall.png"),
@@ -203,23 +204,6 @@ const STAGE_ASSETS = {
   boardroom: { ...BOARDROOM_PACK, tint: null },
   demoday: { ...DEMODAY_PACK, tint: null },
 };
-
-function imageState(url) {
-  return { url, image: null, loaded: false, failed: false };
-}
-
-function loadImage(state) {
-  if (state.failed) return null;
-  if (state.loaded) return state.image;
-  if (!state.image && typeof Image !== "undefined") {
-    const img = new Image();
-    img.onload = () => { state.loaded = true; };
-    img.onerror = () => { state.failed = true; };
-    img.src = state.url;
-    state.image = img;
-  }
-  return state.loaded ? state.image : null;
-}
 
 function spriteAnims() {
   return {

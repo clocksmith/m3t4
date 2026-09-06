@@ -12,8 +12,6 @@ export {
 
 import { createCanvas2DRenderer } from "./canvas2d.js";
 import { rendererBackendCandidates, normalizeRendererPreference } from "./capabilities.js";
-import { canUseWebGlRenderer, createWebGlRenderer } from "./webgl.js";
-import { canUseWebGpuRenderer, createWebGpuRenderer } from "./webgpu.js";
 import { replaceCanvasElement } from "./surface.js";
 
 export async function createFrameRenderer(canvas, options = {}) {
@@ -34,11 +32,13 @@ export async function createFrameRenderer(canvas, options = {}) {
       }
 
       if (backend === "webgpu") {
+        const { canUseWebGpuRenderer, createWebGpuRenderer } = await import("./webgpu.js");
         if (!await canUseWebGpuRenderer()) continue;
         claimedContext = true;
         const renderer = await createWebGpuRenderer(targetCanvas, options);
         if (renderer) return renderer;
       } else if (backend === "webgl") {
+        const { canUseWebGlRenderer, createWebGlRenderer } = await import("./webgl.js");
         if (!canUseWebGlRenderer()) continue;
         claimedContext = true;
         const renderer = createWebGlRenderer(targetCanvas, options);

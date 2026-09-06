@@ -19,7 +19,8 @@
 // beyond a public STUN. Symmetric-NAT peers may fail to connect; a TURN
 // relay is the planned fix.
 
-import { firebase } from "./firebase-client.js";
+import { isP2PSupported } from "./p2p-capabilities.js";
+export { isP2PSupported } from "./p2p-capabilities.js";
 import { ensureIceServers, iceServers } from "./ice-config.js";
 import {
   ensureAnonAuth,
@@ -42,13 +43,6 @@ const PAIR_TIMEOUT_MS = 5 * 60_000;
 const ANSWER_LINK_TIMEOUT_MS = 15_000;
 const PING_INTERVAL_MS = 1_000;
 const PING_STALE_MS = 5_000;
-
-export function isP2PSupported() {
-  if (typeof window === "undefined") return false;
-  if (typeof RTCPeerConnection === "undefined") return false;
-  const fb = firebase();
-  return !!fb;
-}
 
 function playerSlotTaken(sessionData) {
   return !!sessionData?.answer?.sdp;

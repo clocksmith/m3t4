@@ -9,6 +9,17 @@ import { imageState, loadImage } from "../render/image-assets.js";
 import { isP2PSupported } from "../lib/p2p-capabilities.js";
 import { getComputeClient } from "../lib/compute.js";
 import { pickCurrentStaticMatch } from "../lib/match-feed.js";
+import { fitCanvasText } from "../render/canvas2d.js";
+
+test("long fighter labels fit their HUD lane without shrinking the font", () => {
+  const ctx = { measureText: text => ({ width: Array.from(text).length * 12 }) };
+  assert.equal(fitCanvasText(ctx, "P1", 344), "P1");
+  const label = fitCanvasText(ctx, "@a_very_long_fighter_handle [a long build name]", 344);
+  assert.ok(ctx.measureText(label).width <= 344);
+  assert.ok(label.endsWith("…"));
+  assert.equal(fitCanvasText(ctx, "😀😀😀", 24), "😀…");
+  assert.equal(fitCanvasText(ctx, "P1", 0), "");
+});
 
 test("local capability and static feed imports do not require Firebase", () => {
   assert.equal(isP2PSupported(), false);

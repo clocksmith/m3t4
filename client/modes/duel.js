@@ -29,12 +29,12 @@ import {
 import { STAGES } from "../lib/public-sim.js";
 import { escapeHtml } from "../ui/html.js";
 import { buttonHtml } from "../ui/actions.js";
-import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
+import { contextCardHtml, pageHeaderHtml, disclosureHtml } from "../ui/shell.js";
 import presetRanking from "../data/preset-ranking.v1.json" with { type: "json" };
 import rosterCatalog from "../content/roster-catalog.v1.json" with { type: "json" };
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
 import { BODY_PORTRAIT_SHEETS, BODY_VARIANTS } from "../content/character-presentation.js";
-import { startP2PDuel, isP2PSupported } from "../lib/p2p-duel.js";
+import { isP2PSupported } from "../lib/p2p-capabilities.js";
 
 const SIM_HZ = 120;
 const STEP_MS = 1000 / SIM_HZ;
@@ -308,7 +308,7 @@ function isTypingTarget(el) {
   return t === "INPUT" || t === "TEXTAREA" || t === "SELECT" || el.isContentEditable;
 }
 function onKeyDown(e) {
-  if (!state || isTypingTarget(e.target)) return;
+  if (!state || isTypingTarget(e.target) || e.target?.closest?.("button, summary, a")) return;
   if (e.code === "Space" && (!state.world || state.world.matchWinner !== -1)) {
     e.preventDefault();
     startMatch();
@@ -769,9 +769,7 @@ function controlsCardHtml() {
   return `
     <div class="duel-controls">
       ${subModeRowHtml()}
-      <div class="duel-character-select" id="duel-character-select">
-        ${characterSelectHtml()}
-      </div>
+      ${disclosureHtml({ label: "Choose fighters & weapons", className: "duel-cosmetics-fold", body: `<div class="duel-character-select" id="duel-character-select">${characterSelectHtml()}</div>` })}
 
       <div class="duel-row">
         <label class="tight">stage
@@ -909,7 +907,7 @@ export function mount(root, ctx = {}) {
   root.innerHTML = `
     <div class="page duel-page">
       ${pageHeaderHtml({
-        title: "Duel",
+        title: "Play",
         subtitle: "play a match yourself · sandbox only · not ranked",
       })}
       <div class="duel-workbench">
@@ -1425,6 +1423,9 @@ async function beginP2P(role, opts) {
     ? (reuseSessionId ? "resuming session…" : "creating session…")
     : "connecting…");
   try {
+    const ownerState = state;
+    const { startP2PDuel } = await import("../lib/p2p-duel.js");
+    if (state !== ownerState || !state?.running || state.subMode !== "p2p") return;
     const handle = await startP2PDuel({
       role,
       sessionId,

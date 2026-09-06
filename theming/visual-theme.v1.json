@@ -235,7 +235,7 @@
         "spriteCell": 3,
         "hitVFX": "hit-failover",
         "trail": {
-          "color": "#f472b6",
+          "color": "#38bdf8",
           "width": 5,
           "ttl": 0.2
         }
@@ -285,7 +285,7 @@
         "spriteCell": 3,
         "hitVFX": "hit-compliance-seal",
         "trail": {
-          "color": "#f472b6",
+          "color": "#38bdf8",
           "width": 5,
           "ttl": 0.2
         }
@@ -335,7 +335,7 @@
         "spriteCell": 3,
         "hitVFX": "hit-qed",
         "trail": {
-          "color": "#f472b6",
+          "color": "#38bdf8",
           "width": 5,
           "ttl": 0.2
         }
@@ -385,7 +385,7 @@
         "spriteCell": 3,
         "hitVFX": "hit-social-graph",
         "trail": {
-          "color": "#f472b6",
+          "color": "#38bdf8",
           "width": 5,
           "ttl": 0.2
         }

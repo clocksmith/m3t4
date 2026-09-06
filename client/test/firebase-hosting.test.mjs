@@ -7,6 +7,17 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../..");
 
+test("Hosting revalidates code and gives mutable artwork bounded caching", () => {
+  const { hosting } = JSON.parse(fs.readFileSync(path.join(repoRoot, "firebase.json"), "utf8"));
+  assert.ok(hosting.ignore.includes("test/**"));
+  assert.ok(hosting.ignore.includes("assets/chars/**/packed/**"));
+  const code = hosting.headers.find(row => row.source === "**/*.@(js|css|json)");
+  assert.equal(code.headers[0].value, "no-cache");
+  const art = hosting.headers.find(row => row.source === "/assets/**/*.@(png|webp|svg)");
+  assert.equal(art.headers[0].value, "public, max-age=3600, must-revalidate");
+  assert.doesNotMatch(art.headers[0].value, /immutable/);
+});
+
 test("Firebase Hosting serves the synced sim bundle used by the plasma worker", () => {
   const firebaseConfig = JSON.parse(fs.readFileSync(path.join(repoRoot, "firebase.json"), "utf8"));
   const hosting = firebaseConfig.hosting ?? {};

@@ -1,4 +1,4 @@
-export const DEFAULT_ROUTE = "intro";
+export const DEFAULT_ROUTE = "tune";
 
 export const DEFAULT_FEATURES = {
   p2pDuel: false,
@@ -17,7 +17,7 @@ export const DEFAULT_FEATURES = {
 
 export const LEGACY_HASH = {
   start: "",
-  intro: "",
+  intro: "intro",
   practice: "tune",
   lore: "intro",
   rules: "about",

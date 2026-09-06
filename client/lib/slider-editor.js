@@ -1,13 +1,8 @@
 import { KNOBS } from "./build-config.js";
+import { escapeHtml } from "../ui/html.js";
+import { disclosureHtml } from "../ui/shell.js";
 
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
+export const PRIMARY_KNOBS = ["burnRate", "moat", "shipRate", "foresight"];
 
 function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n));
@@ -37,7 +32,9 @@ export function renderSliderEditor(container, state, options = {}) {
     .map(([k, v]) => `data-${escapeHtml(k)}="${escapeHtml(v)}"`)
     .join(" ");
   const extra = extraAttrs ? ` ${extraAttrs}` : "";
-  container.innerHTML = KNOBS.map(([id, label, desc]) => {
+  const primary = new Set(options.primaryKnobs ?? PRIMARY_KNOBS);
+  const advancedOpen = container.querySelector(".knobs-advanced")?.open ?? false;
+  const renderKnob = ([id, label, desc]) => {
     const value = knobValue(state, id);
     return `
       <label class="knob">
@@ -46,10 +43,16 @@ export function renderSliderEditor(container, state, options = {}) {
           <span class="knob-desc">${escapeHtml(desc)}</span>
         </div>
         <input type="range" min="0" max="100" step="1" value="${value}" data-knob="${escapeHtml(id)}"${extra} ${disabled ? "disabled" : ""}>
-        <div class="knob-val" data-val="${escapeHtml(id)}"${extra}>${value}</div>
+        <output class="knob-val" data-val="${escapeHtml(id)}"${extra}>${value}</output>
       </label>
     `;
-  }).join("");
+  };
+  const advanced = KNOBS.filter(([id]) => !primary.has(id));
+  container.innerHTML = KNOBS.filter(([id]) => primary.has(id)).map(renderKnob).join("")
+    + (advanced.length ? disclosureHtml({
+      label: `Advanced · ${advanced.length} traits`, className: "knobs-advanced", open: advancedOpen,
+      body: advanced.map(renderKnob).join(""),
+    }) : "");
 
   paintSliderFills(container, state);
 

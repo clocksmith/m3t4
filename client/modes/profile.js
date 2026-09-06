@@ -19,7 +19,7 @@ import { renderSliderEditor } from "../lib/slider-editor.js";
 import { trackProfileSignIn, trackProfileHandleClaim, trackProfileSubmitConfig } from "../lib/analytics.js";
 import { escapeHtml } from "../ui/html.js";
 import { buttonHtml } from "../ui/actions.js";
-import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
+import { contextCardHtml, workshopHeaderHtml } from "../ui/shell.js";
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
 import rosterCatalog from "../content/roster-catalog.v1.json" with { type: "json" };
 import { BODY_VARIANTS, BODY_PORTRAIT_SHEETS } from "../content/character-presentation.js";
@@ -57,12 +57,12 @@ function rosterIntroPanelHtml({ needsHandle = false } = {}) {
       </div>` : "";
   return contextCardHtml({
     className: "roster-intro-panel",
-    autoHeight: needsHandle,
+    autoHeight: true,
     body: `
       <div class="context-card-kicker">ranked roster</div>
       <div class="roster-intro-copy">
-        <strong>${pending ? "Bot ready for the live roster." : "Your live roster holds ranked seats."}</strong>
-        <span>Tune one, test it, then send it into a seat. The server schedules matches. Live streams the current fight.</span>
+        <strong>${pending ? "Your tuned fighter is ready to save." : "Keep your fighters. Refine your rivalry."}</strong>
+        <span>Save up to four fighters here. Ranked scheduling is server-controlled; archive playback does not enter them in new matches.</span>
       </div>
       ${claimForm}`,
   });
@@ -89,7 +89,7 @@ function render() {
 }
 
 function rosterPageHeaderHtml({ subtitle = "", action = "" } = {}) {
-  return pageHeaderHtml({ title: "Roster", subtitle, action });
+  return workshopHeaderHtml({ active: "roster", subtitle, action });
 }
 
 function renderSignIn() {

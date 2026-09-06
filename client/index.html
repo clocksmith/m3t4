@@ -15,11 +15,10 @@
     <div class="brand">
       <a href="/" class="logo" title="Go home">m3t4<span class="logo-caret">.ai</span></a>
     </div>
-    <nav>
-      <a href="/tune" data-route="tune" data-nav="primary" title="Tune a bot in the sandbox before sending it to your ranked roster">tune</a>
-      <a href="/live" data-route="live" data-nav="primary" title="Watch ranked matches streaming live from the server">live</a>
-      <a href="/duel" data-route="duel" data-nav="primary" title="Play a match yourself — vs AI, hot-seat, or peer-to-peer">duel</a>
-      <a href="/about" data-route="about" data-nav="primary" title="What m3t4.ai is, how it runs, and the compute pitch">about</a>
+    <nav aria-label="Main">
+      <a href="/tune" data-route="tune" data-route-group="tune roster" data-nav="primary" title="Tune, test, and save your fighters">workshop</a>
+      <a href="/live" data-route="live" data-nav="primary" title="Watch arena matches and browse results">watch</a>
+      <a href="/duel" data-route="duel" data-nav="primary" title="Play a match yourself — vs AI, hot-seat, or peer-to-peer">play</a>
     </nav>
     <div id="account" class="account" data-state="anon"></div>
   </header>
@@ -29,6 +28,8 @@
   <footer id="bottom">
     <span id="status">—</span>
     <span class="spacer"></span>
+    <a href="/about">how to play</a>
+    <a href="/intro">the world</a>
     <a href="https://d4da.com" target="_blank" rel="noreferrer">produced by d4da.com</a>
   </footer>
 

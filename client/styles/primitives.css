@@ -76,3 +76,13 @@ a {
 a:hover {
   color: var(--ui-purple);
 }
+/* One visible keyboard-focus treatment across links, controls and disclosures. */
+:where(a, button, input, select, textarea, summary, canvas):focus-visible,
+.mode-pill:focus-within {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 3px;
+}
+canvas, .stage-option-thumb { image-rendering: pixelated; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+}

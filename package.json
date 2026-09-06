@@ -25,7 +25,11 @@
     "plasma-lab": "npm -w plasma-lab run start",
     "phantom:gate": "npm -w pareto run phantom-gate --",
     "test:client": "node --test client/test/*.test.mjs",
+    "test:ui": "node tools/browser-ui-smoke.mjs",
     "test:design": "node --test client/test/design-system.test.mjs client/test/ui.test.mjs client/test/leaderboard-ui.test.mjs",
     "test": "npm -w sim test && npm run test:client"
+  },
+  "devDependencies": {
+    "playwright": "1.58.0"
   }
 }

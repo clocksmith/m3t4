@@ -16,7 +16,7 @@ import { createFrameRenderer, W, H } from "../render/index.js";
 import { getComputeClient } from "../lib/compute.js";
 import { getAudio, audioEnabledStored } from "../lib/audio.js";
 import { escapeHtml } from "../ui/html.js";
-import { contextCardHtml, pageHeaderHtml } from "../ui/shell.js";
+import { contextCardHtml, pageHeaderHtml, disclosureHtml } from "../ui/shell.js";
 import { statListHtml } from "../ui/stats.js";
 import { toggleSwitchHtml } from "../ui/actions.js";
 import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
@@ -189,7 +189,7 @@ export function mount(root, { setStatus }) {
   statusCb = setStatus;
   root.innerHTML = `
     <div class="page">
-      ${pageHeaderHtml({ title: "Live", subtitle: "whatever match is happening right now" })}
+      ${pageHeaderHtml({ title: "Watch", subtitle: useFirebaseFeed() ? "live arena · server-authoritative matches" : useStaticFeed() ? "match archive · recorded fights, not a live ranked feed" : "arena feed · server playback" })}
       ${contextCardHtml({
         className: "live-briefing-card",
         body: `
@@ -223,7 +223,7 @@ export function mount(root, { setStatus }) {
         </div>
         <aside class="panel spectate-stats spectate-side">
           <div class="spectate-stats-head">
-            <h3>Live</h3>
+            <h3>${useStaticFeed() && !useFirebaseFeed() ? "Archive" : "Live"}</h3>
             <button id="spectate-dash-cycle" type="button" class="spectate-dash-cycle" title="Cycle: battle / compute / both">
               <span class="spectate-dash-cycle-label">view</span>
               <span id="spectate-dash-cycle-state" class="spectate-dash-cycle-state">1</span>
@@ -233,7 +233,7 @@ export function mount(root, { setStatus }) {
             { label: "P1", id: "stat-p1", className: "p1-accent" },
             { label: "P2", id: "stat-p2", className: "p2-accent" },
             { label: "stage", id: "stat-stage" },
-            { label: "ws", id: "stat-ws", value: "connecting…" },
+            { label: "source", id: "stat-ws", value: "connecting…" },
             { label: "next match", id: "stat-countdown" },
             { label: "buffer", id: "stat-buf" },
             { label: "last result", id: "stat-result" },
@@ -266,7 +266,9 @@ export function mount(root, { setStatus }) {
   void attachRenderer(rendererId, canvas);
   computeClient = getComputeClient();
   computeClient.setMatchPhase(matchActive ? "active" : "intermission");
-  void computeClient.maybeAutoStart();
+  void computeClient.maybeAutoStart().catch(error => {
+    console.warn("[m3t4] optional compute unavailable; playback continues", error);
+  });
 
   running = true;
   const audioToggle = root.querySelector("#spectate-audio");
@@ -640,7 +642,7 @@ async function connectFirebaseFeed() {
 async function connectStaticFeed() {
   if (firebaseFeedStop) return;
   signalState = null;
-  setStat("stat-ws", "live");
+  setStat("stat-ws", "archive");
   statusCb("static feed");
   try {
     const { framesFromActionLog, subscribeStaticMatch } = await matchFeed();
@@ -1110,7 +1112,7 @@ async function refreshLeaderboard({ append = false, reset = false } = {}) {
     renderLeaderboardRows(leaderboardRows);
   } catch (e) {
     if (requestId === leaderboardRequestId && leaderboardRows.length === 0 && leaderboardEl) {
-      leaderboardEl.textContent = `offline — ${e.message}`;
+      leaderboardEl.innerHTML = unavailablePanelHtml("Ranked standings need a connection.", e);
     }
   } finally {
     if (requestId !== leaderboardRequestId) return;
@@ -1189,7 +1191,7 @@ async function refreshBotDirectory({ reset = false } = {}) {
     botRows = reset ? page.rows : [...botRows, ...page.rows];
     renderBotDirectory(botRows, page);
   } catch (e) {
-    botDirectoryEl.textContent = `offline — ${e.message}`;
+    if (botDirectoryEl) botDirectoryEl.innerHTML = unavailablePanelHtml("The fighter directory is unavailable.", e);
   } finally {
     botPageLoading = false;
   }
@@ -1201,7 +1203,7 @@ async function refreshBotEvents() {
     const rows = await (await submitApi()).getPublicBotEvents(10);
     renderBotEvents(rows);
   } catch (e) {
-    botEventsEl.textContent = `offline — ${e.message}`;
+    if (botEventsEl) botEventsEl.innerHTML = unavailablePanelHtml("Fighter updates are unavailable.", e);
   }
 }
 
@@ -1227,6 +1229,12 @@ function renderBotDirectory(rows, page = {}) {
     botMoreBtn.disabled = page.hasMore === false || botPageLoading;
     botMoreBtn.textContent = page.hasMore === false ? "all" : "more";
   }
+}
+
+function unavailablePanelHtml(message, error) {
+  return `<p class="tight">${escapeHtml(message)}</p>` + disclosureHtml({
+    label: "Connection details", body: `<p class="tight">${escapeHtml(error?.message ?? String(error))}</p>`,
+  });
 }
 
 function renderBotEvents(rows) {

@@ -37,6 +37,8 @@
   border-radius: 6px;
   background: var(--ui-paint-rgba-15-23-42-0-34);
 }
+.duel-fighter-slot[data-side="0"] { --slot-accent: var(--ui-blue); }
+.duel-fighter-slot[data-side="1"] { --slot-accent: var(--ui-purple); }
 
 .duel-fighter-head {
   min-width: 0;
@@ -66,7 +68,7 @@
 
 .duel-fighter-kicker {
   grid-row: 1 / span 2;
-  color: var(--ui-red);
+  color: var(--slot-accent);
   font-family: ui-monospace, Menlo, monospace;
   font-size: 11px;
   font-weight: 800;
@@ -188,10 +190,10 @@
 
 .duel-body-option.is-selected,
 .duel-weapon-option.is-selected {
-  border-color: var(--ui-red);
-  background: var(--ui-paint-rgba-239-68-68-0-14);
+  border-color: var(--slot-accent);
+  background: color-mix(in srgb, var(--slot-accent) 14%, var(--ui-surface));
   color: var(--ui-text);
-  box-shadow: 0 0 0 1px var(--ui-paint-rgba-239-68-68-0-18) inset;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--slot-accent) 18%, transparent) inset;
 }
 
 .duel-body-option span:last-child {
@@ -323,7 +325,7 @@
 
 .duel-keys b {
   display: block;
-  color: var(--ui-red);
+  color: var(--ui-accent);
   letter-spacing: 0.06em;
 }
 

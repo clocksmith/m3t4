@@ -1,5 +1,7 @@
 import { defineMode } from "./modes/define-mode.js";
 import { pathToRoute, routeToPath } from "./navigate.js";
+import { panelHtml } from "./ui/shell.js";
+import { linkButtonHtml } from "./ui/actions.js";
 
 export function createPathRouter({
   appEl,
@@ -44,7 +46,10 @@ export function createPathRouter({
 
   function syncNavActive(route) {
     navLinks.forEach((a) => {
-      a.classList.toggle("active", a.dataset.route === route);
+      const active = (a.dataset.routeGroup ?? a.dataset.route ?? "").split(" ").includes(route);
+      a.classList.toggle("active", active);
+      if (active) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
     });
   }
 
@@ -99,8 +104,16 @@ export function createPathRouter({
         if (version !== renderVersion) return;
         console.error(`failed to load route: ${activeName}`, error);
         setStatus(`${activeName} unavailable`);
-        activeName = defaultMode;
-        mode = routeModes[defaultMode];
+        current?.unmount();
+        current = null;
+        currentRoute = null;
+        currentPath = null;
+        syncNavActive(activeName);
+        appEl.innerHTML = panelHtml({ title: "This page could not load", body:
+          `<p>Check your connection, then try again. Your saved fighters are unchanged.</p>`
+          + linkButtonHtml({ href: canonicalPath, text: "Retry", attrs: { "data-native-nav": "true" } }),
+        });
+        return;
       }
     }
     if (version !== renderVersion || !mode) return;
@@ -109,8 +122,7 @@ export function createPathRouter({
     if (
       current &&
       preserveSame.has(activeName) &&
-      currentRoute === activeName &&
-      currentPath === canonicalPath
+      currentRoute === activeName
     ) {
       return;
     }

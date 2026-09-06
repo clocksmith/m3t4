@@ -11,7 +11,7 @@ export function pageHeaderHtml({ title, subtitle = "", action = "", className = 
     </div>`;
 }
 
-export function contextCardHtml({ className = "", kicker = "", strong = "", copy = "", body = "", autoHeight = false }) {
+export function contextCardHtml({ className = "", kicker = "", strong = "", copy = "", body = "", autoHeight = true }) {
   const content = body || `
     <div class="context-card-kicker">${escapeHtml(kicker)}</div>
     <div class="context-card-copy">
@@ -30,4 +30,19 @@ export function panelHtml({ className = "", title = "", body = "" }) {
       ${title ? `<h3>${escapeHtml(title)}</h3>` : ""}
       ${body}
     </section>`;
+}
+
+// Contents are trusted component markup; labels and attributes are escaped.
+export function disclosureHtml({ label, body, className = "", open = false }) {
+  return `<details class="${classNames("ui-disclosure", className)}"${open ? " open" : ""}>
+    <summary>${escapeHtml(label)}</summary><div class="ui-disclosure-body">${body}</div>
+  </details>`;
+}
+
+export function workshopHeaderHtml({ active = "tune", subtitle = "", action = "" } = {}) {
+  return pageHeaderHtml({ title: "Workshop", subtitle, action }) + `
+    <nav class="ui-tabs" aria-label="Workshop">
+      ${[["tune", "Tune & test"], ["roster", "Saved fighters"]].map(([route, label]) =>
+        `<a href="/${route}"${active === route ? ' aria-current="page"' : ""}>${label}</a>`).join("")}
+    </nav>`;
 }

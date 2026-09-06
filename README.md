@@ -155,8 +155,12 @@ docs/         architecture, migration, compute, provisioning notes
 ## Quick start
 
 ```bash
-npm install --workspaces
+npm install
 npm run build
+
+# Browser UI/render checks: serves a local client, blocks external services.
+npx playwright install chromium
+npm run test:ui
 
 # Static match generation for hosting-only mode
 PROJECT=m3ta-ai node scripts/generate-static-matches.cjs --count=500

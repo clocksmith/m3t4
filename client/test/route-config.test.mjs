@@ -11,9 +11,9 @@ import {
 import { MODE_LOADERS, MODES, ROUTE_NAMES } from "../routes.js";
 
 test("route config keeps browser feature gates centralized", () => {
-  assert.equal(DEFAULT_ROUTE, "intro");
+  assert.equal(DEFAULT_ROUTE, "tune");
   assert.equal(LEGACY_HASH.start, "");
-  assert.equal(LEGACY_HASH.intro, "");
+  assert.equal(LEGACY_HASH.intro, "intro");
   assert.equal(LEGACY_HASH.practice, "tune");
   assert.equal(LEGACY_HASH.rules, "about");
   assert.equal(LEGACY_HASH.spectate, "live");
@@ -25,8 +25,8 @@ test("route config keeps browser feature gates centralized", () => {
   assert.equal(DEFAULT_FEATURES.webglRenderer, false);
   assert.equal(featureForRoute("duel"), null);
   assert.equal(featureForRoute("live"), null);
-  assert.deepEqual(Object.keys(MODES), ["intro"]);
-  assert.deepEqual(Object.keys(MODE_LOADERS), ["tune", "live", "roster", "compute", "rules", "about", "duel"]);
+  assert.deepEqual(Object.keys(MODES), []);
+  assert.deepEqual(Object.keys(MODE_LOADERS), ["intro", "tune", "live", "roster", "compute", "rules", "about", "duel"]);
   assert.deepEqual(ROUTE_NAMES, ["intro", "tune", "live", "roster", "compute", "rules", "about", "duel"]);
 });
 
@@ -37,6 +37,10 @@ test("top navigation keeps home on the logo without a start tab", () => {
   assert.doesNotMatch(html, /data-route="roster" data-nav="primary"/);
   assert.doesNotMatch(html, /data-route="compute" data-nav="primary"/);
   assert.match(html, /data-route="duel" data-nav="primary"/);
+  assert.equal((html.match(/data-nav="primary"/g) ?? []).length, 3);
+  assert.match(html, /data-route-group="tune roster"/);
+  assert.match(html, /href="\/intro">the world/);
+  assert.match(html, /href="\/about">how to play/);
   assert.doesNotMatch(html, />start<\/a>/);
   assert.doesNotMatch(html, /id="nav-more"/);
   assert.doesNotMatch(html, />more<\/button>/);

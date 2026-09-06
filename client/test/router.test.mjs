@@ -36,6 +36,57 @@ function createHarness({ pathname = "/", loaders = {}, preserveSameRoutes = [] }
   return { appEl, events, mode, router };
 }
 
+test("lazy default loads directly and home/workshop navigation preserves the editor", async () => {
+  installWindow("/");
+  let mounts = 0;
+  let loads = 0;
+  const router = createPathRouter({ appEl: { innerHTML: "" }, navLinks: [], statusEl: null,
+    modes: {}, defaultMode: "tune", preserveSameRoutes: ["tune"],
+    modeLoaders: { tune: async () => { loads++; return { mount() { mounts++; }, unmount() {} }; } },
+  });
+  await router.render();
+  window.location.pathname = "/tune";
+  await router.render();
+  await router.refreshRoutes();
+  assert.equal(loads, 1);
+  assert.equal(mounts, 1);
+});
+
+test("a failed lazy default has a retry surface and can load on retry", async () => {
+  installWindow("/");
+  const appEl = { innerHTML: "" };
+  const statusEl = { textContent: "" };
+  let loads = 0;
+  let mounts = 0;
+  const router = createPathRouter({ appEl, navLinks: [], statusEl, modes: {}, defaultMode: "tune",
+    modeLoaders: { tune: async () => {
+      if (++loads === 1) throw new Error("test network failure");
+      return { mount() { mounts++; }, unmount() {} };
+    } },
+  });
+  const oldError = console.error;
+  console.error = () => {};
+  try { await router.render(); } finally { console.error = oldError; }
+  assert.match(appEl.innerHTML, /Retry/);
+  assert.equal(statusEl.textContent, "tune unavailable");
+  await router.render();
+  assert.equal(loads, 2);
+  assert.equal(mounts, 1);
+});
+
+test("Workshop navigation remains active on saved fighters", async () => {
+  installWindow("/roster");
+  const attrs = {};
+  const nav = { dataset: { route: "tune", routeGroup: "tune roster" }, classList: { toggle(_name, active) { attrs.active = active; } },
+    setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; } };
+  const router = createPathRouter({ appEl: { innerHTML: "" }, navLinks: [nav], statusEl: null,
+    modes: { roster: { mount() {}, unmount() {} } },
+  });
+  await router.render();
+  assert.equal(attrs.active, true);
+  assert.equal(attrs["aria-current"], "page");
+});
+
 test("landing render does not load route modules or remount on feature refresh", async () => {
   let loads = 0;
   const harness = createHarness({

@@ -17,21 +17,6 @@
 // `window.__M3T4_FIREBASE__` (project config) before this module loads.
 
 import {
-  initializeApp,
-  getApps,
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-import {
-  getFirestore,
-  collection,
-  query,
-  orderBy,
-  limit,
-  onSnapshot,
-  doc,
-  getDoc,
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-
-import {
   framesFromActionLog as simFramesFromActionLog,
   simulateTrace,
   STAGES,
@@ -40,57 +25,56 @@ import {
 
 const FRAME_TICK_MS = 1000 / 120;
 
-let app = null;
-let firestore = null;
-
-function ensureFirebase() {
-  if (firestore) return firestore;
-  const config = window.__M3T4_FIREBASE_CONFIG__ ?? window.__M3T4_FIREBASE__;
-  if (!config) throw new Error("window.__M3T4_FIREBASE__ not set");
-  if (!window.__M3T4_FIREBASE__) window.__M3T4_FIREBASE__ = config;
-  app = getApps()[0] ?? initializeApp(config);
-  firestore = getFirestore(app);
-  return firestore;
+// Firebase is optional for archive playback. Reuse the shared app instance,
+// and keep unsubscribe synchronous even while its SDK is loading.
+async function firestoreContext() {
+  const [{ firebase }, sdk] = await Promise.all([
+    import("./firebase-client.js"),
+    import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"),
+  ]);
+  const context = firebase();
+  if (!context) throw new Error("Firebase is not configured");
+  return { db: context.firestore, sdk };
 }
 
-// Subscribe to the latest match. Calls onMatch when a new match arrives;
-// the returned unsubscribe stops the listener.
-export function subscribeLatestMatch(onMatch) {
-  const fs = ensureFirebase();
-  const q = query(collection(fs, "matches"), orderBy("startedAt", "desc"), limit(1));
-  return onSnapshot(q, (snap) => {
-    snap.docChanges().forEach((change) => {
-      if (change.type === "added" || change.type === "modified") {
-        const data = change.doc.data();
-        if (data && typeof data === "object") onMatch(data);
-      }
-    });
-  });
+function subscribeSnapshot(makeRef, onSnapshotValue, onError = error => console.warn("[match-feed]", error)) {
+  let stopped = false;
+  let unsubscribe = null;
+  void firestoreContext().then(({ db, sdk }) => {
+    if (stopped) return;
+    unsubscribe = sdk.onSnapshot(makeRef(db, sdk), onSnapshotValue, onError);
+  }).catch(error => { if (!stopped) onError(error); });
+  return () => { stopped = true; unsubscribe?.(); };
 }
 
-// Subscribe to the authoritative match-chain head. The Functions match
-// worker writes state/matchChain.latestMatchId after each committed match;
-// mesh spectators use this tiny document as the rendezvous before fetching
-// or receiving the actual match doc.
+export function subscribeLatestMatch(onMatch, onError) {
+  return subscribeSnapshot(
+    (db, sdk) => sdk.query(sdk.collection(db, "matches"), sdk.orderBy("startedAt", "desc"), sdk.limit(1)),
+    snap => {
+      snap.docChanges().forEach(change => {
+        if (change.type === "added" || change.type === "modified") {
+          const data = change.doc.data();
+          if (data && typeof data === "object") onMatch(data);
+        }
+      });
+    }, onError,
+  );
+}
+
 export function subscribeCurrentMatchId(onHead, onError = () => {}) {
-  const fs = ensureFirebase();
-  const ref = doc(fs, "state", "matchChain");
-  return onSnapshot(
-    ref,
-    (snap) => {
+  return subscribeSnapshot(
+    (db, sdk) => sdk.doc(db, "state", "matchChain"),
+    snap => {
       const data = snap.data();
       const matchId = data?.latestMatchId;
-      if (typeof matchId === "string" && matchId) {
-        onHead({ matchId, state: data });
-      }
-    },
-    onError,
+      if (typeof matchId === "string" && matchId) onHead({ matchId, state: data });
+    }, onError,
   );
 }
 
 export async function fetchMatchDoc(matchId) {
-  const fs = ensureFirebase();
-  const snap = await getDoc(doc(fs, "matches", matchId));
+  const { db, sdk } = await firestoreContext();
+  const snap = await sdk.getDoc(sdk.doc(db, "matches", matchId));
   return snap.exists() ? snap.data() : null;
 }
 

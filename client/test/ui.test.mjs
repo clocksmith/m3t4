@@ -91,7 +91,8 @@ test("pageHeaderHtml preserves standard page chrome classes", () => {
 
 test("contextCardHtml and statListHtml render stable shared structures", () => {
   const card = contextCardHtml({ className: "x", kicker: "k", strong: "s", copy: "c" });
-  assert.match(card, /context-card x/);
+  assert.match(card, /context-card context-card--auto x/);
+  assert.doesNotMatch(contextCardHtml({ autoHeight: false }), /context-card--auto/);
   assert.match(card, /context-card-kicker/);
   assert.match(card, /context-card-copy/);
 
@@ -106,7 +107,7 @@ test("contextCardHtml and statListHtml render stable shared structures", () => {
 });
 
 test("routeToUrl and navigateTo preserve target search and hash", () => {
-  assert.equal(routeToPath("intro"), "/");
+  assert.equal(routeToPath("intro"), "/intro");
   assert.equal(routeToUrl("live", { search: "?match=abc", hash: "#proof" }), "/live?match=abc#proof");
   assert.equal(routeToUrl("/", { search: "view=full", hash: "top" }), "/?view=full#top");
 

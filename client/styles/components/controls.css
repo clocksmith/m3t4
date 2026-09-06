@@ -7,7 +7,8 @@ textarea,
   background: var(--ui-surface-2);
   color: var(--ui-text);
   border: 1px solid var(--ui-border);
-  border-radius: 0;
+  border-radius: var(--ui-radius);
+  min-height: var(--ui-control-height);
   padding: 6px 10px;
   font-family: inherit;
   font-size: 13px;
@@ -122,4 +123,102 @@ textarea {
   font-family: ui-monospace, Menlo, monospace;
   font-size: 11px;
   line-height: 1.4;
+}
+
+/* Shared trait editor: Workshop and saved fighters. */
+.knob {
+  display: grid;
+  grid-template-columns: minmax(90px, 120px) 1fr 48px;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px dotted var(--ui-border);
+}
+
+@media (max-width: 640px) {
+  .knob {
+    grid-template-columns: 1fr 48px;
+  }
+  .knob-val {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .knob input[type="range"] {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+.knob:last-child {
+  border-bottom: none;
+}
+
+.knob-name {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+}
+
+.knob-desc {
+  font-size: 10px;
+  color: var(--ui-text-subtle);
+  display: block;
+  margin-top: 2px;
+}
+
+.knob-val {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  color: var(--slot-accent, var(--ui-blue));
+  text-align: right;
+  font-weight: 700;
+}
+
+/* Themed range input. Inactive track matches surface-code (dark),
+ * filled portion is blue. Cross-browser approach: draw the track as a
+ * linear-gradient on the input itself (Chrome/Safari don't expose a
+ * ::progress pseudo), driven by a --fill custom property that JS sets
+ * per slider based on its value.
+ */
+input[type="range"] {
+  --fill: 0%;
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  height: 6px;
+  padding: 0;
+  margin: 0;
+  border-radius: 3px;
+  border: 1px solid var(--ui-border);
+  background:
+    linear-gradient(
+      to right,
+      var(--ui-blue) 0%,
+      var(--ui-blue) var(--fill),
+      var(--ui-surface-code) var(--fill),
+      var(--ui-surface-code) 100%
+    );
+  cursor: pointer;
+
+}
+input[type="range"]::-webkit-slider-runnable-track { height: 6px; background: transparent; border: none; }
+input[type="range"]::-moz-range-track            { height: 6px; background: transparent; border: none; }
+/* Firefox progress portion renders natively — keep it aligned. */
+input[type="range"]::-moz-range-progress         { height: 6px; background: var(--ui-blue); border-radius: 3px; }
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--ui-blue);
+  border: 2px solid var(--ui-blue-ink);
+  border-radius: 50%;
+  margin-top: -5px;
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: var(--ui-blue);
+  border: 2px solid var(--ui-blue-ink);
+  border-radius: 50%;
+  cursor: pointer;
 }

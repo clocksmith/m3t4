@@ -54,9 +54,19 @@ async function checkSubscriptionContract() {
       const cancelled = feed.subscribeCurrentMatchId(() => cancelledCalls++);
       cancelled();
       const heads = [], matches = [], failures = [];
-      const stopHead = feed.subscribeCurrentMatchId(row => heads.push(row), error => failures.push(String(error)));
-      const stopMatch = feed.subscribeLatestMatch(row => matches.push(row), error => failures.push(String(error)));
+      let readyHead, readyMatch;
+      const headReady = new Promise(resolve => { readyHead = resolve; });
+      const matchReady = new Promise(resolve => { readyMatch = resolve; });
+      const stopHead = feed.subscribeCurrentMatchId(row => { heads.push(row); readyHead(); }, error => { failures.push(String(error)); readyHead(); });
+      const stopMatch = feed.subscribeLatestMatch(row => { matches.push(row); readyMatch(); }, error => { failures.push(String(error)); readyMatch(); });
       const doc = await feed.fetchMatchDoc("fixture");
+      let timeout;
+      try {
+        await Promise.race([
+          Promise.all([headReady, matchReady]),
+          new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error("Subscription fixture did not become ready")), 5000); }),
+        ]);
+      } finally { clearTimeout(timeout); }
       stopHead();
       stopMatch();
       return { cancelledCalls, heads, matches, doc, failures, starts: window.fixtureStarts, stops: window.fixtureStops };

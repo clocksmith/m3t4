@@ -137,6 +137,11 @@ try {
         if (img.src?.endsWith("/sprite.png")) window.uiSmokeSpriteDraws = (window.uiSmokeSpriteDraws || 0) + 1;
         return nativeDraw.call(this, img, ...args);
       };
+      const nativeText = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (text, x, y, ...args) {
+        if (y === 38 && (x === 112 || x === 1168) && this.measureText(text).width > 344) window.uiSmokeHudOverflow = true;
+        return nativeText.call(this, text, x, y, ...args);
+      };
     });
     const errors = [], badAssets = [], requests = [];
     page.on("console", msg => { if (msg.type() === "error" && msg.text().includes("failed to load route")) console.error(msg.text()); });
@@ -194,6 +199,7 @@ try {
         assert.match(await page.locator(".page-subtitle").textContent(), /archive/);
         await page.waitForFunction(() => document.querySelector("#stat-p1")?.textContent?.startsWith("@"));
         await page.waitForFunction(() => window.uiSmokeSpriteDraws > 4);
+        assert.equal(await page.evaluate(() => Boolean(window.uiSmokeHudOverflow)), false, "fighter labels must not overlap the timer");
         assert.equal(requests.some(url => url.endsWith("/lib/firebase-compute.js")), false, "watching without opt-in must not load compute");
       }
       if (route === "/duel") {

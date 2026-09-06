@@ -828,7 +828,7 @@ function drawFighterNameplates(ctx, frame, labels) {
 
 function drawFighterNameplate(ctx, fighter, side, frame, labels) {
   if (!fighter) return;
-  const text = fighterNameplateText(labels, side);
+  let text = fighterNameplateText(labels, side);
   if (!text) return;
 
   const carrying = frame?.token?.carrier === side;
@@ -838,6 +838,7 @@ function drawFighterNameplate(ctx, fighter, side, frame, labels) {
 
   ctx.save();
   ctx.font = "700 12px ui-monospace, Menlo, monospace";
+  text = fitCanvasText(ctx, text, 144);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   const maxWidth = 160;
@@ -867,6 +868,15 @@ function normalizeNameplateText(value) {
   const withoutBracket = raw.replace(/\s*\[[^\]]*\]\s*$/u, "");
   const trimmed = withoutBracket.replace(/\s*·.*$/u, "");
   return trimmed.length > 18 ? `${trimmed.slice(0, 17)}…` : trimmed;
+}
+
+export function fitCanvasText(ctx, value, maxWidth) {
+  const text = String(value ?? "");
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  if (ctx.measureText("…").width > maxWidth) return "";
+  const chars = Array.from(text);
+  while (chars.length && ctx.measureText(chars.join("") + "…").width > maxWidth) chars.pop();
+  return chars.join("") + "…";
 }
 
 function drawWeaponSprite(ctx, side, bx, by, tx, ty, active) {
@@ -974,12 +984,14 @@ function drawHUD(ctx, frame, labels, p1Color, p2Color) {
   drawRoundHud(ctx, frame);
 
   ctx.font = "700 20px monospace";
+  // Reserve the central round/timer panel. Long handles must not paint over it.
+  const nameWidth = W / 2 - 168 - 112 - 16;
   ctx.fillStyle = p1Color;
   ctx.textAlign = "left";
-  ctx.fillText(L.p1 || "P1", 112, 38);
+  ctx.fillText(fitCanvasText(ctx, L.p1 || "P1", nameWidth), 112, 38);
   ctx.fillStyle = p2Color;
   ctx.textAlign = "right";
-  ctx.fillText(L.p2 || "P2", W - 112, 38);
+  ctx.fillText(fitCanvasText(ctx, L.p2 || "P2", nameWidth), W - 112, 38);
 
   ctx.font = "700 44px monospace";
   ctx.fillStyle = cssColor("--arena-hud-text", "white");

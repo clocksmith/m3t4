@@ -16,13 +16,17 @@ These instructions apply to the whole `m3t4` repo unless a nested
 - Related cross-repo contracts and strategy live in `../plasma` and
   `../ouroboros`.
 
-## Git Discipline
+## Git workflow: direct to main
 
-- Work on `main`.
-- Pull before pushing if the remote moved.
-- Commit and push directly to `main` when the user asks to keep going or ship.
-- Do not create branches or GitHub PRs unless explicitly asked.
-- Stage only files that belong to the task.
+- Work and commit directly on the owning repository's `main` branch, then push
+  directly to its existing `origin/main` remote branch.
+- Do not create feature/task branches, branch-backed worktrees, or GitHub pull
+  requests. Do not use a branch/PR workflow unless the user explicitly requests it.
+- If the checkout is on another branch, preserve its work and move the task to
+  `main` safely; never discard changes to switch branches.
+- Stage only task-related changes, run the applicable checks, and integrate remote
+  updates without overwriting unrelated work. Never force-push `main`.
+- Report the pushed commit or the concrete blocker. A local commit is not a push.
 - Never revert unrelated dirty files. Current art/render/theme work is often
   dirty during generation passes.
 - Keep commits narrow and named for the behavior or status change.
@@ -31,8 +35,8 @@ These instructions apply to the whole `m3t4` repo unless a nested
 
 - Treat dirty assets, generated sprites, render experiments, and theme status
   files as user-owned unless the task specifically targets them.
-- Before deploys, prefer a clean temporary worktree so unrelated local files do
-  not ship accidentally.
+- Before deploys, prefer a clean temporary detached worktree so unrelated local
+  files do not ship accidentally.
 - `client/config.js` is tracked public deploy config. Do not put secrets in it.
 
 ## Verification Commands
@@ -105,7 +109,7 @@ the user explicitly asks for a controlled public window.
 - Use `PROVISIONING.md` as the deployment runbook.
 - Firebase Hosting has predeploy checks for content and client sim sync.
 - For a clean Hosting deploy while the worktree has unrelated dirt:
-  1. create a temporary worktree at `HEAD`
+  1. create a temporary detached worktree at `HEAD` (`git worktree add --detach`)
   2. link or install dependencies
   3. run `npm -w sim run build`
   4. run `firebase deploy --only hosting --project m3ta-ai`

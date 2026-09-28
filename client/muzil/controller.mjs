@@ -9,6 +9,7 @@ export class LocalController {
     const { dr } = await import('../vendor/doppler/src/index.js');
     const source = this.source || (this.model === MODEL ? { url: new URL('/vendor/doppler/models/muzil-gemma-1b', location.href).href } : this.model);
     this.session = await dr.open(source, { cache: !this.source && this.model === MODEL ? 'opfs' : false, onProgress: event => { this.status = event.message || event.stage || 'Loading model'; onProgress(this.status); } });
+    this.model = this.session.modelId;
     this.status = 'Ready'; onProgress(this.status);
   }
   async generate(job, signal) {
@@ -18,7 +19,9 @@ export class LocalController {
     let settled; this.settlement = new Promise(resolve => { settled = resolve; });
     try {
       const prompt = job.kind === 'action' ? actionPrompt(job, { format: 'json' }) : replyPrompt(job);
-      const options = { maxTokens: 160, temperature: 0, signal };
+      const options = { maxTokens: 160, temperature: 0, topK: 0, topP: 1,
+        repetitionPenalty: 1, repetitionPenaltyWindow: 0, presencePenalty: 0,
+        useChatTemplate: true, signal };
       if (job.kind === 'action') {
         const url = new URL('../vendor/doppler/src/inference/pipelines/structured/json-grammar-mask.js', import.meta.url);
         const { createJsonGrammarMask } = await import(url.href);
@@ -32,7 +35,7 @@ export class LocalController {
         options.logitMaskIdentity = this.grammarIdentity;
       }
       const result = await this.session.generate([{ role: 'user', content: prompt }], options);
-      return { binding: job.binding ? structuredClone(job.binding) : null, text: result.text ?? result.outputText ?? result.content ?? '', model: this.model, provider: 'doppler', execution: { modelId: this.session.modelId, manifestHash: this.session.manifestHash, resolvedExecutionId: result.resolution?.resolvedExecutionId || null } };
+      return { binding: job.binding ? structuredClone(job.binding) : null, text: result.text ?? result.outputText ?? result.content ?? '', model: this.session.modelId, provider: 'doppler', execution: { modelId: this.session.modelId, manifestHash: this.session.manifestHash, resolvedExecutionId: result.resolution?.resolvedExecutionId || null } };
     } finally { this.busy = false; settled(); }
   }
   async close() { this.draining = true; await this.settlement; try { await this.session?.close(); this.session = null; this.grammarIdentity = null; this.status = 'Not loaded'; } finally { this.draining = false; } }
@@ -40,18 +43,20 @@ export class LocalController {
 export function actionPrompt(job, { format = 'command' } = {}) {
   const { observation, memory = [], profile = {}, history = [] } = job;
   const seen = [...new Set(memory.flatMap(o => o.text || []))].filter(t => t && !observation.text.includes(t)).slice(-16);
-  const examples = (profile.examples || []).filter(e => e.observation).slice(-8)
-    .map(e => ({ app: e.observation.screen, action: e.action }));
+  const examples = (profile.examples || []).filter(e => e.observation?.screen?.app === observation.screen.app
+    && e.observation.screen.contact === observation.screen.contact
+    && observation.actions.some(a => a.type === e.action?.type && a.target === e.action.target)).slice(-8)
+    .map(e => ({ app: e.observation.screen, visible: e.observation.text || [], action: e.action }));
   const legal = observation.actions.map(a => ({ type:a.type, target:a.target, label:a.label,
     ...(a.type === 'type' ? { value:'YOUR TEXT HERE' } : {}) }));
   return `You control a phone. Choose one next action to complete the intention you saw.
 Read memory before opening another app. If you already know a requested fact, use it instead of looking it up again. To reply, open Messages, select the contact, type the answer, then send it. Use the CURRENT appointment end time, not its start time or a demonstration time.
 ${profile.objective === 'imitate' ? 'Imitate the demonstrated habits, including detours.' : 'Complete the task accurately. Use facts already seen. Avoid repeating actions that did not help.'}
-Memory of visible information: ${seen.join(' | ').slice(0,2400)}
+${examples.length ? 'Earlier demonstrations from other rounds (their facts are not current): ' + JSON.stringify(examples) + '\n' : ''}Memory of visible information: ${seen.join(' | ').slice(0,2400)}
 Recent actions: ${JSON.stringify(history.slice(-8))}
 Current app: ${observation.screen.app}${observation.screen.contact ? '/' + observation.screen.contact : ''}
 Visible information: ${observation.text.join(' | ')}
-${examples.length ? 'Your demonstrations from a DIFFERENT round. Learn the behavior; use CURRENT times and facts: ' + JSON.stringify(examples) + '\n' : ''}Available controls:\n${format === 'json' ? JSON.stringify(legal) : observation.actions.map(a => a.type + ' ' + a.target + (a.type === 'type' ? ' = TEXT' : '') + ' (' + a.label + ')').join('\n')}
+Available controls:\n${format === 'json' ? JSON.stringify(legal) : observation.actions.map(a => a.type + ' ' + a.target + (a.type === 'type' ? ' = TEXT' : '') + ' (' + a.label + ')').join('\n')}
 ${format === 'json' ? 'Return one JSON action with type and target. For typing include value containing your actual message.' : 'Output only one command: tap TARGET or type TARGET = TEXT. Copy TARGET exactly from a listed control. For typing, TEXT is the actual message. Do not quote a tap target.'} No explanation.\nNext action:`;
 }
 export function replyPrompt(job) {

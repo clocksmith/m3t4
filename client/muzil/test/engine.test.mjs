@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { createPhone, applyAction, observe, advance, makeReplay, replay } from '../engine.mjs';
 import { SCENARIOS } from '../scenarios.mjs';
 import { LocalController, parseDecision, actionPrompt } from '../controller.mjs';
@@ -50,17 +51,39 @@ test('unseen variation needs its own appointment time', () => {
 test('model action parsing fails closed and personalization actually enters the request', () => {
   const o = observe(start()); assert.throws(()=>parseDecision('{"type":"tap","target":"win"}',o),/unavailable/);
   const action = parseDecision('{"type":"tap","target":"app:calendar"}',o); assert.equal(action.target,'app:calendar');
-  const prompt = actionPrompt({observation:o,profile:{objective:'imitate',examples:[{action:{type:'tap',target:'app:notes'}}]}});
-  assert.match(prompt,/Imitate/); assert.match(prompt,/app:notes/);
+  const current = observe(tap(tap(createPhone({roundId:'prompt-variation',scenario:SCENARIOS[1]}),'start'),'app:calendar'));
+  const prompt = actionPrompt({observation:current,profile:{objective:'imitate',examples:[{
+    observation:{screen:{app:'calendar'},text:['Dentist ends at 5:40 PM']},action:{type:'tap',target:'home'},
+  }, { observation:{screen:{app:'messages',contact:'mom'},text:['Unrelated old conversation']},
+    action:{type:'type',target:'reply',value:'5:40 PM'},
+  }]}});
+  assert.match(prompt,/Imitate/); assert.match(prompt,/Dentist ends at 5:40 PM/);
+  assert.doesNotMatch(prompt,/Unrelated old conversation/);
+  assert.ok(prompt.indexOf('Dentist ends at 5:40 PM') < prompt.indexOf('Visible information:'));
+  assert.match(prompt,/3:15 PM/);
 });
 
 test('draining waits for active inference and refuses new work before unloading weights', async () => {
   const local = new LocalController(); let finish, closed = false;
-  local.session = { generate: () => new Promise(resolve => { finish = resolve; }), close: async () => { closed = true; } };
+  local.session = { modelId: 'loaded-candidate', generate: () => new Promise(resolve => { finish = resolve; }), close: async () => { closed = true; } };
   const generation = local.generate({kind:'reply',message:'When?',context:'5:40 PM'});
   const closing = local.close();
   assert.equal(closed,false);
   await assert.rejects(local.generate({kind:'reply',message:'Another?',context:'Later'}),/busy/);
-  finish({outputText:'5:40 PM'}); await generation; await closing;
+  finish({outputText:'5:40 PM'}); const result = await generation; await closing;
+  assert.equal(result.model, 'loaded-candidate'); assert.equal(result.execution.modelId, result.model);
   assert.equal(closed,true); assert.equal(local.session,null);
+});
+
+test('local and distributed controllers use the same explicit sampling policy', async () => {
+  const policy = JSON.parse(await readFile(new URL('../mesh-policy.json', import.meta.url)));
+  const local = new LocalController(); let options;
+  local.session = { modelId: 'sampling-fixture', generate: async (_messages, actual) => {
+    options = actual; return { outputText: '3:15 PM' };
+  } };
+  await local.generate({ kind: 'reply', message: 'When?', context: '3:15 PM' });
+  for (const key of ['temperature', 'topK', 'topP', 'repetitionPenalty',
+    'repetitionPenaltyWindow', 'presencePenalty', 'useChatTemplate']) {
+    assert.equal(options[key], policy.model.generation[key], key);
+  }
 });

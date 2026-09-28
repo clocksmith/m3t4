@@ -1,0 +1,3667 @@
+{
+  "date": "2026-09-28",
+  "scope": "Candidate qualification, not distributed execution acceptance. The current controller and fixed lesson fixture are evaluated on a different appointment scenario. Original Qwen checkpoint comparison uses greedy unmasked generation. Timings are local execution measurements, not public download measurements.",
+  "controllerSha256": "e2e8a6545d2791da9db751a329d75b0e8531fa4c094d7c85c2ffb244b597476e",
+  "runtimeSources": {
+    "schema": "muzil.local-runtimes/v1",
+    "libraries": {
+      "reploid": {
+        "revision": "5b2483d6d9ab7a42075f00e9eb941dd400801656",
+        "sourceDirty": false,
+        "entry": "packages/reploid/src/transport/assignment.js",
+        "files": 24,
+        "digest": "5f5fe5a263e81c71b81179e1eb3cb5493d7693af630e307871491f8ec3b84b1b"
+      },
+      "doppler": {
+        "revision": "7e7237c3c064b7ca8aadc35701180d646b8f42d2",
+        "sourceDirty": false,
+        "entry": "src/index.js",
+        "files": 1707,
+        "digest": "adc8cb97b0735e059108c92f8de421b78127e22f72fdf23791ac5c2f8ebda0f8"
+      }
+    }
+  },
+  "qwenReference": {
+    "source": {
+      "repository": "Qwen/Qwen3-1.7B",
+      "revision": "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e",
+      "precision": "Original BF16 checkpoint expanded to F32, eager PyTorch CPU"
+    },
+    "doppler": {
+      "precision": "F16 weights, F32 activations, Intel browser WebGPU",
+      "manifestSha256": "9107aca5e3bed6719b27d61983e9946392e306b442fcd9bef196f415476f4724"
+    },
+    "sampling": {
+      "temperature": 0,
+      "topK": 0,
+      "topP": 1,
+      "repetitionPenalty": 1,
+      "repetitionPenaltyWindow": 0,
+      "presencePenalty": 0
+    },
+    "checks": [
+      {
+        "name": "arithmetic",
+        "prompt": "What is 2 + 2? Answer with one number.",
+        "inputIds": [
+          151644,
+          872,
+          198,
+          3838,
+          374,
+          220,
+          17,
+          488,
+          220,
+          17,
+          30,
+          21806,
+          448,
+          825,
+          1372,
+          13,
+          151645,
+          198,
+          151644,
+          77091,
+          198,
+          151667,
+          271,
+          151668,
+          271
+        ],
+        "outputIds": [
+          19,
+          151645
+        ],
+        "referenceOutputIds": [
+          19,
+          151645
+        ],
+        "text": "4",
+        "referenceText": "4",
+        "inputIdsEqual": true,
+        "outputIdsEqual": true
+      },
+      {
+        "name": "baseline",
+        "prompt": "You control a phone. Choose one next action to complete the intention you saw.\nRead memory before opening another app. If you already know a requested fact, use it instead of looking it up again. To reply, open Messages, select the contact, type the answer, then send it. Use the CURRENT appointment end time, not its start time or a demonstration time.\nComplete the task accurately. Use facts already seen. Avoid repeating actions that did not help.\nMemory of visible information: \nRecent actions: [{\"type\":\"tap\",\"target\":\"start\"}]\nCurrent app: home\nVisible information: Tell Mom what time to pick you up after your appointment. | Tuesday, September 29 | Up next: Eye appointment, 2:20 PM\nAvailable controls:\n[{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"},{\"type\":\"tap\",\"target\":\"back\",\"label\":\"Back\"},{\"type\":\"tap\",\"target\":\"switcher\",\"label\":\"App switcher\"},{\"type\":\"tap\",\"target\":\"notifications\",\"label\":\"Notifications\"},{\"type\":\"tap\",\"target\":\"recall\",\"label\":\"Remember intention\"},{\"type\":\"tap\",\"target\":\"app:messages\",\"label\":\"Messages\"},{\"type\":\"tap\",\"target\":\"app:calendar\",\"label\":\"Calendar\"},{\"type\":\"tap\",\"target\":\"app:clock\",\"label\":\"Clock\"},{\"type\":\"tap\",\"target\":\"app:notes\",\"label\":\"Notes\"},{\"type\":\"tap\",\"target\":\"app:feed\",\"label\":\"Loop\"},{\"type\":\"tap\",\"target\":\"app:contacts\",\"label\":\"Contacts\"}]\nReturn one JSON action with type and target. For typing include value containing your actual message. No explanation.\nNext action:",
+        "inputIds": [
+          151644,
+          872,
+          198,
+          2610,
+          2524,
+          264,
+          4540,
+          13,
+          22201,
+          825,
+          1790,
+          1917,
+          311,
+          4583,
+          279,
+          14602,
+          498,
+          5485,
+          624,
+          4418,
+          4938,
+          1573,
+          8568,
+          2441,
+          906,
+          13,
+          1416,
+          498,
+          2669,
+          1414,
+          264,
+          11223,
+          2097,
+          11,
+          990,
+          432,
+          4518,
+          315,
+          3330,
+          432,
+          705,
+          1549,
+          13,
+          2014,
+          9851,
+          11,
+          1787,
+          26729,
+          11,
+          3293,
+          279,
+          3645,
+          11,
+          943,
+          279,
+          4226,
+          11,
+          1221,
+          3624,
+          432,
+          13,
+          5443,
+          279,
+          43107,
+          17635,
+          835,
+          882,
+          11,
+          537,
+          1181,
+          1191,
+          882,
+          476,
+          264,
+          29716,
+          882,
+          624,
+          12548,
+          279,
+          3383,
+          29257,
+          13,
+          5443,
+          13064,
+          2669,
+          3884,
+          13,
+          34006,
+          39816,
+          6168,
+          429,
+          1521,
+          537,
+          1492,
+          624,
+          10642,
+          315,
+          9434,
+          1995,
+          25,
+          715,
+          25140,
+          6168,
+          25,
+          61753,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          2468,
+          9207,
+          921,
+          5405,
+          906,
+          25,
+          2114,
+          198,
+          5715,
+          1995,
+          25,
+          24647,
+          22180,
+          1128,
+          882,
+          311,
+          3735,
+          498,
+          705,
+          1283,
+          697,
+          17635,
+          13,
+          760,
+          7589,
+          11,
+          6122,
+          220,
+          17,
+          24,
+          760,
+          3138,
+          1790,
+          25,
+          27829,
+          17635,
+          11,
+          220,
+          17,
+          25,
+          17,
+          15,
+          5851,
+          198,
+          16485,
+          11574,
+          510,
+          58,
+          4913,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          5117,
+          2198,
+          1502,
+          3252,
+          7623,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          1419,
+          2198,
+          1502,
+          3252,
+          3707,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          17338,
+          261,
+          2198,
+          1502,
+          3252,
+          2164,
+          3398,
+          261,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          38188,
+          2198,
+          1502,
+          3252,
+          34736,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          93828,
+          2198,
+          1502,
+          3252,
+          28590,
+          14602,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          676,
+          25,
+          16325,
+          2198,
+          1502,
+          3252,
+          15820,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          676,
+          25,
+          26258,
+          2198,
+          1502,
+          3252,
+          19882,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          676,
+          25,
+          20666,
+          2198,
+          1502,
+          3252,
+          26104,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          676,
+          25,
+          18286,
+          2198,
+          1502,
+          3252,
+          21667,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          676,
+          25,
+          11184,
+          2198,
+          1502,
+          3252,
+          14620,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          676,
+          25,
+          29063,
+          2198,
+          1502,
+          3252,
+          36784,
+          9207,
+          921,
+          5598,
+          825,
+          4718,
+          1917,
+          448,
+          943,
+          323,
+          2169,
+          13,
+          1752,
+          19496,
+          2924,
+          897,
+          8482,
+          697,
+          5042,
+          1943,
+          13,
+          2308,
+          16148,
+          624,
+          5847,
+          1917,
+          25,
+          151645,
+          198,
+          151644,
+          77091,
+          198,
+          151667,
+          271,
+          151668,
+          271
+        ],
+        "outputIds": [
+          4913,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          676,
+          25,
+          16325,
+          2198,
+          1502,
+          3252,
+          15820,
+          9207,
+          151645
+        ],
+        "referenceOutputIds": [
+          4913,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          676,
+          25,
+          16325,
+          2198,
+          1502,
+          3252,
+          15820,
+          9207,
+          151645
+        ],
+        "text": "{\"type\":\"tap\",\"target\":\"app:messages\",\"label\":\"Messages\"}",
+        "referenceText": "{\"type\":\"tap\",\"target\":\"app:messages\",\"label\":\"Messages\"}",
+        "inputIdsEqual": true,
+        "outputIdsEqual": true
+      },
+      {
+        "name": "trained",
+        "prompt": "You control a phone. Choose one next action to complete the intention you saw.\nRead memory before opening another app. If you already know a requested fact, use it instead of looking it up again. To reply, open Messages, select the contact, type the answer, then send it. Use the CURRENT appointment end time, not its start time or a demonstration time.\nComplete the task accurately. Use facts already seen. Avoid repeating actions that did not help.\nMemory of visible information: \nRecent actions: [{\"type\":\"tap\",\"target\":\"start\"}]\nCurrent app: home\nVisible information: Tell Mom what time to pick you up after your appointment. | Tuesday, September 29 | Up next: Eye appointment, 2:20 PM\nYour demonstrations from a DIFFERENT round. Learn the behavior; use CURRENT times and facts: [{\"app\":{\"app\":\"home\"},\"visible\":[\"Tell Mom what time to pick you up after your appointment.\",\"Monday, September 28\",\"Up next: Dentist, 4:50 PM\"],\"action\":{\"type\":\"tap\",\"target\":\"app:calendar\"}},{\"app\":{\"app\":\"calendar\"},\"visible\":[\"Tell Mom what time to pick you up after your appointment.\",\"Monday, September 28\",\"Dentist: 4:50 PM–5:40 PM\",\"Appointment moved. Use the updated finish time.\"],\"action\":{\"type\":\"tap\",\"target\":\"home\"}},{\"app\":{\"app\":\"home\"},\"visible\":[\"Tell Mom what time to pick you up after your appointment.\",\"Monday, September 28\",\"Up next: Dentist, 4:50 PM\"],\"action\":{\"type\":\"tap\",\"target\":\"app:messages\"}},{\"app\":{\"app\":\"messages\"},\"visible\":[\"Tell Mom what time to pick you up after your appointment.\",\"mom: What time should I pick you up? Outside the dentist, right?\",\"group: Would you rather fight one horse-sized duck or finish your errands?\"],\"action\":{\"type\":\"tap\",\"target\":\"contact:mom\"}},{\"app\":{\"app\":\"messages\",\"contact\":\"mom\"},\"visible\":[\"Tell Mom what time to pick you up after your appointment.\",\"mom: What time should I pick you up? Outside the dentist, right?\",\"Draft: \"],\"action\":{\"type\":\"type\",\"target\":\"reply\",\"value\":\"Pick me up at 5:40 PM.\"}},{\"app\":{\"app\":\"messages\",\"contact\":\"mom\"},\"visible\":[\"Tell Mom what time to pick you up after your appointment.\",\"mom: What time should I pick you up? Outside the dentist, right?\",\"Draft: Pick me up at 5:40 PM.\"],\"action\":{\"type\":\"tap\",\"target\":\"send\"}}]\nAvailable controls:\n[{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"},{\"type\":\"tap\",\"target\":\"back\",\"label\":\"Back\"},{\"type\":\"tap\",\"target\":\"switcher\",\"label\":\"App switcher\"},{\"type\":\"tap\",\"target\":\"notifications\",\"label\":\"Notifications\"},{\"type\":\"tap\",\"target\":\"recall\",\"label\":\"Remember intention\"},{\"type\":\"tap\",\"target\":\"app:messages\",\"label\":\"Messages\"},{\"type\":\"tap\",\"target\":\"app:calendar\",\"label\":\"Calendar\"},{\"type\":\"tap\",\"target\":\"app:clock\",\"label\":\"Clock\"},{\"type\":\"tap\",\"target\":\"app:notes\",\"label\":\"Notes\"},{\"type\":\"tap\",\"target\":\"app:feed\",\"label\":\"Loop\"},{\"type\":\"tap\",\"target\":\"app:contacts\",\"label\":\"Contacts\"}]\nReturn one JSON action with type and target. For typing include value containing your actual message. No explanation.\nNext action:",
+        "inputIds": [
+          151644,
+          872,
+          198,
+          2610,
+          2524,
+          264,
+          4540,
+          13,
+          22201,
+          825,
+          1790,
+          1917,
+          311,
+          4583,
+          279,
+          14602,
+          498,
+          5485,
+          624,
+          4418,
+          4938,
+          1573,
+          8568,
+          2441,
+          906,
+          13,
+          1416,
+          498,
+          2669,
+          1414,
+          264,
+          11223,
+          2097,
+          11,
+          990,
+          432,
+          4518,
+          315,
+          3330,
+          432,
+          705,
+          1549,
+          13,
+          2014,
+          9851,
+          11,
+          1787,
+          26729,
+          11,
+          3293,
+          279,
+          3645,
+          11,
+          943,
+          279,
+          4226,
+          11,
+          1221,
+          3624,
+          432,
+          13,
+          5443,
+          279,
+          43107,
+          17635,
+          835,
+          882,
+          11,
+          537,
+          1181,
+          1191,
+          882,
+          476,
+          264,
+          29716,
+          882,
+          624,
+          12548,
+          279,
+          3383,
+          29257,
+          13,
+          5443,
+          13064,
+          2669,
+          3884,
+          13,
+          34006,
+          39816,
+          6168,
+          429,
+          1521,
+          537,
+          1492,
+          624,
+          10642,
+          315,
+          9434,
+          1995,
+          25,
+          715,
+          25140,
+          6168,
+          25,
+          61753,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          2468,
+          9207,
+          921,
+          5405,
+          906,
+          25,
+          2114,
+          198,
+          5715,
+          1995,
+          25,
+          24647,
+          22180,
+          1128,
+          882,
+          311,
+          3735,
+          498,
+          705,
+          1283,
+          697,
+          17635,
+          13,
+          760,
+          7589,
+          11,
+          6122,
+          220,
+          17,
+          24,
+          760,
+          3138,
+          1790,
+          25,
+          27829,
+          17635,
+          11,
+          220,
+          17,
+          25,
+          17,
+          15,
+          5851,
+          198,
+          7771,
+          43795,
+          504,
+          264,
+          68549,
+          640,
+          1825,
+          4778,
+          13,
+          14934,
+          279,
+          7709,
+          26,
+          990,
+          43107,
+          3039,
+          323,
+          13064,
+          25,
+          61753,
+          676,
+          22317,
+          676,
+          3252,
+          5117,
+          58640,
+          12601,
+          36799,
+          40451,
+          22180,
+          1128,
+          882,
+          311,
+          3735,
+          498,
+          705,
+          1283,
+          697,
+          17635,
+          47891,
+          35239,
+          11,
+          6122,
+          220,
+          17,
+          23,
+          2198,
+          2324,
+          1790,
+          25,
+          42811,
+          380,
+          11,
+          220,
+          19,
+          25,
+          20,
+          15,
+          5851,
+          68882,
+          1311,
+          22317,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          676,
+          25,
+          26258,
+          9207,
+          36828,
+          676,
+          22317,
+          676,
+          3252,
+          26258,
+          58640,
+          12601,
+          36799,
+          40451,
+          22180,
+          1128,
+          882,
+          311,
+          3735,
+          498,
+          705,
+          1283,
+          697,
+          17635,
+          47891,
+          35239,
+          11,
+          6122,
+          220,
+          17,
+          23,
+          2198,
+          35,
+          306,
+          380,
+          25,
+          220,
+          19,
+          25,
+          20,
+          15,
+          5851,
+          4142,
+          20,
+          25,
+          19,
+          15,
+          5851,
+          2198,
+          69535,
+          7726,
+          13,
+          5443,
+          279,
+          6049,
+          6248,
+          882,
+          1189,
+          28503,
+          1311,
+          22317,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          5117,
+          9207,
+          36828,
+          676,
+          22317,
+          676,
+          3252,
+          5117,
+          58640,
+          12601,
+          36799,
+          40451,
+          22180,
+          1128,
+          882,
+          311,
+          3735,
+          498,
+          705,
+          1283,
+          697,
+          17635,
+          47891,
+          35239,
+          11,
+          6122,
+          220,
+          17,
+          23,
+          2198,
+          2324,
+          1790,
+          25,
+          42811,
+          380,
+          11,
+          220,
+          19,
+          25,
+          20,
+          15,
+          5851,
+          68882,
+          1311,
+          22317,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          676,
+          25,
+          16325,
+          9207,
+          36828,
+          676,
+          22317,
+          676,
+          3252,
+          16325,
+          58640,
+          12601,
+          36799,
+          40451,
+          22180,
+          1128,
+          882,
+          311,
+          3735,
+          498,
+          705,
+          1283,
+          697,
+          17635,
+          47891,
+          60774,
+          25,
+          3555,
+          882,
+          1265,
+          358,
+          3735,
+          498,
+          705,
+          30,
+          41151,
+          279,
+          49251,
+          11,
+          1290,
+          30,
+          2198,
+          4074,
+          25,
+          18885,
+          498,
+          4751,
+          4367,
+          825,
+          15223,
+          27835,
+          35985,
+          476,
+          6248,
+          697,
+          1848,
+          2844,
+          7521,
+          28503,
+          1311,
+          22317,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          6287,
+          30286,
+          316,
+          9207,
+          36828,
+          676,
+          22317,
+          676,
+          3252,
+          16325,
+          2198,
+          6287,
+          3252,
+          60774,
+          58640,
+          12601,
+          36799,
+          40451,
+          22180,
+          1128,
+          882,
+          311,
+          3735,
+          498,
+          705,
+          1283,
+          697,
+          17635,
+          47891,
+          60774,
+          25,
+          3555,
+          882,
+          1265,
+          358,
+          3735,
+          498,
+          705,
+          30,
+          41151,
+          279,
+          49251,
+          11,
+          1290,
+          30,
+          2198,
+          50086,
+          25,
+          330,
+          28503,
+          1311,
+          22317,
+          1313,
+          3252,
+          1313,
+          2198,
+          5657,
+          3252,
+          21034,
+          2198,
+          957,
+          3252,
+          36953,
+          752,
+          705,
+          518,
+          220,
+          20,
+          25,
+          19,
+          15,
+          5851,
+          1189,
+          92,
+          36828,
+          676,
+          22317,
+          676,
+          3252,
+          16325,
+          2198,
+          6287,
+          3252,
+          60774,
+          58640,
+          12601,
+          36799,
+          40451,
+          22180,
+          1128,
+          882,
+          311,
+          3735,
+          498,
+          705,
+          1283,
+          697,
+          17635,
+          47891,
+          60774,
+          25,
+          3555,
+          882,
+          1265,
+          358,
+          3735,
+          498,
+          705,
+          30,
+          41151,
+          279,
+          49251,
+          11,
+          1290,
+          30,
+          2198,
+          50086,
+          25,
+          19725,
+          752,
+          705,
+          518,
+          220,
+          20,
+          25,
+          19,
+          15,
+          5851,
+          1189,
+          28503,
+          1311,
+          22317,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          6681,
+          30975,
+          921,
+          16485,
+          11574,
+          510,
+          58,
+          4913,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          5117,
+          2198,
+          1502,
+          3252,
+          7623,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          1419,
+          2198,
+          1502,
+          3252,
+          3707,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          17338,
+          261,
+          2198,
+          1502,
+          3252,
+          2164,
+          3398,
+          261,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          38188,
+          2198,
+          1502,
+          3252,
+          34736,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          93828,
+          2198,
+          1502,
+          3252,
+          28590,
+          14602,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          676,
+          25,
+          16325,
+          2198,
+          1502,
+          3252,
+          15820,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          676,
+          25,
+          26258,
+          2198,
+          1502,
+          3252,
+          19882,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          676,
+          25,
+          20666,
+          2198,
+          1502,
+          3252,
+          26104,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          676,
+          25,
+          18286,
+          2198,
+          1502,
+          3252,
+          21667,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          676,
+          25,
+          11184,
+          2198,
+          1502,
+          3252,
+          14620,
+          36509,
+          1313,
+          3252,
+          30047,
+          2198,
+          5657,
+          3252,
+          676,
+          25,
+          29063,
+          2198,
+          1502,
+          3252,
+          36784,
+          9207,
+          921,
+          5598,
+          825,
+          4718,
+          1917,
+          448,
+          943,
+          323,
+          2169,
+          13,
+          1752,
+          19496,
+          2924,
+          897,
+          8482,
+          697,
+          5042,
+          1943,
+          13,
+          2308,
+          16148,
+          624,
+          5847,
+          1917,
+          25,
+          151645,
+          198,
+          151644,
+          77091,
+          198,
+          151667,
+          271,
+          151668,
+          271
+        ],
+        "outputIds": [
+          4913,
+          1313,
+          3252,
+          1313,
+          2198,
+          5657,
+          3252,
+          21034,
+          2198,
+          957,
+          3252,
+          36953,
+          752,
+          705,
+          518,
+          220,
+          20,
+          25,
+          19,
+          15,
+          5851,
+          1189,
+          92,
+          151645
+        ],
+        "referenceOutputIds": [
+          4913,
+          1313,
+          3252,
+          1313,
+          2198,
+          5657,
+          3252,
+          21034,
+          2198,
+          957,
+          3252,
+          36953,
+          752,
+          705,
+          518,
+          220,
+          20,
+          25,
+          19,
+          15,
+          5851,
+          1189,
+          92,
+          151645
+        ],
+        "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"Pick me up at 5:40 PM.\"}",
+        "referenceText": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"Pick me up at 5:40 PM.\"}",
+        "inputIdsEqual": true,
+        "outputIdsEqual": true
+      }
+    ]
+  },
+  "qualification": [
+    {
+      "scope": "Real Chrome Doppler inference on one executor, complete model. No distributed execution claim.",
+      "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+      "manifestIdentity": "sha256:f947e3ccac8028c9fcd0eb87cad3deec023102672288c75353d97d3b813e731b",
+      "weightBytes": 1025493248,
+      "runs": [
+        {
+          "personalized": false,
+          "phase": "playing",
+          "firstValidActionMs": null,
+          "elapsedMs": 1984.1999999284744,
+          "steps": [
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\": \"tap\", \"target\": \"messages\"}",
+              "elapsedMs": 1983.8000000715256,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              },
+              "model": "gemma-3-1b-it-q4k-ehf16-af32",
+              "error": "The agent proposed an unavailable action. The phone was not changed."
+            }
+          ],
+          "actions": [
+            {
+              "matchId": "af318516-b030-429e-b609-02173538e7b6",
+              "roundId": "d1b5e0d8-2d84-44f7-8bef-193225c8773c",
+              "controllerId": "qualification",
+              "attemptId": "8a2eafca-6db4-46f0-aeea-a43c4147ebe6",
+              "observationId": "de33ff2b-ccbf-44c4-92be-80fa18895220",
+              "revision": 1,
+              "accepted": false,
+              "reason": "The agent proposed an unavailable action. The phone was not changed.",
+              "timeToValidActionMs": null,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              }
+            }
+          ],
+          "record": {
+            "version": "muzil-phone/1",
+            "roundId": "d1b5e0d8-2d84-44f7-8bef-193225c8773c",
+            "scenario": {
+              "id": "pickup-variation",
+              "title": "Same favor. Different day.",
+              "intention": "Tell Mom what time to pick you up after your appointment.",
+              "contact": "mom",
+              "name": "Mom",
+              "event": "Eye appointment",
+              "start": "14:20",
+              "end": "15:15",
+              "date": "Tuesday, September 29",
+              "incoming": "When will you be done at the eye doctor? I can pick you up.",
+              "note": "The appointment was moved to the afternoon.",
+              "interruptions": [
+                {
+                  "id": "calendar-update",
+                  "at": 6500,
+                  "app": "calendar",
+                  "title": "Calendar updated",
+                  "body": "Eye appointment ends at 3:15 PM."
+                },
+                {
+                  "id": "group",
+                  "at": 12000,
+                  "app": "messages",
+                  "contact": "group",
+                  "title": "The group chat",
+                  "body": "We need your opinion on something completely unimportant."
+                },
+                {
+                  "id": "feed",
+                  "at": 20500,
+                  "app": "feed",
+                  "title": "For you, apparently",
+                  "body": "A tiny apartment with a surprisingly long tour."
+                }
+              ]
+            },
+            "controller": "agent",
+            "elapsed": 1984,
+            "log": [
+              {
+                "at": 0,
+                "action": {
+                  "id": "start",
+                  "roundId": "d1b5e0d8-2d84-44f7-8bef-193225c8773c",
+                  "type": "tap",
+                  "target": "start"
+                }
+              }
+            ]
+          },
+          "replayAgrees": true
+        },
+        {
+          "personalized": true,
+          "phase": "playing",
+          "firstValidActionMs": 2364.2000000476837,
+          "elapsedMs": 40344.800000071526,
+          "steps": [
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\": \"tap\", \"target\": \"app:calendar\"}",
+              "elapsedMs": 2364.100000023842,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              },
+              "model": "gemma-3-1b-it-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "calendar"
+              },
+              "text": "{\"type\": \"tap\", \"target\": \"home\"}\n",
+              "elapsedMs": 1969.5,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              },
+              "model": "gemma-3-1b-it-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\": \"tap\", \"target\": \"app:calendar\", \"label\": \"Calendar\"}",
+              "elapsedMs": 2871.399999976158,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              },
+              "model": "gemma-3-1b-it-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "calendar"
+              },
+              "text": "{\"type\": \"tap\", \"target\": \"home\"}\n",
+              "elapsedMs": 2130.899999976158,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              },
+              "model": "gemma-3-1b-it-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 2545.899999976158,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              },
+              "model": "gemma-3-1b-it-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 2445,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              },
+              "model": "gemma-3-1b-it-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 2649.7999999523163,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              },
+              "model": "gemma-3-1b-it-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 2586.399999976158,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              },
+              "model": "gemma-3-1b-it-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"app:messages\",\"label\":\"Messages\"}",
+              "elapsedMs": 2726.600000023842,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              },
+              "model": "gemma-3-1b-it-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 2469,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              },
+              "model": "gemma-3-1b-it-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 2692.100000023842,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              },
+              "model": "gemma-3-1b-it-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 2600.7000000476837,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              },
+              "model": "gemma-3-1b-it-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 2559.600000023842,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              },
+              "model": "gemma-3-1b-it-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 2559.600000023842,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              },
+              "model": "gemma-3-1b-it-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 2615.7000000476837,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              },
+              "model": "gemma-3-1b-it-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 2554.2999999523163,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              },
+              "model": "gemma-3-1b-it-q4k-ehf16-af32"
+            }
+          ],
+          "actions": [
+            {
+              "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+              "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+              "controllerId": "qualification",
+              "attemptId": "b29d47db-d0c8-4b9f-aa40-baa6f4f166d5",
+              "observationId": "69dcfaa4-dce4-44c6-9ab4-181709c03189",
+              "revision": 1,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2364.2000000476837,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              }
+            },
+            {
+              "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+              "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+              "controllerId": "qualification",
+              "attemptId": "2756feac-0f37-4b5d-8618-dfb1198af03c",
+              "observationId": "2f7474e2-06fe-460b-bc5c-0b48b1f69bbc",
+              "revision": 2,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 1969.6000000238419,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              }
+            },
+            {
+              "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+              "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+              "controllerId": "qualification",
+              "attemptId": "20825fa2-69d1-44f5-8747-629235e773a9",
+              "observationId": "c9e4f81f-a6dd-4d1f-816a-45d6676d9ba0",
+              "revision": 3,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2871.5,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              }
+            },
+            {
+              "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+              "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+              "controllerId": "qualification",
+              "attemptId": "2174f150-dd1f-47f4-8539-6819d951ba82",
+              "observationId": "814f1d4d-2c23-425f-92a9-809917bbdb3e",
+              "revision": 4,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2131.0999999046326,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              }
+            },
+            {
+              "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+              "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+              "controllerId": "qualification",
+              "attemptId": "225fd0d0-1eb9-43b3-827d-3c819c1cce75",
+              "observationId": "25cdbd9a-e2d3-48c0-9c02-92131c774168",
+              "revision": 5,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2545.899999976158,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              }
+            },
+            {
+              "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+              "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+              "controllerId": "qualification",
+              "attemptId": "57ed53f3-8f46-4d39-a027-ddea05355100",
+              "observationId": "ec3db30e-e9a9-4188-bcce-0edaa9dbaa98",
+              "revision": 6,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2445.100000023842,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              }
+            },
+            {
+              "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+              "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+              "controllerId": "qualification",
+              "attemptId": "2399fefb-c24c-4c16-bd80-07626d818747",
+              "observationId": "81583ccb-5bbd-4de7-b643-8474b47317b9",
+              "revision": 7,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2649.7999999523163,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              }
+            },
+            {
+              "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+              "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+              "controllerId": "qualification",
+              "attemptId": "4b958ba8-b126-4b35-ba1b-f808dbcaa973",
+              "observationId": "8cfeff74-aeb1-453e-b7e2-fc17c0b0c8b8",
+              "revision": 8,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2586.5999999046326,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              }
+            },
+            {
+              "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+              "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+              "controllerId": "qualification",
+              "attemptId": "8204627c-f916-488a-ac0d-c943634280e4",
+              "observationId": "1daf59d8-da00-40e8-99f0-9aa63d0cf0b1",
+              "revision": 9,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2726.8000000715256,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              }
+            },
+            {
+              "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+              "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+              "controllerId": "qualification",
+              "attemptId": "724f61c4-5c7f-435c-9d2e-7672fc1ee5c7",
+              "observationId": "468067e6-804a-4b78-9a9b-c4fecfdbd3c3",
+              "revision": 10,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2469.2000000476837,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              }
+            },
+            {
+              "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+              "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+              "controllerId": "qualification",
+              "attemptId": "ae2e9896-8e04-46fc-b167-88eeb96311e2",
+              "observationId": "99c464be-cf02-4a30-a2fb-3048f4434ae0",
+              "revision": 11,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2692.1999999284744,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              }
+            },
+            {
+              "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+              "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+              "controllerId": "qualification",
+              "attemptId": "da0c289d-9a26-4305-a0bf-eb78b166fb3e",
+              "observationId": "90d288f7-a245-4f7e-a4ff-904f4e94e16b",
+              "revision": 12,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2600.899999976158,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              }
+            },
+            {
+              "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+              "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+              "controllerId": "qualification",
+              "attemptId": "12891f49-705f-4fec-b35b-c054e54eae5d",
+              "observationId": "8707b2b6-1845-44f2-819c-f13686ef2062",
+              "revision": 13,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2559.7999999523163,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              }
+            },
+            {
+              "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+              "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+              "controllerId": "qualification",
+              "attemptId": "f2d2afe8-a403-4a33-aa04-52be5b12c4f8",
+              "observationId": "fa1f5aca-a7f2-4c53-83c7-b3929f9ba80a",
+              "revision": 14,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2559.8000000715256,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              }
+            },
+            {
+              "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+              "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+              "controllerId": "qualification",
+              "attemptId": "02f14f99-0fe1-4293-bf6a-52cf2bb7bd49",
+              "observationId": "d1e251b3-0425-48cd-9176-4448fb46d9f8",
+              "revision": 15,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2615.899999976158,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              }
+            },
+            {
+              "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+              "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+              "controllerId": "qualification",
+              "attemptId": "a403529e-209e-41d2-9626-9954f4e37b7b",
+              "observationId": "8bf4e589-fa99-48f8-b3b9-6a936ae6734a",
+              "revision": 16,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2554.5,
+              "execution": {
+                "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+                "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+                "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+              }
+            }
+          ],
+          "record": {
+            "version": "muzil-phone/1",
+            "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+            "scenario": {
+              "id": "pickup-variation",
+              "title": "Same favor. Different day.",
+              "intention": "Tell Mom what time to pick you up after your appointment.",
+              "contact": "mom",
+              "name": "Mom",
+              "event": "Eye appointment",
+              "start": "14:20",
+              "end": "15:15",
+              "date": "Tuesday, September 29",
+              "incoming": "When will you be done at the eye doctor? I can pick you up.",
+              "note": "The appointment was moved to the afternoon.",
+              "interruptions": [
+                {
+                  "id": "calendar-update",
+                  "at": 6500,
+                  "app": "calendar",
+                  "title": "Calendar updated",
+                  "body": "Eye appointment ends at 3:15 PM."
+                },
+                {
+                  "id": "group",
+                  "at": 12000,
+                  "app": "messages",
+                  "contact": "group",
+                  "title": "The group chat",
+                  "body": "We need your opinion on something completely unimportant."
+                },
+                {
+                  "id": "feed",
+                  "at": 20500,
+                  "app": "feed",
+                  "title": "For you, apparently",
+                  "body": "A tiny apartment with a surprisingly long tour."
+                }
+              ]
+            },
+            "controller": "agent",
+            "elapsed": 40344,
+            "log": [
+              {
+                "at": 0,
+                "action": {
+                  "id": "start",
+                  "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                  "type": "tap",
+                  "target": "start"
+                }
+              },
+              {
+                "at": 2364,
+                "action": {
+                  "type": "tap",
+                  "target": "app:calendar",
+                  "id": "b29d47db-d0c8-4b9f-aa40-baa6f4f166d5",
+                  "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+                    "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                    "controllerId": "qualification",
+                    "attemptId": "b29d47db-d0c8-4b9f-aa40-baa6f4f166d5",
+                    "observationId": "69dcfaa4-dce4-44c6-9ab4-181709c03189",
+                    "revision": 1
+                  }
+                }
+              },
+              {
+                "at": 4333,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "2756feac-0f37-4b5d-8618-dfb1198af03c",
+                  "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                  "screen": {
+                    "app": "calendar"
+                  },
+                  "decision": {
+                    "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+                    "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                    "controllerId": "qualification",
+                    "attemptId": "2756feac-0f37-4b5d-8618-dfb1198af03c",
+                    "observationId": "2f7474e2-06fe-460b-bc5c-0b48b1f69bbc",
+                    "revision": 2
+                  }
+                }
+              },
+              {
+                "at": 7205,
+                "action": {
+                  "type": "tap",
+                  "target": "app:calendar",
+                  "id": "20825fa2-69d1-44f5-8747-629235e773a9",
+                  "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+                    "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                    "controllerId": "qualification",
+                    "attemptId": "20825fa2-69d1-44f5-8747-629235e773a9",
+                    "observationId": "c9e4f81f-a6dd-4d1f-816a-45d6676d9ba0",
+                    "revision": 3
+                  }
+                }
+              },
+              {
+                "at": 9336,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "2174f150-dd1f-47f4-8539-6819d951ba82",
+                  "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                  "screen": {
+                    "app": "calendar"
+                  },
+                  "decision": {
+                    "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+                    "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                    "controllerId": "qualification",
+                    "attemptId": "2174f150-dd1f-47f4-8539-6819d951ba82",
+                    "observationId": "814f1d4d-2c23-425f-92a9-809917bbdb3e",
+                    "revision": 4
+                  }
+                }
+              },
+              {
+                "at": 11882,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "225fd0d0-1eb9-43b3-827d-3c819c1cce75",
+                  "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+                    "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                    "controllerId": "qualification",
+                    "attemptId": "225fd0d0-1eb9-43b3-827d-3c819c1cce75",
+                    "observationId": "25cdbd9a-e2d3-48c0-9c02-92131c774168",
+                    "revision": 5
+                  }
+                }
+              },
+              {
+                "at": 14327,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "57ed53f3-8f46-4d39-a027-ddea05355100",
+                  "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+                    "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                    "controllerId": "qualification",
+                    "attemptId": "57ed53f3-8f46-4d39-a027-ddea05355100",
+                    "observationId": "ec3db30e-e9a9-4188-bcce-0edaa9dbaa98",
+                    "revision": 6
+                  }
+                }
+              },
+              {
+                "at": 16977,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "2399fefb-c24c-4c16-bd80-07626d818747",
+                  "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+                    "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                    "controllerId": "qualification",
+                    "attemptId": "2399fefb-c24c-4c16-bd80-07626d818747",
+                    "observationId": "81583ccb-5bbd-4de7-b643-8474b47317b9",
+                    "revision": 7
+                  }
+                }
+              },
+              {
+                "at": 19564,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "4b958ba8-b126-4b35-ba1b-f808dbcaa973",
+                  "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+                    "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                    "controllerId": "qualification",
+                    "attemptId": "4b958ba8-b126-4b35-ba1b-f808dbcaa973",
+                    "observationId": "8cfeff74-aeb1-453e-b7e2-fc17c0b0c8b8",
+                    "revision": 8
+                  }
+                }
+              },
+              {
+                "at": 22291,
+                "action": {
+                  "type": "tap",
+                  "target": "app:messages",
+                  "id": "8204627c-f916-488a-ac0d-c943634280e4",
+                  "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+                    "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                    "controllerId": "qualification",
+                    "attemptId": "8204627c-f916-488a-ac0d-c943634280e4",
+                    "observationId": "1daf59d8-da00-40e8-99f0-9aa63d0cf0b1",
+                    "revision": 9
+                  }
+                }
+              },
+              {
+                "at": 24760,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "724f61c4-5c7f-435c-9d2e-7672fc1ee5c7",
+                  "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                  "screen": {
+                    "app": "messages"
+                  },
+                  "decision": {
+                    "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+                    "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                    "controllerId": "qualification",
+                    "attemptId": "724f61c4-5c7f-435c-9d2e-7672fc1ee5c7",
+                    "observationId": "468067e6-804a-4b78-9a9b-c4fecfdbd3c3",
+                    "revision": 10
+                  }
+                }
+              },
+              {
+                "at": 27452,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "ae2e9896-8e04-46fc-b167-88eeb96311e2",
+                  "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+                    "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                    "controllerId": "qualification",
+                    "attemptId": "ae2e9896-8e04-46fc-b167-88eeb96311e2",
+                    "observationId": "99c464be-cf02-4a30-a2fb-3048f4434ae0",
+                    "revision": 11
+                  }
+                }
+              },
+              {
+                "at": 30053,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "da0c289d-9a26-4305-a0bf-eb78b166fb3e",
+                  "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+                    "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                    "controllerId": "qualification",
+                    "attemptId": "da0c289d-9a26-4305-a0bf-eb78b166fb3e",
+                    "observationId": "90d288f7-a245-4f7e-a4ff-904f4e94e16b",
+                    "revision": 12
+                  }
+                }
+              },
+              {
+                "at": 32613,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "12891f49-705f-4fec-b35b-c054e54eae5d",
+                  "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+                    "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                    "controllerId": "qualification",
+                    "attemptId": "12891f49-705f-4fec-b35b-c054e54eae5d",
+                    "observationId": "8707b2b6-1845-44f2-819c-f13686ef2062",
+                    "revision": 13
+                  }
+                }
+              },
+              {
+                "at": 35173,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "f2d2afe8-a403-4a33-aa04-52be5b12c4f8",
+                  "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+                    "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                    "controllerId": "qualification",
+                    "attemptId": "f2d2afe8-a403-4a33-aa04-52be5b12c4f8",
+                    "observationId": "fa1f5aca-a7f2-4c53-83c7-b3929f9ba80a",
+                    "revision": 14
+                  }
+                }
+              },
+              {
+                "at": 37789,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "02f14f99-0fe1-4293-bf6a-52cf2bb7bd49",
+                  "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+                    "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                    "controllerId": "qualification",
+                    "attemptId": "02f14f99-0fe1-4293-bf6a-52cf2bb7bd49",
+                    "observationId": "d1e251b3-0425-48cd-9176-4448fb46d9f8",
+                    "revision": 15
+                  }
+                }
+              },
+              {
+                "at": 40344,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "a403529e-209e-41d2-9626-9954f4e37b7b",
+                  "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "a7a79c7b-bc86-4691-8801-2b50660d84aa",
+                    "roundId": "879253ac-da57-4a93-bb20-9989353993e2",
+                    "controllerId": "qualification",
+                    "attemptId": "a403529e-209e-41d2-9626-9954f4e37b7b",
+                    "observationId": "8bf4e589-fa99-48f8-b3b9-6a936ae6734a",
+                    "revision": 16
+                  }
+                }
+              }
+            ]
+          },
+          "replayAgrees": true
+        }
+      ],
+      "errors": [],
+      "preparation": {
+        "elapsedMs": 2256.2999999523163,
+        "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+        "gpu": {
+          "vendor": "apple",
+          "architecture": "metal-3"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36"
+      },
+      "reply": {
+        "binding": null,
+        "text": "Pick me up at 3:15 PM.",
+        "model": "gemma-3-1b-it-q4k-ehf16-af32",
+        "provider": "doppler",
+        "execution": {
+          "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+          "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+          "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+        }
+      },
+      "passed": false
+    },
+    {
+      "scope": "Real Chrome Doppler inference on one executor, complete model. No distributed execution claim.",
+      "modelId": "gemma-3-1b-it-f16-af32",
+      "manifestIdentity": "sha256:2f6c01e893290b43938e8fe9199558a680c75b7318761ea7c346647f80245934",
+      "weightBytes": 1999771904,
+      "runs": [
+        {
+          "personalized": false,
+          "phase": "playing",
+          "firstValidActionMs": null,
+          "elapsedMs": 2022.5,
+          "steps": [
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\": \"tap\", \"target\": \"messages\"}",
+              "elapsedMs": 2022.0999999046326,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              },
+              "model": "gemma-3-1b-it-f16-af32",
+              "error": "The agent proposed an unavailable action. The phone was not changed."
+            }
+          ],
+          "actions": [
+            {
+              "matchId": "3275a84b-310c-4a11-9706-4b475779ade1",
+              "roundId": "e0d9bbc0-e3aa-40d5-864d-cee2fdfe7c65",
+              "controllerId": "qualification",
+              "attemptId": "b35d61fe-16dd-47bb-b493-23a6905fd2f8",
+              "observationId": "2b5ad939-a5ac-45cc-a1db-978f503fe8b7",
+              "revision": 1,
+              "accepted": false,
+              "reason": "The agent proposed an unavailable action. The phone was not changed.",
+              "timeToValidActionMs": null,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              }
+            }
+          ],
+          "record": {
+            "version": "muzil-phone/1",
+            "roundId": "e0d9bbc0-e3aa-40d5-864d-cee2fdfe7c65",
+            "scenario": {
+              "id": "pickup-variation",
+              "title": "Same favor. Different day.",
+              "intention": "Tell Mom what time to pick you up after your appointment.",
+              "contact": "mom",
+              "name": "Mom",
+              "event": "Eye appointment",
+              "start": "14:20",
+              "end": "15:15",
+              "date": "Tuesday, September 29",
+              "incoming": "When will you be done at the eye doctor? I can pick you up.",
+              "note": "The appointment was moved to the afternoon.",
+              "interruptions": [
+                {
+                  "id": "calendar-update",
+                  "at": 6500,
+                  "app": "calendar",
+                  "title": "Calendar updated",
+                  "body": "Eye appointment ends at 3:15 PM."
+                },
+                {
+                  "id": "group",
+                  "at": 12000,
+                  "app": "messages",
+                  "contact": "group",
+                  "title": "The group chat",
+                  "body": "We need your opinion on something completely unimportant."
+                },
+                {
+                  "id": "feed",
+                  "at": 20500,
+                  "app": "feed",
+                  "title": "For you, apparently",
+                  "body": "A tiny apartment with a surprisingly long tour."
+                }
+              ]
+            },
+            "controller": "agent",
+            "elapsed": 2022,
+            "log": [
+              {
+                "at": 0,
+                "action": {
+                  "id": "start",
+                  "roundId": "e0d9bbc0-e3aa-40d5-864d-cee2fdfe7c65",
+                  "type": "tap",
+                  "target": "start"
+                }
+              }
+            ]
+          },
+          "replayAgrees": true
+        },
+        {
+          "personalized": true,
+          "phase": "playing",
+          "firstValidActionMs": 2839.600000023842,
+          "elapsedMs": 41971.700000047684,
+          "steps": [
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\": \"tap\", \"target\": \"app:calendar\", \"label\": \"Calendar\"}",
+              "elapsedMs": 2839.5,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              },
+              "model": "gemma-3-1b-it-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "calendar"
+              },
+              "text": "{\"type\": \"tap\", \"target\": \"home\"}\n",
+              "elapsedMs": 1940,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              },
+              "model": "gemma-3-1b-it-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\": \"tap\",\"target\":\"app:calendar\",\"label\":\"Calendar\"}",
+              "elapsedMs": 2566,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              },
+              "model": "gemma-3-1b-it-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "calendar"
+              },
+              "text": "{\"type\": \"tap\", \"target\": \"home\"}",
+              "elapsedMs": 2061.8000000715256,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              },
+              "model": "gemma-3-1b-it-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"app:calendar\",\"label\":\"Calendar updated\"}",
+              "elapsedMs": 2779.399999976158,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              },
+              "model": "gemma-3-1b-it-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "calendar"
+              },
+              "text": "{\"type\": \"tap\", \"target\": \"switcher\"}",
+              "elapsedMs": 2218.600000023842,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              },
+              "model": "gemma-3-1b-it-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "switcher"
+              },
+              "text": "{\"type\": \"tap\", \"target\": \"app:messages\"}",
+              "elapsedMs": 2396.1999999284744,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              },
+              "model": "gemma-3-1b-it-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 2462.2999999523163,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              },
+              "model": "gemma-3-1b-it-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"app:calendar\",\"label\":\"Calendar\"}",
+              "elapsedMs": 2725.2999999523163,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              },
+              "model": "gemma-3-1b-it-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "calendar"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 2439.0999999046326,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              },
+              "model": "gemma-3-1b-it-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 2731.399999976158,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              },
+              "model": "gemma-3-1b-it-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 2544.600000023842,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              },
+              "model": "gemma-3-1b-it-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 2546.8000000715256,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              },
+              "model": "gemma-3-1b-it-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 2550.2999999523163,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              },
+              "model": "gemma-3-1b-it-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"app:messages\",\"label\":\"Tell Mom what time to pick you up after your appointment.\",\"action\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 4617.699999928474,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              },
+              "model": "gemma-3-1b-it-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"home\",\"label\":\"Home\"}",
+              "elapsedMs": 2548.6999999284744,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              },
+              "model": "gemma-3-1b-it-f16-af32"
+            }
+          ],
+          "actions": [
+            {
+              "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+              "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+              "controllerId": "qualification",
+              "attemptId": "97c5cde4-6e59-4796-b16e-334fa4b18940",
+              "observationId": "b95902db-819b-48e7-8450-07e712c52b2e",
+              "revision": 1,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2839.600000023842,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              }
+            },
+            {
+              "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+              "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+              "controllerId": "qualification",
+              "attemptId": "d5e95cd0-306d-4368-93a8-13c83abfd203",
+              "observationId": "daa540e3-013e-4bfb-8285-f38dbdc00a13",
+              "revision": 2,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 1940.1000000238419,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              }
+            },
+            {
+              "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+              "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+              "controllerId": "qualification",
+              "attemptId": "bf794d60-8775-4f3f-b15b-ba00ec33def0",
+              "observationId": "77c991e4-3b3e-4d1e-a898-abe95dd978ac",
+              "revision": 3,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2566.0999999046326,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              }
+            },
+            {
+              "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+              "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+              "controllerId": "qualification",
+              "attemptId": "4538b076-8777-47bd-9bd8-89c70829ed03",
+              "observationId": "2df42904-6441-4d57-95e0-2cf767cdb7a5",
+              "revision": 4,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2061.899999976158,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              }
+            },
+            {
+              "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+              "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+              "controllerId": "qualification",
+              "attemptId": "422d0820-8c5b-4b9a-a113-1a3923660361",
+              "observationId": "8fcec4e7-e19e-4e0f-a2a6-7e4d5e6078c8",
+              "revision": 5,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2779.399999976158,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              }
+            },
+            {
+              "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+              "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+              "controllerId": "qualification",
+              "attemptId": "c266e5e1-2af4-4b9a-858f-9805d4acfe9e",
+              "observationId": "5664ad09-17a2-4ca5-a7ba-078d46ea8e6b",
+              "revision": 6,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2218.7000000476837,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              }
+            },
+            {
+              "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+              "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+              "controllerId": "qualification",
+              "attemptId": "307986d7-05f1-4d18-a4bf-155e6ba92ab0",
+              "observationId": "f836e5a5-e7a5-4cf5-a3ba-1233f6675d25",
+              "revision": 7,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2396.1999999284744,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              }
+            },
+            {
+              "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+              "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+              "controllerId": "qualification",
+              "attemptId": "84bd0ab0-4ccb-492a-a925-150c87f5c2e1",
+              "observationId": "1bc531bd-3726-4d2f-ab9a-054dad9ddd14",
+              "revision": 8,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2462.5,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              }
+            },
+            {
+              "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+              "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+              "controllerId": "qualification",
+              "attemptId": "e6a9c05c-2557-4c04-8386-8743aa3969f8",
+              "observationId": "ac71d40d-59fa-4cad-b52b-6b1494f87335",
+              "revision": 9,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2725.399999976158,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              }
+            },
+            {
+              "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+              "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+              "controllerId": "qualification",
+              "attemptId": "3579b48c-043d-4527-a26f-dcfbb9345f96",
+              "observationId": "538ce5ff-4bf5-4c52-a597-68fba8293df2",
+              "revision": 10,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2439.2999999523163,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              }
+            },
+            {
+              "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+              "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+              "controllerId": "qualification",
+              "attemptId": "f958aa11-01a7-4118-b30d-0b77aaba7c66",
+              "observationId": "d643dc06-6fe3-4d20-be50-7700c9281e85",
+              "revision": 11,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2731.600000023842,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              }
+            },
+            {
+              "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+              "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+              "controllerId": "qualification",
+              "attemptId": "577ca5be-b862-44ce-a289-025a98c1d858",
+              "observationId": "4fe69f77-94ba-477f-9457-9bc503818022",
+              "revision": 12,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2544.8000000715256,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              }
+            },
+            {
+              "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+              "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+              "controllerId": "qualification",
+              "attemptId": "35c0a7db-4cd6-4160-8a24-294db868cf08",
+              "observationId": "f4b2828f-c602-48a2-8434-ecf2899d8bd3",
+              "revision": 13,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2547.100000023842,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              }
+            },
+            {
+              "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+              "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+              "controllerId": "qualification",
+              "attemptId": "ddd1a066-f8d1-4974-a3ec-4c5df1b973ee",
+              "observationId": "763e85fb-3868-4e49-b3f5-513b80507e0e",
+              "revision": 14,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2550.5,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              }
+            },
+            {
+              "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+              "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+              "controllerId": "qualification",
+              "attemptId": "36fc967a-6542-4a2b-9798-6470a93ea8e7",
+              "observationId": "b9c21ff6-4a2e-4f61-96b8-4b43ef76dc57",
+              "revision": 15,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 4617.899999976158,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              }
+            },
+            {
+              "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+              "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+              "controllerId": "qualification",
+              "attemptId": "fccbe689-0c5e-4376-b5e2-5c0738c2b05e",
+              "observationId": "10b3524d-f8ef-4df2-b7c5-fd9558bbb1ea",
+              "revision": 16,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 2548.899999976158,
+              "execution": {
+                "modelId": "gemma-3-1b-it-f16-af32",
+                "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+                "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+              }
+            }
+          ],
+          "record": {
+            "version": "muzil-phone/1",
+            "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+            "scenario": {
+              "id": "pickup-variation",
+              "title": "Same favor. Different day.",
+              "intention": "Tell Mom what time to pick you up after your appointment.",
+              "contact": "mom",
+              "name": "Mom",
+              "event": "Eye appointment",
+              "start": "14:20",
+              "end": "15:15",
+              "date": "Tuesday, September 29",
+              "incoming": "When will you be done at the eye doctor? I can pick you up.",
+              "note": "The appointment was moved to the afternoon.",
+              "interruptions": [
+                {
+                  "id": "calendar-update",
+                  "at": 6500,
+                  "app": "calendar",
+                  "title": "Calendar updated",
+                  "body": "Eye appointment ends at 3:15 PM."
+                },
+                {
+                  "id": "group",
+                  "at": 12000,
+                  "app": "messages",
+                  "contact": "group",
+                  "title": "The group chat",
+                  "body": "We need your opinion on something completely unimportant."
+                },
+                {
+                  "id": "feed",
+                  "at": 20500,
+                  "app": "feed",
+                  "title": "For you, apparently",
+                  "body": "A tiny apartment with a surprisingly long tour."
+                }
+              ]
+            },
+            "controller": "agent",
+            "elapsed": 41971,
+            "log": [
+              {
+                "at": 0,
+                "action": {
+                  "id": "start",
+                  "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                  "type": "tap",
+                  "target": "start"
+                }
+              },
+              {
+                "at": 2839,
+                "action": {
+                  "type": "tap",
+                  "target": "app:calendar",
+                  "id": "97c5cde4-6e59-4796-b16e-334fa4b18940",
+                  "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+                    "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                    "controllerId": "qualification",
+                    "attemptId": "97c5cde4-6e59-4796-b16e-334fa4b18940",
+                    "observationId": "b95902db-819b-48e7-8450-07e712c52b2e",
+                    "revision": 1
+                  }
+                }
+              },
+              {
+                "at": 4779,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "d5e95cd0-306d-4368-93a8-13c83abfd203",
+                  "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                  "screen": {
+                    "app": "calendar"
+                  },
+                  "decision": {
+                    "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+                    "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                    "controllerId": "qualification",
+                    "attemptId": "d5e95cd0-306d-4368-93a8-13c83abfd203",
+                    "observationId": "daa540e3-013e-4bfb-8285-f38dbdc00a13",
+                    "revision": 2
+                  }
+                }
+              },
+              {
+                "at": 7345,
+                "action": {
+                  "type": "tap",
+                  "target": "app:calendar",
+                  "id": "bf794d60-8775-4f3f-b15b-ba00ec33def0",
+                  "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+                    "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                    "controllerId": "qualification",
+                    "attemptId": "bf794d60-8775-4f3f-b15b-ba00ec33def0",
+                    "observationId": "77c991e4-3b3e-4d1e-a898-abe95dd978ac",
+                    "revision": 3
+                  }
+                }
+              },
+              {
+                "at": 9407,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "4538b076-8777-47bd-9bd8-89c70829ed03",
+                  "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                  "screen": {
+                    "app": "calendar"
+                  },
+                  "decision": {
+                    "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+                    "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                    "controllerId": "qualification",
+                    "attemptId": "4538b076-8777-47bd-9bd8-89c70829ed03",
+                    "observationId": "2df42904-6441-4d57-95e0-2cf767cdb7a5",
+                    "revision": 4
+                  }
+                }
+              },
+              {
+                "at": 12187,
+                "action": {
+                  "type": "tap",
+                  "target": "app:calendar",
+                  "id": "422d0820-8c5b-4b9a-a113-1a3923660361",
+                  "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+                    "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                    "controllerId": "qualification",
+                    "attemptId": "422d0820-8c5b-4b9a-a113-1a3923660361",
+                    "observationId": "8fcec4e7-e19e-4e0f-a2a6-7e4d5e6078c8",
+                    "revision": 5
+                  }
+                }
+              },
+              {
+                "at": 14405,
+                "action": {
+                  "type": "tap",
+                  "target": "switcher",
+                  "id": "c266e5e1-2af4-4b9a-858f-9805d4acfe9e",
+                  "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                  "screen": {
+                    "app": "calendar"
+                  },
+                  "decision": {
+                    "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+                    "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                    "controllerId": "qualification",
+                    "attemptId": "c266e5e1-2af4-4b9a-858f-9805d4acfe9e",
+                    "observationId": "5664ad09-17a2-4ca5-a7ba-078d46ea8e6b",
+                    "revision": 6
+                  }
+                }
+              },
+              {
+                "at": 16802,
+                "action": {
+                  "type": "tap",
+                  "target": "app:messages",
+                  "id": "307986d7-05f1-4d18-a4bf-155e6ba92ab0",
+                  "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                  "screen": {
+                    "app": "switcher"
+                  },
+                  "decision": {
+                    "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+                    "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                    "controllerId": "qualification",
+                    "attemptId": "307986d7-05f1-4d18-a4bf-155e6ba92ab0",
+                    "observationId": "f836e5a5-e7a5-4cf5-a3ba-1233f6675d25",
+                    "revision": 7
+                  }
+                }
+              },
+              {
+                "at": 19264,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "84bd0ab0-4ccb-492a-a925-150c87f5c2e1",
+                  "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                  "screen": {
+                    "app": "messages"
+                  },
+                  "decision": {
+                    "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+                    "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                    "controllerId": "qualification",
+                    "attemptId": "84bd0ab0-4ccb-492a-a925-150c87f5c2e1",
+                    "observationId": "1bc531bd-3726-4d2f-ab9a-054dad9ddd14",
+                    "revision": 8
+                  }
+                }
+              },
+              {
+                "at": 21990,
+                "action": {
+                  "type": "tap",
+                  "target": "app:calendar",
+                  "id": "e6a9c05c-2557-4c04-8386-8743aa3969f8",
+                  "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+                    "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                    "controllerId": "qualification",
+                    "attemptId": "e6a9c05c-2557-4c04-8386-8743aa3969f8",
+                    "observationId": "ac71d40d-59fa-4cad-b52b-6b1494f87335",
+                    "revision": 9
+                  }
+                }
+              },
+              {
+                "at": 24429,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "3579b48c-043d-4527-a26f-dcfbb9345f96",
+                  "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                  "screen": {
+                    "app": "calendar"
+                  },
+                  "decision": {
+                    "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+                    "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                    "controllerId": "qualification",
+                    "attemptId": "3579b48c-043d-4527-a26f-dcfbb9345f96",
+                    "observationId": "538ce5ff-4bf5-4c52-a597-68fba8293df2",
+                    "revision": 10
+                  }
+                }
+              },
+              {
+                "at": 27161,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "f958aa11-01a7-4118-b30d-0b77aaba7c66",
+                  "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+                    "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                    "controllerId": "qualification",
+                    "attemptId": "f958aa11-01a7-4118-b30d-0b77aaba7c66",
+                    "observationId": "d643dc06-6fe3-4d20-be50-7700c9281e85",
+                    "revision": 11
+                  }
+                }
+              },
+              {
+                "at": 29706,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "577ca5be-b862-44ce-a289-025a98c1d858",
+                  "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+                    "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                    "controllerId": "qualification",
+                    "attemptId": "577ca5be-b862-44ce-a289-025a98c1d858",
+                    "observationId": "4fe69f77-94ba-477f-9457-9bc503818022",
+                    "revision": 12
+                  }
+                }
+              },
+              {
+                "at": 32253,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "35c0a7db-4cd6-4160-8a24-294db868cf08",
+                  "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+                    "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                    "controllerId": "qualification",
+                    "attemptId": "35c0a7db-4cd6-4160-8a24-294db868cf08",
+                    "observationId": "f4b2828f-c602-48a2-8434-ecf2899d8bd3",
+                    "revision": 13
+                  }
+                }
+              },
+              {
+                "at": 34804,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "ddd1a066-f8d1-4974-a3ec-4c5df1b973ee",
+                  "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+                    "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                    "controllerId": "qualification",
+                    "attemptId": "ddd1a066-f8d1-4974-a3ec-4c5df1b973ee",
+                    "observationId": "763e85fb-3868-4e49-b3f5-513b80507e0e",
+                    "revision": 14
+                  }
+                }
+              },
+              {
+                "at": 39422,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "36fc967a-6542-4a2b-9798-6470a93ea8e7",
+                  "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+                    "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                    "controllerId": "qualification",
+                    "attemptId": "36fc967a-6542-4a2b-9798-6470a93ea8e7",
+                    "observationId": "b9c21ff6-4a2e-4f61-96b8-4b43ef76dc57",
+                    "revision": 15
+                  }
+                }
+              },
+              {
+                "at": 41971,
+                "action": {
+                  "type": "tap",
+                  "target": "home",
+                  "id": "fccbe689-0c5e-4376-b5e2-5c0738c2b05e",
+                  "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "7e9b807a-1ce8-465f-a734-a90f36229496",
+                    "roundId": "485a2413-78bb-48f4-bf0d-6926124a50b5",
+                    "controllerId": "qualification",
+                    "attemptId": "fccbe689-0c5e-4376-b5e2-5c0738c2b05e",
+                    "observationId": "10b3524d-f8ef-4df2-b7c5-fd9558bbb1ea",
+                    "revision": 16
+                  }
+                }
+              }
+            ]
+          },
+          "replayAgrees": true
+        }
+      ],
+      "errors": [],
+      "preparation": {
+        "elapsedMs": 3253.1999999284744,
+        "modelId": "gemma-3-1b-it-f16-af32",
+        "gpu": {
+          "vendor": "apple",
+          "architecture": "metal-3"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36"
+      },
+      "reply": {
+        "binding": null,
+        "text": "Please let me know when you’d like to pick me up.",
+        "model": "gemma-3-1b-it-f16-af32",
+        "provider": "doppler",
+        "execution": {
+          "modelId": "gemma-3-1b-it-f16-af32",
+          "manifestHash": "5a3cad96099bc99113a48c6d2a8b39c1e099ce49c094ff2d7c2f05ea08d2b8e5",
+          "resolvedExecutionId": "sha256:9d118a761cd97df7a0adc5d23a6b48cc487c5a6805063df85aed3300518b9ab3"
+        }
+      },
+      "passed": false
+    },
+    {
+      "scope": "Real Chrome Doppler inference on one executor, complete model. No distributed execution claim.",
+      "modelId": "qwen-3-1-7b-f16-af32",
+      "manifestIdentity": "sha256:573273e80e6d0752780bdf72d0a4834e8810dbcd8e2d5ebf931fa47a2241862c",
+      "weightBytes": 4063479808,
+      "runs": [
+        {
+          "personalized": false,
+          "phase": "expired",
+          "firstValidActionMs": 46652.10000038147,
+          "elapsedMs": 183309.89999961853,
+          "steps": [
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"app:messages\",\"label\":\"Messages\"}",
+              "elapsedMs": 46651.39999961853,
+              "execution": {
+                "modelId": "qwen-3-1-7b-f16-af32",
+                "manifestHash": "9107aca5e3bed6719b27d61983e9946392e306b442fcd9bef196f415476f4724",
+                "resolvedExecutionId": "sha256:ae99834117e8c2a75ae4d979138a5b9366e366d49ef81462c9d17c776b0f87e0"
+              },
+              "model": "qwen-3-1-7b-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"contact:mom\",\"value\":\"I will be done at the eye doctor at 3:00 PM. Please pick me up at 3:00 PM.\"}",
+              "elapsedMs": 46744.900000572205,
+              "execution": {
+                "modelId": "qwen-3-1-7b-f16-af32",
+                "manifestHash": "9107aca5e3bed6719b27d61983e9946392e306b442fcd9bef196f415476f4724",
+                "resolvedExecutionId": "sha256:ae99834117e8c2a75ae4d979138a5b9366e366d49ef81462c9d17c776b0f87e0"
+              },
+              "model": "qwen-3-1-7b-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"The appointment ends at 3:00 PM. I will pick you up at 3:00 PM.\"}",
+              "elapsedMs": 46087.699999809265,
+              "execution": {
+                "modelId": "qwen-3-1-7b-f16-af32",
+                "manifestHash": "9107aca5e3bed6719b27d61983e9946392e306b442fcd9bef196f415476f4724",
+                "resolvedExecutionId": "sha256:ae99834117e8c2a75ae4d979138a5b9366e366d49ef81462c9d17c776b0f87e0"
+              },
+              "model": "qwen-3-1-7b-f16-af32"
+            },
+            {
+              "error": "Doppler: prefill aborted"
+            }
+          ],
+          "actions": [
+            {
+              "matchId": "33a1fffe-c27a-4046-b8e5-63ca8719327a",
+              "roundId": "aa18ce9a-1155-45a4-9353-fdb83522541a",
+              "controllerId": "qualification",
+              "attemptId": "67c39dab-a278-4aee-907e-9d06f02683fb",
+              "observationId": "88b99e23-ec28-455c-ae4e-50e27cca7a9a",
+              "revision": 1,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 46651.800000190735,
+              "execution": {
+                "modelId": "qwen-3-1-7b-f16-af32",
+                "manifestHash": "9107aca5e3bed6719b27d61983e9946392e306b442fcd9bef196f415476f4724",
+                "resolvedExecutionId": "sha256:ae99834117e8c2a75ae4d979138a5b9366e366d49ef81462c9d17c776b0f87e0"
+              }
+            },
+            {
+              "matchId": "33a1fffe-c27a-4046-b8e5-63ca8719327a",
+              "roundId": "aa18ce9a-1155-45a4-9353-fdb83522541a",
+              "controllerId": "qualification",
+              "attemptId": "111cf935-6faf-40f2-9617-74ee162bec75",
+              "observationId": "a43dee08-9efe-4a0c-8bd1-a23cc787d960",
+              "revision": 2,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 46745.300000190735,
+              "execution": {
+                "modelId": "qwen-3-1-7b-f16-af32",
+                "manifestHash": "9107aca5e3bed6719b27d61983e9946392e306b442fcd9bef196f415476f4724",
+                "resolvedExecutionId": "sha256:ae99834117e8c2a75ae4d979138a5b9366e366d49ef81462c9d17c776b0f87e0"
+              }
+            },
+            {
+              "matchId": "33a1fffe-c27a-4046-b8e5-63ca8719327a",
+              "roundId": "aa18ce9a-1155-45a4-9353-fdb83522541a",
+              "controllerId": "qualification",
+              "attemptId": "113a644c-8a84-4808-aa59-867ce5245eea",
+              "observationId": "32b9639c-56c2-4c06-ba43-a733ed8e050e",
+              "revision": 3,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 46087.79999923706,
+              "execution": {
+                "modelId": "qwen-3-1-7b-f16-af32",
+                "manifestHash": "9107aca5e3bed6719b27d61983e9946392e306b442fcd9bef196f415476f4724",
+                "resolvedExecutionId": "sha256:ae99834117e8c2a75ae4d979138a5b9366e366d49ef81462c9d17c776b0f87e0"
+              }
+            }
+          ],
+          "record": {
+            "version": "muzil-phone/1",
+            "roundId": "aa18ce9a-1155-45a4-9353-fdb83522541a",
+            "scenario": {
+              "id": "pickup-variation",
+              "title": "Same favor. Different day.",
+              "intention": "Tell Mom what time to pick you up after your appointment.",
+              "contact": "mom",
+              "name": "Mom",
+              "event": "Eye appointment",
+              "start": "14:20",
+              "end": "15:15",
+              "date": "Tuesday, September 29",
+              "incoming": "When will you be done at the eye doctor? I can pick you up.",
+              "note": "The appointment was moved to the afternoon.",
+              "interruptions": [
+                {
+                  "id": "calendar-update",
+                  "at": 6500,
+                  "app": "calendar",
+                  "title": "Calendar updated",
+                  "body": "Eye appointment ends at 3:15 PM."
+                },
+                {
+                  "id": "group",
+                  "at": 12000,
+                  "app": "messages",
+                  "contact": "group",
+                  "title": "The group chat",
+                  "body": "We need your opinion on something completely unimportant."
+                },
+                {
+                  "id": "feed",
+                  "at": 20500,
+                  "app": "feed",
+                  "title": "For you, apparently",
+                  "body": "A tiny apartment with a surprisingly long tour."
+                }
+              ]
+            },
+            "controller": "agent",
+            "elapsed": 180000,
+            "log": [
+              {
+                "at": 0,
+                "action": {
+                  "id": "start",
+                  "roundId": "aa18ce9a-1155-45a4-9353-fdb83522541a",
+                  "type": "tap",
+                  "target": "start"
+                }
+              },
+              {
+                "at": 46651,
+                "action": {
+                  "type": "tap",
+                  "target": "app:messages",
+                  "id": "67c39dab-a278-4aee-907e-9d06f02683fb",
+                  "roundId": "aa18ce9a-1155-45a4-9353-fdb83522541a",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "33a1fffe-c27a-4046-b8e5-63ca8719327a",
+                    "roundId": "aa18ce9a-1155-45a4-9353-fdb83522541a",
+                    "controllerId": "qualification",
+                    "attemptId": "67c39dab-a278-4aee-907e-9d06f02683fb",
+                    "observationId": "88b99e23-ec28-455c-ae4e-50e27cca7a9a",
+                    "revision": 1
+                  }
+                }
+              },
+              {
+                "at": 93396,
+                "action": {
+                  "type": "tap",
+                  "target": "contact:mom",
+                  "id": "111cf935-6faf-40f2-9617-74ee162bec75",
+                  "roundId": "aa18ce9a-1155-45a4-9353-fdb83522541a",
+                  "screen": {
+                    "app": "messages"
+                  },
+                  "decision": {
+                    "matchId": "33a1fffe-c27a-4046-b8e5-63ca8719327a",
+                    "roundId": "aa18ce9a-1155-45a4-9353-fdb83522541a",
+                    "controllerId": "qualification",
+                    "attemptId": "111cf935-6faf-40f2-9617-74ee162bec75",
+                    "observationId": "a43dee08-9efe-4a0c-8bd1-a23cc787d960",
+                    "revision": 2
+                  }
+                }
+              },
+              {
+                "at": 139485,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "The appointment ends at 3:00 PM. I will pick you up at 3:00 PM.",
+                  "id": "113a644c-8a84-4808-aa59-867ce5245eea",
+                  "roundId": "aa18ce9a-1155-45a4-9353-fdb83522541a",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "33a1fffe-c27a-4046-b8e5-63ca8719327a",
+                    "roundId": "aa18ce9a-1155-45a4-9353-fdb83522541a",
+                    "controllerId": "qualification",
+                    "attemptId": "113a644c-8a84-4808-aa59-867ce5245eea",
+                    "observationId": "32b9639c-56c2-4c06-ba43-a733ed8e050e",
+                    "revision": 3
+                  }
+                }
+              }
+            ]
+          },
+          "replayAgrees": true
+        },
+        {
+          "personalized": true,
+          "phase": "expired",
+          "firstValidActionMs": 70580,
+          "elapsedMs": 183996.5,
+          "steps": [
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"app:messages\",\"label\":\"Messages\"}",
+              "elapsedMs": 70579.5,
+              "execution": {
+                "modelId": "qwen-3-1-7b-f16-af32",
+                "manifestHash": "9107aca5e3bed6719b27d61983e9946392e306b442fcd9bef196f415476f4724",
+                "resolvedExecutionId": "sha256:ae99834117e8c2a75ae4d979138a5b9366e366d49ef81462c9d17c776b0f87e0"
+              },
+              "model": "qwen-3-1-7b-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"contact:mom\",\"label\":\"Mom\",\"value\":\"When will you be done at the eye doctor? I can pick you up.\"}",
+              "elapsedMs": 60133.800000190735,
+              "execution": {
+                "modelId": "qwen-3-1-7b-f16-af32",
+                "manifestHash": "9107aca5e3bed6719b27d61983e9946392e306b442fcd9bef196f415476f4724",
+                "resolvedExecutionId": "sha256:ae99834117e8c2a75ae4d979138a5b9366e366d49ef81462c9d17c776b0f87e0"
+              },
+              "model": "qwen-3-1-7b-f16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"",
+              "elapsedMs": 53282.10000038147,
+              "execution": {
+                "modelId": "qwen-3-1-7b-f16-af32",
+                "manifestHash": "9107aca5e3bed6719b27d61983e9946392e306b442fcd9bef196f415476f4724",
+                "resolvedExecutionId": "sha256:ae99834117e8c2a75ae4d979138a5b9366e366d49ef81462c9d17c776b0f87e0"
+              },
+              "model": "qwen-3-1-7b-f16-af32",
+              "error": "Phone changed during inference"
+            }
+          ],
+          "actions": [
+            {
+              "matchId": "841c3f3a-046f-4f3a-96d8-66d46fa09458",
+              "roundId": "70756340-17c3-4eda-9517-ce4483501d78",
+              "controllerId": "qualification",
+              "attemptId": "aac70ec7-ba3a-45bd-bd56-2f804aacbe26",
+              "observationId": "30892df0-8138-4254-a55f-2bc503b90897",
+              "revision": 1,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 70579.69999980927,
+              "execution": {
+                "modelId": "qwen-3-1-7b-f16-af32",
+                "manifestHash": "9107aca5e3bed6719b27d61983e9946392e306b442fcd9bef196f415476f4724",
+                "resolvedExecutionId": "sha256:ae99834117e8c2a75ae4d979138a5b9366e366d49ef81462c9d17c776b0f87e0"
+              }
+            },
+            {
+              "matchId": "841c3f3a-046f-4f3a-96d8-66d46fa09458",
+              "roundId": "70756340-17c3-4eda-9517-ce4483501d78",
+              "controllerId": "qualification",
+              "attemptId": "43dc7ff0-52c3-4feb-92bc-aa4bc2704356",
+              "observationId": "e92cec64-dc9b-4b4f-8823-83418255b0c9",
+              "revision": 2,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 60134,
+              "execution": {
+                "modelId": "qwen-3-1-7b-f16-af32",
+                "manifestHash": "9107aca5e3bed6719b27d61983e9946392e306b442fcd9bef196f415476f4724",
+                "resolvedExecutionId": "sha256:ae99834117e8c2a75ae4d979138a5b9366e366d49ef81462c9d17c776b0f87e0"
+              }
+            },
+            {
+              "matchId": "841c3f3a-046f-4f3a-96d8-66d46fa09458",
+              "roundId": "70756340-17c3-4eda-9517-ce4483501d78",
+              "controllerId": "qualification",
+              "attemptId": "c73f157e-3904-4828-807e-fef893f6f42b",
+              "observationId": "4272fc36-8888-4719-8a43-43e25b586a1a",
+              "revision": 3,
+              "accepted": false,
+              "reason": "Phone changed during inference",
+              "timeToValidActionMs": null,
+              "execution": {
+                "modelId": "qwen-3-1-7b-f16-af32",
+                "manifestHash": "9107aca5e3bed6719b27d61983e9946392e306b442fcd9bef196f415476f4724",
+                "resolvedExecutionId": "sha256:ae99834117e8c2a75ae4d979138a5b9366e366d49ef81462c9d17c776b0f87e0"
+              }
+            }
+          ],
+          "record": {
+            "version": "muzil-phone/1",
+            "roundId": "70756340-17c3-4eda-9517-ce4483501d78",
+            "scenario": {
+              "id": "pickup-variation",
+              "title": "Same favor. Different day.",
+              "intention": "Tell Mom what time to pick you up after your appointment.",
+              "contact": "mom",
+              "name": "Mom",
+              "event": "Eye appointment",
+              "start": "14:20",
+              "end": "15:15",
+              "date": "Tuesday, September 29",
+              "incoming": "When will you be done at the eye doctor? I can pick you up.",
+              "note": "The appointment was moved to the afternoon.",
+              "interruptions": [
+                {
+                  "id": "calendar-update",
+                  "at": 6500,
+                  "app": "calendar",
+                  "title": "Calendar updated",
+                  "body": "Eye appointment ends at 3:15 PM."
+                },
+                {
+                  "id": "group",
+                  "at": 12000,
+                  "app": "messages",
+                  "contact": "group",
+                  "title": "The group chat",
+                  "body": "We need your opinion on something completely unimportant."
+                },
+                {
+                  "id": "feed",
+                  "at": 20500,
+                  "app": "feed",
+                  "title": "For you, apparently",
+                  "body": "A tiny apartment with a surprisingly long tour."
+                }
+              ]
+            },
+            "controller": "agent",
+            "elapsed": 180000,
+            "log": [
+              {
+                "at": 0,
+                "action": {
+                  "id": "start",
+                  "roundId": "70756340-17c3-4eda-9517-ce4483501d78",
+                  "type": "tap",
+                  "target": "start"
+                }
+              },
+              {
+                "at": 70579,
+                "action": {
+                  "type": "tap",
+                  "target": "app:messages",
+                  "id": "aac70ec7-ba3a-45bd-bd56-2f804aacbe26",
+                  "roundId": "70756340-17c3-4eda-9517-ce4483501d78",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "841c3f3a-046f-4f3a-96d8-66d46fa09458",
+                    "roundId": "70756340-17c3-4eda-9517-ce4483501d78",
+                    "controllerId": "qualification",
+                    "attemptId": "aac70ec7-ba3a-45bd-bd56-2f804aacbe26",
+                    "observationId": "30892df0-8138-4254-a55f-2bc503b90897",
+                    "revision": 1
+                  }
+                }
+              },
+              {
+                "at": 130713,
+                "action": {
+                  "type": "tap",
+                  "target": "contact:mom",
+                  "id": "43dc7ff0-52c3-4feb-92bc-aa4bc2704356",
+                  "roundId": "70756340-17c3-4eda-9517-ce4483501d78",
+                  "screen": {
+                    "app": "messages"
+                  },
+                  "decision": {
+                    "matchId": "841c3f3a-046f-4f3a-96d8-66d46fa09458",
+                    "roundId": "70756340-17c3-4eda-9517-ce4483501d78",
+                    "controllerId": "qualification",
+                    "attemptId": "43dc7ff0-52c3-4feb-92bc-aa4bc2704356",
+                    "observationId": "e92cec64-dc9b-4b4f-8823-83418255b0c9",
+                    "revision": 2
+                  }
+                }
+              }
+            ]
+          },
+          "replayAgrees": true
+        }
+      ],
+      "errors": [],
+      "preparation": {
+        "elapsedMs": 19994.39999961853,
+        "modelId": "qwen-3-1-7b-f16-af32",
+        "gpu": {
+          "vendor": "intel",
+          "architecture": "gen-12lp"
+        },
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/136.0.0.0 Safari/537.36"
+      },
+      "reply": {
+        "binding": null,
+        "text": "I should pick you up at 3:15 PM.",
+        "model": "qwen-3-1-7b-f16-af32",
+        "provider": "doppler",
+        "execution": {
+          "modelId": "qwen-3-1-7b-f16-af32",
+          "manifestHash": "9107aca5e3bed6719b27d61983e9946392e306b442fcd9bef196f415476f4724",
+          "resolvedExecutionId": "sha256:ae99834117e8c2a75ae4d979138a5b9366e366d49ef81462c9d17c776b0f87e0"
+        }
+      },
+      "passed": false
+    }
+  ],
+  "passed": false
+}

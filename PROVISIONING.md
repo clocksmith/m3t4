@@ -1,7 +1,9 @@
-# Provisioning m3t4.ai (PRIVATE)
+# Provisioning m3t4.ai
 
-**Do not publish.** This is the Firebase-first production runbook. Cloud Run
-arena services are preserved as legacy rollback/dev surfaces.
+This is the Firebase-first provisioning runbook. Project names and service
+addresses identify the existing deployment; credentials remain outside this
+repository. Cloud Run arena services are preserved as legacy rollback/dev
+surfaces. Use your own project and credentials when deploying a fork.
 
 ## Prerequisites
 

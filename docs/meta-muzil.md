@@ -121,6 +121,12 @@ npm run test:muzil:inference
 npm run test:muzil:mesh -- --personalized --lifecycle --require-completion
 # Enforce autonomous completion as a separate quality gate:
 npm run test:muzil:inference -- --require-completion
+# Compare unchanged and personalized controllers against an explicit artifact:
+npm run test:muzil:model -- --model-dir /absolute/model-directory --out /tmp/muzil-candidate
+# Run on a separately prepared browser (CDP and app origin must be reachable):
+npm run test:muzil:model -- --model-dir /local/manifest-directory \
+  --cdp http://127.0.0.1:9334 --origin http://127.0.0.1:7795 \
+  --model-url http://127.0.0.1:7806 --out /tmp/muzil-remote-candidate
 ```
 
 The browser smoke uses actual Chrome and actual local Reploid WebRTC. Its executor
@@ -161,3 +167,37 @@ Model quality is a concrete remaining product gap. JSON syntax is constrained by
 Doppler; legal-action validation is enforced by m3t4. Neither guarantees useful
 choices. Invalid proposals stop the agent and leave the phone available to the
 human. The page does not manufacture task completion or substitute a script.
+
+## Model qualification and controller corrections
+
+The candidate runner pins the served manifest, records the loaded model identity,
+and compares an unchanged controller with a fixed demonstration fixture on the
+other appointment scenario. Every evaluated move comes from real Doppler
+inference. The fixture supplies training examples only. Qualification requires
+both controllers to finish within the real round duration and reproduce their
+outcomes through replay. Preparation time, first valid action, rejected proposals,
+and actual execution identities are retained. A valid move alone does not pass.
+
+Local generation now explicitly matches the mesh's greedy sampling settings.
+Previously it inherited Doppler's repetition penalty of 1.1. Demonstrations retain
+their observed text, select the same app/contact and currently permitted action
+surface, and precede current observations. This prevents unrelated example screens
+from being presented as immediate action suggestions. It does not establish that
+the model learns or improves. Responses identify the model actually loaded.
+
+The pinned original Qwen3 1.7B checkpoint and its F16 Doppler conversion produced
+identical input and output token IDs on three unmasked greedy checks. Matching the
+sampling settings removed the missing `app:` prefix in the baseline check. Both
+implementations reproduced the old prompt's incorrect demonstration-time copy;
+that failure was not unique to GPU execution. Relevant examples placed before the
+current state corrected the first move in an independent checkpoint probe.
+
+See the [retained candidate evidence](meta-muzil-model-qualification-evidence.json).
+Gemma Q4 and F16 still failed the full task: the unchanged controller proposed an
+unavailable target, and personalized controllers repeated legal but unproductive
+moves. Qwen F16 made legal moves on the Intel helper but both rounds expired;
+first valid actions took 46.7 and 70.6 seconds. Its unchanged controller also
+drafted the wrong appointment time. Late/partial output from the expired trained
+round was rejected. All six recorded outcomes reproduced through replay.
+No replacement artifact is published or selected by these experiments.
+Transport acceptance and autonomous task completion remain separate gates.

@@ -1,0 +1,313 @@
+{
+  "scope": "Actual local Chrome WebGPU inference over Reploid WebRTC between two tabs on one Mac. Complete-model executor; no distributed partitions.",
+  "requesterWeightRequests": [],
+  "result": {
+    "phase": "playing",
+    "steps": [
+      {
+        "screen": {
+          "app": "home"
+        },
+        "text": "{\"type\": \"tap\", \"target\": \"app:messages\"}",
+        "execution": {
+          "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+          "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+          "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+        }
+      },
+      {
+        "screen": {
+          "app": "messages"
+        },
+        "text": "{\"type\": \"tap\", \"target\": \"recall\"}",
+        "execution": {
+          "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+          "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+          "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+        }
+      },
+      {
+        "screen": {
+          "app": "intention"
+        },
+        "text": "{\"type\": \"tap\", \"target\": \"home\"}",
+        "execution": {
+          "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+          "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+          "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+        }
+      },
+      {
+        "screen": {
+          "app": "home"
+        },
+        "text": "{\"type\": \"tap\", \"target\": \"app:clock\"}",
+        "execution": {
+          "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+          "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+          "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+        }
+      },
+      {
+        "screen": {
+          "app": "clock"
+        },
+        "text": "{\"type\": \"tap\", \"target\": \"recall\", \"value\": \"Pick Mom up after dentist\"}\n",
+        "execution": {
+          "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+          "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+          "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+        }
+      },
+      {
+        "screen": {
+          "app": "intention"
+        },
+        "text": "{\"type\": \"tap\", \"target\": \"home\"}",
+        "execution": {
+          "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+          "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+          "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+        }
+      },
+      {
+        "screen": {
+          "app": "home"
+        },
+        "text": "{\"type\": \"tap\", \"target\": \"app:clock\"}",
+        "execution": {
+          "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+          "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+          "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+        }
+      },
+      {
+        "screen": {
+          "app": "clock"
+        },
+        "text": "{\"type\": \"tap\", \"target\": \"recall\", \"value\": \"Pick Mom up after dentist\"}\n",
+        "execution": {
+          "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+          "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+          "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+        }
+      },
+      {
+        "screen": {
+          "app": "intention"
+        },
+        "text": "{\"type\": \"tap\", \"target\": \"home\"}",
+        "execution": {
+          "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+          "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+          "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+        }
+      },
+      {
+        "screen": {
+          "app": "home"
+        },
+        "text": "{\"type\": \"tap\", \"target\": \"app:clock\"}",
+        "execution": {
+          "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+          "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+          "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+        }
+      }
+    ],
+    "reply": {
+      "text": "I\u2019ll be there around 5:40 PM.",
+      "model": "gemma-3-1b-it-q4k-ehf16-af32",
+      "provider": "doppler",
+      "execution": {
+        "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+        "manifestHash": "cff3d7b885af14e8d554a52fadaa6bc8e9fcffa9520ffecac4f8959a02b093b5",
+        "resolvedExecutionId": "sha256:f366b6707fdc7142d8d19bbc3e04eb36588b1bcf8f2f0beddb82f77cdc33a20f"
+      }
+    },
+    "record": {
+      "version": "muzil-phone/1",
+      "roundId": "real-peer",
+      "scenario": {
+        "id": "pickup",
+        "title": "A small favor",
+        "intention": "Tell Mom what time to pick you up after your appointment.",
+        "contact": "mom",
+        "name": "Mom",
+        "event": "Dentist",
+        "start": "16:50",
+        "end": "17:40",
+        "date": "Monday, September 28",
+        "incoming": "What time should I pick you up? Outside the dentist, right?",
+        "note": "Appointment moved. Use the updated finish time.",
+        "interruptions": [
+          {
+            "id": "calendar-update",
+            "at": 6500,
+            "app": "calendar",
+            "title": "Your appointment changed",
+            "body": "Dentist now finishes at 5:40 PM. Same place."
+          },
+          {
+            "id": "group",
+            "at": 12000,
+            "app": "messages",
+            "contact": "group",
+            "title": "The group chat \u00b7 12 messages",
+            "body": "Wait. Is that your old apartment in this video?"
+          },
+          {
+            "id": "feed",
+            "at": 20500,
+            "app": "feed",
+            "title": "Just one thing",
+            "body": "This pan was abandoned for 40 years. Part 1 of 38."
+          },
+          {
+            "id": "mom-followup",
+            "at": 33000,
+            "app": "messages",
+            "contact": "mom",
+            "title": "Mom",
+            "body": "No rush. Just let me know the time."
+          }
+        ]
+      },
+      "controller": "human",
+      "elapsed": 0,
+      "log": [
+        {
+          "at": 0,
+          "action": {
+            "roundId": "real-peer",
+            "id": "start",
+            "type": "tap",
+            "target": "start"
+          }
+        },
+        {
+          "at": 0,
+          "action": {
+            "type": "tap",
+            "target": "app:messages",
+            "id": "step0",
+            "roundId": "real-peer",
+            "screen": {
+              "app": "home"
+            }
+          }
+        },
+        {
+          "at": 0,
+          "action": {
+            "type": "tap",
+            "target": "recall",
+            "id": "step1",
+            "roundId": "real-peer",
+            "screen": {
+              "app": "messages"
+            }
+          }
+        },
+        {
+          "at": 0,
+          "action": {
+            "type": "tap",
+            "target": "home",
+            "id": "step2",
+            "roundId": "real-peer",
+            "screen": {
+              "app": "intention"
+            }
+          }
+        },
+        {
+          "at": 0,
+          "action": {
+            "type": "tap",
+            "target": "app:clock",
+            "id": "step3",
+            "roundId": "real-peer",
+            "screen": {
+              "app": "home"
+            }
+          }
+        },
+        {
+          "at": 0,
+          "action": {
+            "type": "tap",
+            "target": "recall",
+            "id": "step4",
+            "roundId": "real-peer",
+            "screen": {
+              "app": "clock"
+            }
+          }
+        },
+        {
+          "at": 0,
+          "action": {
+            "type": "tap",
+            "target": "home",
+            "id": "step5",
+            "roundId": "real-peer",
+            "screen": {
+              "app": "intention"
+            }
+          }
+        },
+        {
+          "at": 0,
+          "action": {
+            "type": "tap",
+            "target": "app:clock",
+            "id": "step6",
+            "roundId": "real-peer",
+            "screen": {
+              "app": "home"
+            }
+          }
+        },
+        {
+          "at": 0,
+          "action": {
+            "type": "tap",
+            "target": "recall",
+            "id": "step7",
+            "roundId": "real-peer",
+            "screen": {
+              "app": "clock"
+            }
+          }
+        },
+        {
+          "at": 0,
+          "action": {
+            "type": "tap",
+            "target": "home",
+            "id": "step8",
+            "roundId": "real-peer",
+            "screen": {
+              "app": "intention"
+            }
+          }
+        },
+        {
+          "at": 0,
+          "action": {
+            "type": "tap",
+            "target": "app:clock",
+            "id": "step9",
+            "roundId": "real-peer",
+            "screen": {
+              "app": "home"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "date": "2026-09-28",
+  "autonomousCompletionQualified": false
+}

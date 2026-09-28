@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base href="/">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>m3t4.ai — historical arena</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header id="topnav">
+    <div class="brand">
+      <a href="/history" class="logo" title="Go home">m3t4<span class="logo-caret">.ai</span></a>
+    </div>
+    <nav aria-label="Main">
+      <a href="/tune" data-route="tune" data-route-group="tune roster" data-nav="primary" title="Tune, test, and save your fighters">workshop</a>
+      <a href="/live" data-route="live" data-nav="primary" title="Watch arena matches and browse results">watch</a>
+      <a href="/duel" data-route="duel" data-nav="primary" title="Play a match yourself — vs AI, hot-seat, or peer-to-peer">play</a>
+    </nav>
+    <div id="account" class="account" data-state="anon"></div>
+  </header>
+
+  <main id="app"></main>
+
+  <footer id="bottom">
+    <a href="/" data-native-nav="true">← Meta Muzil</a><span id="status">Historical arena</span>
+    <span class="spacer"></span>
+    <a href="/about">how to play</a>
+    <a href="/intro">the world</a>
+    <a href="https://d4da.com" target="_blank" rel="noreferrer">produced by d4da.com</a>
+  </footer>
+
+  <script src="config.js"></script>
+  <script>
+    const isLocalM3t4 = ["localhost", "127.0.0.1"].includes(location.hostname);
+    if (!window.__M3T4_API_ORIGIN__) {
+      window.__M3T4_API_ORIGIN__ = isLocalM3t4 ? "http://localhost:7777" : window.location.origin;
+    }
+    if (!window.__M3T4_WS_ORIGIN__ && !isLocalM3t4) {
+      window.__M3T4_WS_ORIGIN__ = "wss://arena-server-789525635095.us-central1.run.app";
+    }
+    if (!window.__M3T4_AUTH_MODE__) {
+      window.__M3T4_AUTH_MODE__ = isLocalM3t4 ? "dev" : "firebase";
+    }
+  </script>
+  <script type="module">
+    import { installAlphaGate } from "./lib/alpha-gate.js";
+    await installAlphaGate();
+    await import("./app.js");
+  </script>
+</body>
+</html>

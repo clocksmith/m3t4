@@ -26,3 +26,12 @@ and installed package license files supply the corresponding notices.
 Other locked dependencies declare MIT, Apache-2.0, ISC, BSD, or 0BSD licenses;
 `node-forge` declares a BSD-3-Clause or GPL-2.0 choice. Retain the applicable
 notices when distributing those packages.
+
+## Meta Muzil browser dependencies
+
+`client/muzil/assets/Manrope.ttf` is distributed under the SIL Open Font
+License; see the adjacent `OFL.txt`.
+
+`npm run sync:runtime` copies local Reploid and Doppler source with each
+library's LICENSE. Model weights are not included; opt-in acquisition remains
+subject to the selected model's terms.

@@ -3,6 +3,15 @@
 These instructions apply to the whole `m3t4` repo unless a nested
 `AGENTS.md` is added later.
 
+## Current Product Direction
+
+The user has authorized Meta Muzil as the new home page. `client/muzil/` owns
+the simulated phone and controllers; `client/history/index.html` preserves the
+old arena entry. `tools/sync-muzil-runtime.mjs` copies sibling Reploid/Doppler
+sources into ignored `client/vendor/`, without model weights. Read
+`docs/meta-muzil.md` for implemented and target integration boundaries.
+Historical ranked/sidecar rules below remain in effect for those surfaces.
+
 ## Project Shape
 
 - `client/` is the Firebase-hosted browser app.
@@ -78,7 +87,7 @@ copy with `npm run sync:client-sim` or `npm run check:client-sim`.
 
 ## Intent-First Operations
 
-- Treat m3t4 intent as ranked arena plus bounded distributed-compute experiments, not broad public compute claims.
+- Meta Muzil is the new product intent. Preserve the historical ranked arena and bounded compute experiments; do not extend their evidence into broad mesh claims.
 - If the user asks what works, produce a current scoreboard from server state, client build, plasma-lab smoke artifacts, production flags, and docs claim boundary.
 - Do not open public compute intake, change production flags, or claim strict WebRTC proof unless the user explicitly asks for that operation and the smoke artifacts support it.
 - Ranked arena behavior belongs to `server`; advisory compute belongs to `plasma-lab`. Keep those authority boundaries explicit.

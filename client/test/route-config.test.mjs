@@ -30,9 +30,9 @@ test("route config keeps browser feature gates centralized", () => {
   assert.deepEqual(ROUTE_NAMES, ["intro", "tune", "live", "roster", "compute", "rules", "about", "duel"]);
 });
 
-test("top navigation keeps home on the logo without a start tab", () => {
-  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  assert.match(html, /<a href="\/" class="logo" title="Go home">/);
+test("historical navigation keeps the arena home on the logo", () => {
+  const html = fs.readFileSync(new URL("../history/index.html", import.meta.url), "utf8");
+  assert.match(html, /<a href="\/history" class="logo" title="Go home">/);
   assert.doesNotMatch(html, /data-route="intro" data-nav="primary"/);
   assert.doesNotMatch(html, /data-route="roster" data-nav="primary"/);
   assert.doesNotMatch(html, /data-route="compute" data-nav="primary"/);
@@ -47,7 +47,7 @@ test("top navigation keeps home on the logo without a start tab", () => {
 });
 
 test("account control replaces the inline whoami link", () => {
-  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const html = fs.readFileSync(new URL("../history/index.html", import.meta.url), "utf8");
   const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
   assert.match(html, /id="account"/);
   assert.doesNotMatch(html, /id="whoami"/);

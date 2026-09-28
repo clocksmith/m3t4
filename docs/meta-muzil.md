@@ -70,22 +70,42 @@ First requesting-player weight bytes: zero. A contributor's model preparation
 still costs bandwidth, storage, and GPU memory. Keeping an executor ready removes
 that cost from subsequent requesters. The app shows unavailable capacity honestly.
 
-## Current integration limit
+## Distributed execution
 
-The page's adapter uses Reploid's transport and complete-model Doppler execution.
-It does not implement requester-to-remote-A partition entry, automatic discovery,
-mesh-wide slot reservations, selective model-piece acquisition, replica placement,
-checkpoint migration, automatic failover, or Bayesian scheduling. Peer output is
-validated as a legal proposal; the browser is not attested trustworthy hardware.
-A copied connection code does not establish broad NAT traversal. Operators can
-inject a short-lived RTC configuration through `MUZIL_RTC_CONFIG`; no TURN secrets
-are committed. No public seed fleet or inference service is provisioned here.
+The distributed helper uses Reploid's authenticated requester entry and direct
+A–B partition channel. Only contributors import Doppler execution. The requesting
+phone sends authorized observations and receives proposed actions; it carries no
+intermediate tensors. The phone validates match, round, controller, attempt and
+observation ownership before applying a still-legal action.
 
-Next defining acceptance remains: a weightless requester, separate warm A and B,
-a compatible replacement, and an empty contributor; direct A–B tensor exchange;
-selective verified acquisition concurrent with play; draining and abrupt failure
-with bounded recovery, ownership generations and no duplicate committed action.
-Keep those changes in the sibling libraries' established owners.
+Doppler defines executable partitions and an independently hash-verified piece
+index. Reploid coordinates bounded acquisition, cache reuse and source replacement.
+This page supplies an exact HTTP range source and OPFS cache; it does not yet
+supply a peer weight source. Shared embeddings are genuinely needed by both stages.
+The pinned-manifest development path is not signed Capsule qualification.
+
+Contributors advertise readiness after actual loading. Draining refuses new work
+and settles admitted attempts. Loss can restart an affected request on another
+explicitly connected entry with a new attempt and ownership generation. This is
+reconstruction from authorized input, not KV-cache migration. Healthy requests
+retain their owners. A rematch cannot accept an old inference result.
+
+Real inference was exercised between a Mac and an Intel Linux machine through
+Tailscale WebRTC, with no requester weights. One retained baseline produced eight
+valid model actions and a first valid action in 5.6 seconds. It did **not** finish
+the appointment. Subsequent lifecycle runs exercised joining, abrupt loss, restart
+and draining, but failed the valid-action gate on model output formatting. Full
+product acceptance remains open; do not infer autonomous completion from transport
+or unit-test success. Whole-model comparison reproduced an empty model response
+to the same longer prompt, so that failure was not unique to split execution.
+
+Discovery uses explicit connection codes. No public seed fleet, automatic
+placement, global reservations, checkpoint migration, Bayesian scheduling, or
+public signed model acquisition is provisioned. Peers are not attested hardware.
+Operators can inject `MUZIL_RTC_CONFIG`; no TURN credentials are committed.
+The Reploid test-only `tests/fixtures/tailnet-stun.js` can expose tailnet ICE
+candidates where browsers advertise only LAN addresses. SSH access alone does not
+prove a WebRTC route.
 
 ## Commands and evidence
 
@@ -98,6 +118,7 @@ npm run test:muzil:browser
 npm run check:runtime
 # Optional physical GPU check; requires sibling local model files:
 npm run test:muzil:inference
+npm run test:muzil:mesh -- --personalized --lifecycle --require-completion
 # Enforce autonomous completion as a separate quality gate:
 npm run test:muzil:inference -- --require-completion
 ```

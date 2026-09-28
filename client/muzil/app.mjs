@@ -1,7 +1,9 @@
 import { APPS, RULES, SCENARIOS } from './scenarios.mjs';
 import { createPhone, applyAction, advance, observe, displayTime, makeReplay, replay } from './engine.mjs';
-import { LocalController, parseDecision } from './controller.mjs';
+import { LocalController } from './controller.mjs';
 import { PeerController } from './peer.mjs';
+import { createDecisionOwner } from './decision.mjs';
+import { MeshController } from './mesh.mjs';
 const $ = id => document.getElementById(id);
 const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const iconPaths = {
@@ -23,18 +25,22 @@ let lastReplay = read('muzil.replay.v1', null), state = createPhone({ roundId: u
 let roundStarted = 0, toastTimer, interval, replayStarted = 0, replayMode = false, agentRunning = false, requestController = null, revealDismissed = false, recorded = false, mode = 'play';
 let memory = [], inferenceMs = 0, race = null, invitation = null;
 const local = new LocalController();
+export const mesh = new MeshController({ onChange: updateConnection });
+const decisions = createDecisionOwner();
+let agentOwnerId = null;
 const peer = new PeerController({ local, onChange: updateConnection, onGame: handleGame });
 function toast(message) { clearTimeout(toastTimer); $('toast').textContent = message; $('toast').hidden = false; toastTimer = setTimeout(() => { $('toast').hidden = true; }, 6000); }
 function report(error) { toast(error.message || String(error)); }
 function updateConnection() {
   if (race && ['closed','failed','offline'].includes(peer.state)) { $('race-status').textContent = 'Peer disconnected. This race is interrupted; you can keep playing.'; race = null; }
-  const ready = peer.ready || !!local.session;
-  $('connection-label').textContent = peer.ready ? 'Peer ready' : local.session ? 'Helper ready here' : 'Connect a helper';
+  const ready = mesh.ready || peer.ready || !!local.session;
+  if ($('partition-state')) $('partition-state').textContent = mesh.status;
+  $('connection-label').textContent = mesh.ready ? 'Distributed helper ready' : peer.ready ? 'Peer ready' : local.session ? 'Helper ready here' : 'Connect a helper';
   document.querySelectorAll('.status-dot').forEach(n => n.classList.toggle('ready', ready));
   $('mesh-state').textContent = peer.ready ? `Prepared peer · ${peer.remote.model}` : `Peer ${peer.state}${peer.state === 'connected' ? ' · waiting for a prepared model' : ''}`;
 }
 function setMode(next) { mode = next; for (const name of ['play','train','finish']) $(`${name}-view`).hidden = name !== next; document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === next)); if (next === 'train') renderProfile(); }
-function stopAgent() { agentRunning = false; requestController?.abort(); requestController = null; $('agent-round').textContent = 'Let my stand-in try →'; }
+function stopAgent() { decisions.cancel(); agentOwnerId = null; agentRunning = false; requestController?.abort(); requestController = null; $('agent-round').textContent = 'Let my stand-in try →'; }
 function newRound(controller = 'human', options = {}) {
   stopAgent(); replayMode = false; recorded = false; revealDismissed = false; inferenceMs = 0;
   if (!options.raceId) { if (race && peer.state === 'connected') peer.sendGame({ type: 'leave', raceId: race.id }); race = null; $('race-status').textContent = ''; }
@@ -110,26 +116,28 @@ function renderNotification() {
 }
 async function agentPlay() {
   if (agentRunning) { stopAgent(); toast('Your turn. The stand-in is paused.'); return; }
-  if (!peer.ready && !local.session) { $('mesh-dialog').showModal(); return; }
+  if (!mesh.ready && !peer.ready && !local.session) { $('mesh-dialog').showModal(); return; }
   if (race?.id === state.roundId && state.phase === 'playing') state.controller = 'agent'; else newRound('agent'); agentRunning = true; $('agent-round').textContent = 'Take over →';
   const roundId = state.roundId;
+  const ownerId = agentOwnerId = uuid();
+  const matchId = race?.id || roundId;
   try {
     while (agentRunning && state.phase === 'playing' && state.roundId === roundId) {
-      const observation = observe(state); requestController = new AbortController();
+      const pending = decisions.begin(state, { matchId, controllerId: ownerId });
+      const { observation } = pending; requestController = new AbortController();
       const started = performance.now();
-      const result = await (peer.ready ? peer : local).generate({ kind: 'action', observation, memory, profile: { id: profile.id, objective: profile.objective, version: profile.version, examples: profile.examples.slice(-6) } }, requestController.signal);
+      const result = await (mesh.ready ? mesh : peer.ready ? peer : local).generate({ kind: 'action', binding: pending.binding, observation, memory, history: state.log.map(e => ({type:e.action.type,target:e.action.target,...(e.action.value !== undefined ? {value:e.action.value} : {})})), profile: { id: profile.id, objective: profile.objective, version: profile.version, examples: profile.examples.slice(-6) } }, AbortSignal.any([requestController.signal, pending.signal]));
       inferenceMs += performance.now() - started;
-      if (!agentRunning || state.roundId !== roundId) break;
-      const action = parseDecision(result.text, observation);
-      const applied = applyAction(state, { ...action, id: uuid(), roundId, screen: observation.screen });
+      if (!agentRunning || agentOwnerId !== ownerId || state.roundId !== roundId) break;
+      const applied = decisions.accept(state, result, { matchId: race?.id || state.roundId, controllerId: agentOwnerId });
       if (!applied.accepted) throw new Error(applied.reason);
       state = applied.state; remember(observe(state)); render();
-      $('round-status').textContent = `Stand-in: ${action.target.replace('app:', 'opened ')} · ${peer.ready ? 'connected peer' : 'this device'}`;
+      $('round-status').textContent = `Stand-in: ${state.log.at(-1).action.target.replace('app:', 'opened ')} · ${mesh.ready ? 'distributed helper' : peer.ready ? 'connected peer' : 'this device'}`;
       if (state.phase === 'finished') complete();
       await new Promise(r => setTimeout(r, 350));
     }
   } catch (error) { if (agentRunning) { report(error); $('round-status').textContent = `${error.message} You can take over.`; } }
-  finally { stopAgent(); }
+  finally { if (agentOwnerId === ownerId) stopAgent(); }
 }
 function raceSummary() {
   if (!race) return;
@@ -230,12 +238,12 @@ $('unload-model').onclick = guarded(async () => { peer.sharing = false; $('share
 $('reply-form').onsubmit = guarded(async e => {
   e.preventDefault(); const message = $('real-message').value.trim(), context = $('real-context').value.trim();
   if (!message || !context) throw new Error('Add the message and the relevant details first.');
-  const remote = peer.ready;
+  const remote = mesh.ready || peer.ready;
   if (remote && !$('reply-consent').checked) throw new Error('Approve sharing this message with the connected peer first.');
   if (!remote && !local.session) { $('mesh-dialog').showModal(); return; }
   $('draft-reply').disabled = true; $('reply-status').textContent = remote ? 'Preparing your reply on the connected peer…' : 'Preparing your reply on this device…';
   const controller = new AbortController(); const timer = setTimeout(() => controller.abort(),45000);
-  try { const result = await (remote ? peer : local).generate({ kind: 'reply', message, context },controller.signal); $('reply-output').value = result.text; $('reply-status').textContent = 'Check the details, edit if needed, then copy. Nothing has been sent.'; }
+  try { const result = await (mesh.ready ? mesh : remote ? peer : local).generate({ kind: 'reply', message, context },controller.signal); $('reply-output').value = result.text; $('reply-status').textContent = 'Check the details, edit if needed, then copy. Nothing has been sent.'; }
   catch (error) { $('reply-status').textContent = error.message; }
   finally { clearTimeout(timer); $('draft-reply').disabled = false; }
 });
@@ -250,3 +258,21 @@ interval = setInterval(() => {
 },250);
 window.addEventListener('pagehide', () => { clearInterval(interval); stopAgent(); void peer.close(); });
 render(); updateConnection();
+
+let partitionLink = null;
+$('partition-offer').onclick = () => pairing(async () => {
+  partitionLink = await mesh.connect(true, $('partition-kind').value);
+  $('partition-output').value = await partitionLink.exportCode();
+});
+$('partition-join').onclick = () => pairing(async () => {
+  partitionLink = await mesh.connect(false, $('partition-kind').value);
+  partitionLink.acceptCode($('partition-input').value);
+  $('partition-output').value = await partitionLink.exportCode();
+});
+$('partition-answer').onclick = () => pairing(async () => { if (!partitionLink) throw new Error('Create a connection first'); partitionLink.acceptCode($('partition-input').value); });
+$('partition-copy').onclick = guarded(() => navigator.clipboard.writeText($('partition-output').value));
+$('prepare-a').onclick = () => pairing(() => mesh.prepare(0));
+$('prepare-b').onclick = () => pairing(() => mesh.prepare(1));
+$('partition-drain').onclick = () => pairing(() => mesh.drain());
+$('partition-disconnect').onclick = () => pairing(async () => { stopAgent(); await mesh.close(); updateConnection(); });
+$('partition-evidence').onclick = () => download('muzil-execution.json', { ...mesh.metrics, actions: decisions.receipts });

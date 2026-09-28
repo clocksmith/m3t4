@@ -17,7 +17,7 @@ export class LocalController {
     this.busy = true;
     let settled; this.settlement = new Promise(resolve => { settled = resolve; });
     try {
-      const prompt = job.kind === 'action' ? actionPrompt(job) : replyPrompt(job);
+      const prompt = job.kind === 'action' ? actionPrompt(job, { format: 'json' }) : replyPrompt(job);
       const options = { maxTokens: 160, temperature: 0, signal };
       if (job.kind === 'action') {
         const url = new URL('../vendor/doppler/src/inference/pipelines/structured/json-grammar-mask.js', import.meta.url);
@@ -32,23 +32,27 @@ export class LocalController {
         options.logitMaskIdentity = this.grammarIdentity;
       }
       const result = await this.session.generate([{ role: 'user', content: prompt }], options);
-      return { text: result.text ?? result.outputText ?? result.content ?? '', model: this.model, provider: 'doppler', execution: { modelId: this.session.modelId, manifestHash: this.session.manifestHash, resolvedExecutionId: result.resolution?.resolvedExecutionId || null } };
+      return { binding: job.binding ? structuredClone(job.binding) : null, text: result.text ?? result.outputText ?? result.content ?? '', model: this.model, provider: 'doppler', execution: { modelId: this.session.modelId, manifestHash: this.session.manifestHash, resolvedExecutionId: result.resolution?.resolvedExecutionId || null } };
     } finally { this.busy = false; settled(); }
   }
   async close() { this.draining = true; await this.settlement; try { await this.session?.close(); this.session = null; this.grammarIdentity = null; this.status = 'Not loaded'; } finally { this.draining = false; } }
 }
-export function actionPrompt(job) {
-  const { observation, memory = [], profile = {} } = job;
+export function actionPrompt(job, { format = 'command' } = {}) {
+  const { observation, memory = [], profile = {}, history = [] } = job;
   const seen = [...new Set(memory.flatMap(o => o.text || []))].filter(t => t && !observation.text.includes(t)).slice(-16);
-  const examples = (profile.examples || []).filter(e => e.observation?.screen?.app === observation.screen.app).slice(-2).map(e => ({ screen:e.observation.screen, action:e.action }));
-  const legal = observation.actions.map(a => ({ type:a.type, target:a.target, ...(a.type === 'type' ? { value:'YOUR TEXT HERE' } : {}) }));
-  return `Choose the next phone action. Complete the intention you previously saw. Find required facts before replying. Once you have seen the appointment finish time, go to Messages and reply to Mom with that time. Do not keep looking up information you already know. If the correct reply is already drafted, send it.
-${profile.objective === 'imitate' ? 'Imitate demonstrated habits, even detours.' : 'Help finish the task accurately.'}
-Previously seen: ${seen.join(' | ').slice(0,2400)}
-Current screen: ${observation.screen.app}${observation.screen.contact ? '/' + observation.screen.contact : ''}
-Visible text: ${observation.text.join(' | ')}
-${examples.length ? 'Demonstrated choices (old examples, not current facts): ' + JSON.stringify(examples) + '\n' : ''}Legal actions: ${JSON.stringify(legal)}
-Return exactly one legal action as JSON. For typing, replace YOUR TEXT HERE with the text to enter. Do not add explanation or multiple actions.`;
+  const examples = (profile.examples || []).filter(e => e.observation).slice(-8)
+    .map(e => ({ app: e.observation.screen, action: e.action }));
+  const legal = observation.actions.map(a => ({ type:a.type, target:a.target, label:a.label,
+    ...(a.type === 'type' ? { value:'YOUR TEXT HERE' } : {}) }));
+  return `You control a phone. Choose one next action to complete the intention you saw.
+Read memory before opening another app. If you already know a requested fact, use it instead of looking it up again. To reply, open Messages, select the contact, type the answer, then send it. Use the CURRENT appointment end time, not its start time or a demonstration time.
+${profile.objective === 'imitate' ? 'Imitate the demonstrated habits, including detours.' : 'Complete the task accurately. Use facts already seen. Avoid repeating actions that did not help.'}
+Memory of visible information: ${seen.join(' | ').slice(0,2400)}
+Recent actions: ${JSON.stringify(history.slice(-8))}
+Current app: ${observation.screen.app}${observation.screen.contact ? '/' + observation.screen.contact : ''}
+Visible information: ${observation.text.join(' | ')}
+${examples.length ? 'Your demonstrations from a DIFFERENT round. Learn the behavior; use CURRENT times and facts: ' + JSON.stringify(examples) + '\n' : ''}Available controls:\n${format === 'json' ? JSON.stringify(legal) : observation.actions.map(a => a.type + ' ' + a.target + (a.type === 'type' ? ' = TEXT' : '') + ' (' + a.label + ')').join('\n')}
+${format === 'json' ? 'Return one JSON action with type and target. For typing include value containing your actual message.' : 'Output only one command: tap TARGET or type TARGET = TEXT. Copy TARGET exactly from a listed control. For typing, TEXT is the actual message. Do not quote a tap target.'} No explanation.\nNext action:`;
 }
 export function replyPrompt(job) {
   if (job.kind !== 'reply' || typeof job.message !== 'string' || typeof job.context !== 'string' || job.message.length > 3000 || job.context.length > 4000) throw new Error('Invalid reply request');
@@ -60,8 +64,17 @@ Use these facts, including the exact time when supplied. Return only my reply, i
 export function parseDecision(text, observation) {
   const cleaned = text.trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '').trim();
   const start = cleaned.indexOf('{'), end = cleaned.lastIndexOf('}');
-  if (start < 0 || end < start) throw new Error('The agent did not return an action. Try another decision.');
-  const proposed = JSON.parse(cleaned.slice(start, end + 1));
+  let proposed;
+  if (start >= 0 && end >= start) proposed = JSON.parse(cleaned.slice(start, end + 1));
+  else {
+    let command = cleaned.replace(/^(tap|type)\s+/, '');
+    if (command.startsWith('"') && command.endsWith('"')) command = JSON.parse(command);
+    const tapped = observation.actions.find(a => a.type === 'tap' && a.target === command);
+    const typed = observation.actions.find(a => a.type === 'type' && command.startsWith(a.target + ' = '));
+    if (tapped) proposed = {type:'tap',target:tapped.target};
+    else if (typed) proposed = {type:'type',target:typed.target,value:command.slice(typed.target.length + 3)};
+    else throw new Error('The agent did not return one permitted command. Try another decision.');
+  }
   const legal = observation.actions.find(a => a.type === proposed.type && a.target === proposed.target);
   if (!legal || (proposed.type === 'type' && (typeof proposed.value !== 'string' || proposed.value.length > (legal.maxLength || 5)))) throw new Error('The agent proposed an unavailable action. The phone was not changed.');
   return { type: proposed.type, target: proposed.target, ...(proposed.type === 'type' ? { value: proposed.value } : {}) };

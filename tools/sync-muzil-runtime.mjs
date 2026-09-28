@@ -23,7 +23,9 @@ for (const [name, entry] of Object.entries(entries)) {
       await visit(relative(source, resolve(dirname(absolute), match[1])));
     }
   };
-  if (name === 'reploid') await visit(entry);
+  if (name === 'reploid') {
+    for (const path of [entry, 'packages/reploid/src/mesh/partitions/partition-link.js', 'packages/reploid/src/mesh/partitions/partition-entry.js', 'packages/reploid/src/mesh/partitions/partition-chat.js', 'packages/reploid/src/mesh/partitions/partition-peer.js', 'packages/reploid/src/mesh/partitions/resident-partition.js', 'packages/reploid/src/mesh/partitions/partition-grants.js', 'packages/reploid/src/artifacts/custody/piece-acquisition.js']) await visit(path);
+  }
   else {
     // Doppler resolves kernels/configuration dynamically. Preserve its complete runtime
     // source tree rather than guessing a static import closure and missing shader assets.
@@ -36,6 +38,7 @@ for (const [name, entry] of Object.entries(entries)) {
     };
     await walk('src');
     paths.add('models/local/create-gemma-3-1b-qualification/manifest.json');
+    paths.add('models/partition-pieces/gemma-3-1b.json');
   }
   paths.add('LICENSE');
   const files = {};

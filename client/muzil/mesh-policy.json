@@ -1,0 +1,123 @@
+{
+  "schema": "muzil.partition-policy/v1",
+  "roomId": "muzil-prepared-v1",
+  "model": {
+    "id": "gemma-3-1b-it-q4k-ehf16-af32",
+    "name": "Gemma 3 1B split",
+    "provider": "doppler",
+    "identity": "sha256:f947e3ccac8028c9fcd0eb87cad3deec023102672288c75353d97d3b813e731b",
+    "adapters": [],
+    "generation": {
+      "maxTokens": 96,
+      "maxSeqLen": 4096,
+      "temperature": 0,
+      "topK": 0,
+      "topP": 1,
+      "repetitionPenalty": 1,
+      "repetitionPenaltyWindow": 0,
+      "presencePenalty": 0,
+      "useChatTemplate": true
+    }
+  },
+  "plan": {
+    "schema": "doppler.layer-partition-contract/v1",
+    "modelId": "gemma-3-1b-it-q4k-ehf16-af32",
+    "totalLayers": 26,
+    "hiddenSize": 1152,
+    "vocabSize": 262144,
+    "splitLayer": 13,
+    "activationDtype": "f32",
+    "partitions": [
+      {
+        "index": 0,
+        "layerRange": [
+          0,
+          12
+        ],
+        "layerCount": 13,
+        "hasEmbedding": true,
+        "hasLmHead": false,
+        "inputContract": {
+          "type": "token-ids",
+          "rank": 2,
+          "shapeDescription": "[batchSize, seqLen]",
+          "dtype": "i32"
+        },
+        "outputContract": {
+          "type": "activation-tensor",
+          "rank": 3,
+          "shapeDescription": "[batchSize, seqLen, hiddenSize]",
+          "hiddenSize": 1152,
+          "dtype": "f32"
+        }
+      },
+      {
+        "index": 1,
+        "layerRange": [
+          13,
+          25
+        ],
+        "layerCount": 13,
+        "hasEmbedding": false,
+        "hasLmHead": true,
+        "inputContract": {
+          "type": "activation-tensor",
+          "rank": 3,
+          "shapeDescription": "[batchSize, seqLen, hiddenSize]",
+          "hiddenSize": 1152,
+          "dtype": "f32"
+        },
+        "outputContract": {
+          "type": "logits",
+          "rank": 3,
+          "shapeDescription": "[batchSize, seqLen, vocabSize]",
+          "vocabSize": 262144,
+          "dtype": "f32"
+        }
+      }
+    ]
+  },
+  "planId": "sha256:75187557c147fefdfe5e94e37cbbc7cbe692f21acf31ddad3e7231e16db9bf59",
+  "indexIdentity": "sha256:ddf74b00cc55f9029f14087488114974b2545a8810e0f7b343076669bd9cdea8",
+  "limits": {
+    "maxTokens": 96,
+    "maxPromptTokens": 2048,
+    "maxActivationBytes": 16777216,
+    "maxOutputCharacters": 4000,
+    "maxAttempts": 4096,
+    "maxConcurrentAttempts": 2
+  },
+  "channel": {
+    "maxFrameBytes": 16384,
+    "maxControlBytes": 60000,
+    "maxPayloadBytes": 16777216,
+    "maxPendingBytes": 33554432,
+    "maxPendingRequests": 8,
+    "maxRequestsPerChannel": 65536,
+    "maxBufferedBytes": 16777216,
+    "maxTransferBytes": 1073741824,
+    "timeoutMs": 120000
+  },
+  "input": {
+    "maxInputCharacters": 18000,
+    "maxOutputCharacters": 4000,
+    "maxAttempts": 4096,
+    "maxConcurrentAttempts": 2,
+    "descriptorTtlMs": 10000
+  },
+  "acquisition": {
+    "maxConcurrent": 1,
+    "maxQueued": 32,
+    "maxPieceBytes": 1048576,
+    "timeoutMs": 120000
+  },
+  "receiver": {
+    "maxAttempts": 4096,
+    "maxSteps": 96
+  },
+  "grantTtlMs": 240000,
+  "maxGrants": 4096,
+  "maxLinks": 8,
+  "maxPlacements": 3,
+  "connectTimeoutMs": 180000
+}

@@ -2,18 +2,18 @@
   "schema": "muzil.local-runtimes/v1",
   "libraries": {
     "reploid": {
-      "revision": "15d0a55a5438b2042df080cbcdd190da543014f0",
+      "revision": "5b2483d6d9ab7a42075f00e9eb941dd400801656",
       "sourceDirty": false,
       "entry": "packages/reploid/src/transport/assignment.js",
-      "files": 9,
-      "digest": "2556cd9e62db8ff09c7df0d1172dd4f59d6392faefd8feb5bad12e680903e443"
+      "files": 24,
+      "digest": "5f5fe5a263e81c71b81179e1eb3cb5493d7693af630e307871491f8ec3b84b1b"
     },
     "doppler": {
-      "revision": "069f343587d3925e7577cead6134b11ff05d36c5",
+      "revision": "dbadbb64b48a8ae863892769246cf8351c83fee6",
       "sourceDirty": false,
       "entry": "src/index.js",
-      "files": 1705,
-      "digest": "53befdebc7f3914560cd5c22ebf95408763ee9a22861f833147933e5fdc17990"
+      "files": 1707,
+      "digest": "6a686bc8fab65bc3510b4055d2b11f220edbb63f36fb2ba59db2ceefe1c730b2"
     }
   }
 }

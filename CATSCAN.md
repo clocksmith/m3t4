@@ -4,34 +4,46 @@ Parent: none
 
 ## Target
 
-Deterministic ranked bot arena with bounded advisory compute experiments.
+Meta Muzil simulated-phone game, teachable model controllers, and preserved
+historical deterministic arena.
 
 ## Authority
 
-Server owns ranked authority; plasma-lab owns isolated advisory work.
+m3t4 owns phone transitions, permitted observations/actions, task evaluation,
+scoring, demonstrations and replay. Reploid owns peer transport and execution
+coordination. Doppler owns model loading and inference. Historical ranked
+results remain server-owned; historical plasma-lab work remains advisory.
 
 ## Scope
 
-Client, simulation, server, analysis, and sidecar boundaries.
+New client/muzil surface, local library synchronization, historical client,
+simulation, server and sidecar boundaries.
 
 ## Contracts
 
-Inputs: fighter configurations, match state, assignments. Outputs: match results and separately validated compute receipts.
+Inputs: versioned scenarios, player actions, model proposals and profiles.
+Outputs: validated state transitions, outcome results and recorded replays.
+Historical contracts remain documented in docs/history/CATSCAN.md.
 
 ## Invariants
 
-Safe-off public intake. No leaked expected hashes or private bots. Strict WebRTC requires verified peer subreceipts. Administrative windows need explicit authorization.
+No weights or execution runtime on first requester load. Model use is explicit.
+No fabricated inference or peer readiness. Private data requires recipient
+permission. Exact round/action identity and contextual preconditions gate changes.
+No public compute intake, expected-hash disclosure or private bot publication.
 
 ## Acceptance
 
-Use relevant simulation, server, client, and sidecar tests. Public network claims need identified transport and deployment evidence.
+Phone invariants, browser task completion, rematch, replay, local-source copy
+checks, and real library integration evidence. Separate physical devices and
+partition acquisition/recovery require their own acceptance evidence.
 
 ## Non-goals
 
-Trustless compute claims, broad NAT coverage from one host, or sidecar authority over ranking.
+Trustless compute, blanket NAT coverage, automatic production changes, copying
+real phone notifications, and implying medical or Meta affiliation.
 
 ## Freedom
 
-Improve implementation without changing ranked authority, safe defaults, or evidence meaning.
-
-Related: [GOALS.md](GOALS.md), [INTENT.md](INTENT.md).
+Implement the new product while retaining the historical experience and evidence
+boundaries. Related: GOALS.md, INTENT.md, docs/meta-muzil.md.

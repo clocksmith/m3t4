@@ -14,7 +14,7 @@ const mime = { ".html": "text/html", ".js": "text/javascript", ".json": "applica
 const server = http.createServer(async (req, res) => {
   try {
     let file = decodeURIComponent(new URL(req.url, "http://local").pathname);
-    if (!path.extname(file)) file = "/index.html";
+    if (!path.extname(file)) file = "/history/index.html";
     const target = path.resolve(root, "." + file);
     if (!target.startsWith(root)) throw new Error("invalid path");
     const data = await fs.readFile(target);

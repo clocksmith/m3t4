@@ -1,4 +1,29 @@
-# m3t4.ai
+# m3t4.ai / Meta Muzil
+
+A simulated-phone game about finishing what you opened your phone to do.
+The new homepage contains working apps, outcome-based tasks, demonstrations,
+replay, paired races, and opt-in model controllers. The previous arena remains
+at `/history` and its original routes.
+
+```sh
+npm install
+npm run sync:runtime   # uses ../reploid and ../doppler; copies no model weights
+npm run dev           # http://localhost:7788
+npm run test:muzil
+npm run test:muzil:browser
+```
+
+The page does not load Reploid or Doppler until the relevant connection/execution
+control is used. A prepared peer can execute inference for a requester without
+weights. Automatic mesh discovery, remote partition placement, selective weight
+acquisition, and replacement recovery are not yet connected to this page.
+
+See [implementation, local library copies, and acceptance](docs/meta-muzil.md).
+This source change is not a deployment claim.
+
+---
+
+# Historical m3t4 arena
 
 m3t4.ai is a deterministic bot-design arena. Players build fighter brains from
 bounded JSON configs, watch scheduled matches, and can opt in to advisory

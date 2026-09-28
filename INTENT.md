@@ -4,26 +4,33 @@ Parent: none
 
 ## Need
 
-Players need reproducible ranked behavior, while compute experiments need room to test claims without becoming hidden game authority.
+People open a phone with an intention and lose it among interruptions. Make that
+experience playable, teachable, and eventually useful for a bounded real task.
 
 ## Target
 
-Preserve a deterministic configured-bot arena with an isolated advisory compute sidecar and explicit evidence for each laboratory claim.
+A working simulated phone and shared action engine, with Doppler-powered
+stand-ins that can execute through authorized Reploid participants. First use
+must not require a model download on the requesting phone.
 
 ## Invariants
 
-Ranked decisions remain server-owned. Keep public compute intake disabled by default and use bounded, explicitly authorized windows. Protect private fighter logic and server-held expected hashes. Require signatures for production validation and verified peer subreceipts for strict WebRTC claims.
+Task outcome belongs to m3t4. Remote results are proposals. Every accepted action
+belongs to one round and identity. No hidden evaluator information enters model
+observations. Replays use recorded actions; new agent matches use real inference.
+Personalization is distinguished from weight training. No scripted substitution
+for an unavailable model. Permission scope applies to replacements as well as
+initial executors. The historical arena remains available with its authority and
+safe-off compute settings intact.
 
 ## Evidence
 
-Compare deterministic match inputs and outputs separately from transport, assignment, validation, and replay records. A mock or single-host run does not establish broad NAT coverage, honest hardware, or a public trustless compute network.
-
-## Non-goals
-
-No automatic public intake, credential publication, shared-buffer claims, or promotion of sidecar activity into ranked outcomes.
+Test human outcomes, alternate valid paths, wrong replies, duplicates, rematches,
+late responses, real inference, and peer interruption. Measure first useful
+validated action, requester weight bytes, acquisition interference and recovery.
+Same-host browser tests do not establish separate-device partition availability.
 
 ## Truth
 
-[README.md](README.md) explains the arena; [docs/distributed-compute.md](docs/distributed-compute.md) bounds network claims. Current flags and signed task evidence govern operational statements. Configuration documentation is not authorization to enable production compute.
-
-Related: [GOALS.md](GOALS.md), [CATSCAN.md](CATSCAN.md).
+[Implementation and acceptance](docs/meta-muzil.md) distinguishes working page
+behavior from distributed-mesh acceptance still requiring library work.

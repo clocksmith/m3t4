@@ -45,3 +45,6 @@ firebase-debug.log
 service-account*.json
 *credentials*.json
 !arena.config.ts
+
+# Regenerated from the sibling Reploid and Doppler checkouts.
+client/vendor/

@@ -24,14 +24,16 @@
     "public": "client",
     "predeploy": [
       "npm run sync:content",
-      "npm run check:client-sim"
+      "npm run check:client-sim",
+      "npm run sync:runtime"
     ],
     "ignore": [
       "firebase.json",
       "**/.*",
       "test/**",
       "assets/chars/**/packed/**",
-      "**/node_modules/**"
+      "**/node_modules/**",
+      "muzil/test/**"
     ],
     "headers": [
       {
@@ -69,12 +71,131 @@
             "value": "no-cache"
           }
         ]
+      },
+      {
+        "source": "**/*.mjs",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
       }
     ],
     "rewrites": [
       {
+        "source": "/history{,/**}",
+        "destination": "/history/index.html"
+      },
+      {
+        "source": "/{rules,intro,tune,live,duel,roster,about,compute,build,profile,spectate}",
+        "destination": "/history/index.html"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
+      }
+    ],
+    "redirects": [
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/shard_00000.bin",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/shard_00000.bin",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/shard_00001.bin",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/shard_00001.bin",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/shard_00002.bin",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/shard_00002.bin",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/shard_00003.bin",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/shard_00003.bin",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/shard_00004.bin",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/shard_00004.bin",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/shard_00005.bin",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/shard_00005.bin",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/shard_00006.bin",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/shard_00006.bin",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/shard_00007.bin",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/shard_00007.bin",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/shard_00008.bin",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/shard_00008.bin",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/shard_00009.bin",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/shard_00009.bin",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/shard_00010.bin",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/shard_00010.bin",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/shard_00011.bin",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/shard_00011.bin",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/shard_00012.bin",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/shard_00012.bin",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/shard_00013.bin",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/shard_00013.bin",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/shard_00014.bin",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/shard_00014.bin",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/shard_00015.bin",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/shard_00015.bin",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/tokenizer.json",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/tokenizer.json",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/tokenizer.model",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/tokenizer.model",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/tokenizer_config.json",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/tokenizer_config.json",
+        "type": 307
+      },
+      {
+        "source": "/vendor/doppler/models/muzil-gemma-1b/special_tokens_map.json",
+        "destination": "https://huggingface.co/clocksmith/rdrr/resolve/7c3d30e300bcb02cbd68fb0db3eee64fbf738f99/models/gemma-3-1b-it-q4k-ehf16-af32/special_tokens_map.json",
+        "type": 307
       }
     ]
   }

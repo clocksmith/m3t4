@@ -2,30 +2,33 @@
 
 ## Mission & Thesis
 
-m3t4 develops a deterministic bot arena in which configured fighters can compete and their behavior can be studied. Bounded distributed-compute experiments sit beside that arena, not above it. The strategic distinction is between authoritative ranked game execution and advisory work whose results require their own validation and do not automatically affect a match.
+Meta Muzil is a competitive simulated-phone game about completing an intention.
+People teach a stand-in through demonstrations and inspect its actual decisions.
+Doppler executes model decisions; Reploid makes authorized peer execution and
+agent portability meaningful capabilities. Removing those integrations removes
+agent-controlled play and assistance, while human play remains usable.
 
-## Intended Beneficiaries
+## Desired outcomes
 
-Players and bot authors need understandable rules, reproducible matches, and protection of private fighter logic. Operators need reliable ranked authority and explicit rollback controls. Compute researchers need a contained environment for examining transport, task execution, and receipts without presenting laboratory results as a public trustless network.
+1. A believable phone with working apps, persistent drafts, relevant interruptions,
+   and success determined by resulting state rather than prescribed clicks.
+2. Humans and agents use the same permitted actions and available information.
+3. Demonstration profiles produce inspectable changes, evaluated separately for
+   imitation and improved task completion on unseen scenarios.
+4. A requester uses prepared compute without acquiring model weights first.
+5. Contributors progressively acquire verified dependencies and join capacity;
+   departure has bounded recovery and cannot duplicate a game action.
+6. Preserve the original arena at `/history` and its established routes.
 
-## Desired Outcomes
+## Evidence and boundaries
 
-1. Reproduce arena behavior from declared simulation inputs and fighter configurations.
-2. Keep ranked decisions under the server's authority while the browser presents the game faithfully.
-3. Evaluate bot changes and parameter sweeps without exposing private configurations to opponents.
-4. Demonstrate bounded compute tasks with identified assignments, signed receipts, and clearly stated transport conditions.
-5. Keep laboratory controls separate from ordinary gameplay and public participation.
+The current implementation and missing mesh capabilities are recorded in
+[Meta Muzil architecture](docs/meta-muzil.md). A paired whole-model executor does
+not qualify distributed partition execution. Target acceptance uses a requester
+without weights, separate prepared partition executors, a replacement, and an
+initially empty contributor. Useful reply drafting remains a product hypothesis.
 
-## Operating Loops
-
-Define or revise a fighter configuration, run the deterministic simulation, inspect the match, and compare controlled results. For compute experiments, open an explicitly authorized bounded intake window, issue assignments, validate returned evidence, and return intake to its safe state. Use isolated sidecar records to explain what was tested instead of promoting an arena result into an unrelated network claim.
-
-## Strategic Constraints
-
-Ranked arena authority stays in the server; plasma-lab remains advisory. Public compute intake stays disabled by default, with COMPUTE_ACCEPT_ASSIGNMENTS=false as the primary rollback. Workers must not receive server-held expected hashes. Strict WebRTC evidence requires the declared transport and an accepted, verified peer-signed subreceipt. Production validation requires signatures, but signatures alone do not establish honest hardware or honest execution. Keep administrative credentials and private bot logic out of public artifacts.
-
-## Explicit Exclusions
-
-Do not claim anonymous proof of useful work, Sybil resistance, broad NAT coverage, shared GPU buffers, or fused kernels from mocks or single-host tests. This charter does not authorize enabling compute intake or deployment. Do not substitute visual polish, peer counts, or sidecar activity for correctness of the ranked game.
-
-Related: [INTENT.md](INTENT.md), [CATSCAN.md](CATSCAN.md).
+Historical ranked authority, private bots, credentials, and safe-off compute
+intake retain their protections. This direction does not enable public compute
+intake or authorize production deployment. Historical goals are retained in
+[the archive](docs/history/GOALS.md).

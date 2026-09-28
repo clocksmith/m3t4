@@ -183,12 +183,18 @@ PROJECT=m3ta-ai node scripts/generate-static-matches.cjs --count=500
 
 - `ARCHITECTURE.md` — authority boundaries and runtime architecture.
 - `MIGRATION.md` — static/Firebase migration and mode selection.
-- `PROVISIONING.md` — private Firebase/GCP runbook.
+- `PROVISIONING.md` — Firebase/GCP provisioning runbook.
 - `docs/distributed-compute.md` — public-safe compute claim boundary.
 - `docs/compute-lab-plan.md` — compute lanes, receipt contract, flags.
 - `docs/p2p-migration-plan.md` — mesh rollout plan.
 
 ## Licensing
 
-TBD. Sim code likely MIT. Named strategies, tuning config, and the live meta
-stay proprietary.
+M3T4's original source, checked-in presets, and tuning artifacts are available
+under the [MIT License](LICENSE). Third-party dependencies retain their own
+licenses; see [third-party notices](THIRD_PARTY_NOTICES.md), including the
+GPL-3.0 dependencies used by the optional proof tooling.
+
+Live player stables, credentials, and production database contents remain
+private operational data and must not be committed. See the
+[public-source review](docs/public-source-review.md) for the publication scope.

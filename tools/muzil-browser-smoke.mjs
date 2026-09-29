@@ -23,6 +23,9 @@ try {
   assert.equal(await page.locator('#phone-reply').inputValue(),'Pick me up at 5:40 PM.');
   await page.getByRole('button',{name:'Send message',exact:true}).click(); await page.locator('#next-round').waitFor();
   await page.locator('#result-profile').click(); assert.match(await page.locator('#profile-summary').textContent(),/1 completed/);
+  const lesson = await page.evaluate(() => JSON.parse(localStorage.getItem('muzil.profile.v1')));
+  assert.equal(lesson.examples.at(-1).action.target, 'send');
+  assert.equal(lesson.examples.at(-1).after.phase, 'finished');
   await page.locator('#replay-round').click(); await page.locator('#next-round').waitFor();
   await page.locator('#next-round').click(); await page.locator('#dismiss-reveal').click(); await page.locator('[data-action="app:calendar"]').first().click(); await page.getByText('2:20 PM – 3:15 PM').waitFor();
   report.checks.push('No initial vendor/weight requests; task completion; draft persistence; profile; replay; fresh variation');

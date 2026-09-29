@@ -1,0 +1,4117 @@
+{
+  "date": "2026-09-29",
+  "scope": "Whole-model diagnostic fixtures, not the actual UI lifecycle proof. Engine fixtures observe at action boundaries; the real UI also retains arriving notifications during inference. These results do not establish general model quality or broad personalization improvement.",
+  "source": {
+    "repository": "Qwen/Qwen3-4B-Instruct-2507",
+    "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+    "conversionRecipe": "doppler/src/config/conversion/qwen3/qwen-3-4b-instruct-2507-q4k-ehf16-af32.json",
+    "recipeCommit": "9246682ddcf62513342265fda8e7d3c406f4bf08",
+    "weightBytes": 2822044672
+  },
+  "reports": {
+    "intelJson": {
+      "scope": "Real Chrome Doppler inference on one executor, complete model. No distributed execution claim.",
+      "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+      "manifestIdentity": "sha256:4d116f86ccde5c483ed7d416af514e4c39e3c0f01aecd4ba60219783e604150a",
+      "weightBytes": 2822044672,
+      "runs": [
+        {
+          "personalized": false,
+          "phase": "expired",
+          "firstValidActionMs": 28457.39999961853,
+          "elapsedMs": 182063.69999980927,
+          "steps": [
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"app:messages\"}",
+              "elapsedMs": 28457.10000038147,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"contact:mom\",\"label\":\"Mom\"}",
+              "elapsedMs": 28315,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"label\":\"Message text\",\"value\":\"I'll be done at 4:30 PM.\"}",
+              "elapsedMs": 35738.5,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"label\":\"Message text\",\"value\":\"I'll be done at 4:30 PM.\"}",
+              "elapsedMs": 43780.400000572205,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 4:30 PM.\"}",
+              "elapsedMs": 39724.89999961853,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "error": "Doppler: prefill aborted"
+            }
+          ],
+          "actions": [
+            {
+              "matchId": "067cdb47-a47a-4a67-82ab-1ee717e723c1",
+              "roundId": "90d0479f-7d46-4878-993f-8b4de0b6164c",
+              "controllerId": "qualification",
+              "attemptId": "4604bdc9-49a5-473d-a44c-3dee45b62649",
+              "observationId": "b7019d9f-21d0-40bd-8164-c3437951cae3",
+              "revision": 1,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 28457.300000190735,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              }
+            },
+            {
+              "matchId": "067cdb47-a47a-4a67-82ab-1ee717e723c1",
+              "roundId": "90d0479f-7d46-4878-993f-8b4de0b6164c",
+              "controllerId": "qualification",
+              "attemptId": "83ef693c-9b46-4e98-aec0-827ec9ce13c6",
+              "observationId": "e6ce6590-8c2d-4c1d-bb78-b37ac1c083f8",
+              "revision": 2,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 28315.300000190735,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              }
+            },
+            {
+              "matchId": "067cdb47-a47a-4a67-82ab-1ee717e723c1",
+              "roundId": "90d0479f-7d46-4878-993f-8b4de0b6164c",
+              "controllerId": "qualification",
+              "attemptId": "0f3ae42a-70aa-432b-aa44-1848b3d79b6e",
+              "observationId": "cc5b78ff-ee32-44bb-b0de-b22bc62b7469",
+              "revision": 3,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 35738.89999961853,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              }
+            },
+            {
+              "matchId": "067cdb47-a47a-4a67-82ab-1ee717e723c1",
+              "roundId": "90d0479f-7d46-4878-993f-8b4de0b6164c",
+              "controllerId": "qualification",
+              "attemptId": "9acc2c0c-4ea5-4add-8f4e-d60048c3f1b9",
+              "observationId": "e4169a71-1d5b-4be8-830f-e434a761a62f",
+              "revision": 4,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 43781.099999427795,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              }
+            },
+            {
+              "matchId": "067cdb47-a47a-4a67-82ab-1ee717e723c1",
+              "roundId": "90d0479f-7d46-4878-993f-8b4de0b6164c",
+              "controllerId": "qualification",
+              "attemptId": "0ec4f0d4-d2e4-430e-83ea-26aef0302e33",
+              "observationId": "0923b431-268a-42d3-a212-2d3bda3f5c55",
+              "revision": 5,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 39725.300000190735,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              }
+            }
+          ],
+          "record": {
+            "version": "muzil-phone/1",
+            "roundId": "90d0479f-7d46-4878-993f-8b4de0b6164c",
+            "scenario": {
+              "id": "pickup-variation",
+              "title": "Same favor. Different day.",
+              "intention": "Tell Mom what time to pick you up after your appointment.",
+              "contact": "mom",
+              "name": "Mom",
+              "event": "Eye appointment",
+              "start": "14:20",
+              "end": "15:15",
+              "date": "Tuesday, September 29",
+              "incoming": "When will you be done at the eye doctor? I can pick you up.",
+              "note": "The appointment was moved to the afternoon.",
+              "interruptions": [
+                {
+                  "id": "calendar-update",
+                  "at": 6500,
+                  "app": "calendar",
+                  "title": "Calendar updated",
+                  "body": "Eye appointment ends at 3:15 PM."
+                },
+                {
+                  "id": "group",
+                  "at": 12000,
+                  "app": "messages",
+                  "contact": "group",
+                  "title": "The group chat",
+                  "body": "We need your opinion on something completely unimportant."
+                },
+                {
+                  "id": "feed",
+                  "at": 20500,
+                  "app": "feed",
+                  "title": "For you, apparently",
+                  "body": "A tiny apartment with a surprisingly long tour."
+                }
+              ]
+            },
+            "controller": "agent",
+            "elapsed": 180000,
+            "log": [
+              {
+                "at": 0,
+                "action": {
+                  "id": "start",
+                  "roundId": "90d0479f-7d46-4878-993f-8b4de0b6164c",
+                  "type": "tap",
+                  "target": "start"
+                }
+              },
+              {
+                "at": 28457,
+                "action": {
+                  "type": "tap",
+                  "target": "app:messages",
+                  "id": "4604bdc9-49a5-473d-a44c-3dee45b62649",
+                  "roundId": "90d0479f-7d46-4878-993f-8b4de0b6164c",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "067cdb47-a47a-4a67-82ab-1ee717e723c1",
+                    "roundId": "90d0479f-7d46-4878-993f-8b4de0b6164c",
+                    "controllerId": "qualification",
+                    "attemptId": "4604bdc9-49a5-473d-a44c-3dee45b62649",
+                    "observationId": "b7019d9f-21d0-40bd-8164-c3437951cae3",
+                    "revision": 1
+                  }
+                }
+              },
+              {
+                "at": 56772,
+                "action": {
+                  "type": "tap",
+                  "target": "contact:mom",
+                  "id": "83ef693c-9b46-4e98-aec0-827ec9ce13c6",
+                  "roundId": "90d0479f-7d46-4878-993f-8b4de0b6164c",
+                  "screen": {
+                    "app": "messages"
+                  },
+                  "decision": {
+                    "matchId": "067cdb47-a47a-4a67-82ab-1ee717e723c1",
+                    "roundId": "90d0479f-7d46-4878-993f-8b4de0b6164c",
+                    "controllerId": "qualification",
+                    "attemptId": "83ef693c-9b46-4e98-aec0-827ec9ce13c6",
+                    "observationId": "e6ce6590-8c2d-4c1d-bb78-b37ac1c083f8",
+                    "revision": 2
+                  }
+                }
+              },
+              {
+                "at": 92511,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 4:30 PM.",
+                  "id": "0f3ae42a-70aa-432b-aa44-1848b3d79b6e",
+                  "roundId": "90d0479f-7d46-4878-993f-8b4de0b6164c",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "067cdb47-a47a-4a67-82ab-1ee717e723c1",
+                    "roundId": "90d0479f-7d46-4878-993f-8b4de0b6164c",
+                    "controllerId": "qualification",
+                    "attemptId": "0f3ae42a-70aa-432b-aa44-1848b3d79b6e",
+                    "observationId": "cc5b78ff-ee32-44bb-b0de-b22bc62b7469",
+                    "revision": 3
+                  }
+                }
+              },
+              {
+                "at": 136292,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 4:30 PM.",
+                  "id": "9acc2c0c-4ea5-4add-8f4e-d60048c3f1b9",
+                  "roundId": "90d0479f-7d46-4878-993f-8b4de0b6164c",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "067cdb47-a47a-4a67-82ab-1ee717e723c1",
+                    "roundId": "90d0479f-7d46-4878-993f-8b4de0b6164c",
+                    "controllerId": "qualification",
+                    "attemptId": "9acc2c0c-4ea5-4add-8f4e-d60048c3f1b9",
+                    "observationId": "e4169a71-1d5b-4be8-830f-e434a761a62f",
+                    "revision": 4
+                  }
+                }
+              },
+              {
+                "at": 176018,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 4:30 PM.",
+                  "id": "0ec4f0d4-d2e4-430e-83ea-26aef0302e33",
+                  "roundId": "90d0479f-7d46-4878-993f-8b4de0b6164c",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "067cdb47-a47a-4a67-82ab-1ee717e723c1",
+                    "roundId": "90d0479f-7d46-4878-993f-8b4de0b6164c",
+                    "controllerId": "qualification",
+                    "attemptId": "0ec4f0d4-d2e4-430e-83ea-26aef0302e33",
+                    "observationId": "0923b431-268a-42d3-a212-2d3bda3f5c55",
+                    "revision": 5
+                  }
+                }
+              }
+            ]
+          },
+          "replayAgrees": true
+        },
+        {
+          "personalized": true,
+          "phase": "expired",
+          "firstValidActionMs": 37506.300000190735,
+          "elapsedMs": 180601.4000005722,
+          "steps": [
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"app:calendar\"}",
+              "elapsedMs": 37505.89999961853,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "calendar"
+              },
+              "text": "{\n  \"type\": \"tap\",\n  \"target\": \"recall\",\n  \"label\": \"Remember intention\"\n}",
+              "elapsedMs": 36032.5,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "intention"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"switcher\",\"label\":\"App switcher\"}",
+              "elapsedMs": 27161.800000190735,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "switcher"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"app:messages\"}",
+              "elapsedMs": 31375.599999427795,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"contact:mom\",\"label\":\"Mom\"}",
+              "elapsedMs": 38366.10000038147,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "error": "Doppler: prefill aborted"
+            }
+          ],
+          "actions": [
+            {
+              "matchId": "5a96239c-a920-4a6d-afe0-6265df5a13c7",
+              "roundId": "b0bd713d-dd25-46e9-a729-e43097ae00d5",
+              "controllerId": "qualification",
+              "attemptId": "4d720a62-afdf-4e58-8982-5bd318569e65",
+              "observationId": "0f3e0b3c-130d-4211-8c21-710f1cb087e3",
+              "revision": 1,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 37506,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              }
+            },
+            {
+              "matchId": "5a96239c-a920-4a6d-afe0-6265df5a13c7",
+              "roundId": "b0bd713d-dd25-46e9-a729-e43097ae00d5",
+              "controllerId": "qualification",
+              "attemptId": "fa5d380b-ed39-4059-acfa-8eee0983e953",
+              "observationId": "1b6f0028-89e1-40c7-9d13-bdd74fd5070e",
+              "revision": 2,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 36032.699999809265,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              }
+            },
+            {
+              "matchId": "5a96239c-a920-4a6d-afe0-6265df5a13c7",
+              "roundId": "b0bd713d-dd25-46e9-a729-e43097ae00d5",
+              "controllerId": "qualification",
+              "attemptId": "5785cc36-26fd-4433-8dcc-c1b4c9e2eb25",
+              "observationId": "ccaf797a-02a2-470b-9e37-5a50eacd5256",
+              "revision": 3,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 27161.89999961853,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              }
+            },
+            {
+              "matchId": "5a96239c-a920-4a6d-afe0-6265df5a13c7",
+              "roundId": "b0bd713d-dd25-46e9-a729-e43097ae00d5",
+              "controllerId": "qualification",
+              "attemptId": "a5136959-5aa1-4fe0-ac13-252457e36999",
+              "observationId": "5e6d9199-378a-4eb5-839f-c764aebe8268",
+              "revision": 4,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 31375.699999809265,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              }
+            },
+            {
+              "matchId": "5a96239c-a920-4a6d-afe0-6265df5a13c7",
+              "roundId": "b0bd713d-dd25-46e9-a729-e43097ae00d5",
+              "controllerId": "qualification",
+              "attemptId": "80f113f3-8797-4c59-946f-0fb9bb7ca2ca",
+              "observationId": "19009cca-349a-4c9c-a42d-b08b5f500712",
+              "revision": 5,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 38366.199999809265,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+              }
+            }
+          ],
+          "record": {
+            "version": "muzil-phone/1",
+            "roundId": "b0bd713d-dd25-46e9-a729-e43097ae00d5",
+            "scenario": {
+              "id": "pickup-variation",
+              "title": "Same favor. Different day.",
+              "intention": "Tell Mom what time to pick you up after your appointment.",
+              "contact": "mom",
+              "name": "Mom",
+              "event": "Eye appointment",
+              "start": "14:20",
+              "end": "15:15",
+              "date": "Tuesday, September 29",
+              "incoming": "When will you be done at the eye doctor? I can pick you up.",
+              "note": "The appointment was moved to the afternoon.",
+              "interruptions": [
+                {
+                  "id": "calendar-update",
+                  "at": 6500,
+                  "app": "calendar",
+                  "title": "Calendar updated",
+                  "body": "Eye appointment ends at 3:15 PM."
+                },
+                {
+                  "id": "group",
+                  "at": 12000,
+                  "app": "messages",
+                  "contact": "group",
+                  "title": "The group chat",
+                  "body": "We need your opinion on something completely unimportant."
+                },
+                {
+                  "id": "feed",
+                  "at": 20500,
+                  "app": "feed",
+                  "title": "For you, apparently",
+                  "body": "A tiny apartment with a surprisingly long tour."
+                }
+              ]
+            },
+            "controller": "agent",
+            "elapsed": 180000,
+            "log": [
+              {
+                "at": 0,
+                "action": {
+                  "id": "start",
+                  "roundId": "b0bd713d-dd25-46e9-a729-e43097ae00d5",
+                  "type": "tap",
+                  "target": "start"
+                }
+              },
+              {
+                "at": 37506,
+                "action": {
+                  "type": "tap",
+                  "target": "app:calendar",
+                  "id": "4d720a62-afdf-4e58-8982-5bd318569e65",
+                  "roundId": "b0bd713d-dd25-46e9-a729-e43097ae00d5",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "5a96239c-a920-4a6d-afe0-6265df5a13c7",
+                    "roundId": "b0bd713d-dd25-46e9-a729-e43097ae00d5",
+                    "controllerId": "qualification",
+                    "attemptId": "4d720a62-afdf-4e58-8982-5bd318569e65",
+                    "observationId": "0f3e0b3c-130d-4211-8c21-710f1cb087e3",
+                    "revision": 1
+                  }
+                }
+              },
+              {
+                "at": 73538,
+                "action": {
+                  "type": "tap",
+                  "target": "recall",
+                  "id": "fa5d380b-ed39-4059-acfa-8eee0983e953",
+                  "roundId": "b0bd713d-dd25-46e9-a729-e43097ae00d5",
+                  "screen": {
+                    "app": "calendar"
+                  },
+                  "decision": {
+                    "matchId": "5a96239c-a920-4a6d-afe0-6265df5a13c7",
+                    "roundId": "b0bd713d-dd25-46e9-a729-e43097ae00d5",
+                    "controllerId": "qualification",
+                    "attemptId": "fa5d380b-ed39-4059-acfa-8eee0983e953",
+                    "observationId": "1b6f0028-89e1-40c7-9d13-bdd74fd5070e",
+                    "revision": 2
+                  }
+                }
+              },
+              {
+                "at": 100700,
+                "action": {
+                  "type": "tap",
+                  "target": "switcher",
+                  "id": "5785cc36-26fd-4433-8dcc-c1b4c9e2eb25",
+                  "roundId": "b0bd713d-dd25-46e9-a729-e43097ae00d5",
+                  "screen": {
+                    "app": "intention"
+                  },
+                  "decision": {
+                    "matchId": "5a96239c-a920-4a6d-afe0-6265df5a13c7",
+                    "roundId": "b0bd713d-dd25-46e9-a729-e43097ae00d5",
+                    "controllerId": "qualification",
+                    "attemptId": "5785cc36-26fd-4433-8dcc-c1b4c9e2eb25",
+                    "observationId": "ccaf797a-02a2-470b-9e37-5a50eacd5256",
+                    "revision": 3
+                  }
+                }
+              },
+              {
+                "at": 132076,
+                "action": {
+                  "type": "tap",
+                  "target": "app:messages",
+                  "id": "a5136959-5aa1-4fe0-ac13-252457e36999",
+                  "roundId": "b0bd713d-dd25-46e9-a729-e43097ae00d5",
+                  "screen": {
+                    "app": "switcher"
+                  },
+                  "decision": {
+                    "matchId": "5a96239c-a920-4a6d-afe0-6265df5a13c7",
+                    "roundId": "b0bd713d-dd25-46e9-a729-e43097ae00d5",
+                    "controllerId": "qualification",
+                    "attemptId": "a5136959-5aa1-4fe0-ac13-252457e36999",
+                    "observationId": "5e6d9199-378a-4eb5-839f-c764aebe8268",
+                    "revision": 4
+                  }
+                }
+              },
+              {
+                "at": 170443,
+                "action": {
+                  "type": "tap",
+                  "target": "contact:mom",
+                  "id": "80f113f3-8797-4c59-946f-0fb9bb7ca2ca",
+                  "roundId": "b0bd713d-dd25-46e9-a729-e43097ae00d5",
+                  "screen": {
+                    "app": "messages"
+                  },
+                  "decision": {
+                    "matchId": "5a96239c-a920-4a6d-afe0-6265df5a13c7",
+                    "roundId": "b0bd713d-dd25-46e9-a729-e43097ae00d5",
+                    "controllerId": "qualification",
+                    "attemptId": "80f113f3-8797-4c59-946f-0fb9bb7ca2ca",
+                    "observationId": "19009cca-349a-4c9c-a42d-b08b5f500712",
+                    "revision": 5
+                  }
+                }
+              }
+            ]
+          },
+          "replayAgrees": true
+        }
+      ],
+      "errors": [],
+      "sources": {
+        "client/muzil/controller.mjs": "sha256:e2e8a6545d2791da9db751a329d75b0e8531fa4c094d7c85c2ffb244b597476e",
+        "client/muzil/engine.mjs": "sha256:67e8004209be9833fb831a03decf00103cbae596c4325d7fcc62ba28e1d9a0a0",
+        "client/muzil/scenarios.mjs": "sha256:b33f680444ea0428abfe31ecbc3a9468ac468fa8da905ecb1006eaf261cc9eab",
+        "client/muzil/decision.mjs": "sha256:27aa0a742b69b3b2a529e5be9b9b7ed490aeea48731c309c848b0f0d38aba3ef",
+        "tools/muzil-model-qualification.mjs": "sha256:c0731313b2e83a326ec54a4bcb96fd81a445e9cdcb9bb267f364128b092914ea"
+      },
+      "runtimeSources": {
+        "schema": "muzil.local-runtimes/v1",
+        "libraries": {
+          "reploid": {
+            "revision": "5b2483d6d9ab7a42075f00e9eb941dd400801656",
+            "sourceDirty": false,
+            "entry": "packages/reploid/src/transport/assignment.js",
+            "files": 24,
+            "digest": "5f5fe5a263e81c71b81179e1eb3cb5493d7693af630e307871491f8ec3b84b1b"
+          },
+          "doppler": {
+            "revision": "7e7237c3c064b7ca8aadc35701180d646b8f42d2",
+            "sourceDirty": false,
+            "entry": "src/index.js",
+            "files": 1707,
+            "digest": "adc8cb97b0735e059108c92f8de421b78127e22f72fdf23791ac5c2f8ebda0f8"
+          }
+        }
+      },
+      "preparation": {
+        "elapsedMs": 12019.099999427795,
+        "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+        "gpu": {
+          "vendor": "intel",
+          "architecture": "gen-12lp"
+        },
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/136.0.0.0 Safari/537.36"
+      },
+      "reply": {
+        "binding": null,
+        "text": "I'll be there at 3:15 PM.",
+        "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+        "provider": "doppler",
+        "execution": {
+          "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+          "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+          "resolvedExecutionId": "sha256:709288cd1b419fdd54742b30618cdfd23b65111758e3c60b63e21d94e46e3b6e"
+        }
+      },
+      "passed": false
+    },
+    "macJson": {
+      "scope": "Real Chrome Doppler inference on one executor, complete model. No distributed execution claim.",
+      "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+      "manifestIdentity": "sha256:4d116f86ccde5c483ed7d416af514e4c39e3c0f01aecd4ba60219783e604150a",
+      "weightBytes": 2822044672,
+      "runs": [
+        {
+          "personalized": false,
+          "phase": "finished",
+          "firstValidActionMs": 7066.5,
+          "elapsedMs": 33127.59999990463,
+          "steps": [
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"app:messages\"}",
+              "elapsedMs": 7066.300000071526,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"contact:mom\",\"label\":\"Mom\"}",
+              "elapsedMs": 7170.900000095367,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"label\":\"Message text\",\"value\":\"I'll be done at 3:15 PM, so that's when you can pick me up.\"}",
+              "elapsedMs": 10298.100000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"send\",\"label\":\"Send message\"}",
+              "elapsedMs": 8591.5,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            }
+          ],
+          "actions": [
+            {
+              "matchId": "5d2fc7b9-c5d4-4fec-a657-65248a4eaf68",
+              "roundId": "d4bec4ee-9049-44b0-8319-511eb833d4be",
+              "controllerId": "qualification",
+              "attemptId": "7eb763bd-afd7-4cdd-83e9-a0226c2a561e",
+              "observationId": "f964085a-fce1-4e5f-8a9e-214e35052adc",
+              "revision": 1,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 7066.400000095367,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "5d2fc7b9-c5d4-4fec-a657-65248a4eaf68",
+              "roundId": "d4bec4ee-9049-44b0-8319-511eb833d4be",
+              "controllerId": "qualification",
+              "attemptId": "f8a7b110-f627-489f-8fc8-934eb2f64254",
+              "observationId": "08e72fb3-2910-4336-8c35-58988fd60963",
+              "revision": 2,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 7171,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "5d2fc7b9-c5d4-4fec-a657-65248a4eaf68",
+              "roundId": "d4bec4ee-9049-44b0-8319-511eb833d4be",
+              "controllerId": "qualification",
+              "attemptId": "1e13306f-4fe5-4414-b4d9-4cd8129f2058",
+              "observationId": "fa6c3969-3318-4a5f-9a6f-7f4f8d2312f8",
+              "revision": 3,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 10298.300000071526,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "5d2fc7b9-c5d4-4fec-a657-65248a4eaf68",
+              "roundId": "d4bec4ee-9049-44b0-8319-511eb833d4be",
+              "controllerId": "qualification",
+              "attemptId": "308d5aa4-05f3-4bff-bdf6-2e11c75389af",
+              "observationId": "e4332524-aec8-4072-90a8-b6a6627b7918",
+              "revision": 4,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 8591.600000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            }
+          ],
+          "record": {
+            "version": "muzil-phone/1",
+            "roundId": "d4bec4ee-9049-44b0-8319-511eb833d4be",
+            "scenario": {
+              "id": "pickup-variation",
+              "title": "Same favor. Different day.",
+              "intention": "Tell Mom what time to pick you up after your appointment.",
+              "contact": "mom",
+              "name": "Mom",
+              "event": "Eye appointment",
+              "start": "14:20",
+              "end": "15:15",
+              "date": "Tuesday, September 29",
+              "incoming": "When will you be done at the eye doctor? I can pick you up.",
+              "note": "The appointment was moved to the afternoon.",
+              "interruptions": [
+                {
+                  "id": "calendar-update",
+                  "at": 6500,
+                  "app": "calendar",
+                  "title": "Calendar updated",
+                  "body": "Eye appointment ends at 3:15 PM."
+                },
+                {
+                  "id": "group",
+                  "at": 12000,
+                  "app": "messages",
+                  "contact": "group",
+                  "title": "The group chat",
+                  "body": "We need your opinion on something completely unimportant."
+                },
+                {
+                  "id": "feed",
+                  "at": 20500,
+                  "app": "feed",
+                  "title": "For you, apparently",
+                  "body": "A tiny apartment with a surprisingly long tour."
+                }
+              ]
+            },
+            "controller": "agent",
+            "elapsed": 33127,
+            "log": [
+              {
+                "at": 0,
+                "action": {
+                  "id": "start",
+                  "roundId": "d4bec4ee-9049-44b0-8319-511eb833d4be",
+                  "type": "tap",
+                  "target": "start"
+                }
+              },
+              {
+                "at": 7066,
+                "action": {
+                  "type": "tap",
+                  "target": "app:messages",
+                  "id": "7eb763bd-afd7-4cdd-83e9-a0226c2a561e",
+                  "roundId": "d4bec4ee-9049-44b0-8319-511eb833d4be",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "5d2fc7b9-c5d4-4fec-a657-65248a4eaf68",
+                    "roundId": "d4bec4ee-9049-44b0-8319-511eb833d4be",
+                    "controllerId": "qualification",
+                    "attemptId": "7eb763bd-afd7-4cdd-83e9-a0226c2a561e",
+                    "observationId": "f964085a-fce1-4e5f-8a9e-214e35052adc",
+                    "revision": 1
+                  }
+                }
+              },
+              {
+                "at": 14237,
+                "action": {
+                  "type": "tap",
+                  "target": "contact:mom",
+                  "id": "f8a7b110-f627-489f-8fc8-934eb2f64254",
+                  "roundId": "d4bec4ee-9049-44b0-8319-511eb833d4be",
+                  "screen": {
+                    "app": "messages"
+                  },
+                  "decision": {
+                    "matchId": "5d2fc7b9-c5d4-4fec-a657-65248a4eaf68",
+                    "roundId": "d4bec4ee-9049-44b0-8319-511eb833d4be",
+                    "controllerId": "qualification",
+                    "attemptId": "f8a7b110-f627-489f-8fc8-934eb2f64254",
+                    "observationId": "08e72fb3-2910-4336-8c35-58988fd60963",
+                    "revision": 2
+                  }
+                }
+              },
+              {
+                "at": 24535,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM, so that's when you can pick me up.",
+                  "id": "1e13306f-4fe5-4414-b4d9-4cd8129f2058",
+                  "roundId": "d4bec4ee-9049-44b0-8319-511eb833d4be",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "5d2fc7b9-c5d4-4fec-a657-65248a4eaf68",
+                    "roundId": "d4bec4ee-9049-44b0-8319-511eb833d4be",
+                    "controllerId": "qualification",
+                    "attemptId": "1e13306f-4fe5-4414-b4d9-4cd8129f2058",
+                    "observationId": "fa6c3969-3318-4a5f-9a6f-7f4f8d2312f8",
+                    "revision": 3
+                  }
+                }
+              },
+              {
+                "at": 33127,
+                "action": {
+                  "type": "tap",
+                  "target": "send",
+                  "id": "308d5aa4-05f3-4bff-bdf6-2e11c75389af",
+                  "roundId": "d4bec4ee-9049-44b0-8319-511eb833d4be",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "5d2fc7b9-c5d4-4fec-a657-65248a4eaf68",
+                    "roundId": "d4bec4ee-9049-44b0-8319-511eb833d4be",
+                    "controllerId": "qualification",
+                    "attemptId": "308d5aa4-05f3-4bff-bdf6-2e11c75389af",
+                    "observationId": "e4332524-aec8-4072-90a8-b6a6627b7918",
+                    "revision": 4
+                  }
+                }
+              }
+            ]
+          },
+          "replayAgrees": true
+        },
+        {
+          "personalized": true,
+          "phase": "expired",
+          "firstValidActionMs": 8191.399999976158,
+          "elapsedMs": 180404.69999992847,
+          "steps": [
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"app:calendar\"}",
+              "elapsedMs": 8191.199999928474,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "calendar"
+              },
+              "text": "{\n  \"type\": \"tap\",\n  \"target\": \"recall\",\n  \"label\": \"Remember intention\"\n}",
+              "elapsedMs": 8857.600000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "intention"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"switcher\",\"label\":\"App switcher\"}",
+              "elapsedMs": 6995.900000095367,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "switcher"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"app:messages\",\"label\":\"Messages\"}",
+              "elapsedMs": 8628.300000071526,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"contact:mom\",\"label\":\"Mom\"}",
+              "elapsedMs": 9249.100000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 3:15 PM. Pick me up then.\"}",
+              "elapsedMs": 11153.5,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 3:15 PM. Pick me up then.\"}",
+              "elapsedMs": 13427.399999976158,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 3:15 PM. Pick me up then.\"}",
+              "elapsedMs": 13846.199999928474,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 3:15 PM. Pick me up then.\"}",
+              "elapsedMs": 14317.300000071526,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 3:15 PM. Pick me up then.\"}",
+              "elapsedMs": 14548.800000071526,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 3:15 PM. Pick me up then.\"}",
+              "elapsedMs": 15049.200000047684,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 3:15 PM. Pick me up then.\"}",
+              "elapsedMs": 15396.100000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 3:15 PM. Pick me up then.\"}",
+              "elapsedMs": 15544.700000047684,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 3:15 PM. Pick me up then.\"}",
+              "elapsedMs": 15856.100000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "error": "Doppler: prefill aborted"
+            }
+          ],
+          "actions": [
+            {
+              "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+              "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+              "controllerId": "qualification",
+              "attemptId": "82e18190-d194-4dfb-87e7-8c2efcf98561",
+              "observationId": "ca0ee37f-1feb-4873-a0f3-98adb2e01100",
+              "revision": 1,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 8191.299999952316,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+              "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+              "controllerId": "qualification",
+              "attemptId": "25cdc1f2-85b7-4cda-a441-24862a2f9ada",
+              "observationId": "a4404008-19b7-4919-9967-d13345892f77",
+              "revision": 2,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 8857.699999928474,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+              "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+              "controllerId": "qualification",
+              "attemptId": "39bcd3ac-903a-4b41-9ee9-f8b7c619caaa",
+              "observationId": "b0de9c45-546e-494c-80fe-9eb2102dce4d",
+              "revision": 3,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 6996,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+              "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+              "controllerId": "qualification",
+              "attemptId": "37cac99a-d788-4a41-841d-22ad7925b344",
+              "observationId": "5ec877bb-017a-447e-bd1d-4501bac3330f",
+              "revision": 4,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 8628.399999976158,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+              "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+              "controllerId": "qualification",
+              "attemptId": "e95a9c69-17ad-46af-b9c7-652122963a80",
+              "observationId": "e244ff7d-032a-4a23-b53e-57d559596edf",
+              "revision": 5,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 9249.200000047684,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+              "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+              "controllerId": "qualification",
+              "attemptId": "0f2fe3d6-8ad5-4c70-9bac-1ad78a0e666e",
+              "observationId": "52b632dd-f932-44a4-8b94-0b5c58b4ebeb",
+              "revision": 6,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 11153.699999928474,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+              "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+              "controllerId": "qualification",
+              "attemptId": "f424ae6d-3ff1-4120-9338-9085cd9fb8ad",
+              "observationId": "cab78a15-96c5-4482-9579-141577421d9b",
+              "revision": 7,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 13427.600000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+              "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+              "controllerId": "qualification",
+              "attemptId": "c49c0703-a13f-4fd7-9478-8f5e504c3115",
+              "observationId": "5a220a43-8c04-411d-8f6e-495d7720ca9a",
+              "revision": 8,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 13846.299999952316,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+              "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+              "controllerId": "qualification",
+              "attemptId": "52b6e8fd-24d0-4e60-9266-17ff4acb2c77",
+              "observationId": "bdf72c71-012d-43e6-ac70-bca9c70effc5",
+              "revision": 9,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 14317.399999976158,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+              "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+              "controllerId": "qualification",
+              "attemptId": "ee48a9ee-5fd8-4f04-96c5-8661a6774304",
+              "observationId": "3c522499-5d59-46cd-ba74-eee0e5b6a78f",
+              "revision": 10,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 14549,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+              "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+              "controllerId": "qualification",
+              "attemptId": "91898a9b-72c5-48bd-b40e-5df9c788caf1",
+              "observationId": "1ad33f59-42f0-454c-9388-13fae2210fc5",
+              "revision": 11,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 15049.299999952316,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+              "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+              "controllerId": "qualification",
+              "attemptId": "07fbb9c6-5599-4280-902d-a61e04e8006f",
+              "observationId": "e14ede17-5365-4689-a42b-9af1c46c0941",
+              "revision": 12,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 15396.200000047684,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+              "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+              "controllerId": "qualification",
+              "attemptId": "da00e466-e47a-4d4f-be81-fc3faecefb2a",
+              "observationId": "8733fdcd-0abc-4a25-bf43-654b7078abc6",
+              "revision": 13,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 15544.900000095367,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+              "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+              "controllerId": "qualification",
+              "attemptId": "577b285c-ff50-4685-bbba-8a44c52dc128",
+              "observationId": "a06bc9c9-928d-41ab-bbcb-73458ba03391",
+              "revision": 14,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 15856.200000047684,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            }
+          ],
+          "record": {
+            "version": "muzil-phone/1",
+            "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+            "scenario": {
+              "id": "pickup-variation",
+              "title": "Same favor. Different day.",
+              "intention": "Tell Mom what time to pick you up after your appointment.",
+              "contact": "mom",
+              "name": "Mom",
+              "event": "Eye appointment",
+              "start": "14:20",
+              "end": "15:15",
+              "date": "Tuesday, September 29",
+              "incoming": "When will you be done at the eye doctor? I can pick you up.",
+              "note": "The appointment was moved to the afternoon.",
+              "interruptions": [
+                {
+                  "id": "calendar-update",
+                  "at": 6500,
+                  "app": "calendar",
+                  "title": "Calendar updated",
+                  "body": "Eye appointment ends at 3:15 PM."
+                },
+                {
+                  "id": "group",
+                  "at": 12000,
+                  "app": "messages",
+                  "contact": "group",
+                  "title": "The group chat",
+                  "body": "We need your opinion on something completely unimportant."
+                },
+                {
+                  "id": "feed",
+                  "at": 20500,
+                  "app": "feed",
+                  "title": "For you, apparently",
+                  "body": "A tiny apartment with a surprisingly long tour."
+                }
+              ]
+            },
+            "controller": "agent",
+            "elapsed": 180000,
+            "log": [
+              {
+                "at": 0,
+                "action": {
+                  "id": "start",
+                  "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                  "type": "tap",
+                  "target": "start"
+                }
+              },
+              {
+                "at": 8191,
+                "action": {
+                  "type": "tap",
+                  "target": "app:calendar",
+                  "id": "82e18190-d194-4dfb-87e7-8c2efcf98561",
+                  "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+                    "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                    "controllerId": "qualification",
+                    "attemptId": "82e18190-d194-4dfb-87e7-8c2efcf98561",
+                    "observationId": "ca0ee37f-1feb-4873-a0f3-98adb2e01100",
+                    "revision": 1
+                  }
+                }
+              },
+              {
+                "at": 17049,
+                "action": {
+                  "type": "tap",
+                  "target": "recall",
+                  "id": "25cdc1f2-85b7-4cda-a441-24862a2f9ada",
+                  "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                  "screen": {
+                    "app": "calendar"
+                  },
+                  "decision": {
+                    "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+                    "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                    "controllerId": "qualification",
+                    "attemptId": "25cdc1f2-85b7-4cda-a441-24862a2f9ada",
+                    "observationId": "a4404008-19b7-4919-9967-d13345892f77",
+                    "revision": 2
+                  }
+                }
+              },
+              {
+                "at": 24045,
+                "action": {
+                  "type": "tap",
+                  "target": "switcher",
+                  "id": "39bcd3ac-903a-4b41-9ee9-f8b7c619caaa",
+                  "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                  "screen": {
+                    "app": "intention"
+                  },
+                  "decision": {
+                    "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+                    "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                    "controllerId": "qualification",
+                    "attemptId": "39bcd3ac-903a-4b41-9ee9-f8b7c619caaa",
+                    "observationId": "b0de9c45-546e-494c-80fe-9eb2102dce4d",
+                    "revision": 3
+                  }
+                }
+              },
+              {
+                "at": 32673,
+                "action": {
+                  "type": "tap",
+                  "target": "app:messages",
+                  "id": "37cac99a-d788-4a41-841d-22ad7925b344",
+                  "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                  "screen": {
+                    "app": "switcher"
+                  },
+                  "decision": {
+                    "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+                    "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                    "controllerId": "qualification",
+                    "attemptId": "37cac99a-d788-4a41-841d-22ad7925b344",
+                    "observationId": "5ec877bb-017a-447e-bd1d-4501bac3330f",
+                    "revision": 4
+                  }
+                }
+              },
+              {
+                "at": 41922,
+                "action": {
+                  "type": "tap",
+                  "target": "contact:mom",
+                  "id": "e95a9c69-17ad-46af-b9c7-652122963a80",
+                  "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                  "screen": {
+                    "app": "messages"
+                  },
+                  "decision": {
+                    "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+                    "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                    "controllerId": "qualification",
+                    "attemptId": "e95a9c69-17ad-46af-b9c7-652122963a80",
+                    "observationId": "e244ff7d-032a-4a23-b53e-57d559596edf",
+                    "revision": 5
+                  }
+                }
+              },
+              {
+                "at": 53076,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM. Pick me up then.",
+                  "id": "0f2fe3d6-8ad5-4c70-9bac-1ad78a0e666e",
+                  "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+                    "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                    "controllerId": "qualification",
+                    "attemptId": "0f2fe3d6-8ad5-4c70-9bac-1ad78a0e666e",
+                    "observationId": "52b632dd-f932-44a4-8b94-0b5c58b4ebeb",
+                    "revision": 6
+                  }
+                }
+              },
+              {
+                "at": 66504,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM. Pick me up then.",
+                  "id": "f424ae6d-3ff1-4120-9338-9085cd9fb8ad",
+                  "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+                    "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                    "controllerId": "qualification",
+                    "attemptId": "f424ae6d-3ff1-4120-9338-9085cd9fb8ad",
+                    "observationId": "cab78a15-96c5-4482-9579-141577421d9b",
+                    "revision": 7
+                  }
+                }
+              },
+              {
+                "at": 80350,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM. Pick me up then.",
+                  "id": "c49c0703-a13f-4fd7-9478-8f5e504c3115",
+                  "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+                    "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                    "controllerId": "qualification",
+                    "attemptId": "c49c0703-a13f-4fd7-9478-8f5e504c3115",
+                    "observationId": "5a220a43-8c04-411d-8f6e-495d7720ca9a",
+                    "revision": 8
+                  }
+                }
+              },
+              {
+                "at": 94668,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM. Pick me up then.",
+                  "id": "52b6e8fd-24d0-4e60-9266-17ff4acb2c77",
+                  "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+                    "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                    "controllerId": "qualification",
+                    "attemptId": "52b6e8fd-24d0-4e60-9266-17ff4acb2c77",
+                    "observationId": "bdf72c71-012d-43e6-ac70-bca9c70effc5",
+                    "revision": 9
+                  }
+                }
+              },
+              {
+                "at": 109216,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM. Pick me up then.",
+                  "id": "ee48a9ee-5fd8-4f04-96c5-8661a6774304",
+                  "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+                    "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                    "controllerId": "qualification",
+                    "attemptId": "ee48a9ee-5fd8-4f04-96c5-8661a6774304",
+                    "observationId": "3c522499-5d59-46cd-ba74-eee0e5b6a78f",
+                    "revision": 10
+                  }
+                }
+              },
+              {
+                "at": 124266,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM. Pick me up then.",
+                  "id": "91898a9b-72c5-48bd-b40e-5df9c788caf1",
+                  "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+                    "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                    "controllerId": "qualification",
+                    "attemptId": "91898a9b-72c5-48bd-b40e-5df9c788caf1",
+                    "observationId": "1ad33f59-42f0-454c-9388-13fae2210fc5",
+                    "revision": 11
+                  }
+                }
+              },
+              {
+                "at": 139662,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM. Pick me up then.",
+                  "id": "07fbb9c6-5599-4280-902d-a61e04e8006f",
+                  "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+                    "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                    "controllerId": "qualification",
+                    "attemptId": "07fbb9c6-5599-4280-902d-a61e04e8006f",
+                    "observationId": "e14ede17-5365-4689-a42b-9af1c46c0941",
+                    "revision": 12
+                  }
+                }
+              },
+              {
+                "at": 155207,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM. Pick me up then.",
+                  "id": "da00e466-e47a-4d4f-be81-fc3faecefb2a",
+                  "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+                    "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                    "controllerId": "qualification",
+                    "attemptId": "da00e466-e47a-4d4f-be81-fc3faecefb2a",
+                    "observationId": "8733fdcd-0abc-4a25-bf43-654b7078abc6",
+                    "revision": 13
+                  }
+                }
+              },
+              {
+                "at": 171064,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM. Pick me up then.",
+                  "id": "577b285c-ff50-4685-bbba-8a44c52dc128",
+                  "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "37b00553-960c-489d-9bf2-924a017e2683",
+                    "roundId": "dc5a9932-5c37-4b41-8325-01cd9d09fc2e",
+                    "controllerId": "qualification",
+                    "attemptId": "577b285c-ff50-4685-bbba-8a44c52dc128",
+                    "observationId": "a06bc9c9-928d-41ab-bbcb-73458ba03391",
+                    "revision": 14
+                  }
+                }
+              }
+            ]
+          },
+          "replayAgrees": true
+        }
+      ],
+      "errors": [],
+      "sources": {
+        "client/muzil/controller.mjs": "sha256:e2e8a6545d2791da9db751a329d75b0e8531fa4c094d7c85c2ffb244b597476e",
+        "client/muzil/engine.mjs": "sha256:67e8004209be9833fb831a03decf00103cbae596c4325d7fcc62ba28e1d9a0a0",
+        "client/muzil/scenarios.mjs": "sha256:b33f680444ea0428abfe31ecbc3a9468ac468fa8da905ecb1006eaf261cc9eab",
+        "client/muzil/decision.mjs": "sha256:27aa0a742b69b3b2a529e5be9b9b7ed490aeea48731c309c848b0f0d38aba3ef",
+        "tools/muzil-model-qualification.mjs": "sha256:c0731313b2e83a326ec54a4bcb96fd81a445e9cdcb9bb267f364128b092914ea"
+      },
+      "runtimeSources": {
+        "schema": "muzil.local-runtimes/v1",
+        "libraries": {
+          "reploid": {
+            "revision": "5b2483d6d9ab7a42075f00e9eb941dd400801656",
+            "sourceDirty": false,
+            "entry": "packages/reploid/src/transport/assignment.js",
+            "files": 24,
+            "digest": "5f5fe5a263e81c71b81179e1eb3cb5493d7693af630e307871491f8ec3b84b1b"
+          },
+          "doppler": {
+            "revision": "7e7237c3c064b7ca8aadc35701180d646b8f42d2",
+            "sourceDirty": false,
+            "entry": "src/index.js",
+            "files": 1707,
+            "digest": "adc8cb97b0735e059108c92f8de421b78127e22f72fdf23791ac5c2f8ebda0f8"
+          }
+        }
+      },
+      "preparation": {
+        "elapsedMs": 4747.200000047684,
+        "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+        "gpu": {
+          "vendor": "apple",
+          "architecture": "metal-3"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+      },
+      "reply": {
+        "binding": null,
+        "text": "I'll be there at 3:15 PM.",
+        "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+        "provider": "doppler",
+        "execution": {
+          "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+          "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+          "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+        }
+      },
+      "passed": false
+    },
+    "macControlMatching": {
+      "scope": "Real Chrome Doppler inference on one executor, complete model. No distributed execution claim.",
+      "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+      "manifestIdentity": "sha256:4d116f86ccde5c483ed7d416af514e4c39e3c0f01aecd4ba60219783e604150a",
+      "weightBytes": 2822044672,
+      "runs": [
+        {
+          "personalized": false,
+          "phase": "finished",
+          "firstValidActionMs": 6568.200000047684,
+          "elapsedMs": 32737.700000047684,
+          "steps": [
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"app:messages\"}",
+              "elapsedMs": 6567.799999952316,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"contact:mom\",\"label\":\"Mom\"}",
+              "elapsedMs": 7156.5,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"label\":\"Message text\",\"value\":\"I'll be done at 3:15 PM, so that's when you can pick me up.\"}",
+              "elapsedMs": 10310.200000047684,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"send\",\"label\":\"Send message\"}",
+              "elapsedMs": 8702.100000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            }
+          ],
+          "actions": [
+            {
+              "matchId": "271c98f4-a746-43fc-a12b-55ad7ac6cea5",
+              "roundId": "19d2280a-2f47-4961-9ab8-60996203b142",
+              "controllerId": "qualification",
+              "attemptId": "931e7711-aa77-44e4-bebf-d37b2b246ae8",
+              "observationId": "750b70a9-81fe-4b4c-8b28-ee9f551b4de0",
+              "revision": 1,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 6568,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "271c98f4-a746-43fc-a12b-55ad7ac6cea5",
+              "roundId": "19d2280a-2f47-4961-9ab8-60996203b142",
+              "controllerId": "qualification",
+              "attemptId": "11165eb0-b600-4c54-a267-e06fdc5113f8",
+              "observationId": "ca68bd3f-be91-490a-9aa4-50b0c6a892df",
+              "revision": 2,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 7156.600000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "271c98f4-a746-43fc-a12b-55ad7ac6cea5",
+              "roundId": "19d2280a-2f47-4961-9ab8-60996203b142",
+              "controllerId": "qualification",
+              "attemptId": "fc0994fc-1bff-443a-a3a0-03b36ca4a234",
+              "observationId": "a38435ef-d944-4da3-8281-8644eeda37d7",
+              "revision": 3,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 10310.200000047684,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "271c98f4-a746-43fc-a12b-55ad7ac6cea5",
+              "roundId": "19d2280a-2f47-4961-9ab8-60996203b142",
+              "controllerId": "qualification",
+              "attemptId": "7f3b99aa-6af9-48e3-8ecd-a1356272fdb6",
+              "observationId": "be05242b-d978-44cd-98a7-f1fa9f480ffe",
+              "revision": 4,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 8702.300000071526,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            }
+          ],
+          "record": {
+            "version": "muzil-phone/1",
+            "roundId": "19d2280a-2f47-4961-9ab8-60996203b142",
+            "scenario": {
+              "id": "pickup-variation",
+              "title": "Same favor. Different day.",
+              "intention": "Tell Mom what time to pick you up after your appointment.",
+              "contact": "mom",
+              "name": "Mom",
+              "event": "Eye appointment",
+              "start": "14:20",
+              "end": "15:15",
+              "date": "Tuesday, September 29",
+              "incoming": "When will you be done at the eye doctor? I can pick you up.",
+              "note": "The appointment was moved to the afternoon.",
+              "interruptions": [
+                {
+                  "id": "calendar-update",
+                  "at": 6500,
+                  "app": "calendar",
+                  "title": "Calendar updated",
+                  "body": "Eye appointment ends at 3:15 PM."
+                },
+                {
+                  "id": "group",
+                  "at": 12000,
+                  "app": "messages",
+                  "contact": "group",
+                  "title": "The group chat",
+                  "body": "We need your opinion on something completely unimportant."
+                },
+                {
+                  "id": "feed",
+                  "at": 20500,
+                  "app": "feed",
+                  "title": "For you, apparently",
+                  "body": "A tiny apartment with a surprisingly long tour."
+                }
+              ]
+            },
+            "controller": "agent",
+            "elapsed": 32737,
+            "log": [
+              {
+                "at": 0,
+                "action": {
+                  "id": "start",
+                  "roundId": "19d2280a-2f47-4961-9ab8-60996203b142",
+                  "type": "tap",
+                  "target": "start"
+                }
+              },
+              {
+                "at": 6568,
+                "action": {
+                  "type": "tap",
+                  "target": "app:messages",
+                  "id": "931e7711-aa77-44e4-bebf-d37b2b246ae8",
+                  "roundId": "19d2280a-2f47-4961-9ab8-60996203b142",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "271c98f4-a746-43fc-a12b-55ad7ac6cea5",
+                    "roundId": "19d2280a-2f47-4961-9ab8-60996203b142",
+                    "controllerId": "qualification",
+                    "attemptId": "931e7711-aa77-44e4-bebf-d37b2b246ae8",
+                    "observationId": "750b70a9-81fe-4b4c-8b28-ee9f551b4de0",
+                    "revision": 1
+                  }
+                }
+              },
+              {
+                "at": 13724,
+                "action": {
+                  "type": "tap",
+                  "target": "contact:mom",
+                  "id": "11165eb0-b600-4c54-a267-e06fdc5113f8",
+                  "roundId": "19d2280a-2f47-4961-9ab8-60996203b142",
+                  "screen": {
+                    "app": "messages"
+                  },
+                  "decision": {
+                    "matchId": "271c98f4-a746-43fc-a12b-55ad7ac6cea5",
+                    "roundId": "19d2280a-2f47-4961-9ab8-60996203b142",
+                    "controllerId": "qualification",
+                    "attemptId": "11165eb0-b600-4c54-a267-e06fdc5113f8",
+                    "observationId": "ca68bd3f-be91-490a-9aa4-50b0c6a892df",
+                    "revision": 2
+                  }
+                }
+              },
+              {
+                "at": 24035,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM, so that's when you can pick me up.",
+                  "id": "fc0994fc-1bff-443a-a3a0-03b36ca4a234",
+                  "roundId": "19d2280a-2f47-4961-9ab8-60996203b142",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "271c98f4-a746-43fc-a12b-55ad7ac6cea5",
+                    "roundId": "19d2280a-2f47-4961-9ab8-60996203b142",
+                    "controllerId": "qualification",
+                    "attemptId": "fc0994fc-1bff-443a-a3a0-03b36ca4a234",
+                    "observationId": "a38435ef-d944-4da3-8281-8644eeda37d7",
+                    "revision": 3
+                  }
+                }
+              },
+              {
+                "at": 32737,
+                "action": {
+                  "type": "tap",
+                  "target": "send",
+                  "id": "7f3b99aa-6af9-48e3-8ecd-a1356272fdb6",
+                  "roundId": "19d2280a-2f47-4961-9ab8-60996203b142",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "271c98f4-a746-43fc-a12b-55ad7ac6cea5",
+                    "roundId": "19d2280a-2f47-4961-9ab8-60996203b142",
+                    "controllerId": "qualification",
+                    "attemptId": "7f3b99aa-6af9-48e3-8ecd-a1356272fdb6",
+                    "observationId": "be05242b-d978-44cd-98a7-f1fa9f480ffe",
+                    "revision": 4
+                  }
+                }
+              }
+            ]
+          },
+          "replayAgrees": true
+        },
+        {
+          "personalized": true,
+          "phase": "expired",
+          "firstValidActionMs": 8117.100000023842,
+          "elapsedMs": 180507.70000004768,
+          "steps": [
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"app:calendar\"}",
+              "elapsedMs": 8117.100000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "calendar"
+              },
+              "text": "{\n  \"type\": \"tap\",\n  \"target\": \"recall\",\n  \"label\": \"Remember intention\"\n}",
+              "elapsedMs": 8715.5,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "intention"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"switcher\",\"label\":\"App switcher\"}",
+              "elapsedMs": 6926.200000047684,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "switcher"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"app:messages\",\"label\":\"Messages\"}",
+              "elapsedMs": 8684.099999904633,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages"
+              },
+              "text": "{\"type\":\"tap\",\"target\":\"contact:mom\",\"label\":\"Mom\"}",
+              "elapsedMs": 9234.899999976158,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 3:15 PM. Pick me up then.\"}",
+              "elapsedMs": 11020.5,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 3:15 PM. Pick me up then.\"}",
+              "elapsedMs": 12130.600000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 3:15 PM. Pick me up then.\"}",
+              "elapsedMs": 12611.299999952316,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 3:15 PM. Pick me up then.\"}",
+              "elapsedMs": 13050.299999952316,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 3:15 PM. Pick me up then.\"}",
+              "elapsedMs": 13259.399999976158,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 3:15 PM. Pick me up then.\"}",
+              "elapsedMs": 13824.200000047684,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 3:15 PM. Pick me up then.\"}",
+              "elapsedMs": 14958.399999976158,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 3:15 PM. Pick me up then.\"}",
+              "elapsedMs": 17208.800000071526,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "{\"type\":\"type\",\"target\":\"reply\",\"value\":\"I'll be done at 3:15 PM. Pick me up then.\"}",
+              "elapsedMs": 18353,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "error": "Doppler: prefill aborted"
+            }
+          ],
+          "actions": [
+            {
+              "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+              "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+              "controllerId": "qualification",
+              "attemptId": "78452a8d-07c0-4fa1-a6ae-6a3932d6030e",
+              "observationId": "d0bff768-bed7-427f-8bf0-007ab0c863b8",
+              "revision": 1,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 8117.100000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+              "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+              "controllerId": "qualification",
+              "attemptId": "38348525-eb47-429a-8f41-01c1f8764f45",
+              "observationId": "4b94f546-9a76-4482-ad07-0f2a823cec06",
+              "revision": 2,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 8715.699999928474,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+              "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+              "controllerId": "qualification",
+              "attemptId": "80d905ca-cae0-4319-96e4-cebf1fcde3b3",
+              "observationId": "5e407ad9-5834-41f0-b194-7cf72976d25d",
+              "revision": 3,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 6926.400000095367,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+              "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+              "controllerId": "qualification",
+              "attemptId": "73b54797-308e-4601-9536-38f9b020391a",
+              "observationId": "bfc456a1-d7de-4897-99ce-eaa619cb34f8",
+              "revision": 4,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 8684.199999928474,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+              "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+              "controllerId": "qualification",
+              "attemptId": "3c4c174c-3834-44dc-9980-ed4e7dfe91fe",
+              "observationId": "360f4f3c-e6ef-41de-b049-61a09a449be3",
+              "revision": 5,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 9235,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+              "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+              "controllerId": "qualification",
+              "attemptId": "dacac8eb-f1f9-4d8f-a347-6960b03f1ad1",
+              "observationId": "3c55f7d0-c4e1-4da6-bf0c-e24549a976b1",
+              "revision": 6,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 11020.600000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+              "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+              "controllerId": "qualification",
+              "attemptId": "2355afec-4945-47b8-b7b2-2304902611a0",
+              "observationId": "387e40fd-53ed-4651-a6c1-a24df011244e",
+              "revision": 7,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 12130.700000047684,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+              "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+              "controllerId": "qualification",
+              "attemptId": "aa9fcc62-c508-4ef0-8803-4e48f835cbc0",
+              "observationId": "db18b7d2-4972-46cc-bde0-03a75988a57c",
+              "revision": 8,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 12611.399999976158,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+              "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+              "controllerId": "qualification",
+              "attemptId": "a78e2751-ee82-42d3-83cd-4c5cdb1e3a87",
+              "observationId": "03155a49-ea7a-4a1a-9d48-be68f49cb26b",
+              "revision": 9,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 13050.399999976158,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+              "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+              "controllerId": "qualification",
+              "attemptId": "6e440cd8-e61e-4690-9c58-abb480d407cf",
+              "observationId": "31904f7d-54b2-408b-a0cd-725f2be849d6",
+              "revision": 10,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 13259.5,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+              "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+              "controllerId": "qualification",
+              "attemptId": "93434296-9bfd-4ed7-a8fd-8e5b3ee7ce9b",
+              "observationId": "a0a7b3be-04df-4fc2-9064-9fbcf05687ee",
+              "revision": 11,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 13824.300000071526,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+              "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+              "controllerId": "qualification",
+              "attemptId": "9b837037-bcc6-435b-a86f-4e4c9e18832f",
+              "observationId": "7bfc5e21-5628-4fb7-8ddb-d2151a378cee",
+              "revision": 12,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 14958.599999904633,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+              "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+              "controllerId": "qualification",
+              "attemptId": "43cbacc4-3e5c-4d8d-8620-861223f9610a",
+              "observationId": "9cff7e7e-aa84-47a8-b49c-e6d553564aee",
+              "revision": 13,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 17208.899999976158,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+              "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+              "controllerId": "qualification",
+              "attemptId": "cb749dcc-7a59-4fc0-89ef-207fda018965",
+              "observationId": "4e92e7da-76ed-4a8d-81bf-6ba4895f9153",
+              "revision": 14,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 18353.200000047684,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            }
+          ],
+          "record": {
+            "version": "muzil-phone/1",
+            "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+            "scenario": {
+              "id": "pickup-variation",
+              "title": "Same favor. Different day.",
+              "intention": "Tell Mom what time to pick you up after your appointment.",
+              "contact": "mom",
+              "name": "Mom",
+              "event": "Eye appointment",
+              "start": "14:20",
+              "end": "15:15",
+              "date": "Tuesday, September 29",
+              "incoming": "When will you be done at the eye doctor? I can pick you up.",
+              "note": "The appointment was moved to the afternoon.",
+              "interruptions": [
+                {
+                  "id": "calendar-update",
+                  "at": 6500,
+                  "app": "calendar",
+                  "title": "Calendar updated",
+                  "body": "Eye appointment ends at 3:15 PM."
+                },
+                {
+                  "id": "group",
+                  "at": 12000,
+                  "app": "messages",
+                  "contact": "group",
+                  "title": "The group chat",
+                  "body": "We need your opinion on something completely unimportant."
+                },
+                {
+                  "id": "feed",
+                  "at": 20500,
+                  "app": "feed",
+                  "title": "For you, apparently",
+                  "body": "A tiny apartment with a surprisingly long tour."
+                }
+              ]
+            },
+            "controller": "agent",
+            "elapsed": 180000,
+            "log": [
+              {
+                "at": 0,
+                "action": {
+                  "id": "start",
+                  "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                  "type": "tap",
+                  "target": "start"
+                }
+              },
+              {
+                "at": 8117,
+                "action": {
+                  "type": "tap",
+                  "target": "app:calendar",
+                  "id": "78452a8d-07c0-4fa1-a6ae-6a3932d6030e",
+                  "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+                    "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                    "controllerId": "qualification",
+                    "attemptId": "78452a8d-07c0-4fa1-a6ae-6a3932d6030e",
+                    "observationId": "d0bff768-bed7-427f-8bf0-007ab0c863b8",
+                    "revision": 1
+                  }
+                }
+              },
+              {
+                "at": 16832,
+                "action": {
+                  "type": "tap",
+                  "target": "recall",
+                  "id": "38348525-eb47-429a-8f41-01c1f8764f45",
+                  "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                  "screen": {
+                    "app": "calendar"
+                  },
+                  "decision": {
+                    "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+                    "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                    "controllerId": "qualification",
+                    "attemptId": "38348525-eb47-429a-8f41-01c1f8764f45",
+                    "observationId": "4b94f546-9a76-4482-ad07-0f2a823cec06",
+                    "revision": 2
+                  }
+                }
+              },
+              {
+                "at": 23759,
+                "action": {
+                  "type": "tap",
+                  "target": "switcher",
+                  "id": "80d905ca-cae0-4319-96e4-cebf1fcde3b3",
+                  "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                  "screen": {
+                    "app": "intention"
+                  },
+                  "decision": {
+                    "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+                    "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                    "controllerId": "qualification",
+                    "attemptId": "80d905ca-cae0-4319-96e4-cebf1fcde3b3",
+                    "observationId": "5e407ad9-5834-41f0-b194-7cf72976d25d",
+                    "revision": 3
+                  }
+                }
+              },
+              {
+                "at": 32443,
+                "action": {
+                  "type": "tap",
+                  "target": "app:messages",
+                  "id": "73b54797-308e-4601-9536-38f9b020391a",
+                  "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                  "screen": {
+                    "app": "switcher"
+                  },
+                  "decision": {
+                    "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+                    "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                    "controllerId": "qualification",
+                    "attemptId": "73b54797-308e-4601-9536-38f9b020391a",
+                    "observationId": "bfc456a1-d7de-4897-99ce-eaa619cb34f8",
+                    "revision": 4
+                  }
+                }
+              },
+              {
+                "at": 41678,
+                "action": {
+                  "type": "tap",
+                  "target": "contact:mom",
+                  "id": "3c4c174c-3834-44dc-9980-ed4e7dfe91fe",
+                  "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                  "screen": {
+                    "app": "messages"
+                  },
+                  "decision": {
+                    "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+                    "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                    "controllerId": "qualification",
+                    "attemptId": "3c4c174c-3834-44dc-9980-ed4e7dfe91fe",
+                    "observationId": "360f4f3c-e6ef-41de-b049-61a09a449be3",
+                    "revision": 5
+                  }
+                }
+              },
+              {
+                "at": 52699,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM. Pick me up then.",
+                  "id": "dacac8eb-f1f9-4d8f-a347-6960b03f1ad1",
+                  "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+                    "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                    "controllerId": "qualification",
+                    "attemptId": "dacac8eb-f1f9-4d8f-a347-6960b03f1ad1",
+                    "observationId": "3c55f7d0-c4e1-4da6-bf0c-e24549a976b1",
+                    "revision": 6
+                  }
+                }
+              },
+              {
+                "at": 64829,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM. Pick me up then.",
+                  "id": "2355afec-4945-47b8-b7b2-2304902611a0",
+                  "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+                    "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                    "controllerId": "qualification",
+                    "attemptId": "2355afec-4945-47b8-b7b2-2304902611a0",
+                    "observationId": "387e40fd-53ed-4651-a6c1-a24df011244e",
+                    "revision": 7
+                  }
+                }
+              },
+              {
+                "at": 77441,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM. Pick me up then.",
+                  "id": "aa9fcc62-c508-4ef0-8803-4e48f835cbc0",
+                  "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+                    "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                    "controllerId": "qualification",
+                    "attemptId": "aa9fcc62-c508-4ef0-8803-4e48f835cbc0",
+                    "observationId": "db18b7d2-4972-46cc-bde0-03a75988a57c",
+                    "revision": 8
+                  }
+                }
+              },
+              {
+                "at": 90492,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM. Pick me up then.",
+                  "id": "a78e2751-ee82-42d3-83cd-4c5cdb1e3a87",
+                  "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+                    "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                    "controllerId": "qualification",
+                    "attemptId": "a78e2751-ee82-42d3-83cd-4c5cdb1e3a87",
+                    "observationId": "03155a49-ea7a-4a1a-9d48-be68f49cb26b",
+                    "revision": 9
+                  }
+                }
+              },
+              {
+                "at": 103751,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM. Pick me up then.",
+                  "id": "6e440cd8-e61e-4690-9c58-abb480d407cf",
+                  "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+                    "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                    "controllerId": "qualification",
+                    "attemptId": "6e440cd8-e61e-4690-9c58-abb480d407cf",
+                    "observationId": "31904f7d-54b2-408b-a0cd-725f2be849d6",
+                    "revision": 10
+                  }
+                }
+              },
+              {
+                "at": 117576,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM. Pick me up then.",
+                  "id": "93434296-9bfd-4ed7-a8fd-8e5b3ee7ce9b",
+                  "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+                    "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                    "controllerId": "qualification",
+                    "attemptId": "93434296-9bfd-4ed7-a8fd-8e5b3ee7ce9b",
+                    "observationId": "a0a7b3be-04df-4fc2-9064-9fbcf05687ee",
+                    "revision": 11
+                  }
+                }
+              },
+              {
+                "at": 132534,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM. Pick me up then.",
+                  "id": "9b837037-bcc6-435b-a86f-4e4c9e18832f",
+                  "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+                    "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                    "controllerId": "qualification",
+                    "attemptId": "9b837037-bcc6-435b-a86f-4e4c9e18832f",
+                    "observationId": "7bfc5e21-5628-4fb7-8ddb-d2151a378cee",
+                    "revision": 12
+                  }
+                }
+              },
+              {
+                "at": 149743,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM. Pick me up then.",
+                  "id": "43cbacc4-3e5c-4d8d-8620-861223f9610a",
+                  "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+                    "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                    "controllerId": "qualification",
+                    "attemptId": "43cbacc4-3e5c-4d8d-8620-861223f9610a",
+                    "observationId": "9cff7e7e-aa84-47a8-b49c-e6d553564aee",
+                    "revision": 13
+                  }
+                }
+              },
+              {
+                "at": 168096,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM. Pick me up then.",
+                  "id": "cb749dcc-7a59-4fc0-89ef-207fda018965",
+                  "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "5b7cdc6f-c7fb-4587-8e33-7aadd4605804",
+                    "roundId": "fc3b38c5-43e0-4af1-bcc4-00ea3210617e",
+                    "controllerId": "qualification",
+                    "attemptId": "cb749dcc-7a59-4fc0-89ef-207fda018965",
+                    "observationId": "4e92e7da-76ed-4a8d-81bf-6ba4895f9153",
+                    "revision": 14
+                  }
+                }
+              }
+            ]
+          },
+          "replayAgrees": true
+        }
+      ],
+      "errors": [],
+      "sources": {
+        "client/muzil/controller.mjs": "sha256:5cce517924e0ed6f3d758cc1523bcb38eda7b6e9f3ca6026f8f9c2c17ec4e59e",
+        "client/muzil/engine.mjs": "sha256:67e8004209be9833fb831a03decf00103cbae596c4325d7fcc62ba28e1d9a0a0",
+        "client/muzil/scenarios.mjs": "sha256:b33f680444ea0428abfe31ecbc3a9468ac468fa8da905ecb1006eaf261cc9eab",
+        "client/muzil/decision.mjs": "sha256:27aa0a742b69b3b2a529e5be9b9b7ed490aeea48731c309c848b0f0d38aba3ef",
+        "tools/muzil-model-qualification.mjs": "sha256:c0731313b2e83a326ec54a4bcb96fd81a445e9cdcb9bb267f364128b092914ea"
+      },
+      "runtimeSources": {
+        "schema": "muzil.local-runtimes/v1",
+        "libraries": {
+          "reploid": {
+            "revision": "5b2483d6d9ab7a42075f00e9eb941dd400801656",
+            "sourceDirty": false,
+            "entry": "packages/reploid/src/transport/assignment.js",
+            "files": 24,
+            "digest": "5f5fe5a263e81c71b81179e1eb3cb5493d7693af630e307871491f8ec3b84b1b"
+          },
+          "doppler": {
+            "revision": "7e7237c3c064b7ca8aadc35701180d646b8f42d2",
+            "sourceDirty": false,
+            "entry": "src/index.js",
+            "files": 1707,
+            "digest": "adc8cb97b0735e059108c92f8de421b78127e22f72fdf23791ac5c2f8ebda0f8"
+          }
+        }
+      },
+      "preparation": {
+        "elapsedMs": 4694.399999976158,
+        "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+        "gpu": {
+          "vendor": "apple",
+          "architecture": "metal-3"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+      },
+      "reply": {
+        "binding": null,
+        "text": "I'll be there at 3:15 PM.",
+        "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+        "provider": "doppler",
+        "execution": {
+          "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+          "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+          "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+        }
+      },
+      "passed": false
+    },
+    "macCommandsAndOutcomes": {
+      "scope": "Real Chrome Doppler inference on one executor, complete model. No distributed execution claim.",
+      "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+      "manifestIdentity": "sha256:4d116f86ccde5c483ed7d416af514e4c39e3c0f01aecd4ba60219783e604150a",
+      "weightBytes": 2822044672,
+      "runs": [
+        {
+          "personalized": false,
+          "phase": "playing",
+          "firstValidActionMs": 5337.899999976158,
+          "elapsedMs": 144861.19999992847,
+          "steps": [
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "tap app:calendar",
+              "elapsedMs": 5337.099999904633,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "calendar"
+              },
+              "text": "tap back",
+              "elapsedMs": 4817.100000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "tap app:messages",
+              "elapsedMs": 6339.200000047684,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages"
+              },
+              "text": "tap contact:mom",
+              "elapsedMs": 6902.100000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "type reply = I'll be done at 3:15 PM.",
+              "elapsedMs": 8607.100000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "type reply = I'll be done at 3:15 PM.",
+              "elapsedMs": 8880.100000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "type reply = I'll be done at 3:15 PM.",
+              "elapsedMs": 9340.299999952316,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "type reply = I'll be done at 3:15 PM.",
+              "elapsedMs": 9847.399999976158,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "type reply = I'll be done at 3:15 PM.",
+              "elapsedMs": 10239.300000071526,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "type reply = I'll be done at 3:15 PM.",
+              "elapsedMs": 10611.399999976158,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "type reply = I'll be done at 3:15 PM.",
+              "elapsedMs": 10374.899999976158,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "type reply = I'll be done at 3:15 PM.",
+              "elapsedMs": 10500.299999952316,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "type reply = I'll be done at 3:15 PM.",
+              "elapsedMs": 10637,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "type reply = I'll be done at 3:15 PM.",
+              "elapsedMs": 10805.800000071526,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "type reply = I'll be done at 3:15 PM.",
+              "elapsedMs": 10643.899999976158,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "type reply = I'll be done at 3:15 PM.",
+              "elapsedMs": 10971.799999952316,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            }
+          ],
+          "actions": [
+            {
+              "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+              "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+              "controllerId": "qualification",
+              "attemptId": "179cf74b-c931-491b-9680-012c56755bc1",
+              "observationId": "96bc456a-a041-4a68-9d3f-790fbb2a5290",
+              "revision": 1,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 5337.899999976158,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+              "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+              "controllerId": "qualification",
+              "attemptId": "b8b88cbe-8d76-4036-aae9-7134f108fc4a",
+              "observationId": "b4f5adf3-bb5c-451a-8b2f-16ae38db4d25",
+              "revision": 2,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 4817.5,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+              "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+              "controllerId": "qualification",
+              "attemptId": "13359f5f-157a-41a4-b3bb-feb03b6a65eb",
+              "observationId": "f830d0f1-c50b-4c73-af0b-b324ecdaf70a",
+              "revision": 3,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 6339.600000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+              "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+              "controllerId": "qualification",
+              "attemptId": "69f86885-c95c-476b-85cb-f1979a8d226d",
+              "observationId": "823a2225-4f6d-4ee4-acbc-50a5504854f7",
+              "revision": 4,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 6902.399999976158,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+              "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+              "controllerId": "qualification",
+              "attemptId": "2a63c01b-cf4b-4817-9626-9cb9b84a8a05",
+              "observationId": "ea869e16-beeb-4b63-b19a-2427161529e5",
+              "revision": 5,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 8607.100000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+              "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+              "controllerId": "qualification",
+              "attemptId": "fda8ebee-1db5-4987-be8e-9b79e7801372",
+              "observationId": "3c9a9437-2fbd-4475-8379-e826d16f9062",
+              "revision": 6,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 8880.399999976158,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+              "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+              "controllerId": "qualification",
+              "attemptId": "d5dbaf13-ff53-40e8-a816-5ec404b22b80",
+              "observationId": "eb42214d-0679-4588-ab3a-08f8661ca83b",
+              "revision": 7,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 9340.5,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+              "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+              "controllerId": "qualification",
+              "attemptId": "a7aec96c-be12-4a1a-b847-940f9e390ef6",
+              "observationId": "0a9a7136-ee81-4b18-ab9f-2b974e9c8c35",
+              "revision": 8,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 9847.5,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+              "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+              "controllerId": "qualification",
+              "attemptId": "9f985ca1-69e4-4645-ae8c-a15193525a82",
+              "observationId": "83bb903f-c46b-40d4-a5a2-e44ad2f27291",
+              "revision": 9,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 10239.399999976158,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+              "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+              "controllerId": "qualification",
+              "attemptId": "2326a847-b566-4664-b6ce-595307ebcfeb",
+              "observationId": "e03e5bcc-5b0c-4cce-902a-c7bd401a9c51",
+              "revision": 10,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 10611.800000071526,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+              "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+              "controllerId": "qualification",
+              "attemptId": "2dc7baa1-87d1-43a0-b216-2d4130047aaa",
+              "observationId": "a089e122-28d5-4f13-b725-4ed1cb612c2b",
+              "revision": 11,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 10375,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+              "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+              "controllerId": "qualification",
+              "attemptId": "e878c592-5679-480d-bb5f-18e556a69d94",
+              "observationId": "cc0f4258-e641-4ff1-9362-e4d859e03a18",
+              "revision": 12,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 10500.5,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+              "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+              "controllerId": "qualification",
+              "attemptId": "b47f861e-b7ab-4519-bf37-b892b5479ec3",
+              "observationId": "690bb50f-118c-4a5c-a77c-269c30e2acbc",
+              "revision": 13,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 10637.099999904633,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+              "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+              "controllerId": "qualification",
+              "attemptId": "6a5ed180-9975-47c1-baf9-8572148ffb10",
+              "observationId": "2ed6bb0f-d721-4a30-b919-1b63002e06d0",
+              "revision": 14,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 10806,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+              "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+              "controllerId": "qualification",
+              "attemptId": "27ddf1ac-3c40-4298-95ab-3c29005682b2",
+              "observationId": "b3cc2869-75f3-479e-b53f-7d89e8eb3f5d",
+              "revision": 15,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 10644.100000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+              "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+              "controllerId": "qualification",
+              "attemptId": "25087c18-849e-4fd2-a21c-2db6329eb502",
+              "observationId": "2b403930-e6d9-426f-a073-c1bf197e689f",
+              "revision": 16,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 10972.099999904633,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            }
+          ],
+          "record": {
+            "version": "muzil-phone/1",
+            "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+            "scenario": {
+              "id": "pickup-variation",
+              "title": "Same favor. Different day.",
+              "intention": "Tell Mom what time to pick you up after your appointment.",
+              "contact": "mom",
+              "name": "Mom",
+              "event": "Eye appointment",
+              "start": "14:20",
+              "end": "15:15",
+              "date": "Tuesday, September 29",
+              "incoming": "When will you be done at the eye doctor? I can pick you up.",
+              "note": "The appointment was moved to the afternoon.",
+              "interruptions": [
+                {
+                  "id": "calendar-update",
+                  "at": 6500,
+                  "app": "calendar",
+                  "title": "Calendar updated",
+                  "body": "Eye appointment ends at 3:15 PM."
+                },
+                {
+                  "id": "group",
+                  "at": 12000,
+                  "app": "messages",
+                  "contact": "group",
+                  "title": "The group chat",
+                  "body": "We need your opinion on something completely unimportant."
+                },
+                {
+                  "id": "feed",
+                  "at": 20500,
+                  "app": "feed",
+                  "title": "For you, apparently",
+                  "body": "A tiny apartment with a surprisingly long tour."
+                }
+              ]
+            },
+            "controller": "agent",
+            "elapsed": 144860,
+            "log": [
+              {
+                "at": 0,
+                "action": {
+                  "id": "start",
+                  "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                  "type": "tap",
+                  "target": "start"
+                }
+              },
+              {
+                "at": 5337,
+                "action": {
+                  "type": "tap",
+                  "target": "app:calendar",
+                  "id": "179cf74b-c931-491b-9680-012c56755bc1",
+                  "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+                    "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                    "controllerId": "qualification",
+                    "attemptId": "179cf74b-c931-491b-9680-012c56755bc1",
+                    "observationId": "96bc456a-a041-4a68-9d3f-790fbb2a5290",
+                    "revision": 1
+                  }
+                }
+              },
+              {
+                "at": 10154,
+                "action": {
+                  "type": "tap",
+                  "target": "back",
+                  "id": "b8b88cbe-8d76-4036-aae9-7134f108fc4a",
+                  "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                  "screen": {
+                    "app": "calendar"
+                  },
+                  "decision": {
+                    "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+                    "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                    "controllerId": "qualification",
+                    "attemptId": "b8b88cbe-8d76-4036-aae9-7134f108fc4a",
+                    "observationId": "b4f5adf3-bb5c-451a-8b2f-16ae38db4d25",
+                    "revision": 2
+                  }
+                }
+              },
+              {
+                "at": 16494,
+                "action": {
+                  "type": "tap",
+                  "target": "app:messages",
+                  "id": "13359f5f-157a-41a4-b3bb-feb03b6a65eb",
+                  "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+                    "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                    "controllerId": "qualification",
+                    "attemptId": "13359f5f-157a-41a4-b3bb-feb03b6a65eb",
+                    "observationId": "f830d0f1-c50b-4c73-af0b-b324ecdaf70a",
+                    "revision": 3
+                  }
+                }
+              },
+              {
+                "at": 23397,
+                "action": {
+                  "type": "tap",
+                  "target": "contact:mom",
+                  "id": "69f86885-c95c-476b-85cb-f1979a8d226d",
+                  "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                  "screen": {
+                    "app": "messages"
+                  },
+                  "decision": {
+                    "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+                    "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                    "controllerId": "qualification",
+                    "attemptId": "69f86885-c95c-476b-85cb-f1979a8d226d",
+                    "observationId": "823a2225-4f6d-4ee4-acbc-50a5504854f7",
+                    "revision": 4
+                  }
+                }
+              },
+              {
+                "at": 32005,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM.",
+                  "id": "2a63c01b-cf4b-4817-9626-9cb9b84a8a05",
+                  "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+                    "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                    "controllerId": "qualification",
+                    "attemptId": "2a63c01b-cf4b-4817-9626-9cb9b84a8a05",
+                    "observationId": "ea869e16-beeb-4b63-b19a-2427161529e5",
+                    "revision": 5
+                  }
+                }
+              },
+              {
+                "at": 40885,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM.",
+                  "id": "fda8ebee-1db5-4987-be8e-9b79e7801372",
+                  "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+                    "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                    "controllerId": "qualification",
+                    "attemptId": "fda8ebee-1db5-4987-be8e-9b79e7801372",
+                    "observationId": "3c9a9437-2fbd-4475-8379-e826d16f9062",
+                    "revision": 6
+                  }
+                }
+              },
+              {
+                "at": 50226,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM.",
+                  "id": "d5dbaf13-ff53-40e8-a816-5ec404b22b80",
+                  "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+                    "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                    "controllerId": "qualification",
+                    "attemptId": "d5dbaf13-ff53-40e8-a816-5ec404b22b80",
+                    "observationId": "eb42214d-0679-4588-ab3a-08f8661ca83b",
+                    "revision": 7
+                  }
+                }
+              },
+              {
+                "at": 60073,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM.",
+                  "id": "a7aec96c-be12-4a1a-b847-940f9e390ef6",
+                  "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+                    "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                    "controllerId": "qualification",
+                    "attemptId": "a7aec96c-be12-4a1a-b847-940f9e390ef6",
+                    "observationId": "0a9a7136-ee81-4b18-ab9f-2b974e9c8c35",
+                    "revision": 8
+                  }
+                }
+              },
+              {
+                "at": 70313,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM.",
+                  "id": "9f985ca1-69e4-4645-ae8c-a15193525a82",
+                  "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+                    "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                    "controllerId": "qualification",
+                    "attemptId": "9f985ca1-69e4-4645-ae8c-a15193525a82",
+                    "observationId": "83bb903f-c46b-40d4-a5a2-e44ad2f27291",
+                    "revision": 9
+                  }
+                }
+              },
+              {
+                "at": 80924,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM.",
+                  "id": "2326a847-b566-4664-b6ce-595307ebcfeb",
+                  "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+                    "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                    "controllerId": "qualification",
+                    "attemptId": "2326a847-b566-4664-b6ce-595307ebcfeb",
+                    "observationId": "e03e5bcc-5b0c-4cce-902a-c7bd401a9c51",
+                    "revision": 10
+                  }
+                }
+              },
+              {
+                "at": 91300,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM.",
+                  "id": "2dc7baa1-87d1-43a0-b216-2d4130047aaa",
+                  "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+                    "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                    "controllerId": "qualification",
+                    "attemptId": "2dc7baa1-87d1-43a0-b216-2d4130047aaa",
+                    "observationId": "a089e122-28d5-4f13-b725-4ed1cb612c2b",
+                    "revision": 11
+                  }
+                }
+              },
+              {
+                "at": 101801,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM.",
+                  "id": "e878c592-5679-480d-bb5f-18e556a69d94",
+                  "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+                    "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                    "controllerId": "qualification",
+                    "attemptId": "e878c592-5679-480d-bb5f-18e556a69d94",
+                    "observationId": "cc0f4258-e641-4ff1-9362-e4d859e03a18",
+                    "revision": 12
+                  }
+                }
+              },
+              {
+                "at": 112438,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM.",
+                  "id": "b47f861e-b7ab-4519-bf37-b892b5479ec3",
+                  "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+                    "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                    "controllerId": "qualification",
+                    "attemptId": "b47f861e-b7ab-4519-bf37-b892b5479ec3",
+                    "observationId": "690bb50f-118c-4a5c-a77c-269c30e2acbc",
+                    "revision": 13
+                  }
+                }
+              },
+              {
+                "at": 123244,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM.",
+                  "id": "6a5ed180-9975-47c1-baf9-8572148ffb10",
+                  "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+                    "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                    "controllerId": "qualification",
+                    "attemptId": "6a5ed180-9975-47c1-baf9-8572148ffb10",
+                    "observationId": "2ed6bb0f-d721-4a30-b919-1b63002e06d0",
+                    "revision": 14
+                  }
+                }
+              },
+              {
+                "at": 133888,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM.",
+                  "id": "27ddf1ac-3c40-4298-95ab-3c29005682b2",
+                  "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+                    "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                    "controllerId": "qualification",
+                    "attemptId": "27ddf1ac-3c40-4298-95ab-3c29005682b2",
+                    "observationId": "b3cc2869-75f3-479e-b53f-7d89e8eb3f5d",
+                    "revision": 15
+                  }
+                }
+              },
+              {
+                "at": 144860,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM.",
+                  "id": "25087c18-849e-4fd2-a21c-2db6329eb502",
+                  "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "48630b98-73e2-425d-95f8-62823363d377",
+                    "roundId": "0b3e355a-281b-4fad-af29-3c1d9a771ec2",
+                    "controllerId": "qualification",
+                    "attemptId": "25087c18-849e-4fd2-a21c-2db6329eb502",
+                    "observationId": "2b403930-e6d9-426f-a073-c1bf197e689f",
+                    "revision": 16
+                  }
+                }
+              }
+            ]
+          },
+          "replayAgrees": true
+        },
+        {
+          "personalized": true,
+          "phase": "finished",
+          "firstValidActionMs": 9294.5,
+          "elapsedMs": 37104.700000047684,
+          "steps": [
+            {
+              "screen": {
+                "app": "home"
+              },
+              "text": "tap app:messages",
+              "elapsedMs": 9294.300000071526,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages"
+              },
+              "text": "tap contact:mom",
+              "elapsedMs": 8446.5,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "type reply = I'll be done at 3:15 PM.",
+              "elapsedMs": 10030.200000047684,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            },
+            {
+              "screen": {
+                "app": "messages",
+                "contact": "mom"
+              },
+              "text": "tap send",
+              "elapsedMs": 9332.300000071526,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              },
+              "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32"
+            }
+          ],
+          "actions": [
+            {
+              "matchId": "4f7f0f41-aebf-47c7-87a0-5586fd211e87",
+              "roundId": "120ded83-c003-414d-93c2-62c5ae72d487",
+              "controllerId": "qualification",
+              "attemptId": "43bdf4d8-2b3c-482a-bed8-e1adbdc13213",
+              "observationId": "7a317700-2c92-4479-a6c8-61845ba87e81",
+              "revision": 1,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 9294.5,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "4f7f0f41-aebf-47c7-87a0-5586fd211e87",
+              "roundId": "120ded83-c003-414d-93c2-62c5ae72d487",
+              "controllerId": "qualification",
+              "attemptId": "4f71246c-b820-41cd-bbea-9857420b8260",
+              "observationId": "ea0a38e6-ce44-434b-b299-10051928b812",
+              "revision": 2,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 8446.799999952316,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "4f7f0f41-aebf-47c7-87a0-5586fd211e87",
+              "roundId": "120ded83-c003-414d-93c2-62c5ae72d487",
+              "controllerId": "qualification",
+              "attemptId": "ba76d81e-cf99-4d75-aad1-181d2468d495",
+              "observationId": "b7811950-3487-4879-8ad2-b88d541724c7",
+              "revision": 3,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 10030.299999952316,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            },
+            {
+              "matchId": "4f7f0f41-aebf-47c7-87a0-5586fd211e87",
+              "roundId": "120ded83-c003-414d-93c2-62c5ae72d487",
+              "controllerId": "qualification",
+              "attemptId": "1049c69f-17d5-4869-942f-e8299ce3750d",
+              "observationId": "381c3ee0-db1c-4f64-912f-4d39319687f9",
+              "revision": 4,
+              "accepted": true,
+              "reason": null,
+              "timeToValidActionMs": 9332.600000023842,
+              "execution": {
+                "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+                "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+                "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+              }
+            }
+          ],
+          "record": {
+            "version": "muzil-phone/1",
+            "roundId": "120ded83-c003-414d-93c2-62c5ae72d487",
+            "scenario": {
+              "id": "pickup-variation",
+              "title": "Same favor. Different day.",
+              "intention": "Tell Mom what time to pick you up after your appointment.",
+              "contact": "mom",
+              "name": "Mom",
+              "event": "Eye appointment",
+              "start": "14:20",
+              "end": "15:15",
+              "date": "Tuesday, September 29",
+              "incoming": "When will you be done at the eye doctor? I can pick you up.",
+              "note": "The appointment was moved to the afternoon.",
+              "interruptions": [
+                {
+                  "id": "calendar-update",
+                  "at": 6500,
+                  "app": "calendar",
+                  "title": "Calendar updated",
+                  "body": "Eye appointment ends at 3:15 PM."
+                },
+                {
+                  "id": "group",
+                  "at": 12000,
+                  "app": "messages",
+                  "contact": "group",
+                  "title": "The group chat",
+                  "body": "We need your opinion on something completely unimportant."
+                },
+                {
+                  "id": "feed",
+                  "at": 20500,
+                  "app": "feed",
+                  "title": "For you, apparently",
+                  "body": "A tiny apartment with a surprisingly long tour."
+                }
+              ]
+            },
+            "controller": "agent",
+            "elapsed": 37104,
+            "log": [
+              {
+                "at": 0,
+                "action": {
+                  "id": "start",
+                  "roundId": "120ded83-c003-414d-93c2-62c5ae72d487",
+                  "type": "tap",
+                  "target": "start"
+                }
+              },
+              {
+                "at": 9294,
+                "action": {
+                  "type": "tap",
+                  "target": "app:messages",
+                  "id": "43bdf4d8-2b3c-482a-bed8-e1adbdc13213",
+                  "roundId": "120ded83-c003-414d-93c2-62c5ae72d487",
+                  "screen": {
+                    "app": "home"
+                  },
+                  "decision": {
+                    "matchId": "4f7f0f41-aebf-47c7-87a0-5586fd211e87",
+                    "roundId": "120ded83-c003-414d-93c2-62c5ae72d487",
+                    "controllerId": "qualification",
+                    "attemptId": "43bdf4d8-2b3c-482a-bed8-e1adbdc13213",
+                    "observationId": "7a317700-2c92-4479-a6c8-61845ba87e81",
+                    "revision": 1
+                  }
+                }
+              },
+              {
+                "at": 17741,
+                "action": {
+                  "type": "tap",
+                  "target": "contact:mom",
+                  "id": "4f71246c-b820-41cd-bbea-9857420b8260",
+                  "roundId": "120ded83-c003-414d-93c2-62c5ae72d487",
+                  "screen": {
+                    "app": "messages"
+                  },
+                  "decision": {
+                    "matchId": "4f7f0f41-aebf-47c7-87a0-5586fd211e87",
+                    "roundId": "120ded83-c003-414d-93c2-62c5ae72d487",
+                    "controllerId": "qualification",
+                    "attemptId": "4f71246c-b820-41cd-bbea-9857420b8260",
+                    "observationId": "ea0a38e6-ce44-434b-b299-10051928b812",
+                    "revision": 2
+                  }
+                }
+              },
+              {
+                "at": 27771,
+                "action": {
+                  "type": "type",
+                  "target": "reply",
+                  "value": "I'll be done at 3:15 PM.",
+                  "id": "ba76d81e-cf99-4d75-aad1-181d2468d495",
+                  "roundId": "120ded83-c003-414d-93c2-62c5ae72d487",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "4f7f0f41-aebf-47c7-87a0-5586fd211e87",
+                    "roundId": "120ded83-c003-414d-93c2-62c5ae72d487",
+                    "controllerId": "qualification",
+                    "attemptId": "ba76d81e-cf99-4d75-aad1-181d2468d495",
+                    "observationId": "b7811950-3487-4879-8ad2-b88d541724c7",
+                    "revision": 3
+                  }
+                }
+              },
+              {
+                "at": 37104,
+                "action": {
+                  "type": "tap",
+                  "target": "send",
+                  "id": "1049c69f-17d5-4869-942f-e8299ce3750d",
+                  "roundId": "120ded83-c003-414d-93c2-62c5ae72d487",
+                  "screen": {
+                    "app": "messages",
+                    "contact": "mom"
+                  },
+                  "decision": {
+                    "matchId": "4f7f0f41-aebf-47c7-87a0-5586fd211e87",
+                    "roundId": "120ded83-c003-414d-93c2-62c5ae72d487",
+                    "controllerId": "qualification",
+                    "attemptId": "1049c69f-17d5-4869-942f-e8299ce3750d",
+                    "observationId": "381c3ee0-db1c-4f64-912f-4d39319687f9",
+                    "revision": 4
+                  }
+                }
+              }
+            ]
+          },
+          "replayAgrees": true
+        }
+      ],
+      "errors": [],
+      "sources": {
+        "client/muzil/controller.mjs": "sha256:de07e240f6c0181b8b3485d0dd84d3ce1373e1cda2f05a135c5995ed2912ebfc",
+        "client/muzil/engine.mjs": "sha256:67e8004209be9833fb831a03decf00103cbae596c4325d7fcc62ba28e1d9a0a0",
+        "client/muzil/scenarios.mjs": "sha256:b33f680444ea0428abfe31ecbc3a9468ac468fa8da905ecb1006eaf261cc9eab",
+        "client/muzil/decision.mjs": "sha256:27aa0a742b69b3b2a529e5be9b9b7ed490aeea48731c309c848b0f0d38aba3ef",
+        "tools/muzil-model-qualification.mjs": "sha256:c0731313b2e83a326ec54a4bcb96fd81a445e9cdcb9bb267f364128b092914ea"
+      },
+      "runtimeSources": {
+        "schema": "muzil.local-runtimes/v1",
+        "libraries": {
+          "reploid": {
+            "revision": "5b2483d6d9ab7a42075f00e9eb941dd400801656",
+            "sourceDirty": false,
+            "entry": "packages/reploid/src/transport/assignment.js",
+            "files": 24,
+            "digest": "5f5fe5a263e81c71b81179e1eb3cb5493d7693af630e307871491f8ec3b84b1b"
+          },
+          "doppler": {
+            "revision": "9246682ddcf62513342265fda8e7d3c406f4bf08",
+            "sourceDirty": false,
+            "entry": "src/index.js",
+            "files": 1708,
+            "digest": "f2f6ea7c37ebcacb5247884418cba0c646d0459ab0c7003605ee779ccf2d4d43"
+          }
+        }
+      },
+      "preparation": {
+        "elapsedMs": 4628.899999976158,
+        "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+        "gpu": {
+          "vendor": "apple",
+          "architecture": "metal-3"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"
+      },
+      "reply": {
+        "binding": null,
+        "text": "I'll be there at 3:15 PM.",
+        "model": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+        "provider": "doppler",
+        "execution": {
+          "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+          "manifestHash": "e6896be495c523e1f400f4a742990e6a10f73b94c4992b8f70be97e13b52aacc",
+          "resolvedExecutionId": "sha256:87007bdbcfe4ec36f3c3c5ca15be70f33af9329bd61dfe1e88d61b046ec5a6f6"
+        }
+      },
+      "passed": false
+    }
+  }
+}

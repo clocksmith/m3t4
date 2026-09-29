@@ -12,7 +12,7 @@ export class MeshController {
   constructor({ onChange = () => {}, modelBase = null,
     policyUrl = new URL('./mesh-policy.json', import.meta.url) } = {}) {
     this.onChange = onChange; this.modelBase = modelBase; this.policyUrl = policyUrl;
-    this.metrics = { attempts: [], decisions: [], contribution: null };
+    this.metrics = { attempts: [], decisions: [], contribution: null, preparationFailures: [] };
   }
   async initialize() {
     if (this.initializing) return this.initializing;
@@ -102,8 +102,14 @@ export class MeshController {
       this.metrics.contribution = { index, joinToReadyMs: performance.now() - started,
         acquisition: this.acquisition.getReceipt(), storage: storageReceipt(), descriptor: this.resident.getState().descriptor };
     } catch (error) {
+      const acquisition = this.acquisition.getReceipt();
+      this.metrics.preparationFailures.push({ index, elapsedMs: performance.now() - started,
+        error: error.message, acquisition, storage: storageReceipt?.() });
       await this.resident.close(); this.resident = null;
-      await this.acquisition.close(); this.acquisition = null; throw error;
+      await this.acquisition.close(); this.acquisition = null;
+      const reason = acquisition.failedSources.at(-1)?.error;
+      if (reason) throw new Error(`${error.message}: ${reason}`, { cause: error });
+      throw error;
     }
     finally { this.onChange(); }
   }

@@ -67,7 +67,7 @@ function complete() {
   recorded = true; lastReplay = makeReplay(state);
   if (race?.id === state.roundId) { race.local = { finished: state.phase === 'finished', elapsed: state.elapsed }; try { peer.sendGame({ type:'result', raceId:race.id, record:lastReplay }); } catch (e) { report(e); } raceSummary(); } lastReplay.profile = { id:profile.id, version:profile.version, objective:profile.objective }; lastReplay.inferenceMs = Math.round(inferenceMs); save('muzil.replay.v1', lastReplay);
   if (state.controller === 'human') {
-    const examples = state.demonstrations.filter((e,i,all) => e.action.target !== 'start' && !(e.action.type === 'type' && all[i+1]?.action.type === 'type' && all[i+1]?.action.target === e.action.target)).map(e => ({ observation: e.observation, action: e.action }));
+    const examples = state.demonstrations.filter((e,i,all) => e.action.target !== 'start' && !(e.action.type === 'type' && all[i+1]?.action.type === 'type' && all[i+1]?.action.target === e.action.target)).map(e => ({ observation: e.observation, action: e.action, after: e.after }));
     profile.examples = [...profile.examples, ...examples].slice(-36); profile.rounds = (profile.rounds || 0) + 1; profile.version++; save('muzil.profile.v1', profile);
   }
   $('round-status').textContent = state.phase === 'finished' ? 'A message sent. An intention kept. Your replay is saved.' : 'The phone won this one. Your replay is saved.';

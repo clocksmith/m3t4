@@ -98,12 +98,12 @@ explicitly connected entry with a new attempt and ownership generation. This is
 reconstruction from authorized input, not KV-cache migration. Healthy requests
 retain their owners. A rematch cannot accept an old inference result.
 
-Real inference was exercised between a Mac and an Intel Linux machine through
+Earlier Gemma inference was exercised between a Mac and an Intel Linux machine through
 Tailscale WebRTC, with no requester weights. One retained baseline produced eight
 valid model actions and a first valid action in 5.6 seconds. It did **not** finish
 the appointment. Subsequent lifecycle runs exercised joining, abrupt loss, restart
-and draining, but failed the valid-action gate on model output formatting. Full
-product acceptance remains open; do not infer autonomous completion from transport
+and draining, but failed the valid-action gate on model output formatting. Those
+runs did not meet product acceptance; do not infer autonomous completion from transport
 or unit-test success. Whole-model comparison reproduced an empty model response
 to the same longer prompt, so that failure was not unique to split execution.
 
@@ -126,7 +126,7 @@ npm run test:muzil:browser
 npm run check:runtime
 # Optional physical GPU check; requires sibling local model files:
 npm run test:muzil:inference
-npm run test:muzil:mesh -- --personalized --lifecycle --require-completion
+npm run test:muzil:mesh -- --ui --personalized --lifecycle --require-completion
 # Enforce autonomous completion as a separate quality gate:
 npm run test:muzil:inference -- --require-completion
 # Compare unchanged and personalized controllers against an explicit artifact:
@@ -171,9 +171,9 @@ rounds. No rankings are carried over from the historical arena.
   mirroring; its second load made zero weight requests, exercising OPFS reuse.
   This did not measure public Internet download time or separate physical peers.
 
-Model quality is a concrete remaining product gap. JSON syntax is constrained by
-Doppler; legal-action validation is enforced by m3t4. Neither guarantees useful
-choices. Invalid proposals stop the agent and leave the phone available to the
+Model quality is a concrete remaining product gap. Models propose commands;
+legal-action validation is enforced by m3t4. Valid syntax and legal controls do
+not guarantee useful choices. Invalid proposals stop the agent and leave the phone available to the
 human. The page does not manufacture task completion or substitute a script.
 
 ## Model qualification and controller corrections
@@ -186,10 +186,13 @@ both controllers to finish within the real round duration and reproduce their
 outcomes through replay. Preparation time, first valid action, rejected proposals,
 and actual execution identities are retained. A valid move alone does not pass.
 
-Local generation now explicitly matches the mesh's greedy sampling settings.
+Local generation now uses the same command prompt, output budget, and explicit
+greedy sampling settings as the mesh.
 Previously it inherited Doppler's repetition penalty of 1.1. Demonstrations retain
-their observed text, select the same app/contact and currently permitted action
-surface, and precede current observations. This prevents unrelated example screens
+their observed text and visible result, select the same app/contact and compatible
+control availability, and precede current observations. Empty and send-ready drafts
+are different demonstration contexts; transient notifications do not discard an
+otherwise relevant example. This prevents unrelated example screens
 from being presented as immediate action suggestions. It does not establish that
 the model learns or improves. Responses identify the model actually loaded.
 
@@ -209,3 +212,72 @@ drafted the wrong appointment time. Late/partial output from the expired trained
 round was rejected. All six recorded outcomes reproduced through replay.
 No replacement artifact is published or selected by these experiments.
 Transport acceptance and autonomous task completion remain separate gates.
+
+## UI lifecycle proof
+
+The `--ui` mesh proof teaches through actual phone controls, then runs the app's
+own agent loop on the other appointment. It records inputs, proposed actions,
+accepted action bindings, saved replays, screenshots, and first valid action time.
+The lifecycle gate requires complete replayable rounds during contribution,
+draining, and abrupt executor loss, plus an unaffected concurrent round. It stops
+if the initial round fails. Isolated legal actions cannot satisfy this gate.
+
+`MUZIL_PROOF_POLICY_URL` selects a pinned candidate policy without changing the
+site default. `MUZIL_REMOTE_STAGE=0` places stage A on the remote CDP browser;
+stage B is local. The default remote stage remains B. The report identifies the
+host count, exact served product source hashes, runtime source lock, and policy
+hash. Local contributors use separate persistent Chrome profiles, removed after
+the run; requesters remain fresh private contexts. Preparation records selective
+verified byte counts and preserves acquisition failures before cleanup. Browser
+storage estimates are approximate: a private Chrome test reported ample quota
+but rejected an actual cache write after about 1.5 GB. That preparation correctly
+failed before advertising readiness, and the underlying quota error is surfaced.
+
+## Two-host Qwen integration result (2026-09-29 UTC)
+
+The [retained real-UI report](meta-muzil-qwen4b-mesh-evidence.json) passes the
+bounded lifecycle gate with Qwen3 4B Instruct 2507 Q4K/F16. Linux executes the
+embedding and first layer; the Mac executes the remaining 35 layers and output.
+The human lesson is the first appointment. The agent chooses every move on the
+other appointment, using visible observations and remembered notifications.
+
+| Round | First valid action | Completed | Accepted agent actions |
+|---|---:|---:|---:|
+| Prepared baseline | 19.555 s | 79.304 s | 4 |
+| Contributor joining | 26.407 s | 90.908 s | 4 |
+| Executor draining | 22.228 s | 83.476 s | 4 |
+| Abrupt executor loss | 49.796 s | 137.049 s | 4 |
+| Concurrent healthy path | 49.657 s | 136.908 s | 4 |
+
+All five saved replays reproduce the completed outcome. Both requesting pages
+fetched zero weight files, imported no Doppler execution runtime, and sent or
+received zero binary data-channel bytes. Activation traffic stayed on executor
+links. The newcomer acquired 2,771,424,141 verified bytes for stage B and became
+ready in 18.757 seconds while a round continued. Those bytes came from a local
+artifact server; this is not an Internet download benchmark. First-action delay
+during acquisition increased by 6.852 seconds in this single comparison.
+
+Draining settled admitted work and released its resident. Abrupt tab loss restarted
+only the affected decision under a new attempt/placement generation; the next
+valid result arrived 37.743 seconds after loss. The concurrent healthy round did
+not restart. Shared compute still increased its latency. Recovery reconstructs
+from authorized input; no generation-state migration is claimed.
+
+This uses two physical hosts and multiple browser executors on those hosts.
+Joining and loss concern browser participants, not a third physical machine or a
+whole-host outage. It does not qualify public discovery, NAT-diverse access,
+long-running availability, signed Capsules, or other models. The first action
+latency remains substantial even though the phone opens without weights.
+
+The [controller diagnostics](meta-muzil-qwen4b-controller-evidence.json) retain
+the failed variants as well. Earlier profiles repeatedly rewrote the correct
+draft. Preserving visible demonstration results and using the same command
+protocol locally and remotely produced a completed trained fixture. Its unchanged
+engine-fixture baseline still failed to finish within 16 moves. This single task
+does not establish general accuracy or broad improvement from personalization.
+
+The [candidate test policy](meta-muzil-qwen4b-test-policy.json) pins the exact
+model, piece index and asymmetric plan. Its `/__models/` URLs are local proof
+routes. The production selection remains Gemma; the Qwen artifact has not been
+published or selected for the live site. Doppler's conversion-promotion protocol
+requires human coherence review before catalog/Hugging Face publication.

@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createPhone, applyAction, observe, advance, makeReplay, replay } from '../engine.mjs';
 import { SCENARIOS } from '../scenarios.mjs';
 import { LocalController, parseDecision, actionPrompt } from '../controller.mjs';
+import { MeshController } from '../mesh.mjs';
 let n = 0;
 const tap = (s, target, extra = {}) => applyAction(s, { roundId:s.roundId, id:`a${++n}`, type:'tap', target, ...extra }).state;
 const type = (s, target, value) => tap(s, target, { type:'type', value });
@@ -53,7 +54,7 @@ test('model action parsing fails closed and personalization actually enters the 
   const action = parseDecision('{"type":"tap","target":"app:calendar"}',o); assert.equal(action.target,'app:calendar');
   const current = observe(tap(tap(createPhone({roundId:'prompt-variation',scenario:SCENARIOS[1]}),'start'),'app:calendar'));
   const prompt = actionPrompt({observation:current,profile:{objective:'imitate',examples:[{
-    observation:{screen:{app:'calendar'},text:['Dentist ends at 5:40 PM']},action:{type:'tap',target:'home'},
+    observation:{screen:{app:'calendar'},text:['Dentist ends at 5:40 PM'],actions:current.actions},action:{type:'tap',target:'home'},
   }, { observation:{screen:{app:'messages',contact:'mom'},text:['Unrelated old conversation']},
     action:{type:'type',target:'reply',value:'5:40 PM'},
   }]}});
@@ -61,6 +62,25 @@ test('model action parsing fails closed and personalization actually enters the 
   assert.doesNotMatch(prompt,/Unrelated old conversation/);
   assert.ok(prompt.indexOf('Dentist ends at 5:40 PM') < prompt.indexOf('Visible information:'));
   assert.match(prompt,/3:15 PM/);
+});
+
+test('demonstrations distinguish an empty draft from one ready to send despite new notifications', () => {
+  const empty = tap(tap(start(), 'app:messages'), 'contact:mom');
+  const filled = type(empty, 'reply', 'OLD FILLED DRAFT: 5:40 PM.');
+  const profile = { objective: 'finish', examples: [
+    { observation: observe(empty), action: { type: 'type', target: 'reply', value: 'OLD EMPTY DEMONSTRATION' } },
+    { observation: observe(filled), action: { type: 'tap', target: 'send' }, after: observe(tap(filled, 'send')) },
+  ] };
+  const before = actionPrompt({ observation: observe(empty), profile });
+  assert.match(before, /OLD EMPTY DEMONSTRATION/);
+  assert.doesNotMatch(before, /OLD FILLED DRAFT/);
+  const current = advance(type(empty, 'reply', 'Pick me up at 3:15 PM.'), 7000);
+  const after = actionPrompt({ observation: observe(current), profile });
+  assert.doesNotMatch(after, /OLD EMPTY DEMONSTRATION/);
+  assert.match(after, /OLD FILLED DRAFT/);
+  assert.match(after, /3:15 PM/);
+  assert.match(after, /"action":"tap send"/);
+  assert.match(after, /"phase":"finished"/);
 });
 
 test('draining waits for active inference and refuses new work before unloading weights', async () => {
@@ -82,8 +102,24 @@ test('local and distributed controllers use the same explicit sampling policy', 
     options = actual; return { outputText: '3:15 PM' };
   } };
   await local.generate({ kind: 'reply', message: 'When?', context: '3:15 PM' });
-  for (const key of ['temperature', 'topK', 'topP', 'repetitionPenalty',
+  for (const key of ['maxTokens', 'temperature', 'topK', 'topP', 'repetitionPenalty',
     'repetitionPenaltyWindow', 'presencePenalty', 'useChatTemplate']) {
     assert.equal(options[key], policy.model.generation[key], key);
   }
+});
+
+test('local and distributed actions use identical observations and command format', async () => {
+  const local = new LocalController(), mesh = new MeshController();
+  let localMessages, remoteMessages, localOptions;
+  local.session = { modelId: 'controller-fixture', generate: async (messages, options) => {
+    localMessages = messages; localOptions = options; return { text: 'tap app:calendar' };
+  } };
+  mesh.initialize = async () => {};
+  mesh.policy = { model: { id: 'controller-fixture' } };
+  mesh.requester = { generate: async request => { remoteMessages = request.messages; return { content: 'tap app:calendar' }; } };
+  const job = { kind: 'action', observation: observe(start()), profile: { objective: 'finish' } };
+  await local.generate(job); await mesh.generate(job);
+  assert.deepEqual(localMessages, remoteMessages);
+  assert.match(localMessages[0].content, /Output only one command/);
+  assert.equal(localOptions.logitMaskFn, undefined);
 });

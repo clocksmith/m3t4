@@ -78,6 +78,14 @@ phone sends authorized observations and receives proposed actions; it carries no
 intermediate tensors. The phone validates match, round, controller, attempt and
 observation ownership before applying a still-legal action.
 
+The mesh policy explicitly selects both the model artifact directory and its
+piece-index URL. Their existing identity pins remain mandatory. A missing or
+unavailable policy fails before preparing compute; selecting another model cannot
+silently retain Gemma's artifact URLs. Initializing coordination alone imports no
+Doppler runtime and downloads no model weights. Action decision receipts include
+completion timestamps for recovery measurement; real reply text is not added to
+those metrics.
+
 Doppler defines executable partitions and an independently hash-verified piece
 index. Reploid coordinates bounded acquisition, cache reuse and source replacement.
 This page supplies an exact HTTP range source and OPFS cache; it does not yet

@@ -32,6 +32,23 @@ try {
   await mobile.screenshot({path:join(output,'mobile.png'),fullPage:true});
   await mobile.locator('#start-round').click(); await mobile.locator('#dismiss-reveal').click(); await mobile.locator('[data-action="app:messages"]').first().click(); await mobile.locator('[data-action="contact:mom"]').click(); await mobile.locator('#phone-reply').fill('5:40 PM'); await mobile.getByRole('button',{name:'Send message',exact:true}).click(); await mobile.locator('#next-round').waitFor();
   report.checks.push('Mobile layout has no horizontal overflow and can finish a task');
+  const policyPage = await browser.newPage(), policyRequests = [];
+  policyPage.on('request', request => policyRequests.push(request.url()));
+  await policyPage.goto(origin);
+  const policyResult = await policyPage.evaluate(async () => {
+    const { MeshController } = await import('/muzil/mesh.mjs');
+    const controller = new MeshController();
+    try {
+      await controller.initialize();
+      return { base: controller.modelBase, index: controller.indexUrl, ready: controller.ready };
+    } finally { await controller.close(); }
+  });
+  assert.equal(policyResult.base, origin + '/vendor/doppler/models/muzil-gemma-1b/');
+  assert.equal(policyResult.index, origin + '/vendor/doppler/models/partition-pieces/gemma-3-1b.json');
+  assert.equal(policyResult.ready, false);
+  assert.equal(policyRequests.some(url => url.includes('/vendor/doppler/') || /\.bin(?:\?|$)/.test(url)), false);
+  report.checks.push('Mesh policy resolves explicit artifact URLs without importing Doppler or acquiring weights');
+  await policyPage.close();
   const a=await browser.newPage(),b=await browser.newPage();
   for(const p of [a,b]) {p.on('pageerror',e=>errors.push(e.message));await p.goto(origin); await p.evaluate(async()=>{
     const {PeerController}=await import('/muzil/peer.mjs');

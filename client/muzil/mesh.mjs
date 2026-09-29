@@ -9,13 +9,23 @@ const sha = async bytes => 'sha256:' + [...new Uint8Array(await crypto.subtle.di
  */
 export class MeshController {
   links = []; resident = null; chats = new Map(); ready = false; status = 'No prepared path';
-  constructor({ onChange = () => {}, modelBase = '/vendor/doppler/models/muzil-gemma-1b/' } = {}) {
-    this.onChange = onChange; this.modelBase = modelBase; this.metrics = { attempts: [], decisions: [], contribution: null };
+  constructor({ onChange = () => {}, modelBase = null,
+    policyUrl = new URL('./mesh-policy.json', import.meta.url) } = {}) {
+    this.onChange = onChange; this.modelBase = modelBase; this.policyUrl = policyUrl;
+    this.metrics = { attempts: [], decisions: [], contribution: null };
   }
   async initialize() {
     if (this.initializing) return this.initializing;
     this.initializing = (async () => {
-      this.policy = await (await fetch(new URL('./mesh-policy.json', import.meta.url))).json();
+      const response = await fetch(this.policyUrl);
+      if (!response.ok) throw new Error('Cannot load the selected mesh policy');
+      this.policy = await response.json();
+      if (typeof this.policy.artifacts?.baseUrl !== 'string' || !this.policy.artifacts.baseUrl.trim()
+        || typeof this.policy.artifacts?.indexUrl !== 'string' || !this.policy.artifacts.indexUrl.trim()) {
+        throw new Error('Mesh policy requires explicit model and piece-index URLs');
+      }
+      this.modelBase ??= new URL(this.policy.artifacts.baseUrl, response.url).href;
+      this.indexUrl = new URL(this.policy.artifacts.indexUrl, response.url).href;
       const [identities, link, entry, chat, resident, grants, peer, config, acquisition] = await Promise.all([
         load('artifacts/identity.js'), load('mesh/partitions/partition-link.js'), load('mesh/partitions/partition-entry.js'),
         load('mesh/partitions/partition-chat.js'), load('mesh/partitions/resident-partition.js'),
@@ -46,7 +56,7 @@ export class MeshController {
     const { createVerifiedPieceStorage } = this.runtime;
     const [manifestBytes, indexBytes] = await Promise.all([
       fetch(new URL(this.modelBase + 'manifest.json', location.href)).then(r => r.arrayBuffer()),
-      fetch(new URL('../vendor/doppler/models/partition-pieces/gemma-3-1b.json', import.meta.url)).then(r => r.arrayBuffer()),
+      fetch(this.indexUrl).then(r => r.arrayBuffer()),
     ]);
     if (await sha(manifestBytes) !== this.policy.model.identity) throw new Error('Model manifest pin mismatch');
     const manifest = JSON.parse(new TextDecoder().decode(manifestBytes));
@@ -144,7 +154,9 @@ export class MeshController {
     const started = performance.now();
     const result = await this.requester.generate({ messages: [{ role: 'user', content: job.kind === 'action' ? actionPrompt(job) : replyPrompt(job) }],
       threadId: job.binding?.roundId || crypto.randomUUID() }, { signal });
-    this.metrics.decisions.push({ binding: job.binding, elapsedMs: performance.now() - started, execution: result.execution, recovery: result.recovery });
+    this.metrics.decisions.push({ binding: job.binding, elapsedMs: performance.now() - started,
+      completedAt: Date.now(), ...(job.kind === 'action' ? { text: result.content } : {}),
+      execution: result.execution, recovery: result.recovery });
     return { text: result.content, binding: job.binding ? structuredClone(job.binding) : null, model: this.policy.model.id,
       provider: 'reploid-doppler-partitions', execution: result.execution, recovery: result.recovery };
   }

@@ -18,39 +18,37 @@ export class LocalController {
     this.busy = true;
     let settled; this.settlement = new Promise(resolve => { settled = resolve; });
     try {
-      const prompt = job.kind === 'action' ? actionPrompt(job, { format: 'json' }) : replyPrompt(job);
-      const options = { maxTokens: 160, temperature: 0, topK: 0, topP: 1,
+      const prompt = job.kind === 'action' ? actionPrompt(job) : replyPrompt(job);
+      const options = { maxTokens: 96, temperature: 0, topK: 0, topP: 1,
         repetitionPenalty: 1, repetitionPenaltyWindow: 0, presencePenalty: 0,
         useChatTemplate: true, signal };
-      if (job.kind === 'action') {
-        const url = new URL('../vendor/doppler/src/inference/pipelines/structured/json-grammar-mask.js', import.meta.url);
-        const { createJsonGrammarMask } = await import(url.href);
-        const stopTokenIds = this.session.advanced.getStopTokenIds();
-        if (!this.grammarIdentity) {
-          const source = await (await fetch(url)).text();
-          const bytes = await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({source,stopTokenIds})));
-          this.grammarIdentity = {id:'muzil-json-object/v1',contentDigest:'sha256:'+Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('')};
-        }
-        options.logitMaskFn = createJsonGrammarMask({stopTokenIds,cacheBudget:262144});
-        options.logitMaskIdentity = this.grammarIdentity;
-      }
       const result = await this.session.generate([{ role: 'user', content: prompt }], options);
       return { binding: job.binding ? structuredClone(job.binding) : null, text: result.text ?? result.outputText ?? result.content ?? '', model: this.session.modelId, provider: 'doppler', execution: { modelId: this.session.modelId, manifestHash: this.session.manifestHash, resolvedExecutionId: result.resolution?.resolvedExecutionId || null } };
     } finally { this.busy = false; settled(); }
   }
-  async close() { this.draining = true; await this.settlement; try { await this.session?.close(); this.session = null; this.grammarIdentity = null; this.status = 'Not loaded'; } finally { this.draining = false; } }
+  async close() { this.draining = true; await this.settlement; try { await this.session?.close(); this.session = null; this.status = 'Not loaded'; } finally { this.draining = false; } }
 }
 export function actionPrompt(job, { format = 'command' } = {}) {
   const { observation, memory = [], profile = {}, history = [] } = job;
+  // Availability distinguishes states such as an empty draft from a send-ready
+  // draft. Transient notification controls do not change that app interaction.
+  const controls = observed => JSON.stringify((observed.actions || [])
+    .filter(a => !a.target.startsWith('notification:') && !a.target.startsWith('dismiss:'))
+    .map(a => JSON.stringify([a.type, a.target])).sort());
+  const currentControls = controls(observation);
   const seen = [...new Set(memory.flatMap(o => o.text || []))].filter(t => t && !observation.text.includes(t)).slice(-16);
   const examples = (profile.examples || []).filter(e => e.observation?.screen?.app === observation.screen.app
     && e.observation.screen.contact === observation.screen.contact
+    && controls(e.observation) === currentControls
     && observation.actions.some(a => a.type === e.action?.type && a.target === e.action.target)).slice(-8)
-    .map(e => ({ app: e.observation.screen, visible: e.observation.text || [], action: e.action }));
+    .map(e => ({ app: e.observation.screen, visible: e.observation.text || [],
+      action: format === 'json' ? e.action : `${e.action.type} ${e.action.target}${e.action.type === 'type' ? ' = ' + e.action.value : ''}`,
+      ...(e.after ? { result: { phase: e.after.phase, app: e.after.screen, visible: e.after.text } } : {}) }));
   const legal = observation.actions.map(a => ({ type:a.type, target:a.target, label:a.label,
     ...(a.type === 'type' ? { value:'YOUR TEXT HERE' } : {}) }));
   return `You control a phone. Choose one next action to complete the intention you saw.
 Read memory before opening another app. If you already know a requested fact, use it instead of looking it up again. To reply, open Messages, select the contact, type the answer, then send it. Use the CURRENT appointment end time, not its start time or a demonstration time.
+The current screen replaces earlier screen and draft states. Do not retype an unchanged draft. If the current draft already answers the intention using facts you saw, send it. Historical examples show their results; their facts are not this round's facts.
 ${profile.objective === 'imitate' ? 'Imitate the demonstrated habits, including detours.' : 'Complete the task accurately. Use facts already seen. Avoid repeating actions that did not help.'}
 ${examples.length ? 'Earlier demonstrations from other rounds (their facts are not current): ' + JSON.stringify(examples) + '\n' : ''}Memory of visible information: ${seen.join(' | ').slice(0,2400)}
 Recent actions: ${JSON.stringify(history.slice(-8))}

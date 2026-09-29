@@ -1,0 +1,127 @@
+{
+  "schema": "muzil.partition-policy/v1",
+  "roomId": "muzil-prepared-v1",
+  "artifacts": {
+    "baseUrl": "/__models/muzil-qwen4b-rdrr/",
+    "indexUrl": "/__models/muzil-qwen4b-rdrr/pieces.json"
+  },
+  "model": {
+    "id": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+    "name": "Qwen3 4B Instruct 2507 split",
+    "provider": "doppler",
+    "identity": "sha256:4d116f86ccde5c483ed7d416af514e4c39e3c0f01aecd4ba60219783e604150a",
+    "adapters": [],
+    "generation": {
+      "maxTokens": 96,
+      "maxSeqLen": 4096,
+      "temperature": 0,
+      "topK": 0,
+      "topP": 1,
+      "repetitionPenalty": 1,
+      "repetitionPenaltyWindow": 0,
+      "presencePenalty": 0,
+      "useChatTemplate": true
+    }
+  },
+  "plan": {
+    "schema": "doppler.layer-partition-contract/v1",
+    "modelId": "qwen-3-4b-instruct-2507-q4k-ehf16-af32",
+    "totalLayers": 36,
+    "hiddenSize": 2560,
+    "vocabSize": 151936,
+    "splitLayer": 1,
+    "activationDtype": "f32",
+    "partitions": [
+      {
+        "index": 0,
+        "layerRange": [
+          0,
+          0
+        ],
+        "layerCount": 1,
+        "hasEmbedding": true,
+        "hasLmHead": false,
+        "inputContract": {
+          "type": "token-ids",
+          "rank": 2,
+          "shapeDescription": "[batchSize, seqLen]",
+          "dtype": "i32"
+        },
+        "outputContract": {
+          "type": "activation-tensor",
+          "rank": 3,
+          "shapeDescription": "[batchSize, seqLen, hiddenSize]",
+          "hiddenSize": 2560,
+          "dtype": "f32"
+        }
+      },
+      {
+        "index": 1,
+        "layerRange": [
+          1,
+          35
+        ],
+        "layerCount": 35,
+        "hasEmbedding": false,
+        "hasLmHead": true,
+        "inputContract": {
+          "type": "activation-tensor",
+          "rank": 3,
+          "shapeDescription": "[batchSize, seqLen, hiddenSize]",
+          "hiddenSize": 2560,
+          "dtype": "f32"
+        },
+        "outputContract": {
+          "type": "logits",
+          "rank": 3,
+          "shapeDescription": "[batchSize, seqLen, vocabSize]",
+          "vocabSize": 151936,
+          "dtype": "f32"
+        }
+      }
+    ]
+  },
+  "planId": "sha256:50876ab64b40a31b4593fedf48344946d7cb2dbfe15c88847a907f5685e614fd",
+  "indexIdentity": "sha256:662d70c5cde9a0cfea14a8bf722559ec1d57e0903394e12da6051ab3e12534c0",
+  "limits": {
+    "maxTokens": 96,
+    "maxPromptTokens": 2048,
+    "maxActivationBytes": 33554432,
+    "maxOutputCharacters": 4000,
+    "maxAttempts": 4096,
+    "maxConcurrentAttempts": 2
+  },
+  "channel": {
+    "maxFrameBytes": 16384,
+    "maxControlBytes": 60000,
+    "maxPayloadBytes": 33554432,
+    "maxPendingBytes": 67108864,
+    "maxPendingRequests": 8,
+    "maxRequestsPerChannel": 65536,
+    "maxBufferedBytes": 16777216,
+    "maxTransferBytes": 1073741824,
+    "timeoutMs": 120000
+  },
+  "input": {
+    "maxInputCharacters": 18000,
+    "maxOutputCharacters": 4000,
+    "maxAttempts": 4096,
+    "maxConcurrentAttempts": 2,
+    "descriptorTtlMs": 10000
+  },
+  "acquisition": {
+    "maxConcurrent": 1,
+    "maxQueued": 32,
+    "maxPieceBytes": 1048576,
+    "timeoutMs": 120000
+  },
+  "receiver": {
+    "maxAttempts": 4096,
+    "maxSteps": 96
+  },
+  "grantTtlMs": 240000,
+  "maxGrants": 4096,
+  "maxLinks": 8,
+  "maxPlacements": 3,
+  "connectTimeoutMs": 180000
+}

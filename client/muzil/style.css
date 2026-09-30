@@ -696,7 +696,7 @@ h1 em {
   padding:23px 46px 28px;
   border-top:1px solid var(--line);
   display:flex;
-  justify-content:space-between;
+  justify-content:center;
   gap:20px;
   font-size:8px;
   color:#848a7d;
@@ -712,6 +712,9 @@ h1 em {
 }
 .site-footer>div {
   display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  text-align:center;
   gap:22px;
   align-items:center
 }

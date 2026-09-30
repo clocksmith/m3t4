@@ -13,35 +13,49 @@
 <body>
   <header class="site-header">
     <a class="wordmark" href="/" aria-label="Meta Muzil home"><span class="brand-mark">m<span>↗</span></span>meta muzil<span class="byline">by m3t4.ai</span></a>
-    <nav aria-label="Main"><button class="nav-item active" data-mode="play">Play</button><button class="nav-item" data-mode="train">Your stand-in</button><button class="nav-item" data-mode="finish">Finish a thing <span>↗</span></button></nav>
-    <button class="connection-button" id="connection"><span class="status-dot"></span><span id="connection-label">Connect a helper</span></button>
+    <details class="site-menu" id="site-menu">
+      <summary aria-label="Open menu">Menu <span>＋</span></summary>
+      <nav aria-label="Main">
+        <button class="nav-item active" data-mode="play">The game</button>
+        <button class="nav-item" data-mode="train">Your stand-in</button>
+        <button class="nav-item" data-mode="finish">Finish a thing ↗</button>
+        <button class="nav-item" id="agent-round">Let my stand-in try →</button>
+        <button class="nav-item" id="race-peer">Race a friend ↗</button>
+        <button class="nav-item" id="new-round">New round ↻</button>
+        <button class="connection-button" id="connection"><span class="status-dot"></span><span id="connection-label">Connect a helper</span></button>
+      </nav>
+    </details>
   </header>
   <main id="main">
     <section id="play-view" class="play-layout">
-      <div class="intro-column">
-        <div class="eyebrow"><span class="tiny-star">✳</span> A VERY ORDINARY CHALLENGE</div>
-        <h1>You opened <br>your phone <br>for a <em>reason.</em></h1>
-        <p class="intro-copy">One small task. A phone full of other things.<br>See if you can finish what you started.</p>
-        <div class="main-actions"><button class="button primary" id="start-round">Let me try <span>↗</span></button><button class="text-button" id="agent-round">Let my stand-in try <span>→</span></button></div>
-        <p class="fine-print">No download. No account. Just remember why.</p><button class="text-button" id="race-peer">Race a friend ↗</button><p id="race-status" class="small muted" role="status"></p>
-        <div class="editorial-note"><span>01 — THE PREMISE</span><p>Your assistant has prepared a briefing<br>on why you opened your phone.</p><p class="muted">You could also just do the thing.</p></div>
+      <div class="intro-column" id="intro">
+        <p class="story-lead">The world promised us AI assistants many years ago.</p>
+        <h1>They come and they go.<br>But there’s still a major problem with how we use our devices<span class="story-dots">…</span></h1>
+        <button id="start-round" class="oven-start" aria-label="Open your phone. Start the game.">
+          <span class="oven-scene" aria-hidden="true">
+            <span class="oven-shadow"></span>
+            <span class="oven-back"></span>
+            <span class="peek-phone" id="peek-phone"><span class="peek-island"></span><span class="peek-time">9:41</span><span class="peek-notice">Mom <b>2</b></span><span class="peek-apps"><i></i><i></i><i></i><i></i></span></span>
+            <span class="oven-body"><span class="oven-window"><span class="oven-rack"></span><span class="oven-coil"></span></span><span class="oven-handle"></span><span class="oven-controls"><i></i><i></i><b></b></span><span class="oven-brand">m3t4</span></span>
+            <span class="oven-foot left"></span><span class="oven-foot right"></span>
+          </span>
+          <span class="start-label">Open your phone <span>↗</span></span>
+        </button>
+        <p class="intro-hint">One intention. Three minutes. A phone full of distractions.</p>
       </div>
-      <div class="phone-column">
-        <div class="phone-caption"><span class="live-dot"></span> YOUR PHONE, MORE OR LESS <span id="round-clock">00:00</span></div>
-        <div class="phone" id="phone">
+      <div class="phone-column" id="game-stage" hidden>
+        <div class="phone-caption"><button id="remember" aria-label="Remember my intention">Remember why <span>↗</span></button><span id="round-clock" role="timer" aria-label="Time remaining">03:00</span></div>
+        <div class="phone" id="phone" tabindex="-1" aria-label="Simulated phone">
           <div class="phone-hardware"><span class="phone-time">9:41</span><span class="island"></span><span class="phone-signals" aria-label="Full signal and battery">▂▄▆ <span>▰</span></span></div>
           <div id="phone-screen" class="phone-screen"></div>
           <div id="notification-banner" class="notification-banner"></div>
           <div id="phone-overlay" class="phone-overlay"></div>
           <div class="phone-navigation"><button id="phone-back" aria-label="Back">‹</button><button id="phone-home" aria-label="Home"><span></span></button><button id="phone-switcher" aria-label="App switcher">▢</button></div>
         </div>
-        <div class="phone-footnote"><span>Simulated phone. Very real distractions.</span><button id="soundless-notifications" aria-label="Open notifications">Notifications <span id="notification-count">0</span></button></div>
+        <div class="phone-footnote"><span>Simulated phone</span><button id="soundless-notifications" aria-label="Open notifications">Notifications <span id="notification-count">0</span></button></div>
+        <div class="round-status" id="round-status" role="status" aria-live="polite"></div>
       </div>
-      <aside class="round-column">
-        <section class="intention-card"><div class="card-kicker"><span class="orange-dot"></span> THE ORIGINAL PLAN <span>↗</span></div><h2 id="intention-heading">A small favor.</h2><p id="intention-copy">Mom is picking you up. Tell her when your appointment finishes.</p><div class="card-rule"></div><div class="task-detail"><span>THE APPS</span><div><i class="mini-app green">↗</i><i class="mini-app coral">28</i><span>Messages + Calendar</span></div></div><button id="remember" class="text-button">Keep that in mind <span>↗</span></button></section>
-        <section class="standin-card"><div class="standin-avatar">m<span>↗</span></div><div><h3>A little more you.</h3><p>Your choices can teach your stand-in. Including the questionable ones.</p><button id="teach-link" class="text-button">Meet your stand-in <span>→</span></button></div></section>
-        <div class="round-status" id="round-status" role="status" aria-live="polite">Ready when you are.</div>
-      </aside>
+      <p id="race-status" class="small muted" role="status"></p>
     </section>
     <section id="train-view" class="secondary-view" hidden>
       <div class="eyebrow">YOUR STAND-IN</div><h1>A little more <em>you.</em></h1><p class="intro-copy">Teach it with the choices you make. Then see what it does with a different day.</p>
@@ -52,7 +66,7 @@
       <div class="workspace-grid"><form id="reply-form" class="workspace-card"><label class="field-label" for="real-message">The message you need to answer</label><textarea id="real-message" maxlength="3000" rows="4" placeholder="What time should I pick you up?"></textarea><label class="field-label" for="real-context">The details it needs</label><textarea id="real-context" maxlength="4000" rows="4" placeholder="My appointment ends at 5:40 PM. Same entrance as last time."></textarea><label class="check-label"><input id="reply-consent" type="checkbox"> If using a connected peer, send it this message and context for this reply.</label><button class="button primary" id="draft-reply" type="submit">Help me reply ↗</button></form><section class="workspace-card"><div class="card-kicker">YOUR INTENTION</div><h2>A reply, ready for you.</h2><p class="muted">Use the supplied details. Keep it brief. You decide what gets sent.</p><textarea id="reply-output" rows="7" aria-label="Draft reply" placeholder="Your draft will appear here."></textarea><button id="copy-reply" class="button secondary">Copy reply</button><p id="reply-status" class="small muted" role="status"></p></section></div>
     </section>
   </main>
-  <footer class="site-footer"><span>m3t4.ai <span class="footer-divider">/</span> OPEN YOUR PHONE. REMEMBER WHY.</span><div><a href="/history">The original arena ↗</a><a href="https://github.com/clocksmith/m3t4">Source ↗</a><button id="about-button">About this experiment</button></div></footer>
+  <footer class="site-footer"><span>m3t4.ai <span class="footer-divider">/</span> REMEMBER WHY.</span><div><a href="/history">The original arena ↗</a><a href="https://github.com/clocksmith/m3t4">Source ↗</a><button id="about-button">About this experiment</button></div></footer>
   <dialog id="mesh-dialog" class="mesh-dialog"><div class="dialog-heading"><div><div class="eyebrow">A LITTLE HELP FROM ANOTHER DEVICE</div><h2>Bring your stand-in online.</h2></div><button class="icon-button close-dialog" aria-label="Close">×</button></div><p>Use a prepared computer without downloading a model on this phone. Pairing shares simulated observations and your selected profile when you ask the stand-in to play.</p><div id="race-invite" hidden><p>A connected friend wants to race the same task.</p><button id="accept-race" class="button primary">Accept round ↗</button></div><div class="connection-state"><span class="status-dot"></span><span id="mesh-state">No peer connected</span></div><div class="button-row"><button id="make-offer" class="button primary">Create connection</button><button id="join-offer" class="button secondary">Answer a connection</button><button id="disconnect-peer" class="text-button">Disconnect</button></div><label class="field-label" for="peer-input">Code from the other device</label><textarea id="peer-input" rows="2" placeholder="Paste the connection or answer code"></textarea><button id="accept-answer" class="button secondary">Apply answer</button><label class="field-label" for="peer-output">Your code — send this to the other device</label><textarea id="peer-output" readonly rows="2"></textarea><button id="copy-code" class="text-button">Copy code</button><p class="small muted">Pair directly with someone you trust. Some networks need a relay; connection codes do not guarantee access through every network.</p><details><summary>Prepare this computer to help</summary><p>Load Gemma 3 1B through Doppler (approximately 1.05 GB, cached when supported). This is optional. Human play never needs it.</p><button id="load-model" class="button secondary">Load model on this device</button><p id="model-state" class="small" role="status">Model not loaded</p><label class="check-label"><input id="share-compute" type="checkbox"> Accept bounded inference requests from my paired device.</label><button id="unload-model" class="text-button">Stop sharing and unload</button></details><details><summary>Use a distributed helper</summary>
 <p>Your phone sends the task to a prepared pair of computers. No model weights are needed here. Only connect helpers you trust with the observations and profile you choose to share.</p>
 <p id="partition-state" role="status">No prepared path</p>

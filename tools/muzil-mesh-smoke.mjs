@@ -97,8 +97,11 @@ async function page(instance, url, { requester = false, persistent = false } = {
     // The lesson uses real phone controls before any model is prepared.
     await p.locator('#start-round').click(); await p.locator('#dismiss-reveal').click();
     await p.locator('[data-action="app:calendar"]').first().click();
+    await p.locator('#phone-home').click(); await p.locator('[data-action="app:notes"]').click();
+    await p.locator('#phone-home').click(); await p.locator('[data-action="app:clock"]').first().click();
+    await p.locator('#alarm-time').fill('17:30'); await p.locator('[data-action="save-alarm"]').click();
     await p.locator('#phone-home').click(); await p.locator('[data-action="app:messages"]').first().click();
-    await p.locator('[data-action="contact:mom"]').click(); await p.locator('#phone-reply').fill('Pick me up at 5:40 PM.');
+    await p.locator('[data-action="contact:mom"]').click(); await p.locator('#phone-reply').fill('Pick me up at 5:40 PM, side entrance.');
     await p.getByRole('button', { name: 'Send message', exact: true }).click(); await p.locator('#next-round').waitFor();
   }
   return p;
@@ -144,6 +147,7 @@ async function runProductRound(p) {
       decisions: mesh.metrics.decisions.length,
       jobs: meshJobs.length,
     }));
+    await p.locator('#site-menu summary').click();
     await p.locator('#agent-round').click();
     await p.waitForFunction(previous => {
       const saved = JSON.parse(localStorage.getItem('muzil.replay.v1') || 'null');

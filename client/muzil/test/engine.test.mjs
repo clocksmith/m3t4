@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createPhone, applyAction, observe, advance, makeReplay, replay } from '../engine.mjs';
-import { SCENARIOS } from '../scenarios.mjs';
+import { SCENARIOS, PLAY_SCENARIOS, RULES } from '../scenarios.mjs';
 import { LocalController, parseDecision, actionPrompt } from '../controller.mjs';
 import { MeshController } from '../mesh.mjs';
 let n = 0;
@@ -48,6 +48,49 @@ test('unseen variation needs its own appointment time', () => {
   let s = tap(createPhone({roundId:'variation',scenario:SCENARIOS[1]}),'start');
   s = reply(s,'5:40 PM'); assert.equal(s.phase,'playing');
   s = type(s,'reply','3:15 PM'); s = tap(s,'send'); assert.equal(s.phase,'finished');
+});
+
+function alarm(s, value) {
+  s = tap(s, 'home'); s = tap(s, 'app:clock');
+  s = type(s, 'alarm', value); return tap(s, 'save-alarm');
+}
+test('harder intentions require the current time, entrance and alarm in either order', () => {
+  for (const scenario of PLAY_SCENARIOS) {
+    for (const alarmFirst of [false, true]) {
+      let s = tap(createPhone({ roundId: 'errands', scenario }), 'start');
+      assert.equal(observe(s).text.some(text => text.includes(scenario.location)), false);
+      s = tap(s, 'app:notes'); assert.ok(observe(s).text.includes(scenario.initialNotes));
+      s = tap(s, 'home');
+      if (alarmFirst) { s = alarm(s, scenario.requiredAlarm); s = tap(s, 'home'); }
+      s = reply(s, `Pick me up at ${scenario.end}, ${scenario.location}.`);
+      assert.equal(s.phase, alarmFirst ? 'finished' : 'playing');
+      if (!alarmFirst) s = alarm(s, scenario.requiredAlarm);
+      assert.equal(s.phase, 'finished');
+      assert.deepEqual(replay(makeReplay(s)), s);
+    }
+  }
+});
+test('old times, wrong entrances, ambiguous replies and wrong alarms do not complete errands', () => {
+  const scenario = PLAY_SCENARIOS[0];
+  for (const message of ['5:20 PM, side entrance', '5:40 PM, main entrance', '5:20 or 5:40 PM, side entrance', '5:40 PM, main entrance or side entrance', '5:40 PM, beside entrance', '5:40 PM']) {
+    let s = tap(createPhone({ roundId: 'wrong', scenario }), 'start');
+    s = reply(s, message); s = alarm(s, scenario.requiredAlarm);
+    assert.equal(s.phase, 'playing');
+  }
+  let s = tap(createPhone({ roundId: 'wrong-alarm', scenario }), 'start');
+  s = reply(s, '5:40 PM, side entrance'); s = alarm(s, '05:30');
+  assert.equal(s.phase, 'playing');
+  s = tap(s, 'home'); s = reply(s, 'Actually, 5:20 PM, side entrance');
+  s = alarm(s, '17:30'); assert.equal(s.phase, 'playing', 'latest message must still be correct');
+  s = tap(s, 'home'); s = reply(s, '5:40 PM, side entrance');
+  assert.equal(s.phase, 'finished');
+});
+test('challenge interruptions continue through the round and expiration replays exactly', () => {
+  let s = tap(createPhone({ roundId: 'expired-errands', scenario: PLAY_SCENARIOS[0] }), 'start');
+  s = advance(s, 160000);
+  assert.equal(s.notifications.length, 12);
+  s = advance(s, RULES.durationMs);
+  assert.equal(s.phase, 'expired'); assert.deepEqual(replay(makeReplay(s)), s);
 });
 test('model action parsing fails closed and personalization actually enters the request', () => {
   const o = observe(start()); assert.throws(()=>parseDecision('{"type":"tap","target":"win"}',o),/unavailable/);

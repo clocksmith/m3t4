@@ -22,9 +22,17 @@ integration path, not fulfillment of that distributed-partition target.
   Desktop/mobile layouts and reduced-motion and keyboard paths are supported.
 - `/history`: preserved arena entry. Existing arena routes and assets remain.
   The historical page links back with native navigation.
-- Working Messages, Calendar, Clock, Notes, Contacts, app switching, home/back,
-  drafts, notification center and a tempting feed. This is a simulated OS; it
-  does not observe or control real phone apps.
+- Messages supports search, drafts, sending, and new conversations through Contacts.
+  Calendar has month/day navigation, event details, and event creation/editing/deletion.
+  Clock supports adding, editing, toggling and deleting alarms. Notes supports
+  multiple autosaved notes, search and deletion. Contacts has searchable cards,
+  editable names/phone/email, creation/deletion, and a Message action.
+  App switching, home/back, notification center and the feed remain available.
+  Event/contact drafts can be resumed after app switches; interruptions return to
+  the same editor. All changes use shared human/agent actions and deterministic
+  replay. Deleting a contact preserves the conversation and recipient identity.
+  Each new round starts from its challenge data; these are round-local changes.
+  This is a simulated OS; it does not observe or control real phone apps.
 - Eight JSON-defined challenges compose contacts, messages, calendar events,
   notes, alarms and interruptions. Each shipped challenge has one outcome: a
   message, an alarm, or a note update, using information distributed across apps.
@@ -308,3 +316,12 @@ The retained Qwen integration evidence above applies to the original appointment
 task. Model completion and latency on the harder task have not been measured.
 The UI mesh smoke teaches the new task for the next qualification run; changing
 the game does not promote a model or change executor readiness or production flags.
+
+## Mini-app interaction checks (2026-09-30)
+
+`npm run test:muzil:apps` exercises event, alarm, note, contact and message controls
+in Chrome at 1440, 390 and 320 pixels, including interrupted event drafts,
+app-switch persistence, search, deletion, completed-round replay and overflow.
+Engine tests also reject invalid saves and stale controls. Existing phone, race,
+interruption and Doom Scroll browser suites cover the surrounding game.
+These checks do not qualify real-model performance on the expanded controls.

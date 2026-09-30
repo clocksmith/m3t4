@@ -1,7 +1,9 @@
+import { miniScreen, searchField } from './mini-app-view.mjs';
+import { shownThreads } from './mini-apps.mjs';
 import { distractionScreen, updateDistractionMotion, notificationBait } from './distraction-view.mjs';
 import { bindToasterEntry } from './toaster-entry.mjs';
 import { APPS, RULES } from './scenarios.mjs';
-import { loadChallenges, validateChallenge, parseCatalog, calendarEvents, contactName, roundDuration } from './challenges.mjs';
+import { loadChallenges, validateChallenge, parseCatalog, contactName, roundDuration } from './challenges.mjs';
 import { DoomFeed } from './doom-feed.mjs';
 const SCENARIOS = await loadChallenges();
 import { createPhone, applyAction, advance, observe, displayTime, makeReplay, replay, blockingNotification } from './engine.mjs';
@@ -94,7 +96,7 @@ function complete() {
 }
 const launch = a => `<button class="app-launch" data-action="app:${a.id}" aria-label="Open ${a.label}"><span class="app-tile ${a.color}">${a.id === 'calendar' ? `<span class="calendar-tile"><small>${state.scenario.date.startsWith('Monday') ? 'MON' : 'TUE'}</small>${state.scenario.date.startsWith('Monday') ? '28' : '29'}</span>` : icon(a.icon)}</span><span>${a.label}</span>${a.id === 'messages' ? '<i class="badge">2</i>' : ''}</button>`;
 function home() {
-  const event = calendarEvents(state.scenario)[0];
+  const event = state.events.find(e => e.date >= state.today);
   return `<div class="home-screen"><div class="home-date">${esc(state.scenario.date)}</div><div class="home-time">9:41</div><div class="weather">☀ <span>19° · A perfectly ordinary day</span></div><div class="home-widgets"><button class="home-widget" data-action="app:calendar"><small>UP NEXT</small><p>${esc(event?.title || 'A little breathing room')}</p><strong>${event ? esc(displayTime(event.start).replace(' PM','')) : '—'}</strong><p>Open Calendar ↗</p></button><button class="home-widget" data-action="app:clock"><small>TAKE YOUR TIME</small>${icon('sun')}<p>Mostly clear.<br>Unlike your notifications.</p></button></div><div class="apps-grid">${APPS.map(launch).join('')}</div><div class="home-dock">${[APPS[0], APPS[2], APPS[5]].map(launch).join('')}</div></div>`;
 }
 const header = (title, detail = '') => `<div class="app-header"><h2>${title}</h2><span>${detail}</span></div>`;
@@ -102,13 +104,11 @@ function screen() {
   const { app, contact } = state.screen;
   if (app === 'home') return home();
   if (app === 'distraction') return distractionScreen(state.distractions[state.screen.distractionId]);
-  const thread = c => `<button class="thread-row" data-action="contact:${esc(c)}"><span class="thread-avatar">${esc(contactName(state,c).slice(0,1))}</span><span><strong>${esc(contactName(state,c))}</strong><p>${esc(state.messages[c].at(-1).text)}</p></span></button>`;
-  if (app === 'messages' && !contact) return header('Messages', `${Object.keys(state.messages).length} conversations`) + `<div class="app-body">${Object.keys(state.messages).map(thread).join('')}</div>`;
+  const thread = c => `<button class="thread-row" data-action="contact:${esc(c)}"><span class="thread-avatar">${esc(contactName(state,c).slice(0,1))}</span><span><strong>${esc(contactName(state,c))}</strong><p>${esc(state.messages[c].at(-1)?.text || 'No messages yet')}</p></span></button>`;
+  if (app === 'messages' && !contact) return header('Messages', `${Object.keys(state.messages).length} conversations`) + `<div class="app-body"><div class="mini-toolbar"><button class="mini-button" data-action="message-new">New message</button></div>${searchField('messages',state.searches.messages)}<div class="mini-search-results">${shownThreads(state).map(thread).join('') || '<p class="empty-phone">No conversations found.</p>'}</div></div>`;
   if (app === 'messages') return header(esc(contactName(state,contact)), 'Messages') + `<div class="app-body"><div class="chat-date">Today · 9:41 AM</div>${state.messages[contact].map(m => `<div class="bubble ${m.from === 'you' ? 'outgoing' : ''}">${esc(m.text)}</div>`).join('')}<form class="message-compose" id="message-compose"><textarea data-field="reply" id="phone-reply" rows="2" maxlength="500" aria-label="Message to ${esc(contactName(state,contact))}" placeholder="Message">${esc(state.drafts[contact])}</textarea><button class="send-button" aria-label="Send message" type="submit" ${state.drafts[contact].trim() ? '' : 'disabled'}>↑</button></form><p class="app-subtitle">Messages stay in this simulated phone.</p></div>`;
-  if (app === 'calendar') return header('Calendar') + `<div class="app-body"><div class="app-subtitle">${esc(state.scenario.date)}</div>${calendarEvents(state.scenario).map(event => `<div class="appointment"><h3>${esc(event.title)}</h3><p>${displayTime(event.start)} – ${displayTime(event.end)}</p></div><p class="calendar-note">${esc(event.note)}</p>`).join('') || '<p class="empty-phone">No upcoming events.</p>'}</div>`;
-  if (app === 'clock') return header('Clock', 'Alarms') + `<div class="app-body">${state.alarms.length ? state.alarms.map(t => `<div class="alarm-row">${t}<small>ON</small></div>`).join('') : '<p class="empty-phone">No alarms. An ambitious approach.</p>'}<label for="alarm-time" class="field-label">New alarm</label><input id="alarm-time" class="phone-field" type="time" data-field="alarm" value="${state.alarmDraft}"><button class="button secondary" data-action="save-alarm">Add alarm</button></div>`;
-  if (app === 'notes') return header('Notes', 'Just for you') + `<div class="app-body"><textarea class="phone-field phone-note" data-field="note" maxlength="1000" aria-label="Notes" placeholder="Something worth remembering…">${esc(state.notes)}</textarea></div>`;
-  if (app === 'contacts') return header('Contacts') + `<div class="app-body">${Object.keys(state.messages).map(thread).join('')}</div>`;
+  const mini = miniScreen(state, header, displayTime);
+  if (mini !== null) return mini;
   if (app === 'feed') return '';
   if (app === 'notifications') return header('Notifications', String(state.notifications.length)) + `<div class="app-body">${state.notifications.length ? state.notifications.map(n => `<div class="notification-list-item"><button data-action="notification:${n.id}"><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p>${notificationBait(n.distraction)}</button><button class="text-button" data-action="dismiss:${n.id}">Dismiss</button></div>`).join('') : '<p class="empty-phone">A rare moment of quiet.</p>'}</div>`;
   if (app === 'switcher') return header('Your apps', 'Pick up where you left off') + `<div class="app-body apps-grid">${APPS.map(launch).join('')}</div>`;
@@ -136,8 +136,9 @@ function render() {
     doomView.setActive(mode === 'play' && state.phase === 'playing');
   } else {
     doomView?.destroy(); doomView = null;
-    const previousScroll = root.scrollTop;
-    root.innerHTML = screen(); root.scrollTop = previousScroll;
+    const key = JSON.stringify(state.screen);
+    const previousScroll = root.dataset.screen === key ? root.scrollTop : 0;
+    root.innerHTML = screen(); root.scrollTop = previousScroll; root.dataset.screen = key;
   }
   renderTime(); renderOverlay(); renderNotification();
 }
@@ -262,6 +263,11 @@ $('phone').addEventListener('click', e => {
 $('phone').addEventListener('input', e => {
   if (!e.target.dataset.field) return;
   dispatch({ type: 'type', target: e.target.dataset.field, value: e.target.value }, true, false);
+  if (e.target.dataset.field.startsWith('search-')) {
+    const results = document.createElement('div'); results.innerHTML = screen();
+    const current = $('phone-screen').querySelector('.mini-search-results');
+    if (current) current.innerHTML = results.querySelector('.mini-search-results').innerHTML;
+  }
   const send = $('message-compose')?.querySelector('button'); if (send) send.disabled = !state.drafts[state.screen.contact]?.trim();
 });
 $('phone').addEventListener('submit', e => { if (e.target.id === 'message-compose') { e.preventDefault(); dispatch({ type: 'tap', target: 'send' }); } });

@@ -1216,6 +1216,7 @@ hr {
   color:#b0442b!important
 }
 .toast {
+  pointer-events:none;
   position:fixed;
   bottom:28px;
   left:50%;
@@ -1695,3 +1696,35 @@ body.in-round .site-footer { display:none }
 .interrupting .notification-dismiss { font-size:11px; padding:5px 0 5px 8px; color:#758068 }
 @media(min-width:1100px) { .task-note { position:absolute; width:258px; left:-292px; top:80px; transform:rotate(-3deg); } }
 @media(max-width:1099px) { body.in-round .phone { height:calc(100dvh - 295px); min-height:410px } .task-note { min-height:152px; padding:13px 16px; } .task-note p { font-size:13px; margin-top:8px } }
+
+/* Interactive apps share compact controls that fit the simulated phone. */
+.mini-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:8px 0 16px; }
+.mini-button { background:#e9ecdf; color:#354634; border:1px solid #d3daca; border-radius:12px; padding:10px 12px; font-size:12px; min-height:40px; }
+.mini-button:hover { background:#dbe3cf; }
+.mini-button:focus-visible,.mini-day:focus-visible,.event-button:focus-visible { outline:2px solid #307453; outline-offset:2px; }
+.mini-label { display:block; font-size:12px; color:#53634b; margin-top:12px; min-width:0; }
+.mini-columns { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.mini-columns input { min-width:0; }
+.mini-month { flex:1; text-align:center; font-size:13px; }
+.mini-calendar { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:2px; margin-bottom:14px; text-align:center; }
+.mini-calendar>span { color:#74816d; font-size:10px; padding:4px 0; }
+.mini-day { position:relative; border-radius:50%; aspect-ratio:1; font-size:12px; color:#3f5138; background:transparent; min-width:0; padding:0; }
+.mini-day.has-event::after { content:''; position:absolute; bottom:3px; left:calc(50% - 2px); width:4px; height:4px; border-radius:50%; background:currentColor; }
+.mini-day.selected { color:white; background:#54795a; }
+.event-button { width:100%; text-align:left; color:#354634; }
+.event-note { white-space:pre-wrap; overflow-wrap:anywhere; }
+.alarm-row { display:grid; grid-template-columns:1fr auto; align-items:center; gap:5px; }
+.alarm-time { font-size:32px; font-weight:300; color:inherit; text-align:left; background:transparent; }
+.alarm-switch { border-radius:20px; padding:10px 14px; background:#d9ded3; font-size:12px; }
+.alarm-switch[aria-checked="true"] { background:#54795a; color:white; }
+.alarm-delete { grid-column:1 / -1; justify-self:start; background:transparent; color:#8e5144; font-size:11px; padding:7px 0; }
+.mini-list-row { display:block; width:100%; padding:16px 0; border-bottom:1px solid #dce2d3; background:transparent; text-align:left; overflow-wrap:anywhere; }
+.mini-list-row strong { display:block; font-size:13px; }
+.mini-list-row span { display:block; margin-top:7px; color:#74816d; font-size:11px; }
+.contact-card { padding:22px 0; overflow-wrap:anywhere; }
+.contact-card h3 { margin:12px 0 22px; }
+.contact-card dt { font-size:11px; color:#74816d; margin-top:15px; }
+.contact-card dd { font-size:14px; margin:5px 0 0; }
+.mini-editor .phone-field { font-size:13px; }
+.contact-list-item { padding-bottom:10px; border-bottom:1px solid #dce2d3; }
+.contact-list-item .thread-row { border-bottom:0; }

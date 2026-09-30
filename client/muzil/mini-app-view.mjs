@@ -1,0 +1,34 @@
+import { allAlarms, allNotes, currentNote, noteTitle, shownNotes, shownContacts, dateLabel, monthDays } from './mini-apps.mjs';
+const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const button = (target,label,extra='') => `<button type="button" class="mini-button" data-action="${esc(target)}" ${extra}>${esc(label)}</button>`;
+const field = (target,label,value,max=100,type='text') => `<label class="mini-label">${esc(label)}<input class="phone-field" data-field="${target}" aria-label="${esc(label)}" type="${type}" maxlength="${max}" value="${esc(value)}"></label>`;
+export const searchField = (app,value) => field(`search-${app}`,`Search ${app}`,value,100,'search');
+const area = (target,label,value,max) => `<label class="mini-label">${esc(label)}<textarea class="phone-field" data-field="${target}" aria-label="${esc(label)}" maxlength="${max}" rows="4">${esc(value)}</textarea></label>`;
+const tools = (...buttons) => `<div class="mini-toolbar">${buttons.join('')}</div>`;
+export function miniScreen(s, header, displayTime) {
+  const {app}=s.screen;
+  if(app==='calendar') {
+    if(s.screen.edit) {
+      const d=s.eventDraft;
+      return header('Calendar','Event')+`<div class="app-body mini-editor">${field('event-title','Event title',d.title)}${field('event-date','Event date',d.date,10,'date')}<div class="mini-columns">${field('event-start','Start time',d.start,5,'time')}${field('event-end','End time',d.end,5,'time')}</div>${area('event-note','Event notes',d.note,500)}${tools(button('event-save','Save event'),button('event-cancel','Cancel'))}</div>`;
+    }
+    const event=s.events.find(e=>e.id===s.screen.eventId);
+    if(event) return header('Calendar','Event details')+`<div class="app-body">${button('calendar-list','All events ←')}<article class="appointment"><h3>${esc(event.title)}</h3><p>${esc(dateLabel(event.date))}</p><p>${displayTime(event.start)} – ${displayTime(event.end)}</p><p class="event-note">${esc(event.note)}</p></article>${tools(button('event-edit','Edit event'),button('event-delete','Delete event'))}</div>`;
+    const days=monthDays(s.calendarDate),offset=new Date(`${days[0]}T12:00:00Z`).getUTCDay();
+    const events=s.events.filter(e=>e.date===s.calendarDate);
+    const month=new Date(`${s.calendarDate}T12:00:00Z`).toLocaleDateString('en-US',{timeZone:'UTC',month:'long',year:'numeric'});
+    return header('Calendar')+`<div class="app-body">${tools(button('month-previous','‹','aria-label="Previous month"'),`<strong class="mini-month">${esc(month)}</strong>`,button('month-next','›','aria-label="Next month"'))}<div class="mini-calendar">${['S','M','T','W','T','F','S'].map(d=>`<span aria-hidden="true">${d}</span>`).join('')}${'<span></span>'.repeat(offset)}${days.map(d=>`<button class="mini-day ${d===s.calendarDate?'selected':''} ${s.events.some(e=>e.date===d)?'has-event':''}" data-action="day:${d}" aria-label="${dateLabel(d)}" aria-pressed="${d===s.calendarDate}">${Number(d.slice(-2))}</button>`).join('')}</div>${tools(button('calendar-today','Today'),button('event-new','New event'),s.eventDraft?button('event-resume','Resume draft'):'')}<p class="app-subtitle">${esc(dateLabel(s.calendarDate))}</p>${events.map(e=>`<button class="appointment event-button" data-action="event:${e.id}" aria-label="Open ${esc(e.title)}"><h3>${esc(e.title)} ↗</h3><p>${displayTime(e.start)} – ${displayTime(e.end)}</p><p class="event-note">${esc(e.note)}</p></button>`).join('')||'<p class="empty-phone">No events on this day.</p>'}</div>`;
+  }
+  if(app==='clock') return header('Clock','Alarms')+`<div class="app-body">${allAlarms(s).map(t=>`<div class="alarm-row"><button class="alarm-time" data-action="alarm-edit:${t}" aria-label="Edit ${t} alarm">${esc(t)}</button><button class="alarm-switch" data-action="alarm-toggle:${t}" role="switch" aria-checked="${s.alarms.includes(t)}" aria-label="${t} alarm">${s.alarms.includes(t)?'ON':'OFF'}</button><button class="alarm-delete" data-action="alarm-delete:${t}" aria-label="Delete ${t} alarm">Delete</button></div>`).join('')||'<p class="empty-phone">No alarms. An ambitious approach.</p>'}<label for="alarm-time" class="field-label">${s.alarmEditing?'Edit alarm':'New alarm'}</label><input id="alarm-time" class="phone-field" type="time" data-field="alarm" value="${s.alarmDraft}">${tools(button('save-alarm',s.alarmEditing?'Save alarm':'Add alarm'),s.alarmEditing?button('alarm-cancel','Cancel'):'')}</div>`;
+  if(app==='notes') {
+    const note=!s.screen.list&&currentNote(s);
+    return header('Notes',note?'Saved as you type':`${allNotes(s).length} notes`)+`<div class="app-body">${tools(button('note-new','New note'),note?button('notes-list','All notes'):null)}${note?`<textarea class="phone-field phone-note" data-field="note" maxlength="1000" aria-label="Notes" placeholder="Something worth remembering…">${esc(note.text)}</textarea>${button('note-delete','Delete note')}`:`${searchField('notes',s.searches.notes)}<div class="mini-search-results">${shownNotes(s).map(n=>`<button class="mini-list-row" data-action="note-open:${n.id}"><strong>${esc(noteTitle(n))}</strong><span>${esc(n.text.split('\n').slice(1).join(' ').slice(0,100))}</span></button>`).join('')||'<p class="empty-phone">No notes found.</p>'}</div>`}</div>`;
+  }
+  if(app==='contacts') {
+    if(s.screen.edit) {const d=s.personDraft;return header('Contacts','Contact')+`<div class="app-body">${field('person-name','Contact name',d.name)}${field('person-phone','Phone number',d.phone,40,'tel')}${field('person-email','Email address',d.email,120,'email')}${tools(button('person-save','Save contact'),button('person-cancel','Cancel'))}</div>`;}
+    const person=s.contacts.find(c=>c.id===s.screen.personId&&!c.deleted);
+    if(person) return header('Contacts','Contact details')+`<div class="app-body">${button('contacts-list','All contacts ←')}<div class="contact-card"><span class="thread-avatar">${esc(person.name.slice(0,1))}</span><h3>${esc(person.name)}</h3><dl><dt>Phone</dt><dd>${esc(person.phone||'Not set')}</dd><dt>Email</dt><dd>${esc(person.email||'Not set')}</dd></dl></div>${tools(button(`contact:${person.id}`,'Message'),button('person-edit','Edit contact'),button('person-delete','Delete contact'))}</div>`;
+    return header('Contacts')+`<div class="app-body">${tools(button('person-new','New contact'),s.personDraft?button('person-resume','Resume draft'):'')}${searchField('contacts',s.searches.contacts)}<div class="mini-search-results">${shownContacts(s).map(c=>`<div class="contact-list-item"><button class="thread-row" data-action="person:${c.id}"><span class="thread-avatar">${esc(c.name.slice(0,1))}</span><span><strong>${esc(c.name)}</strong><p>${esc(c.phone||c.email||'View contact')}</p></span></button>${button(`contact:${c.id}`,'Message',`aria-label="Message ${esc(c.name)}"`)}</div>`).join('')||'<p class="empty-phone">No contacts found.</p>'}</div></div>`;
+  }
+  return null;
+}

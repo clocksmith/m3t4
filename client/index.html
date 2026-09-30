@@ -12,17 +12,13 @@
 </head>
 <body>
   <header class="site-header">
-    <a class="wordmark" href="/" aria-label="Meta Muzil home"><span class="brand-mark">m<span>↗</span></span>meta muzil<span class="byline">by m3t4.ai</span></a>
+    <a class="wordmark" href="/" aria-label="Meta Muzil home"><span class="brand-mark">m<span>↗</span></span>meta muzil</a>
     <details class="site-menu" id="site-menu">
       <summary aria-label="Open menu">Menu <span>＋</span></summary>
       <nav aria-label="Main">
-        <button class="nav-item active" data-mode="play">The game</button>
-        <button class="nav-item" data-mode="train">Your stand-in</button>
-        <button class="nav-item" data-mode="finish">Finish a thing ↗</button>
-        <button class="nav-item" id="agent-round">Let my stand-in try →</button>
-        <button class="nav-item" id="race-peer">Race a friend ↗</button>
-        <button class="nav-item" id="new-round">New round ↻</button>
-        <button class="connection-button" id="connection"><span class="status-dot"></span><span id="connection-label">Connect a helper</span></button>
+        <button class="nav-item active" id="play-human">Play</button>
+        <button class="nav-item" id="agent-round">Watch AI play</button>
+        <button class="nav-item" id="race-peer">Play with a friend</button>
       </nav>
     </details>
   </header>
@@ -31,20 +27,22 @@
       <div class="intro-column" id="intro">
         <p class="story-lead">The world promised us AI assistants many years ago.</p>
         <h1>They come and they go.<br>But there’s still a major problem with how we use our devices<span class="story-dots">…</span></h1>
-        <button id="start-round" class="oven-start" aria-label="Open your phone. Start the game.">
-          <span class="oven-scene" aria-hidden="true">
-            <span class="oven-shadow"></span>
-            <span class="oven-back"></span>
-            <span class="peek-phone" id="peek-phone"><span class="peek-island"></span><span class="peek-time">9:41</span><span class="peek-notice">Mom <b>2</b></span><span class="peek-apps"><i></i><i></i><i></i><i></i></span></span>
-            <span class="oven-body"><span class="oven-window"><span class="oven-rack"></span><span class="oven-coil"></span></span><span class="oven-handle"></span><span class="oven-controls"><i></i><i></i><b></b></span><span class="oven-brand">m3t4</span></span>
-            <span class="oven-foot left"></span><span class="oven-foot right"></span>
-          </span>
-          <span class="start-label">Open your phone <span>↗</span></span>
-        </button>
-        <p class="intro-hint">One intention. Three minutes. A phone full of distractions.</p>
+        <div class="toaster-entry">
+          <div class="toaster-scene">
+            <span class="toaster-shadow" aria-hidden="true"></span>
+            <span class="toaster-top" aria-hidden="true"><i></i><i></i></span>
+            <span class="phone-pocket" aria-hidden="true"><span class="peek-phone" id="peek-phone"><span class="peek-island"></span><span class="peek-time">9:41</span><span class="peek-notice">Mom <b>2</b></span><span class="peek-apps"><i></i><i></i><i></i><i></i></span></span></span>
+            <span class="toaster-body" aria-hidden="true"><span class="toaster-shine"></span><span class="toaster-seam"></span><span class="toaster-dial"></span><span class="toaster-light"></span></span>
+            <span class="toaster-foot left" aria-hidden="true"></span><span class="toaster-foot right" aria-hidden="true"></span>
+            <button id="toaster-lever" class="toaster-lever" aria-label="Push toaster lever to play"><span class="lever-track" aria-hidden="true"></span><i aria-hidden="true"></i></button>
+            <span class="lever-hint" aria-hidden="true">push ↓</span>
+          </div>
+          <button id="start-round" class="start-label" aria-label="Open your phone. Start the game.">Open your phone <span>↗</span></button>
+        </div>
+        <p class="intro-hint">One intention. A phone full of distractions.</p>
       </div>
       <div class="phone-column" id="game-stage" hidden>
-        <div class="phone-caption"><button id="remember" aria-label="Remember my intention">Remember why <span>↗</span></button><span id="round-clock" role="timer" aria-label="Time remaining">03:00</span></div>
+        <aside class="task-note" aria-label="m3t4.ai task"><div class="task-note-heading">m3t4.ai task <button id="remember" aria-label="Remember my intention">Remember why ↗</button></div><div id="task-note-content"></div></aside><div class="phone-caption"><span>One thing to do.</span><span id="round-clock" role="timer" aria-label="Time remaining">03:00</span></div>
         <div class="phone" id="phone" tabindex="-1" aria-label="Simulated phone">
           <div class="phone-hardware"><span class="phone-time">9:41</span><span class="island"></span><span class="phone-signals" aria-label="Full signal and battery">▂▄▆ <span>▰</span></span></div>
           <div id="phone-screen" class="phone-screen"></div>
@@ -59,6 +57,10 @@
     </section>
     <section id="train-view" class="secondary-view" hidden>
       <div class="eyebrow">YOUR STAND-IN</div><h1>A little more <em>you.</em></h1><p class="intro-copy">Teach it with the choices you make. Then see what it does with a different day.</p>
+      <div class="challenge-tools">
+        <label for="challenge-select">Challenge</label><select id="challenge-select" aria-label="Challenge"><option value="">Next challenge</option></select><button class="nav-item" id="new-round">New round ↻</button><label class="nav-item file-label">Load challenge JSON<input id="import-challenge" type="file" accept="application/json" hidden></label>
+        <button class="connection-button" id="connection"><span class="status-dot"></span><span id="connection-label">Connect a helper</span></button>
+      </div>
       <div class="workspace-grid"><section class="workspace-card"><div class="standin-avatar large">m<span>↗</span></div><h2>Your understudy</h2><p id="profile-summary"></p><label class="field-label" for="training-objective">What are we teaching?</label><select id="training-objective"><option value="finish">Help me finish</option><option value="imitate">Imitate me, distractions included</option></select><p class="muted small">Personalization from your demonstrations. Model weights stay unchanged.</p><button id="train-play" class="button primary">Teach by playing ↗</button><button id="watch-agent" class="button secondary">Watch a new attempt →</button></section><section class="workspace-card"><h2>Things you showed it</h2><div id="demonstration-list"></div><div class="button-row"><button id="export-profile" class="button secondary">Export profile</button><label class="button secondary file-label">Import profile<input id="import-profile" type="file" accept="application/json" hidden></label><button id="clear-profile" class="text-button">Forget demonstrations</button></div><hr><h3>The last round</h3><p id="replay-summary" class="muted"></p><button id="replay-round" class="button secondary">Watch replay ↻</button><button id="export-replay" class="text-button">Save replay ↓</button></section></div>
     </section>
     <section id="finish-view" class="secondary-view" hidden>

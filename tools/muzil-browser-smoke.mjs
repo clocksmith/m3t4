@@ -8,14 +8,11 @@ const server = createDevServer(); await new Promise(r=>server.listen(0,'127.0.0.
 const origin = `http://127.0.0.1:${server.address().port}`;
 const output = await mkdtemp(join(tmpdir(),'muzil-smoke-'));
 async function openMenu(page) { if (!await page.locator('#site-menu').evaluate(el=>el.open)) await page.locator('#site-menu summary').click(); }
-async function setAlarm(page, time) {
-  await page.locator('#phone-home').click(); await page.locator('[data-action="app:clock"]').first().click();
-  await page.locator('#alarm-time').fill(time); await page.locator('[data-action="save-alarm"]').click();
-}
 const browser = await chromium.launch({channel:'chrome',headless:true});
 const errors=[], report={scope:'Local Chrome: real UI and Reploid WebRTC; injected executor tests transport only, not inference or remote networks.',checks:[]};
 try {
   const page=await browser.newPage({viewport:{width:1440,height:1050}});
+  await page.addLocatorHandler(page.locator('.interrupting .notification-dismiss'), button => button.click());
   page.on('pageerror',e=>errors.push(e.message)); const requests=[]; page.on('request',r=>requests.push(r.url()));
   await page.goto(origin); await page.locator('#start-round').waitFor(); await page.evaluate(()=>document.fonts.ready);
   assert.equal(requests.some(u=>u.includes('/vendor/')),false);
@@ -30,12 +27,12 @@ try {
   await page.locator('#phone-home').click(); await page.locator('[data-action="app:messages"]').first().click(); await page.locator('[data-action="contact:mom"]').click();
   assert.equal(await page.locator('#phone-reply').inputValue(),'Pick me up at 5:40 PM, side entrance.');
   await page.getByRole('button',{name:'Send message',exact:true}).click();
-  assert.equal(await page.locator('#next-round').count(),0, 'A message alone must not finish the round');
-  await setAlarm(page, '17:30'); await page.locator('#next-round').waitFor();
+  // The single task is complete when the correct message is sent.
+  await page.locator('#next-round').waitFor();
   await page.screenshot({path:join(output,'desktop-result.png'),fullPage:true});
   await page.locator('#result-profile').click(); assert.match(await page.locator('#profile-summary').textContent(),/1 completed/);
   const lesson = await page.evaluate(() => JSON.parse(localStorage.getItem('muzil.profile.v1')));
-  assert.equal(lesson.examples.at(-1).action.target, 'save-alarm');
+  assert.equal(lesson.examples.at(-1).action.target, 'send');
   assert.equal(lesson.examples.at(-1).after.phase, 'finished');
   await page.locator('#replay-round').click(); await page.locator('#next-round').waitFor();
   await page.locator('#next-round').click(); await page.locator('#dismiss-reveal').click(); await page.locator('[data-action="app:calendar"]').first().click(); await page.getByText('2:20 PM – 3:15 PM').waitFor();
@@ -52,7 +49,7 @@ try {
   await reduced.locator('#site-menu summary').focus(); await reduced.keyboard.press('Enter'); await reduced.keyboard.press('Escape');
   assert.equal(await reduced.locator('#site-menu').evaluate(el=>el.open),false); await reduced.close();
   report.checks.push('Keyboard start and menu dismissal; reduced motion skips bounce and expansion');
-  await mobile.locator('#start-round').click(); await mobile.locator('#dismiss-reveal').click(); await mobile.screenshot({path:join(output,'mobile-game.png'),fullPage:true}); await mobile.locator('[data-action="app:messages"]').first().click(); await mobile.locator('[data-action="contact:mom"]').click(); await mobile.locator('#phone-reply').fill('5:40 PM, side entrance'); await mobile.getByRole('button',{name:'Send message',exact:true}).click(); await setAlarm(mobile, '17:30'); await mobile.locator('#next-round').waitFor();
+  await mobile.locator('#start-round').click(); await mobile.locator('#dismiss-reveal').click(); await mobile.screenshot({path:join(output,'mobile-game.png'),fullPage:true}); await mobile.locator('[data-action="app:messages"]').first().click(); await mobile.locator('[data-action="contact:mom"]').click(); await mobile.locator('#phone-reply').fill('5:40 PM, side entrance'); await mobile.getByRole('button',{name:'Send message',exact:true}).click(); await mobile.locator('#next-round').waitFor();
   await mobile.screenshot({path:join(output,'mobile-result.png'),fullPage:true});
   report.checks.push('Mobile layout has no horizontal overflow and can finish a task');
   const compact = await browser.newPage({viewport:{width:320,height:568},isMobile:true});
@@ -60,7 +57,8 @@ try {
   await compact.goto(origin);
   assert.equal(await compact.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await compact.locator('#start-round').click(); await compact.locator('#dismiss-reveal').click();
-  await compact.locator('#remember').click(); await compact.getByText('Your original intention',{exact:true}).waitFor();
+  await compact.locator('#remember').click(); await compact.locator('#task-note-content').getByText('Tell Mom when and where to pick you up.',{exact:true}).waitFor();
+  assert.equal(await compact.locator('#phone .task-note').count(),0);
   await compact.screenshot({path:join(output,'compact-game.png'),fullPage:true});
   await compact.close();
   report.checks.push('Small 320px phone can enter the game and recall its intention');
@@ -98,7 +96,7 @@ try {
   const disconnected=await a.evaluate(()=>window.requestOutcome);assert.match(disconnected,/disconnect|closed/i);
   report.checks.push('Actual two-tab Reploid connection, bounded request/response, active-request disconnect rejection (fixture executor)');
   const player1=await browser.newPage(),player2=await browser.newPage();
-  for(const p of [player1,player2]) {p.on('pageerror',e=>errors.push(e.message));await p.goto(origin);await openMenu(p);await p.locator('#connection').click();}
+  for(const p of [player1,player2]) {await p.addLocatorHandler(p.locator('.interrupting .notification-dismiss'), button=>button.click());p.on('pageerror',e=>errors.push(e.message));await p.goto(origin);await openMenu(p);await p.locator('#race-peer').click();}
   await player1.locator('#make-offer').click();await player1.waitForFunction(()=>document.querySelector('#peer-output').value.startsWith('ey'));
   await player2.locator('#peer-input').fill(await player1.locator('#peer-output').inputValue());await player2.locator('#join-offer').click();await player2.waitForFunction(()=>document.querySelector('#peer-output').value.startsWith('ey'));
   await player1.locator('#peer-input').fill(await player2.locator('#peer-output').inputValue());await player1.locator('#accept-answer').click();
@@ -107,7 +105,7 @@ try {
     await openMenu(player1);await player1.locator('#race-peer').click();await player2.locator('#accept-race').click();
     for(const p of [player1,player2]) {
       await p.locator('#dismiss-reveal').click();await p.locator('[data-action="app:messages"]').first().click();await p.locator('[data-action="contact:mom"]').click();
-      await p.locator('#phone-reply').fill(round===0?'5:40 PM, side entrance':'3:15 PM, garden gate');await p.getByRole('button',{name:'Send message',exact:true}).click();await setAlarm(p,round===0?'17:30':'15:05');await p.locator('#next-round').waitFor();
+      await p.locator('#phone-reply').fill(round===0?'5:40 PM, side entrance':'3:15 PM, garden gate');await p.getByRole('button',{name:'Send message',exact:true}).click();await p.locator('#next-round').waitFor();
     }
     for(const p of [player1,player2]) await p.waitForFunction(()=>document.querySelector('#race-status').textContent.includes('Friendly comparison'));
   }

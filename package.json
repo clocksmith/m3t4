@@ -37,6 +37,7 @@
     "test:muzil:inference": "node tools/muzil-inference-smoke.mjs",
     "test:muzil:mesh": "node tools/muzil-mesh-smoke.mjs",
     "test:muzil:model": "node tools/muzil-model-qualification.mjs",
+    "test:muzil:apps": "node tools/muzil-mini-apps-smoke.mjs",
     "test:muzil:interruptions": "node tools/muzil-interruption-smoke.mjs"
   },
   "devDependencies": {

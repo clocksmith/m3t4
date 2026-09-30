@@ -57,7 +57,7 @@ stand-in workspace after a round:
   requires one unambiguous time matching the configured 24-hour value. `includes`
   requires all listed words/phrases. `choice` takes `options` and `expected` and
   rejects messages mentioning multiple alternatives.
-- `note`: checks the current saved Notes text using `includes` and/or `choice`.
+- `note`: checks each saved note using `includes` and/or `choice`; one note must satisfy all conditions. Deleted notes do not count.
 - `alarm`: the specified 24-hour `time` must exist in the saved alarm list.
 
 Text matching normalizes case, Unicode and punctuation and matches whole phrases.
@@ -115,6 +115,8 @@ leaving the feed releases its GPU resources. The original round timer continues.
 
 - `npm run test:muzil`: JSON validation, all eight outcomes, alternatives, expiry,
   deterministic feed content, shared actions and replay.
+- `npm run test:muzil:apps`: Calendar, alarms, Notes, Contacts and Messages editing,
+  search, app-switch persistence, interrupted drafts and replay at desktop/mobile sizes.
 - `npm run test:muzil:browser`: desktop/mobile phone, drafts, demos, races/rematches.
 - `node tools/muzil-interruption-smoke.mjs`: toaster controls, external task note,
   forceful notifications, playable detours, preserved drafts and replay.

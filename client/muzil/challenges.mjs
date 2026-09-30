@@ -84,6 +84,7 @@ export function evaluateGoal(goal, state) {
   if (goal.all) return goal.all.every(g => evaluateGoal(g, state));
   if (goal.any) return goal.any.some(g => evaluateGoal(g, state));
   if (goal.kind === 'alarm') return state.alarms.includes(goal.time);
+  if (goal.kind === 'note' && state.extraNotes?.length) return [state.notes,...state.extraNotes.map(n=>n.text)].some(notes=>evaluateGoal(goal,{...state,notes,extraNotes:[]}));
   const raw = goal.kind === 'note' ? state.notes : state.sent.filter(m => m.contact === goal.contact).at(-1)?.text;
   if (typeof raw !== 'string') return false;
   const text = normalize(raw);
@@ -97,4 +98,4 @@ export function evaluateGoal(goal, state) {
 }
 export const roundDuration = scenario => scenario.durationMs || 180000;
 export const calendarEvents = scenario => scenario.initial?.calendar || [{ title: scenario.event, start: scenario.start, end: scenario.end, note: scenario.note }];
-export const contactName = (state, id) => state.scenario.initial?.contacts.find(c => c.id === id)?.name || ({ mom: 'Mom', group: 'The group chat' }[id] || id);
+export const contactName = (state, id) => state.contacts?.find(c => c.id === id)?.name || state.scenario.initial?.contacts.find(c => c.id === id)?.name || ({ mom: 'Mom', group: 'The group chat' }[id] || id);

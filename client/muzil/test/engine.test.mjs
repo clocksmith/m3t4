@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createPhone, applyAction, observe, advance, makeReplay, replay } from '../engine.mjs';
-import { SCENARIOS, PLAY_SCENARIOS, RULES } from '../scenarios.mjs';
+import { SCENARIOS, RULES } from '../scenarios.mjs';
+import { parseCatalog } from '../challenges.mjs';
+const PLAY_SCENARIOS = parseCatalog(JSON.parse(await readFile(new URL('../challenges.json', import.meta.url))));
 import { LocalController, parseDecision, actionPrompt } from '../controller.mjs';
 import { MeshController } from '../mesh.mjs';
 let n = 0;
@@ -54,36 +56,24 @@ function alarm(s, value) {
   s = tap(s, 'home'); s = tap(s, 'app:clock');
   s = type(s, 'alarm', value); return tap(s, 'save-alarm');
 }
-test('harder intentions require the current time, entrance and alarm in either order', () => {
-  for (const scenario of PLAY_SCENARIOS) {
-    for (const alarmFirst of [false, true]) {
-      let s = tap(createPhone({ roundId: 'errands', scenario }), 'start');
-      assert.equal(observe(s).text.some(text => text.includes(scenario.location)), false);
-      s = tap(s, 'app:notes'); assert.ok(observe(s).text.includes(scenario.initialNotes));
-      s = tap(s, 'home');
-      if (alarmFirst) { s = alarm(s, scenario.requiredAlarm); s = tap(s, 'home'); }
-      s = reply(s, `Pick me up at ${scenario.end}, ${scenario.location}.`);
-      assert.equal(s.phase, alarmFirst ? 'finished' : 'playing');
-      if (!alarmFirst) s = alarm(s, scenario.requiredAlarm);
-      assert.equal(s.phase, 'finished');
-      assert.deepEqual(replay(makeReplay(s)), s);
-    }
+test('pickup is one message assembled from calendar and notes, without a second task', () => {
+  for (const scenario of PLAY_SCENARIOS.slice(0,2)) {
+    let s = tap(createPhone({ roundId: 'pickup-task', scenario }), 'start');
+    assert.equal(observe(s).text.some(text => text.includes(scenario.goal.choice.expected)), false);
+    s = tap(s, 'app:notes'); assert.ok(observe(s).text.includes(scenario.initial.notes));
+    s = tap(s, 'home');
+    s = reply(s, `Pick me up at ${scenario.goal.time}, ${scenario.goal.choice.expected}.`);
+    assert.equal(s.phase, 'finished'); assert.equal(s.alarms.length, 0);
+    assert.deepEqual(replay(makeReplay(s)), s);
   }
 });
-test('old times, wrong entrances, ambiguous replies and wrong alarms do not complete errands', () => {
+test('old times, wrong entrances and ambiguous replies do not complete pickup', () => {
   const scenario = PLAY_SCENARIOS[0];
   for (const message of ['5:20 PM, side entrance', '5:40 PM, main entrance', '5:20 or 5:40 PM, side entrance', '5:40 PM, main entrance or side entrance', '5:40 PM, beside entrance', '5:40 PM']) {
     let s = tap(createPhone({ roundId: 'wrong', scenario }), 'start');
-    s = reply(s, message); s = alarm(s, scenario.requiredAlarm);
-    assert.equal(s.phase, 'playing');
+    s = reply(s, message); assert.equal(s.phase, 'playing');
+    s = type(s, 'reply', '5:40 PM, side entrance'); s = tap(s,'send'); assert.equal(s.phase, 'finished');
   }
-  let s = tap(createPhone({ roundId: 'wrong-alarm', scenario }), 'start');
-  s = reply(s, '5:40 PM, side entrance'); s = alarm(s, '05:30');
-  assert.equal(s.phase, 'playing');
-  s = tap(s, 'home'); s = reply(s, 'Actually, 5:20 PM, side entrance');
-  s = alarm(s, '17:30'); assert.equal(s.phase, 'playing', 'latest message must still be correct');
-  s = tap(s, 'home'); s = reply(s, '5:40 PM, side entrance');
-  assert.equal(s.phase, 'finished');
 });
 test('challenge interruptions continue through the round and expiration replays exactly', () => {
   let s = tap(createPhone({ roundId: 'expired-errands', scenario: PLAY_SCENARIOS[0] }), 'start');

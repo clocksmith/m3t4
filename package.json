@@ -33,9 +33,11 @@
     "dev": "node tools/dev-serve.mjs",
     "test:muzil": "node --test client/muzil/test/*.test.mjs",
     "test:muzil:browser": "node tools/muzil-browser-smoke.mjs",
+    "test:muzil:doom": "node tools/muzil-doom-smoke.mjs",
     "test:muzil:inference": "node tools/muzil-inference-smoke.mjs",
     "test:muzil:mesh": "node tools/muzil-mesh-smoke.mjs",
-    "test:muzil:model": "node tools/muzil-model-qualification.mjs"
+    "test:muzil:model": "node tools/muzil-model-qualification.mjs",
+    "test:muzil:interruptions": "node tools/muzil-interruption-smoke.mjs"
   },
   "devDependencies": {
     "playwright": "1.58.0"

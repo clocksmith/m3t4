@@ -1,14 +1,20 @@
+import { newDistraction, distractionObservation, actOnDistraction } from './distractions.mjs';
 import { RULES, SCENARIOS, APPS } from './scenarios.mjs';
+import { evaluateGoal, calendarEvents, contactName, roundDuration, validateChallenge } from './challenges.mjs';
+import { doomPost } from './doom-content.mjs';
 const copy = x => structuredClone(x);
 export function createPhone({ roundId, scenario = SCENARIOS[0], controller = 'human' }) {
   if (!roundId) throw new Error('A round identity is required');
+  if (scenario.version === 1) scenario = validateChallenge(scenario);
+  const messages = scenario.initial ? Object.fromEntries(scenario.initial.contacts.map(c => [c.id, c.messages.map(text => ({ from:c.id, text }))])) : { mom: [{ from: 'mom', text: scenario.incoming }], group: [{ from: 'group', text: 'Would you rather fight one horse-sized duck or finish your errands?' }] };
   return { version: RULES.version, roundId, scenario: copy(scenario), controller, phase: 'ready', elapsed: 0,
     screen: { app: 'home' }, stack: [], revision: 0, notifications: [], delivered: [], seen: [],
-    messages: { mom: [{ from: 'mom', text: scenario.incoming }], group: [{ from: 'group', text: 'Would you rather fight one horse-sized duck or finish your errands?' }] },
-    drafts: { mom: '', group: '' }, notes: scenario.initialNotes || '', alarms: [], alarmDraft: '07:00', feedIndex: 0, sent: [], log: [], demonstrations: [], recalled: 0 };
+    messages, drafts: Object.fromEntries(Object.keys(messages).map(id => [id, ''])), notes: scenario.initial?.notes ?? scenario.initialNotes ?? '', alarms: copy(scenario.initial?.alarms || []), alarmDraft: '07:00', feedIndex: 0, feedLikes: [], distractions: {}, distractionTaps: 0, sent: [], log: [], demonstrations: [], recalled: 0 };
 }
+export const blockingNotification = s => s.phase === 'playing' ? s.notifications.find(n => n.interruptive) : null;
 function visit(s, screen) { s.stack.push(copy(s.screen)); s.screen = screen; }
 export function outcome(s) {
+  if (s.scenario.goal) return evaluateGoal(s.scenario.goal, s);
   const correct = timeMinutes(s.scenario.end);
   if (s.scenario.requiredAlarm && !s.alarms.includes(s.scenario.requiredAlarm)) return false;
   const messages = s.scenario.location ? s.sent.filter(m => m.contact === s.scenario.contact).slice(-1) : s.sent;
@@ -36,23 +42,36 @@ export function observe(s) {
   const add = (target, label) => actions.push({ type: 'tap', target, label });
   if (s.phase === 'ready') { text.push(s.scenario.intention); add('start', 'Begin'); }
   if (s.phase === 'playing') {
+    const blocked = blockingNotification(s);
+    if (blocked) {
+      text.push(`${blocked.title}: ${blocked.body}`, 'This notification is covering the phone. Open it or dismiss it to continue.');
+      add(`notification:${blocked.id}`, `Open ${blocked.title}`); add(`dismiss:${blocked.id}`, `Dismiss ${blocked.title}`);
+      add('recall', 'Read the m3t4.ai task note beside the phone');
+      if (s.elapsed <= RULES.revealMs || s.elapsed < (s.taskRecallUntil || 0)) text.push(`m3t4.ai task: ${s.scenario.intention}`);
+      return { roundId:s.roundId, revision:s.revision, phase:s.phase, screen:copy(s.screen), text, actions };
+    }
     add('home', 'Home'); add('back', 'Back'); add('switcher', 'App switcher'); add('notifications', 'Notifications'); add('recall', 'Remember intention');
-    if (s.elapsed <= RULES.revealMs || s.screen.app === 'intention') text.push(s.scenario.intention);
-    if (s.screen.app === 'home') text.push(s.scenario.date, `Up next: ${s.scenario.event}, ${displayTime(s.scenario.start)}`);
+    if (s.elapsed <= RULES.revealMs || s.elapsed < (s.taskRecallUntil || 0) || s.screen.app === 'intention') text.push(s.scenario.intention);
+    if (s.screen.app === 'home') { const event = calendarEvents(s.scenario)[0]; text.push(s.scenario.date, event ? `Up next: ${event.title}, ${displayTime(event.start)}` : 'No upcoming events'); }
     if (s.screen.app === 'home' || s.screen.app === 'switcher') for (const a of APPS) add(`app:${a.id}`, a.label);
     if (s.screen.app === 'messages') {
-      if (!s.screen.contact) { text.push(...['mom','group'].map(c => `${c}: ${s.messages[c].at(-1).text}`)); add('contact:mom', 'Mom'); add('contact:group', 'The group chat'); }
+      if (!s.screen.contact) { for (const c of Object.keys(s.messages)) { text.push(`${contactName(s,c)}: ${s.messages[c].at(-1).text}`); add(`contact:${c}`, contactName(s,c)); } }
       else {
         text.push(...s.messages[s.screen.contact].map(m => `${m.from}: ${m.text}`), `Draft: ${s.drafts[s.screen.contact]}`);
         actions.push({ type: 'type', target: 'reply', label: 'Message text', maxLength: 500 });
         if (s.drafts[s.screen.contact].trim()) add('send', 'Send message');
       }
     }
-    if (s.screen.app === 'calendar') text.push(s.scenario.date, `${s.scenario.event}: ${displayTime(s.scenario.start)}–${displayTime(s.scenario.end)}`, s.scenario.note);
-    if (s.screen.app === 'contacts') { add('contact:mom', 'Message Mom'); add('contact:group', 'Open group chat'); }
+    if (s.screen.app === 'calendar') text.push(s.scenario.date, ...calendarEvents(s.scenario).flatMap(e => [`${e.title}: ${displayTime(e.start)}–${displayTime(e.end)}`, e.note]));
+    if (s.screen.app === 'contacts') for (const c of Object.keys(s.messages)) add(`contact:${c}`, `Message ${contactName(s,c)}`);
     if (s.screen.app === 'clock') { text.push(...s.alarms.map(a => `Alarm: ${a}`), `New alarm: ${s.alarmDraft}`); actions.push({ type: 'type', target: 'alarm', label: 'Alarm time HH:MM' }); add('save-alarm', 'Add alarm'); }
     if (s.screen.app === 'notes') { text.push(s.notes); actions.push({ type: 'type', target: 'note', label: 'Notes', maxLength: 1000 }); }
-    if (s.screen.app === 'feed') { text.push(['Someone restoring a skillet. They have just located a sponge.', 'Part 2: the sponge has a backstory.', 'You have become invested in cookware.'][s.feedIndex % 3]); add('next-post', 'Next post'); }
+    if (s.screen.app === 'distraction') { const view = distractionObservation(s.distractions[s.screen.distractionId], s.elapsed); text.push(...view.text); actions.push(...view.actions); }
+    if (s.screen.app === 'feed') {
+      const post = doomPost(s.roundId, s.feedIndex);
+      text.push(`Doom Scroll · post ${s.feedIndex + 1}`, `@${post.handle}: ${post.text}`, `Language guess: ${post.language}; nonsense: ${post.nonsense}/100; ${post.label}`, s.feedLikes.includes(s.feedIndex) ? 'Liked' : 'Not liked');
+      add('next-post', 'Scroll to next post'); if (s.feedIndex > 0) add('previous-post', 'Scroll to previous post'); add('like-post', 'Like or unlike post');
+    }
     for (const n of (s.screen.app === 'notifications' ? s.notifications : s.notifications.slice(-1).filter(n => s.elapsed - n.at < 5200))) { text.push(`${n.title}: ${n.body}`); add(`notification:${n.id}`, `Open ${n.title}`); add(`dismiss:${n.id}`, `Dismiss ${n.title}`); }
   }
   return { roundId: s.roundId, revision: s.revision, phase: s.phase, screen: copy(s.screen), text, actions };
@@ -74,18 +93,26 @@ export function applyAction(state, action) {
   else if (target === 'home') { s.screen = { app: 'home' }; s.stack = []; }
   else if (target === 'back') s.screen = s.stack.pop() || { app: 'home' };
   else if (target === 'switcher' || target === 'notifications') visit(s, { app: target });
-  else if (target === 'recall') { s.recalled++; visit(s, { app: 'intention' }); }
+  else if (target === 'recall') { s.recalled++; if (s.scenario.version === 1) s.taskRecallUntil = s.elapsed + RULES.revealMs; else visit(s, { app: 'intention' }); }
   else if (target.startsWith('app:')) visit(s, { app: target.slice(4) });
   else if (target.startsWith('contact:')) visit(s, { app: 'messages', contact: target.slice(8) });
   else if (target.startsWith('notification:')) {
     const n = s.notifications.find(n => n.id === target.slice(13));
-    visit(s, { app: n.app, ...(n.contact ? { contact: n.contact } : {}) }); s.notifications = s.notifications.filter(x => x.id !== n.id);
+    if (n.distraction) {
+      s.distractions[n.id] ||= newDistraction(n.distraction, `${s.roundId}:${n.id}`, s.elapsed);
+      visit(s, { app:'distraction', distractionId:n.id });
+    } else visit(s, { app: n.app, ...(n.contact ? { contact: n.contact } : {}) });
+    s.notifications = s.notifications.filter(x => x.id !== n.id);
   } else if (target.startsWith('dismiss:')) s.notifications = s.notifications.filter(n => n.id !== target.slice(8));
+  else if (target === 'bait:leave') s.screen = s.stack.pop() || { app:'home' };
+  else if (target.startsWith('bait:')) { s.distractionTaps++; s.distractions[s.screen.distractionId] = actOnDistraction(s.distractions[s.screen.distractionId], target, s.elapsed); }
   else if (target === 'reply') s.drafts[s.screen.contact] = action.value;
   else if (target === 'note') s.notes = action.value;
   else if (target === 'alarm') s.alarmDraft = action.value;
   else if (target === 'save-alarm') { if (!s.alarms.includes(s.alarmDraft)) s.alarms.push(s.alarmDraft); }
   else if (target === 'next-post') s.feedIndex++;
+  else if (target === 'previous-post') s.feedIndex--;
+  else if (target === 'like-post') { if (s.feedLikes.includes(s.feedIndex)) s.feedLikes = s.feedLikes.filter(i => i !== s.feedIndex); else s.feedLikes.push(s.feedIndex); }
   else if (target === 'send') {
     const message = { from: 'you', contact: s.screen.contact, text: s.drafts[s.screen.contact].trim(), actionId: action.id };
     s.messages[s.screen.contact].push(message); s.sent.push(message); s.drafts[s.screen.contact] = '';
@@ -97,9 +124,9 @@ export function applyAction(state, action) {
 }
 export function advance(state, elapsed) {
   if (state.phase !== 'playing' || !Number.isFinite(elapsed) || elapsed < state.elapsed) return state;
-  const s = copy(state); s.elapsed = Math.min(Math.floor(elapsed), RULES.durationMs);
+  const s = copy(state); s.elapsed = Math.min(Math.floor(elapsed), roundDuration(s.scenario));
   for (const n of s.scenario.interruptions) if (n.at <= s.elapsed && !s.delivered.includes(n.id)) { s.delivered.push(n.id); s.notifications.push(copy(n)); }
-  if (s.elapsed >= RULES.durationMs) s.phase = 'expired';
+  if (s.elapsed >= roundDuration(s.scenario)) s.phase = 'expired';
   return s;
 }
 export function replay(record, until = Infinity) {

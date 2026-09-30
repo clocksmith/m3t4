@@ -1,5 +1,10 @@
-import { APPS, RULES, PLAY_SCENARIOS as SCENARIOS } from './scenarios.mjs';
-import { createPhone, applyAction, advance, observe, displayTime, makeReplay, replay } from './engine.mjs';
+import { distractionScreen, updateDistractionMotion, notificationBait } from './distraction-view.mjs';
+import { bindToasterEntry } from './toaster-entry.mjs';
+import { APPS, RULES } from './scenarios.mjs';
+import { loadChallenges, validateChallenge, parseCatalog, calendarEvents, contactName, roundDuration } from './challenges.mjs';
+import { DoomFeed } from './doom-feed.mjs';
+const SCENARIOS = await loadChallenges();
+import { createPhone, applyAction, advance, observe, displayTime, makeReplay, replay, blockingNotification } from './engine.mjs';
 import { LocalController } from './controller.mjs';
 import { PeerController } from './peer.mjs';
 import { createDecisionOwner } from './decision.mjs';
@@ -23,7 +28,11 @@ let profile = read('muzil.profile.v1', { schema: 'muzil.profile/v1', id: uuid(),
 if (!Array.isArray(profile.examples)) profile = { schema: 'muzil.profile/v1', id: uuid(), version: 1, objective: 'finish', rounds: 0, examples: [] };
 let lastReplay = read('muzil.replay.v1', null), state = createPhone({ roundId: uuid(), scenario: SCENARIOS[0] });
 let roundStarted = 0, toastTimer, interval, replayStarted = 0, replayMode = false, agentRunning = false, requestController = null, revealDismissed = false, recorded = false, mode = 'play';
-let memory = [], inferenceMs = 0, race = null, invitation = null;
+let memory = [], inferenceMs = 0, race = null, invitation = null, doomView = null;
+let nextChallenge = Number(profile.rounds || 0) % SCENARIOS.length;
+const selectedChallenge = () => SCENARIOS.find(s => s.id === $('challenge-select').value) || SCENARIOS[nextChallenge % SCENARIOS.length];
+function renderChallengeMenu() { $('challenge-select').innerHTML = '<option value="">Next challenge</option>' + SCENARIOS.map(s => `<option value="${esc(s.id)}">${esc(s.title)}</option>`).join(''); }
+renderChallengeMenu();
 const local = new LocalController();
 export const mesh = new MeshController({ onChange: updateConnection });
 const decisions = createDecisionOwner();
@@ -39,17 +48,18 @@ function updateConnection() {
   document.querySelectorAll('.status-dot').forEach(n => n.classList.toggle('ready', ready));
   $('mesh-state').textContent = peer.ready ? `Prepared peer · ${peer.remote.model}` : `Peer ${peer.state}${peer.state === 'connected' ? ' · waiting for a prepared model' : ''}`;
 }
-function setMode(next) { mode = next; $('site-menu').open = false; for (const name of ['play','train','finish']) $(`${name}-view`).hidden = name !== next; document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === next)); if (next === 'train') renderProfile(); }
-function stopAgent() { decisions.cancel(); agentOwnerId = null; agentRunning = false; requestController?.abort(); requestController = null; $('agent-round').textContent = 'Let my stand-in try →'; }
+function setMode(next) { mode = next; doomView?.setActive(next === 'play' && state.phase === 'playing'); $('site-menu').open = false; for (const name of ['play','train','finish']) $(`${name}-view`).hidden = name !== next; document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === next)); if (next === 'train') renderProfile(); }
+function stopAgent() { decisions.cancel(); agentOwnerId = null; agentRunning = false; requestController?.abort(); requestController = null; $('agent-round').textContent = 'Watch AI play'; }
 function newRound(controller = 'human', options = {}) {
-  const from = !$('intro').hidden && mode === 'play' ? $('peek-phone').getBoundingClientRect() : null;
+  const from = options.entryRect || (!$('intro').hidden && mode === 'play' ? $('peek-phone').getBoundingClientRect() : null);
   stopAgent(); replayMode = false; recorded = false; revealDismissed = false; inferenceMs = 0;
   if (!options.raceId) { if (race && peer.state === 'connected') peer.sendGame({ type: 'leave', raceId: race.id }); race = null; $('race-status').textContent = ''; }
-  const index = Number(profile.rounds || 0) % SCENARIOS.length;
-  state = createPhone({ roundId: options.raceId || uuid(), scenario: options.scenario || SCENARIOS[index], controller }); memory = [observe(state)]; roundStarted = performance.now();
+  const scenario = options.scenario || selectedChallenge(); nextChallenge = (SCENARIOS.indexOf(scenario) + 1) % SCENARIOS.length;
+  state = createPhone({ roundId: options.raceId || uuid(), scenario, controller }); memory = [observe(state)]; roundStarted = performance.now();
   dispatch({ type: 'tap', target: 'start' }, false); setMode('play');
   $('round-status').textContent = controller === 'agent' ? 'Your stand-in is reading the phone.' : '';
   render();
+  window.scrollTo({ top: 0, behavior: 'instant' });
   if (from && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const to = $('phone').getBoundingClientRect();
     $('phone').animate([
@@ -69,7 +79,7 @@ function dispatch(action, human = true, renderAfter = true) {
   if (!result.accepted) { if (state.phase !== 'ready') toast(result.reason); return; }
   state = result.state; remember(observe(state));
   if (state.phase === 'finished') complete();
-  if (renderAfter) render();
+  if (renderAfter || state.phase === 'finished') render();
 }
 function complete() {
   stopAgent();
@@ -83,19 +93,24 @@ function complete() {
   $('round-status').textContent = state.phase === 'finished' ? 'Intention kept. Your replay is saved.' : 'The phone won this one. Your replay is saved.';
 }
 const launch = a => `<button class="app-launch" data-action="app:${a.id}" aria-label="Open ${a.label}"><span class="app-tile ${a.color}">${a.id === 'calendar' ? `<span class="calendar-tile"><small>${state.scenario.date.startsWith('Monday') ? 'MON' : 'TUE'}</small>${state.scenario.date.startsWith('Monday') ? '28' : '29'}</span>` : icon(a.icon)}</span><span>${a.label}</span>${a.id === 'messages' ? '<i class="badge">2</i>' : ''}</button>`;
-function home() { return `<div class="home-screen"><div class="home-date">${esc(state.scenario.date)}</div><div class="home-time">9:41</div><div class="weather">☀ <span>19° · A perfectly ordinary day</span></div><div class="home-widgets"><button class="home-widget" data-action="app:calendar"><small>UP NEXT</small><p>${esc(state.scenario.event)}</p><strong>${esc(displayTime(state.scenario.start).replace(' PM',''))}</strong><p>Updated in Calendar ↗</p></button><button class="home-widget" data-action="app:clock"><small>TAKE YOUR TIME</small>${icon('sun')}<p>Mostly clear.<br>Unlike your notifications.</p></button></div><div class="apps-grid">${APPS.map(launch).join('')}</div><div class="home-dock">${[APPS[0], APPS[2], APPS[5]].map(launch).join('')}</div></div>`; }
+function home() {
+  const event = calendarEvents(state.scenario)[0];
+  return `<div class="home-screen"><div class="home-date">${esc(state.scenario.date)}</div><div class="home-time">9:41</div><div class="weather">☀ <span>19° · A perfectly ordinary day</span></div><div class="home-widgets"><button class="home-widget" data-action="app:calendar"><small>UP NEXT</small><p>${esc(event?.title || 'A little breathing room')}</p><strong>${event ? esc(displayTime(event.start).replace(' PM','')) : '—'}</strong><p>Open Calendar ↗</p></button><button class="home-widget" data-action="app:clock"><small>TAKE YOUR TIME</small>${icon('sun')}<p>Mostly clear.<br>Unlike your notifications.</p></button></div><div class="apps-grid">${APPS.map(launch).join('')}</div><div class="home-dock">${[APPS[0], APPS[2], APPS[5]].map(launch).join('')}</div></div>`;
+}
 const header = (title, detail = '') => `<div class="app-header"><h2>${title}</h2><span>${detail}</span></div>`;
 function screen() {
   const { app, contact } = state.screen;
   if (app === 'home') return home();
-  if (app === 'messages' && !contact) return header('Messages', '2 conversations') + `<div class="app-body">${['mom','group'].map(c => `<button class="thread-row" data-action="contact:${c}"><span class="thread-avatar">${c === 'mom' ? 'M' : '☻'}</span><span><strong>${c === 'mom' ? 'Mom' : 'The group chat'}</strong><p>${esc(state.messages[c].at(-1).text)}</p></span></button>`).join('')}</div>`;
-  if (app === 'messages') return header(contact === 'mom' ? 'Mom' : 'The group chat', 'Messages') + `<div class="app-body"><div class="chat-date">Today · 9:41 AM</div>${state.messages[contact].map(m => `<div class="bubble ${m.from === 'you' ? 'outgoing' : ''}">${esc(m.text)}</div>`).join('')}<form class="message-compose" id="message-compose"><textarea data-field="reply" id="phone-reply" rows="2" maxlength="500" aria-label="Message to ${contact === 'mom' ? 'Mom' : 'the group'}" placeholder="Message">${esc(state.drafts[contact])}</textarea><button class="send-button" aria-label="Send message" type="submit" ${state.drafts[contact].trim() ? '' : 'disabled'}>↑</button></form><p class="app-subtitle">Messages stay in this simulated phone.</p></div>`;
-  if (app === 'calendar') return header('Calendar', 'September') + `<div class="app-body"><div class="calendar-month">${['M','T','W','T','F','S','S',21,22,23,24,25,26,27,28,29,30,1,2,3,4].map((d,i) => `<span class="${i === (state.scenario.date.startsWith('Monday') ? 14 : 15) ? 'selected' : ''}">${d}</span>`).join('')}</div><div class="app-subtitle">${esc(state.scenario.date)}</div><div class="appointment"><h3>${esc(state.scenario.event)}</h3><p>${displayTime(state.scenario.start)} – ${displayTime(state.scenario.end)}</p><small>Updated appointment</small></div><p class="calendar-note">${esc(state.scenario.note)}</p></div>`;
+  if (app === 'distraction') return distractionScreen(state.distractions[state.screen.distractionId]);
+  const thread = c => `<button class="thread-row" data-action="contact:${esc(c)}"><span class="thread-avatar">${esc(contactName(state,c).slice(0,1))}</span><span><strong>${esc(contactName(state,c))}</strong><p>${esc(state.messages[c].at(-1).text)}</p></span></button>`;
+  if (app === 'messages' && !contact) return header('Messages', `${Object.keys(state.messages).length} conversations`) + `<div class="app-body">${Object.keys(state.messages).map(thread).join('')}</div>`;
+  if (app === 'messages') return header(esc(contactName(state,contact)), 'Messages') + `<div class="app-body"><div class="chat-date">Today · 9:41 AM</div>${state.messages[contact].map(m => `<div class="bubble ${m.from === 'you' ? 'outgoing' : ''}">${esc(m.text)}</div>`).join('')}<form class="message-compose" id="message-compose"><textarea data-field="reply" id="phone-reply" rows="2" maxlength="500" aria-label="Message to ${esc(contactName(state,contact))}" placeholder="Message">${esc(state.drafts[contact])}</textarea><button class="send-button" aria-label="Send message" type="submit" ${state.drafts[contact].trim() ? '' : 'disabled'}>↑</button></form><p class="app-subtitle">Messages stay in this simulated phone.</p></div>`;
+  if (app === 'calendar') return header('Calendar') + `<div class="app-body"><div class="app-subtitle">${esc(state.scenario.date)}</div>${calendarEvents(state.scenario).map(event => `<div class="appointment"><h3>${esc(event.title)}</h3><p>${displayTime(event.start)} – ${displayTime(event.end)}</p></div><p class="calendar-note">${esc(event.note)}</p>`).join('') || '<p class="empty-phone">No upcoming events.</p>'}</div>`;
   if (app === 'clock') return header('Clock', 'Alarms') + `<div class="app-body">${state.alarms.length ? state.alarms.map(t => `<div class="alarm-row">${t}<small>ON</small></div>`).join('') : '<p class="empty-phone">No alarms. An ambitious approach.</p>'}<label for="alarm-time" class="field-label">New alarm</label><input id="alarm-time" class="phone-field" type="time" data-field="alarm" value="${state.alarmDraft}"><button class="button secondary" data-action="save-alarm">Add alarm</button></div>`;
   if (app === 'notes') return header('Notes', 'Just for you') + `<div class="app-body"><textarea class="phone-field phone-note" data-field="note" maxlength="1000" aria-label="Notes" placeholder="Something worth remembering…">${esc(state.notes)}</textarea></div>`;
-  if (app === 'contacts') return header('Contacts') + `<div class="app-body"><button class="thread-row" data-action="contact:mom"><span class="thread-avatar">M</span><span><strong>Mom</strong><p>Send a message ↗</p></span></button><button class="thread-row" data-action="contact:group"><span class="thread-avatar">☻</span><span><strong>The group chat</strong><p>Against your better judgment ↗</p></span></button></div>`;
-  if (app === 'feed') return header('Loop', 'For you, apparently') + `<div class="app-body"><div class="feed-art">PART ${state.feedIndex + 1} OF 38</div><p class="feed-text">${esc(observe(state).text.find(t => /skillet|sponge|cookware/.test(t)) || 'There is always another video.')}</p><p class="feed-byline">@pan_in_progress · you might as well see how it ends</p><button class="button secondary" data-action="next-post">One more →</button></div>`;
-  if (app === 'notifications') return header('Notifications', String(state.notifications.length)) + `<div class="app-body">${state.notifications.length ? state.notifications.map(n => `<div class="notification-list-item"><button data-action="notification:${n.id}"><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p></button><button class="text-button" data-action="dismiss:${n.id}">Dismiss</button></div>`).join('') : '<p class="empty-phone">A rare moment of quiet.</p>'}</div>`;
+  if (app === 'contacts') return header('Contacts') + `<div class="app-body">${Object.keys(state.messages).map(thread).join('')}</div>`;
+  if (app === 'feed') return '';
+  if (app === 'notifications') return header('Notifications', String(state.notifications.length)) + `<div class="app-body">${state.notifications.length ? state.notifications.map(n => `<div class="notification-list-item"><button data-action="notification:${n.id}"><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p>${notificationBait(n.distraction)}</button><button class="text-button" data-action="dismiss:${n.id}">Dismiss</button></div>`).join('') : '<p class="empty-phone">A rare moment of quiet.</p>'}</div>`;
   if (app === 'switcher') return header('Your apps', 'Pick up where you left off') + `<div class="app-body apps-grid">${APPS.map(launch).join('')}</div>`;
   if (app === 'intention') return header('Remember why') + `<div class="app-body"><div class="appointment"><h3>Your original intention</h3><p>${esc(state.scenario.intention)}</p></div><p class="calendar-note">A reminder is allowed. So is doing the thing.</p><button class="button secondary" data-action="back">Back to it →</button></div>`;
   return '';
@@ -104,28 +119,51 @@ function render() {
   document.body.classList.toggle('in-round', state.phase !== 'ready');
   $('intro').hidden = state.phase !== 'ready';
   $('game-stage').hidden = state.phase === 'ready';
-  const previousScroll = $('phone-screen').scrollTop;
-  $('phone-screen').innerHTML = screen();
-  $('phone-screen').scrollTop = previousScroll;
+  const root = $('phone-screen');
+  root.classList.toggle('is-doom', state.screen.app === 'feed');
+  if (state.screen.app === 'feed') {
+    if (doomView?.roundId !== state.roundId) { doomView?.destroy(); doomView = null; }
+    if (!doomView) doomView = new DoomFeed(root, state, index => {
+      while (state.screen.app === 'feed' && state.phase === 'playing' && state.feedIndex !== index && !replayMode) {
+        const before = state.feedIndex;
+        dispatch({ type:'tap', target:index > before ? 'next-post' : 'previous-post' },true,false);
+        if (before === state.feedIndex) break;
+      }
+      renderTime(); renderOverlay(); renderNotification();
+      return state;
+    });
+    else doomView.update(state);
+    doomView.setActive(mode === 'play' && state.phase === 'playing');
+  } else {
+    doomView?.destroy(); doomView = null;
+    const previousScroll = root.scrollTop;
+    root.innerHTML = screen(); root.scrollTop = previousScroll;
+  }
   renderTime(); renderOverlay(); renderNotification();
 }
-function renderTime() { const remaining = Math.ceil((RULES.durationMs - state.elapsed) / 1000); $('round-clock').textContent = `${String(Math.floor(remaining / 60)).padStart(2,'0')}:${String(remaining % 60).padStart(2,'0')}`; $('round-clock').classList.toggle('running-low', remaining <= 30); $('notification-count').textContent = state.notifications.length; }
+function renderTime() { updateDistractionMotion(state); const remaining = Math.ceil((roundDuration(state.scenario) - state.elapsed) / 1000); $('round-clock').textContent = `${String(Math.floor(remaining / 60)).padStart(2,'0')}:${String(remaining % 60).padStart(2,'0')}`; $('round-clock').classList.toggle('running-low', remaining <= 30); $('notification-count').textContent = state.notifications.length; }
 function renderOverlay() {
   let html = '';
-  if (!replayMode && state.phase === 'playing' && (state.controller === 'human' || state.elapsed < RULES.revealMs) && !revealDismissed) html = `<div class="reveal-card"><div class="eyebrow">YOU OPENED YOUR PHONE TO…</div><h2>${esc(state.scenario.intention)}</h2><p>Calendar has the time. Notes has the entrance.<br>The clock is already ticking.</p><button class="button primary" id="dismiss-reveal">Got it ↗</button></div>`;
-  if (['finished','expired'].includes(state.phase)) html = `<div class="reveal-card"><div class="result-symbol">${state.phase === 'finished' ? '↗' : '↻'}</div><div class="eyebrow">${replayMode ? 'REPLAY · ' : ''}${state.phase === 'finished' ? 'INTENTION KEPT' : 'LOST IN THE PHONE'}</div><h2>${state.phase === 'finished' ? 'You can put it down.' : 'The phone won.'}</h2><p>${state.phase === 'finished' ? (state.scenario.requiredAlarm ? 'Right time. Right entrance. Alarm set.' : 'Mom has the right pickup time.') : esc(state.scenario.intention)}</p><p>${Math.round(state.elapsed / 1000)}s · ${state.log.length} actions · ${state.recalled} reminders</p><button class="button primary" id="next-round">Try another day ↗</button><button class="text-button" id="result-profile">Can your stand-in do it? →</button></div>`;
+  const showTask = state.phase === 'playing' && !revealDismissed && (state.elapsed < RULES.revealMs || state.elapsed < (state.taskRecallUntil || 0));
+  const note = showTask ? `<p>${esc(state.scenario.intention)}</p><button id="dismiss-reveal">Got it ↗</button>` : '<p class="task-folded">You came here for one thing.</p>';
+  if ($('task-note-content').innerHTML !== note) $('task-note-content').innerHTML = note;
+  if (['finished','expired'].includes(state.phase)) html = `<div class="reveal-card"><div class="result-symbol">${state.phase === 'finished' ? '↗' : '↻'}</div><div class="eyebrow">${replayMode ? 'REPLAY · ' : ''}${state.phase === 'finished' ? 'INTENTION KEPT' : 'LOST IN THE PHONE'}</div><h2>${state.phase === 'finished' ? 'You can put it down.' : 'The phone won.'}</h2><p>${state.phase === 'finished' ? esc(state.scenario.success || 'Intention kept.') : 'Your task is still unfinished.'}</p><p>${Math.round(state.elapsed / 1000)}s · ${state.log.length} actions · ${state.recalled} reminders${state.distractionTaps ? ` · ${state.distractionTaps} distraction taps` : ''}</p><button class="button primary" id="next-round">Try another day ↗</button><button class="text-button" id="result-profile">Can your stand-in do it? →</button></div>`;
   if ($('phone-overlay').innerHTML !== html) $('phone-overlay').innerHTML = html;
 }
 function renderNotification() {
-  const n = state.notifications.at(-1);
-  const show = n && state.elapsed - n.at < 5200 && state.phase === 'playing' && state.screen.app !== 'notifications';
-  const html = show ? `<div class="notification-toast"><i class="mini-app ${APPS.find(a => a.id === n.app)?.color || 'green'}">↗</i><button class="notification-open" data-action="notification:${n.id}"><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p></button><button class="notification-dismiss" data-action="dismiss:${n.id}" aria-label="Dismiss ${esc(n.title)}">×</button></div>` : '';
+  const blocked = blockingNotification(state);
+  const n = blocked || state.notifications.at(-1);
+  $('notification-banner').classList.toggle('interrupting', !!blocked);
+  $('phone-screen').inert = !!blocked;
+  document.querySelector('.phone-navigation').inert = !!blocked;
+  const show = n && (blocked || state.elapsed - n.at < 5200) && state.phase === 'playing' && (blocked || state.screen.app !== 'notifications');
+  const html = show ? `<div class="notification-toast"><i class="mini-app ${APPS.find(a => a.id === n.app)?.color || 'green'}">↗</i><button class="notification-open" data-action="notification:${n.id}"><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p>${notificationBait(n.distraction)}</button><button class="notification-dismiss" data-action="dismiss:${n.id}" aria-label="Dismiss ${esc(n.title)}">${blocked ? 'Dismiss' : '×'}</button></div>` : '';
   if ($('notification-banner').innerHTML !== html) $('notification-banner').innerHTML = html;
 }
 async function agentPlay() {
   if (agentRunning) { stopAgent(); toast('Your turn. The stand-in is paused.'); return; }
   if (!mesh.ready && !peer.ready && !local.session) { $('mesh-dialog').showModal(); return; }
-  if (race?.id === state.roundId && state.phase === 'playing') state.controller = 'agent'; else newRound('agent'); agentRunning = true; $('agent-round').textContent = 'Take over →';
+  if (race?.id === state.roundId && state.phase === 'playing') state.controller = 'agent'; else newRound('agent'); agentRunning = true; $('agent-round').textContent = 'Watch AI play';
   const roundId = state.roundId;
   const ownerId = agentOwnerId = uuid();
   const matchId = race?.id || roundId;
@@ -172,7 +210,7 @@ function handleGame(message) {
     if (message.type === 'leave' || message.type === 'declined') { $('race-status').textContent = 'Friend left or declined this round. You can keep playing.'; race = null; return; }
     if (message.type === 'result' && !race.remote) {
       const record = message.record, scenario = SCENARIOS.find(s=>s.id===race.scenarioId);
-      if (record?.roundId !== race.id || record.version !== RULES.version || !Array.isArray(record.log) || record.log.length > RULES.maxActions || !Number.isFinite(record.elapsed) || record.elapsed < 0 || record.elapsed > RULES.durationMs || record.log.some(e=>!Number.isFinite(e.at)||e.at<0||e.at>record.elapsed)) throw new Error('Invalid peer replay');
+      if (record?.roundId !== race.id || record.version !== RULES.version || !Array.isArray(record.log) || record.log.length > RULES.maxActions || !Number.isFinite(record.elapsed) || record.elapsed < 0 || record.elapsed > roundDuration(scenario) || record.log.some(e=>!Number.isFinite(e.at)||e.at<0||e.at>record.elapsed)) throw new Error('Invalid peer replay');
       const verified = replay({...record,scenario});
       if (!['finished','expired'].includes(verified.phase)) throw new Error('Peer replay does not finish the task');
       race.remote = {finished:verified.phase==='finished',elapsed:record.elapsed}; raceSummary();
@@ -189,12 +227,30 @@ function renderProfile() {
 function download(name, data) { const url = URL.createObjectURL(new Blob([JSON.stringify(data,null,2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url),1000); }
 const guarded = fn => async event => { try { await fn(event); } catch (error) { report(error); } };
 document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
-$('start-round').onclick = () => newRound(); $('agent-round').onclick = guarded(agentPlay);
+const toasterEntry = bindToasterEntry(entryRect => newRound('human', { entryRect }));
+$('play-human').onclick = () => {
+  setMode('play');
+  if (state.phase === 'ready') { void toasterEntry.play(); return; }
+  toasterEntry.cancel(); stopAgent();
+  if (state.phase === 'playing') { state.controller = 'human'; render(); }
+  else newRound();
+};
+$('agent-round').onclick = guarded(async () => { toasterEntry.cancel(); await agentPlay(); });
 $('new-round').onclick = () => newRound();
+$('import-challenge').onchange = guarded(async event => {
+  const file = event.target.files[0]; if (!file) return;
+  if (file.size > 200000) throw new Error('Challenge file is too large');
+  const value = JSON.parse(await file.text());
+  const imported = value.schema ? parseCatalog(value) : [validateChallenge(value)];
+  if (imported.some(c => SCENARIOS.some(s => s.id === c.id))) throw new Error('Use new challenge IDs; existing rounds keep their original config.');
+  SCENARIOS.push(...imported); renderChallengeMenu(); $('challenge-select').value = imported[0].id;
+  newRound('human', { scenario:imported[0] }); event.target.value = '';
+});
 $('site-menu').querySelectorAll('button').forEach(button => button.addEventListener('click', () => { $('site-menu').open = false; }));
 document.addEventListener('keydown', event => { if (event.key === 'Escape') $('site-menu').open = false; });
 document.addEventListener('click', event => { if (!$('site-menu').contains(event.target)) $('site-menu').open = false; });
-$('remember').onclick = () => { if (state.phase === 'ready') newRound(); else dispatch({ type: 'tap', target: 'recall' }); };
+$('remember').onclick = () => { revealDismissed = false; if (state.phase === 'ready') newRound(); else dispatch({ type: 'tap', target: 'recall' }); };
+$('task-note-content').onclick = event => { if (event.target.closest('#dismiss-reveal')) { revealDismissed = true; renderOverlay(); } };
 $('phone-back').onclick = () => dispatch({ type: 'tap', target: 'back' }); $('phone-home').onclick = () => dispatch({ type: 'tap', target: 'home' }); $('phone-switcher').onclick = () => dispatch({ type: 'tap', target: 'switcher' });
 $('soundless-notifications').onclick = () => dispatch({ type: 'tap', target: 'notifications' });
 $('phone').addEventListener('click', e => {
@@ -222,9 +278,10 @@ $('import-profile').onchange = guarded(async e => {
 $('replay-round').onclick = guarded(() => { stopAgent(); replayMode = true; replayStarted = performance.now(); state = replay(lastReplay,0); setMode('play'); $('round-status').textContent = 'Recorded replay. No new inference.'; render(); });
 $('export-replay').onclick = () => { if (lastReplay) download('meta-muzil-replay.json',lastReplay); };
 $('race-peer').onclick = guarded(() => {
+  toasterEntry.cancel();
   if (peer.state !== 'connected') { $('mesh-dialog').showModal(); return; }
   if (state.phase === 'playing') throw new Error('Finish this round before inviting a friend.');
-  race = {id:uuid(),scenarioId:SCENARIOS[Number(profile.rounds || 0)%SCENARIOS.length].id,role:'host',phase:'waiting'};
+  race = {id:uuid(),scenarioId:selectedChallenge().id,role:'host',phase:'waiting'};
   peer.sendGame({type:'invite',raceId:race.id,scenarioId:race.scenarioId}); $('race-status').textContent = 'Invitation sent. Waiting for your friend.';
 });
 $('accept-race').onclick = guarded(() => {
@@ -268,7 +325,7 @@ interval = setInterval(() => {
   if (state.notifications.length !== prevCount) remember(observe(state));
   if (state.phase === 'expired') { complete(); render(); }
 },250);
-window.addEventListener('pagehide', () => { clearInterval(interval); stopAgent(); void peer.close(); });
+window.addEventListener('pagehide', () => { clearInterval(interval); doomView?.destroy(); stopAgent(); void peer.close(); });
 render(); updateConnection();
 
 let partitionLink = null;

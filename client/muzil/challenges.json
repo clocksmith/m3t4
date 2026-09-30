@@ -1,0 +1,944 @@
+{
+  "schema": "muzil-challenges/v1",
+  "challenges": [
+    {
+      "version": 1,
+      "id": "pickup-errands",
+      "title": "Before you put it down",
+      "intention": "Tell Mom when and where to pick you up.",
+      "success": "Mom has the updated pickup details.",
+      "date": "Monday, September 28",
+      "durationMs": 180000,
+      "initial": {
+        "contacts": [
+          {
+            "id": "mom",
+            "name": "Mom",
+            "messages": [
+              "Still 5:20 at the main entrance? Check the updated appointment and your pickup note. Let me know both."
+            ]
+          },
+          {
+            "id": "group",
+            "name": "The group chat",
+            "messages": [
+              "We need your vote on something completely unimportant."
+            ]
+          }
+        ],
+        "calendar": [
+          {
+            "title": "Dentist",
+            "start": "16:50",
+            "end": "17:40",
+            "note": "This is the updated appointment. Pickup entrance is saved in Notes."
+          }
+        ],
+        "notes": "Dentist · pickup\n\nThe main entrance is closed for repairs. Meet at the side entrance.\n\nShopping: coffee, lemons, batteries.",
+        "alarms": []
+      },
+      "goal": {
+        "kind": "message",
+        "contact": "mom",
+        "time": "17:40",
+        "choice": {
+          "options": [
+            "main entrance",
+            "side entrance"
+          ],
+          "expected": "side entrance"
+        }
+      },
+      "interruptions": [
+        {
+          "id": "group-urgent",
+          "at": 7000,
+          "app": "messages",
+          "contact": "group",
+          "title": "Someone tagged you in this",
+          "body": "They said it looks exactly like you. Three tiles are covering the photo.",
+          "distraction": "reveal",
+          "interruptive": true
+        },
+        {
+          "id": "calendar-update",
+          "at": 15000,
+          "app": "calendar",
+          "title": "Appointment updated",
+          "body": "The old pickup time is out of date. Check Calendar."
+        },
+        {
+          "id": "feed",
+          "at": 23000,
+          "app": "feed",
+          "title": "A tiny challenge from the group chat",
+          "body": "Six cards. Three pairs. You can probably finish before anyone notices.",
+          "distraction": "pairs",
+          "interruptive": true
+        },
+        {
+          "id": "pickup-note",
+          "at": 31000,
+          "app": "notes",
+          "title": "Pickup note",
+          "body": "The usual entrance is closed. You saved the alternative."
+        },
+        {
+          "id": "group-again",
+          "at": 41000,
+          "app": "messages",
+          "contact": "group",
+          "title": "Nobody gets this on the first try",
+          "body": "One tap in the green zone. It looks embarrassingly easy.",
+          "distraction": "timing",
+          "interruptive": true
+        },
+        {
+          "id": "feed-two",
+          "at": 52000,
+          "app": "feed",
+          "title": "Someone tagged you in this",
+          "body": "They said it looks exactly like you. Three tiles are covering the photo.",
+          "distraction": "reveal",
+          "interruptive": true
+        },
+        {
+          "id": "mom-followup",
+          "at": 65000,
+          "app": "messages",
+          "contact": "mom",
+          "title": "Mom",
+          "body": "Send me the time and entrance together so I can find you."
+        },
+        {
+          "id": "group-photo",
+          "at": 80000,
+          "app": "messages",
+          "contact": "group",
+          "title": "A tiny challenge from the group chat",
+          "body": "Six cards. Three pairs. You can probably finish before anyone notices.",
+          "distraction": "pairs",
+          "interruptive": true
+        },
+        {
+          "id": "feed-three",
+          "at": 97000,
+          "app": "feed",
+          "title": "Nobody gets this on the first try",
+          "body": "One tap in the green zone. It looks embarrassingly easy.",
+          "distraction": "timing",
+          "interruptive": true
+        },
+        {
+          "id": "mom-reminder",
+          "at": 115000,
+          "app": "messages",
+          "contact": "mom",
+          "title": "Mom",
+          "body": "Which entrance was it again? Send the time and entrance together."
+        },
+        {
+          "id": "group-last",
+          "at": 135000,
+          "app": "messages",
+          "contact": "group",
+          "title": "Someone tagged you in this",
+          "body": "They said it looks exactly like you. Three tiles are covering the photo.",
+          "distraction": "reveal",
+          "interruptive": true
+        },
+        {
+          "id": "feed-last",
+          "at": 155000,
+          "app": "feed",
+          "title": "A tiny challenge from the group chat",
+          "body": "Six cards. Three pairs. You can probably finish before anyone notices.",
+          "distraction": "pairs",
+          "interruptive": true
+        }
+      ]
+    },
+    {
+      "version": 1,
+      "id": "pickup-variation-errands",
+      "title": "Before you put it down",
+      "intention": "Tell Mom when and where to pick you up.",
+      "success": "Mom has the updated pickup details.",
+      "date": "Tuesday, September 29",
+      "durationMs": 180000,
+      "initial": {
+        "contacts": [
+          {
+            "id": "mom",
+            "name": "Mom",
+            "messages": [
+              "Still 2:45 at the front gate? Check the updated appointment and your pickup note. Let me know both."
+            ]
+          },
+          {
+            "id": "group",
+            "name": "The group chat",
+            "messages": [
+              "We need your vote on something completely unimportant."
+            ]
+          }
+        ],
+        "calendar": [
+          {
+            "title": "Eye appointment",
+            "start": "14:20",
+            "end": "15:15",
+            "note": "This is the updated appointment. Pickup entrance is saved in Notes."
+          }
+        ],
+        "notes": "Eye doctor · pickup\n\nThe front gate is locked this afternoon. Meet at the garden gate.\n\nShopping: coffee, lemons, batteries.",
+        "alarms": []
+      },
+      "goal": {
+        "kind": "message",
+        "contact": "mom",
+        "time": "15:15",
+        "choice": {
+          "options": [
+            "front gate",
+            "garden gate"
+          ],
+          "expected": "garden gate"
+        }
+      },
+      "interruptions": [
+        {
+          "id": "group-urgent",
+          "at": 7000,
+          "app": "messages",
+          "contact": "group",
+          "title": "Someone tagged you in this",
+          "body": "They said it looks exactly like you. Three tiles are covering the photo.",
+          "distraction": "reveal",
+          "interruptive": true
+        },
+        {
+          "id": "calendar-update",
+          "at": 15000,
+          "app": "calendar",
+          "title": "Appointment updated",
+          "body": "The old pickup time is out of date. Check Calendar."
+        },
+        {
+          "id": "feed",
+          "at": 23000,
+          "app": "feed",
+          "title": "A tiny challenge from the group chat",
+          "body": "Six cards. Three pairs. You can probably finish before anyone notices.",
+          "distraction": "pairs",
+          "interruptive": true
+        },
+        {
+          "id": "pickup-note",
+          "at": 31000,
+          "app": "notes",
+          "title": "Pickup note",
+          "body": "The usual entrance is closed. You saved the alternative."
+        },
+        {
+          "id": "group-again",
+          "at": 41000,
+          "app": "messages",
+          "contact": "group",
+          "title": "Nobody gets this on the first try",
+          "body": "One tap in the green zone. It looks embarrassingly easy.",
+          "distraction": "timing",
+          "interruptive": true
+        },
+        {
+          "id": "feed-two",
+          "at": 52000,
+          "app": "feed",
+          "title": "Someone tagged you in this",
+          "body": "They said it looks exactly like you. Three tiles are covering the photo.",
+          "distraction": "reveal",
+          "interruptive": true
+        },
+        {
+          "id": "mom-followup",
+          "at": 65000,
+          "app": "messages",
+          "contact": "mom",
+          "title": "Mom",
+          "body": "Send me the time and entrance together so I can find you."
+        },
+        {
+          "id": "group-photo",
+          "at": 80000,
+          "app": "messages",
+          "contact": "group",
+          "title": "A tiny challenge from the group chat",
+          "body": "Six cards. Three pairs. You can probably finish before anyone notices.",
+          "distraction": "pairs",
+          "interruptive": true
+        },
+        {
+          "id": "feed-three",
+          "at": 97000,
+          "app": "feed",
+          "title": "Nobody gets this on the first try",
+          "body": "One tap in the green zone. It looks embarrassingly easy.",
+          "distraction": "timing",
+          "interruptive": true
+        },
+        {
+          "id": "mom-reminder",
+          "at": 115000,
+          "app": "messages",
+          "contact": "mom",
+          "title": "Mom",
+          "body": "Which entrance was it again? Send the time and entrance together."
+        },
+        {
+          "id": "group-last",
+          "at": 135000,
+          "app": "messages",
+          "contact": "group",
+          "title": "Someone tagged you in this",
+          "body": "They said it looks exactly like you. Three tiles are covering the photo.",
+          "distraction": "reveal",
+          "interruptive": true
+        },
+        {
+          "id": "feed-last",
+          "at": 155000,
+          "app": "feed",
+          "title": "A tiny challenge from the group chat",
+          "body": "Six cards. Three pairs. You can probably finish before anyone notices.",
+          "distraction": "pairs",
+          "interruptive": true
+        }
+      ]
+    },
+    {
+      "version": 1,
+      "id": "locker-handoff",
+      "title": "The handoff",
+      "intention": "Send Sam the details needed to collect your bag.",
+      "success": "Sam has the locker and current code.",
+      "date": "Wednesday, September 30",
+      "durationMs": 150000,
+      "initial": {
+        "contacts": [
+          {
+            "id": "sam",
+            "name": "Sam",
+            "messages": [
+              "I’m at the station. Which locker? What’s the code?"
+            ]
+          },
+          {
+            "id": "group",
+            "name": "The group chat",
+            "messages": [
+              "You have 28 unread opinions."
+            ]
+          }
+        ],
+        "calendar": [],
+        "notes": "Station locker\nLocker 24 · code 6831\nOld code 1020 was replaced.\n\nBuy oat milk.",
+        "alarms": []
+      },
+      "goal": {
+        "kind": "message",
+        "contact": "sam",
+        "includes": [
+          "24",
+          "6831"
+        ],
+        "choice": {
+          "options": [
+            "6831",
+            "1020"
+          ],
+          "expected": "6831"
+        }
+      },
+      "interruptions": [
+        {
+          "id": "group",
+          "at": 8000,
+          "app": "messages",
+          "contact": "group",
+          "title": "Someone tagged you in this",
+          "body": "They said it looks exactly like you. Three tiles are covering the photo.",
+          "distraction": "reveal",
+          "interruptive": true
+        },
+        {
+          "id": "feed",
+          "at": 19000,
+          "app": "feed",
+          "title": "A tiny challenge from the group chat",
+          "body": "Six cards. Three pairs. You can probably finish before anyone notices.",
+          "distraction": "pairs",
+          "interruptive": true
+        },
+        {
+          "id": "group-two",
+          "at": 38000,
+          "app": "messages",
+          "contact": "group",
+          "title": "Nobody gets this on the first try",
+          "body": "One tap in the green zone. It looks embarrassingly easy.",
+          "distraction": "timing",
+          "interruptive": true
+        },
+        {
+          "id": "feed-two",
+          "at": 58000,
+          "app": "feed",
+          "title": "Someone tagged you in this",
+          "body": "They said it looks exactly like you. Three tiles are covering the photo.",
+          "distraction": "reveal",
+          "interruptive": true
+        },
+        {
+          "id": "group-three",
+          "at": 80000,
+          "app": "messages",
+          "contact": "group",
+          "title": "A tiny challenge from the group chat",
+          "body": "Six cards. Three pairs. You can probably finish before anyone notices.",
+          "distraction": "pairs",
+          "interruptive": true
+        },
+        {
+          "id": "feed-three",
+          "at": 105000,
+          "app": "feed",
+          "title": "Nobody gets this on the first try",
+          "body": "One tap in the green zone. It looks embarrassingly easy.",
+          "distraction": "timing",
+          "interruptive": true
+        }
+      ]
+    },
+    {
+      "version": 1,
+      "id": "early-shift",
+      "title": "The early shift",
+      "intention": "Set your wake-up alarm for tomorrow’s early shift.",
+      "success": "Alarm set. You have time to get ready and get there.",
+      "date": "Wednesday, September 30",
+      "durationMs": 150000,
+      "initial": {
+        "contacts": [
+          {
+            "id": "lee",
+            "name": "Lee",
+            "messages": [
+              "Tomorrow’s shift moved earlier. Check Calendar and allow time to get ready and walk."
+            ]
+          },
+          {
+            "id": "group",
+            "name": "The group chat",
+            "messages": [
+              "You have 28 unread opinions."
+            ]
+          }
+        ],
+        "calendar": [
+          {
+            "title": "Early shift",
+            "start": "06:50",
+            "end": "14:50",
+            "note": "Be at work when the shift starts. Your morning timings are in Notes."
+          }
+        ],
+        "notes": "Morning routine\n20 minutes to get ready.\n30 minutes to walk to work.\nSet the alarm so you have time for both.",
+        "alarms": []
+      },
+      "goal": {
+        "kind": "alarm",
+        "time": "06:00"
+      },
+      "interruptions": [
+        {
+          "id": "group",
+          "at": 8000,
+          "app": "messages",
+          "contact": "group",
+          "title": "Someone tagged you in this",
+          "body": "They said it looks exactly like you. Three tiles are covering the photo.",
+          "distraction": "reveal",
+          "interruptive": true
+        },
+        {
+          "id": "feed",
+          "at": 19000,
+          "app": "feed",
+          "title": "A tiny challenge from the group chat",
+          "body": "Six cards. Three pairs. You can probably finish before anyone notices.",
+          "distraction": "pairs",
+          "interruptive": true
+        },
+        {
+          "id": "group-two",
+          "at": 38000,
+          "app": "messages",
+          "contact": "group",
+          "title": "Nobody gets this on the first try",
+          "body": "One tap in the green zone. It looks embarrassingly easy.",
+          "distraction": "timing",
+          "interruptive": true
+        },
+        {
+          "id": "feed-two",
+          "at": 58000,
+          "app": "feed",
+          "title": "Someone tagged you in this",
+          "body": "They said it looks exactly like you. Three tiles are covering the photo.",
+          "distraction": "reveal",
+          "interruptive": true
+        },
+        {
+          "id": "group-three",
+          "at": 80000,
+          "app": "messages",
+          "contact": "group",
+          "title": "A tiny challenge from the group chat",
+          "body": "Six cards. Three pairs. You can probably finish before anyone notices.",
+          "distraction": "pairs",
+          "interruptive": true
+        },
+        {
+          "id": "feed-three",
+          "at": 105000,
+          "app": "feed",
+          "title": "Nobody gets this on the first try",
+          "body": "One tap in the green zone. It looks embarrassingly easy.",
+          "distraction": "timing",
+          "interruptive": true
+        }
+      ]
+    },
+    {
+      "version": 1,
+      "id": "meeting-change",
+      "title": "The moved meeting",
+      "intention": "Tell Lee when and where the design review is happening.",
+      "success": "Lee has the correct meeting details.",
+      "date": "Wednesday, September 30",
+      "durationMs": 150000,
+      "initial": {
+        "contacts": [
+          {
+            "id": "lee",
+            "name": "Lee",
+            "messages": [
+              "Still 10:00 in the red room?"
+            ]
+          },
+          {
+            "id": "group",
+            "name": "The group chat",
+            "messages": [
+              "You have 28 unread opinions."
+            ]
+          }
+        ],
+        "calendar": [
+          {
+            "title": "Design review",
+            "start": "11:30",
+            "end": "12:15",
+            "note": "This is the updated time. Room allocation is in Notes."
+          }
+        ],
+        "notes": "Room allocation\nDesign review: blue room.\nThe red room is occupied.",
+        "alarms": []
+      },
+      "goal": {
+        "kind": "message",
+        "contact": "lee",
+        "time": "11:30",
+        "choice": {
+          "options": [
+            "blue room",
+            "red room"
+          ],
+          "expected": "blue room"
+        }
+      },
+      "interruptions": [
+        {
+          "id": "group",
+          "at": 8000,
+          "app": "messages",
+          "contact": "group",
+          "title": "Someone tagged you in this",
+          "body": "They said it looks exactly like you. Three tiles are covering the photo.",
+          "distraction": "reveal",
+          "interruptive": true
+        },
+        {
+          "id": "feed",
+          "at": 19000,
+          "app": "feed",
+          "title": "A tiny challenge from the group chat",
+          "body": "Six cards. Three pairs. You can probably finish before anyone notices.",
+          "distraction": "pairs",
+          "interruptive": true
+        },
+        {
+          "id": "group-two",
+          "at": 38000,
+          "app": "messages",
+          "contact": "group",
+          "title": "Nobody gets this on the first try",
+          "body": "One tap in the green zone. It looks embarrassingly easy.",
+          "distraction": "timing",
+          "interruptive": true
+        },
+        {
+          "id": "feed-two",
+          "at": 58000,
+          "app": "feed",
+          "title": "Someone tagged you in this",
+          "body": "They said it looks exactly like you. Three tiles are covering the photo.",
+          "distraction": "reveal",
+          "interruptive": true
+        },
+        {
+          "id": "group-three",
+          "at": 80000,
+          "app": "messages",
+          "contact": "group",
+          "title": "A tiny challenge from the group chat",
+          "body": "Six cards. Three pairs. You can probably finish before anyone notices.",
+          "distraction": "pairs",
+          "interruptive": true
+        },
+        {
+          "id": "feed-three",
+          "at": 105000,
+          "app": "feed",
+          "title": "Nobody gets this on the first try",
+          "body": "One tap in the green zone. It looks embarrassingly easy.",
+          "distraction": "timing",
+          "interruptive": true
+        }
+      ]
+    },
+    {
+      "version": 1,
+      "id": "grocery-detour",
+      "title": "One stop on the way",
+      "intention": "Update your shopping list with what Noor needs.",
+      "success": "The shopping list is ready.",
+      "date": "Wednesday, September 30",
+      "durationMs": 150000,
+      "initial": {
+        "contacts": [
+          {
+            "id": "noor",
+            "name": "Noor",
+            "messages": [
+              "Please add lemons, rice and coffee. Keep the soap that is already on the list."
+            ]
+          },
+          {
+            "id": "group",
+            "name": "The group chat",
+            "messages": [
+              "You have 28 unread opinions."
+            ]
+          }
+        ],
+        "calendar": [],
+        "notes": "Shopping\nsoap",
+        "alarms": []
+      },
+      "goal": {
+        "kind": "note",
+        "includes": [
+          "lemons",
+          "rice",
+          "coffee",
+          "soap"
+        ]
+      },
+      "interruptions": [
+        {
+          "id": "group",
+          "at": 8000,
+          "app": "messages",
+          "contact": "group",
+          "title": "Someone tagged you in this",
+          "body": "They said it looks exactly like you. Three tiles are covering the photo.",
+          "distraction": "reveal",
+          "interruptive": true
+        },
+        {
+          "id": "feed",
+          "at": 19000,
+          "app": "feed",
+          "title": "A tiny challenge from the group chat",
+          "body": "Six cards. Three pairs. You can probably finish before anyone notices.",
+          "distraction": "pairs",
+          "interruptive": true
+        },
+        {
+          "id": "group-two",
+          "at": 38000,
+          "app": "messages",
+          "contact": "group",
+          "title": "Nobody gets this on the first try",
+          "body": "One tap in the green zone. It looks embarrassingly easy.",
+          "distraction": "timing",
+          "interruptive": true
+        },
+        {
+          "id": "feed-two",
+          "at": 58000,
+          "app": "feed",
+          "title": "Someone tagged you in this",
+          "body": "They said it looks exactly like you. Three tiles are covering the photo.",
+          "distraction": "reveal",
+          "interruptive": true
+        },
+        {
+          "id": "group-three",
+          "at": 80000,
+          "app": "messages",
+          "contact": "group",
+          "title": "A tiny challenge from the group chat",
+          "body": "Six cards. Three pairs. You can probably finish before anyone notices.",
+          "distraction": "pairs",
+          "interruptive": true
+        },
+        {
+          "id": "feed-three",
+          "at": 105000,
+          "app": "feed",
+          "title": "Nobody gets this on the first try",
+          "body": "One tap in the green zone. It looks embarrassingly easy.",
+          "distraction": "timing",
+          "interruptive": true
+        }
+      ]
+    },
+    {
+      "version": 1,
+      "id": "train-plan",
+      "title": "Catch the train",
+      "intention": "Tell Alex which train to catch and where to board.",
+      "success": "Alex has the departure time and platform.",
+      "date": "Wednesday, September 30",
+      "durationMs": 150000,
+      "initial": {
+        "contacts": [
+          {
+            "id": "alex",
+            "name": "Alex",
+            "messages": [
+              "Was our train at 7:10? Can you check?"
+            ]
+          },
+          {
+            "id": "group",
+            "name": "The group chat",
+            "messages": [
+              "You have 28 unread opinions."
+            ]
+          }
+        ],
+        "calendar": [
+          {
+            "title": "Train to the coast",
+            "start": "19:45",
+            "end": "20:50",
+            "note": "Updated departure. Check your travel note for the platform."
+          }
+        ],
+        "notes": "Coast train\nPlatform 6.\nTickets are in the blue backpack.",
+        "alarms": []
+      },
+      "goal": {
+        "kind": "message",
+        "contact": "alex",
+        "time": "19:45",
+        "includes": [
+          "platform 6"
+        ]
+      },
+      "interruptions": [
+        {
+          "id": "group",
+          "at": 8000,
+          "app": "messages",
+          "contact": "group",
+          "title": "Someone tagged you in this",
+          "body": "They said it looks exactly like you. Three tiles are covering the photo.",
+          "distraction": "reveal",
+          "interruptive": true
+        },
+        {
+          "id": "feed",
+          "at": 19000,
+          "app": "feed",
+          "title": "A tiny challenge from the group chat",
+          "body": "Six cards. Three pairs. You can probably finish before anyone notices.",
+          "distraction": "pairs",
+          "interruptive": true
+        },
+        {
+          "id": "group-two",
+          "at": 38000,
+          "app": "messages",
+          "contact": "group",
+          "title": "Nobody gets this on the first try",
+          "body": "One tap in the green zone. It looks embarrassingly easy.",
+          "distraction": "timing",
+          "interruptive": true
+        },
+        {
+          "id": "feed-two",
+          "at": 58000,
+          "app": "feed",
+          "title": "Someone tagged you in this",
+          "body": "They said it looks exactly like you. Three tiles are covering the photo.",
+          "distraction": "reveal",
+          "interruptive": true
+        },
+        {
+          "id": "group-three",
+          "at": 80000,
+          "app": "messages",
+          "contact": "group",
+          "title": "A tiny challenge from the group chat",
+          "body": "Six cards. Three pairs. You can probably finish before anyone notices.",
+          "distraction": "pairs",
+          "interruptive": true
+        },
+        {
+          "id": "feed-three",
+          "at": 105000,
+          "app": "feed",
+          "title": "Nobody gets this on the first try",
+          "body": "One tap in the green zone. It looks embarrassingly easy.",
+          "distraction": "timing",
+          "interruptive": true
+        }
+      ]
+    },
+    {
+      "version": 1,
+      "id": "save-address",
+      "title": "Before the battery dies",
+      "intention": "Send Sam the complete address for dinner.",
+      "success": "Sam has the address and apartment number.",
+      "date": "Wednesday, September 30",
+      "durationMs": 150000,
+      "initial": {
+        "contacts": [
+          {
+            "id": "jules",
+            "name": "Jules",
+            "messages": [
+              "Dinner is at 42 Willow Lane. The old address was 9 Ash Road."
+            ]
+          },
+          {
+            "id": "sam",
+            "name": "Sam",
+            "messages": [
+              "Send me the address if you find it."
+            ]
+          },
+          {
+            "id": "group",
+            "name": "The group chat",
+            "messages": [
+              "You have 28 unread opinions."
+            ]
+          }
+        ],
+        "calendar": [],
+        "notes": "Dinner at Jules\nApartment 3, second floor.",
+        "alarms": []
+      },
+      "goal": {
+        "kind": "message",
+        "contact": "sam",
+        "includes": [
+          "42 Willow Lane",
+          "apartment 3"
+        ],
+        "choice": {
+          "options": [
+            "42 Willow Lane",
+            "9 Ash Road"
+          ],
+          "expected": "42 Willow Lane"
+        }
+      },
+      "interruptions": [
+        {
+          "id": "group",
+          "at": 8000,
+          "app": "messages",
+          "contact": "group",
+          "title": "Someone tagged you in this",
+          "body": "They said it looks exactly like you. Three tiles are covering the photo.",
+          "distraction": "reveal",
+          "interruptive": true
+        },
+        {
+          "id": "feed",
+          "at": 19000,
+          "app": "feed",
+          "title": "A tiny challenge from the group chat",
+          "body": "Six cards. Three pairs. You can probably finish before anyone notices.",
+          "distraction": "pairs",
+          "interruptive": true
+        },
+        {
+          "id": "group-two",
+          "at": 38000,
+          "app": "messages",
+          "contact": "group",
+          "title": "Nobody gets this on the first try",
+          "body": "One tap in the green zone. It looks embarrassingly easy.",
+          "distraction": "timing",
+          "interruptive": true
+        },
+        {
+          "id": "feed-two",
+          "at": 58000,
+          "app": "feed",
+          "title": "Someone tagged you in this",
+          "body": "They said it looks exactly like you. Three tiles are covering the photo.",
+          "distraction": "reveal",
+          "interruptive": true
+        },
+        {
+          "id": "group-three",
+          "at": 80000,
+          "app": "messages",
+          "contact": "group",
+          "title": "A tiny challenge from the group chat",
+          "body": "Six cards. Three pairs. You can probably finish before anyone notices.",
+          "distraction": "pairs",
+          "interruptive": true
+        },
+        {
+          "id": "feed-three",
+          "at": 105000,
+          "app": "feed",
+          "title": "Nobody gets this on the first try",
+          "body": "One tap in the green zone. It looks embarrassingly easy.",
+          "distraction": "timing",
+          "interruptive": true
+        }
+      ]
+    }
+  ]
+}

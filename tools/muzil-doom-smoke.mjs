@@ -1,0 +1,93 @@
+import assert from 'node:assert/strict';
+import { chromium } from 'playwright';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createDevServer } from './dev-serve.mjs';
+const server=createDevServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));
+const origin=`http://127.0.0.1:${server.address().port}`,output=await mkdtemp(join(tmpdir(),'muzil-doom-'));
+const browser=await chromium.launch({channel:'chrome',headless:true});
+const errors=[],report={output,checks:[]};
+const check = text => { report.checks.push(text); console.log(text); };
+console.log('Artifacts:',output);
+async function openFeed(page) {
+ page.setDefaultTimeout(15000);
+ await page.addLocatorHandler(page.locator('.interrupting .notification-dismiss'), button=>button.click());
+ await page.goto(origin);await page.locator('#start-round').click();await page.locator('#dismiss-reveal').click();
+ await page.getByRole('button',{name:'Open Doom Scroll',exact:true}).click();await page.locator('.doom-post').first().waitFor();
+}
+async function select(page,id) {
+ await page.locator('#result-profile').click();await page.locator('#challenge-select').selectOption(id);await page.locator('#new-round').click();await page.locator('#dismiss-reveal').click();
+}
+try {
+ const page=await browser.newPage({viewport:{width:1280,height:1000}});
+ await page.addInitScript(() => {
+   window.doomDevices=[];
+   if (!navigator.gpu) return;
+   const requestAdapter=navigator.gpu.requestAdapter.bind(navigator.gpu);
+   navigator.gpu.requestAdapter=async options=>{
+     const adapter=await requestAdapter(options);if(!adapter)return adapter;
+     const requestDevice=adapter.requestDevice.bind(adapter);
+     adapter.requestDevice=async options=>{const device=await requestDevice(options);window.doomDevices.push(device);return device;};
+     return adapter;
+   };
+ });
+ page.on('pageerror',e=>errors.push(e.message));const requests=[];page.on('request',r=>requests.push(r.url()));
+ await page.goto(origin);await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:join(output,'toaster-desktop.png'),fullPage:true});
+ await openFeed(page);
+ await page.waitForFunction(()=>document.querySelector('.doom-canvas')?.dataset.renderer==='webgpu');
+ await page.waitForFunction(()=>Number(document.querySelector('.doom-canvas')?.dataset.frames)>2);
+ report.renderer=await page.locator('.doom-canvas').evaluate(c=>({...c.dataset,width:c.width,height:c.height}));
+ await page.screenshot({path:join(output,'doom-desktop.png'),fullPage:true});
+ await page.locator('.doom-scroller').hover();await page.mouse.wheel(0,460);
+ await page.waitForFunction(()=>Number(document.querySelector('.doom-app')?.dataset.index)>0);
+ console.log('Wheel scroll accepted');
+ const index=await page.locator('.doom-app').getAttribute('data-index');
+ await page.getByRole('button',{name:'Like post',exact:true}).click();assert.equal(await page.locator('[data-action="like-post"]').getAttribute('aria-pressed'),'true');
+ await page.evaluate(()=>window.doomDevices.at(-1).destroy());
+ await page.waitForFunction(()=>document.querySelector('.doom-canvas')?.dataset.renderer==='css');
+ await page.locator('#phone-home').click();await page.getByRole('button',{name:'Open Doom Scroll',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('.doom-canvas')?.dataset.renderer==='webgpu');
+ assert.equal(await page.locator('.doom-app').getAttribute('data-index'),index);assert.equal(await page.locator('[data-action="like-post"]').getAttribute('aria-pressed'),'true');
+ console.log('Likes and navigation accepted');
+ await page.locator('.doom-scroller').focus();await page.keyboard.press('PageDown');await page.waitForFunction(i=>Number(document.querySelector('.doom-app')?.dataset.index)>Number(i),index);
+ for(let i=0;i<12;i++) await page.getByRole('button',{name:'Next post',exact:true}).click();
+ assert.ok(await page.locator('.doom-post').count()<=5);assert.equal(requests.some(u=>u.includes('/vendor/')||/\.bin(?:\?|$)/.test(u)),false);
+ check('Real WebGPU pipeline renders; native wheel/keyboard and tap scrolling; likes and position survive navigation; five-card DOM bound; no model requests');
+ await page.locator('#phone-home').click();
+ assert.equal(await page.evaluate(async()=> (await window.doomDevices.at(-1).lost).reason),'destroyed');
+ check('GPU device loss falls back without breaking play; reentry creates a fresh renderer; exit destroys the device');
+ await page.locator('[data-action="app:messages"]').first().click();await page.locator('[data-action="contact:mom"]').click();await page.locator('#phone-reply').fill('5:40 PM, side entrance');await page.getByRole('button',{name:'Send message',exact:true}).click();
+ await page.locator('#next-round').waitFor();
+ const detour=await page.evaluate(()=>JSON.parse(localStorage.getItem('muzil.replay.v1')));assert.ok(detour.log.some(e=>e.action.target==='like-post'));assert.ok(detour.log.some(e=>e.action.target==='next-post'));
+ assert.equal(await page.evaluate(async r=>(await import('/muzil/engine.mjs')).replay(r).phase,detour),'finished');
+ await select(page,'early-shift');
+ await page.locator('[data-action="app:calendar"]').first().click();await page.getByText('6:50 AM – 2:50 PM').waitFor();
+ await page.locator('#phone-home').click();await page.locator('[data-action="app:notes"]').click();assert.match(await page.getByRole('textbox',{name:'Notes',exact:true}).inputValue(),/20 minutes/);
+ await page.locator('#phone-home').click();await page.locator('[data-action="app:clock"]').first().click();
+ await page.locator('#alarm-time').fill('06:00');await page.locator('[data-action="save-alarm"]').click();await page.locator('#next-round').waitFor();
+ const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('muzil.replay.v1')));assert.equal(saved.scenario.id,'early-shift');
+ assert.equal(await page.evaluate(async r=>(await import('/muzil/engine.mjs')).replay(r).phase,saved),'finished');
+ check('One alarm task requires facts from Calendar and Notes; JSON is saved in replay');
+ const custom={version:1,id:'imported-smoke',title:'Imported challenge',intention:'Tell Jo the violet code.',success:'Jo has the code.',date:'Today',durationMs:45000,initial:{contacts:[{id:'jo',name:'Jo',messages:['Which code?']}],calendar:[],notes:'violet code',alarms:[]},goal:{kind:'message',contact:'jo',includes:['violet code']},interruptions:[]};
+ await page.locator('#result-profile').click();await page.locator('#import-challenge').setInputFiles({name:'custom.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(custom))});await page.locator('#dismiss-reveal').click();
+ await page.locator('[data-action="app:messages"]').first().click();await page.locator('[data-action="contact:jo"]').click();await page.locator('#phone-reply').fill('violet code');await page.getByRole('button',{name:'Send message',exact:true}).click();await page.locator('#next-round').waitFor();
+ check('Local JSON import introduces a new contact and intention without application code changes');
+ const mobile=await browser.newPage({viewport:{width:390,height:844},isMobile:true,deviceScaleFactor:2});mobile.on('pageerror',e=>errors.push(e.message));
+ await mobile.goto(origin);await mobile.evaluate(()=>document.fonts.ready);await mobile.screenshot({path:join(output,'toaster-mobile.png'),fullPage:true});await openFeed(mobile);
+ await mobile.waitForFunction(()=>document.querySelector('.doom-canvas')?.dataset.renderer==='webgpu');
+ const cdp=await mobile.context().newCDPSession(mobile),box=await mobile.locator('.doom-scroller').boundingBox();
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:box.x+box.width/2,y:box.y+box.height*.85}]});
+ for(let i=1;i<=6;i++) await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:box.x+box.width/2,y:box.y+box.height*(.85-i*.11)}]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ await mobile.waitForFunction(()=>Number(document.querySelector('.doom-app')?.dataset.index)>0);
+ assert.equal(await mobile.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ await mobile.screenshot({path:join(output,'doom-mobile.png'),fullPage:true});check('Mobile WebGPU rendering and native touch swipe with no horizontal overflow');
+ const fallback=await browser.newPage({viewport:{width:320,height:568},reducedMotion:'reduce'});fallback.on('pageerror',e=>errors.push(e.message));
+ await fallback.addInitScript(()=>Object.defineProperty(navigator,'gpu',{value:undefined}));await openFeed(fallback);
+ await fallback.waitForFunction(()=>document.querySelector('.doom-canvas')?.dataset.renderer==='css');await fallback.getByRole('button',{name:'Next post',exact:true}).click();assert.equal(await fallback.locator('.doom-app').getAttribute('data-index'),'1');
+ await fallback.screenshot({path:join(output,'doom-fallback.png'),fullPage:true});check('320px reduced-motion CSS fallback remains scrollable without WebGPU');
+ const reduced=await browser.newPage({reducedMotion:'reduce'});reduced.on('pageerror',e=>errors.push(e.message));await openFeed(reduced);await reduced.waitForFunction(()=>Number(document.querySelector('.doom-canvas')?.dataset.frames)>0);
+ await reduced.evaluate(()=>new Promise(r=>setTimeout(r,300)));const frames=await reduced.locator('.doom-canvas').getAttribute('data-frames');await reduced.evaluate(()=>new Promise(r=>setTimeout(r,200)));assert.equal(await reduced.locator('.doom-canvas').getAttribute('data-frames'),frames);check('Reduced-motion WebGPU draws on demand without a continuous animation loop');
+ assert.deepEqual(errors,[]);report.errors=errors;await writeFile(join(output,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
+} catch (error) { console.error(error); throw error; } finally {await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}

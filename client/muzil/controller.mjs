@@ -47,8 +47,8 @@ export function actionPrompt(job, { format = 'command' } = {}) {
   const legal = observation.actions.map(a => ({ type:a.type, target:a.target, label:a.label,
     ...(a.type === 'type' ? { value:'YOUR TEXT HERE' } : {}) }));
   return `You control a phone. Choose one next action to complete the intention you saw.
-Read memory before opening another app. If you already know a requested fact, use it instead of looking it up again. To reply, open Messages, select the contact, type the answer, then send it. Use the CURRENT appointment end time, not its start time or a demonstration time.
-The current screen replaces earlier screen and draft states. Do not retype an unchanged draft. If the current draft already answers the intention using facts you saw, send it. Historical examples show their results; their facts are not this round's facts.
+Read memory before opening another app. If you already know a requested fact, use it instead of looking it up again. To reply, open Messages, select the requested contact, type the answer, then send it. Calendar shows start and end times: use whichever the intention asks for. Notes can hold details or a requested checklist. Clock lets you type an alarm time in 24-hour HH:MM and then save it. Finish the one requested outcome. The m3t4.ai task note is outside the phone; recall reads it without changing apps. An interruptive notification must be opened or dismissed before other phone actions.
+The current screen replaces earlier screen and draft states. Do not retype an unchanged draft. If the current draft already answers the requested message using facts you saw, send it. Historical examples show their results; their facts are not this round's facts.
 ${profile.objective === 'imitate' ? 'Imitate the demonstrated habits, including detours.' : 'Complete the task accurately. Use facts already seen. Avoid repeating actions that did not help.'}
 ${examples.length ? 'Earlier demonstrations from other rounds (their facts are not current): ' + JSON.stringify(examples) + '\n' : ''}Memory of visible information: ${seen.join(' | ').slice(0,2400)}
 Recent actions: ${JSON.stringify(history.slice(-8))}

@@ -14,26 +14,33 @@ integration path, not fulfillment of that distributed-partition target.
 
 ## Implemented page
 
-- `/`: a short introduction and bouncing phone peeking out of a toaster oven.
-  Opening it expands into the playable phone. One menu holds stand-in, helper,
-  race and reply tools; the round shows the phone, countdown and intention recall.
+- `/`: a short introduction and bouncing phone peeking out of a pop-up toaster.
+  The orange lever and start button press, pop and expand it into the playable phone.
+  The menu has only Play, Watch AI play, and Play with a friend. A separate
+  m3t4.ai task note sits beside the phone (above it on mobile); recall reveals
+  that note without navigating the simulated phone.
   Desktop/mobile layouts and reduced-motion and keyboard paths are supported.
 - `/history`: preserved arena entry. Existing arena routes and assets remain.
   The historical page links back with native navigation.
 - Working Messages, Calendar, Clock, Notes, Contacts, app switching, home/back,
   drafts, notification center and a tempting feed. This is a simulated OS; it
   does not observe or control real phone apps.
-- Two harder appointment scenarios require a message to Mom with the updated
-  finish time and pickup entrance, plus an alarm ten minutes before pickup.
-  Calendar and Notes hold the facts; Mom's earlier suggestion is stale. Twelve
-  useful and distracting notifications arrive throughout the three-minute round.
-  The message and alarm can be completed in either order. The latest reply must
-  contain one explicit correct time and one recognized entrance; ambiguous
-  alternatives do not win. This bounded evaluator is not semantic judgment.
+- Eight JSON-defined challenges compose contacts, messages, calendar events,
+  notes, alarms and interruptions. Each shipped challenge has one outcome: a
+  message, an alarm, or a note update, using information distributed across apps.
+  The predicate format also supports `all`/`any` for authoring.
+  [Authoring guide](muzil-challenges.md) covers catalog edits and local imports.
   The original two scenarios remain available to qualification tools and replays.
+- Doom Scroll is a native scrolling fictional social feed with seeded multilingual
+  posts, local language/nonsense heuristics, likes, and scroll-reactive WebGPU
+  effects. Five cards stay mounted; CSS fallback and reduced motion are supported.
+  Post navigation and likes are recorded through the shared action engine.
 - The same validated transitions serve humans and agents. Observations contain
   visible controls/text; model memory retains previously observed information.
-  Notification arrival alone does not invalidate a pending contextual action.
+  Ordinary notification arrival permits a pending contextual action. Interruptive
+  notifications block app controls until opened or dismissed, for both humans
+  and agents. Optional reveal, pairs and timing games consume round time and
+  record every action; their cosmetic rewards never satisfy the main task.
 - Local profiles store demonstrations and an explicit imitation/improvement
   objective. No fine-tuning, automatic improvement claim, or behavioral diagnosis.
 - Recorded replay uses actions and scenario data; new agent play uses inference.

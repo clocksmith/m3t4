@@ -1686,7 +1686,6 @@ body.in-round .site-footer { display:none }
 .task-note p { font-size:15px; line-height:1.6; margin:15px 0 5px; font-weight:600 }
 .task-note p.task-folded { font-size:11px; color:#9b8a5c; font-weight:400; margin-top:12px }
 #dismiss-reveal { color:#7f6d3c; font-size:10px; margin-top:10px; padding:7px 0; text-decoration:underline; text-underline-offset:4px }
-.phone-caption>span:first-child { font-size:10px; color:#88907f }
 .notification-banner.interrupting { inset:44px 0 42px; z-index:9; display:flex; align-items:center; padding:14px; background:#30382b55; backdrop-filter:blur(3px); pointer-events:auto }
 .interrupting .notification-toast { width:100%; padding:15px; box-shadow:0 12px 40px #26321950; align-items:flex-start }
 .interrupting .notification-open strong { font-size:12px; line-height:1.5 }

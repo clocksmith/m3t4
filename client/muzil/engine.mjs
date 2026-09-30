@@ -5,12 +5,19 @@ export function createPhone({ roundId, scenario = SCENARIOS[0], controller = 'hu
   return { version: RULES.version, roundId, scenario: copy(scenario), controller, phase: 'ready', elapsed: 0,
     screen: { app: 'home' }, stack: [], revision: 0, notifications: [], delivered: [], seen: [],
     messages: { mom: [{ from: 'mom', text: scenario.incoming }], group: [{ from: 'group', text: 'Would you rather fight one horse-sized duck or finish your errands?' }] },
-    drafts: { mom: '', group: '' }, notes: '', alarms: [], alarmDraft: '07:00', feedIndex: 0, sent: [], log: [], demonstrations: [], recalled: 0 };
+    drafts: { mom: '', group: '' }, notes: scenario.initialNotes || '', alarms: [], alarmDraft: '07:00', feedIndex: 0, sent: [], log: [], demonstrations: [], recalled: 0 };
 }
 function visit(s, screen) { s.stack.push(copy(s.screen)); s.screen = screen; }
 export function outcome(s) {
   const correct = timeMinutes(s.scenario.end);
-  return s.sent.some(m => m.contact === s.scenario.contact && (() => {
+  if (s.scenario.requiredAlarm && !s.alarms.includes(s.scenario.requiredAlarm)) return false;
+  const messages = s.scenario.location ? s.sent.filter(m => m.contact === s.scenario.contact).slice(-1) : s.sent;
+  return messages.some(m => m.contact === s.scenario.contact && (() => {
+    if (s.scenario.location) {
+      const text = ` ${m.text.toLowerCase().replace(/[^a-z]+/g, ' ')} `;
+      const entrances = (s.scenario.entrances || [s.scenario.location]).filter(place => text.includes(` ${place} `));
+      if (entrances.length !== 1 || entrances[0] !== s.scenario.location) return false;
+    }
     const times = [...m.text.matchAll(/\b(\d{1,2})[:.](\d{2})\s*(a\.?m\.?|p\.?m\.?)?/gi)];
     return times.length === 1 && timeMinutes(`${times[0][1]}:${times[0][2]}`, times[0][3], correct) === correct;
   })());
@@ -43,7 +50,7 @@ export function observe(s) {
     }
     if (s.screen.app === 'calendar') text.push(s.scenario.date, `${s.scenario.event}: ${displayTime(s.scenario.start)}–${displayTime(s.scenario.end)}`, s.scenario.note);
     if (s.screen.app === 'contacts') { add('contact:mom', 'Message Mom'); add('contact:group', 'Open group chat'); }
-    if (s.screen.app === 'clock') { text.push(...s.alarms.map(a => `Alarm: ${a}`)); actions.push({ type: 'type', target: 'alarm', label: 'Alarm time HH:MM' }); add('save-alarm', 'Add alarm'); }
+    if (s.screen.app === 'clock') { text.push(...s.alarms.map(a => `Alarm: ${a}`), `New alarm: ${s.alarmDraft}`); actions.push({ type: 'type', target: 'alarm', label: 'Alarm time HH:MM' }); add('save-alarm', 'Add alarm'); }
     if (s.screen.app === 'notes') { text.push(s.notes); actions.push({ type: 'type', target: 'note', label: 'Notes', maxLength: 1000 }); }
     if (s.screen.app === 'feed') { text.push(['Someone restoring a skillet. They have just located a sponge.', 'Part 2: the sponge has a backstory.', 'You have become invested in cookware.'][s.feedIndex % 3]); add('next-post', 'Next post'); }
     for (const n of (s.screen.app === 'notifications' ? s.notifications : s.notifications.slice(-1).filter(n => s.elapsed - n.at < 5200))) { text.push(`${n.title}: ${n.body}`); add(`notification:${n.id}`, `Open ${n.title}`); add(`dismiss:${n.id}`, `Dismiss ${n.title}`); }
@@ -82,8 +89,8 @@ export function applyAction(state, action) {
   else if (target === 'send') {
     const message = { from: 'you', contact: s.screen.contact, text: s.drafts[s.screen.contact].trim(), actionId: action.id };
     s.messages[s.screen.contact].push(message); s.sent.push(message); s.drafts[s.screen.contact] = '';
-    if (outcome(s)) s.phase = 'finished';
   }
+  if (outcome(s)) s.phase = 'finished';
   s.log.push({ at: s.elapsed, action: copy(action) });
   s.demonstrations.push({ observation: before, action: { type: action.type, target, ...(action.value !== undefined ? { value: action.value } : {}) }, after: observe(s) });
   return { state: s, accepted: true };

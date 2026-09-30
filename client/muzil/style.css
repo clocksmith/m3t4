@@ -1479,3 +1479,98 @@ hr {
     margin-top:12px
   }
 }
+
+/* One opening, one phone. Secondary tools live in the menu. */
+body { min-height:100dvh; display:flex; flex-direction:column }
+#main { flex:1 }
+.site-header { width:100%; height:88px; padding:0 5%; max-width:1440px }
+.site-menu { position:relative; z-index:20 }
+.site-menu summary { cursor:pointer; list-style:none; font-size:12px; padding:12px 0 12px 20px }
+.site-menu summary::-webkit-details-marker { display:none }
+.site-menu summary span { margin-left:12px; color:var(--orange); font-size:18px }
+.site-menu nav { position:absolute; top:48px; right:0; display:flex; flex-direction:column; align-items:stretch; gap:3px; width:230px; padding:15px; border:1px solid var(--line); background:#fcfbf7; border-radius:16px; box-shadow:0 16px 45px #30342e15 }
+.site-menu .nav-item { text-align:left; padding:10px 12px; border-radius:8px }
+.site-menu .nav-item.active:after { display:none }
+.site-menu .nav-item:hover { background:#eeeee5 }
+.site-menu .connection-button { margin-top:8px; justify-content:center }
+.play-layout { display:flex; flex-direction:column; max-width:960px; margin:32px auto 44px; padding:0 24px; gap:0 }
+.intro-column { padding:0; width:100%; text-align:center; align-self:center }
+.story-lead { font-size:15px; line-height:1.7; color:#74766e; margin:22px 0 18px }
+.intro-column h1 { font-size:clamp(28px,3.7vw,48px); line-height:1.25; font-weight:500; letter-spacing:-1.8px; margin:0 auto; max-width:800px }
+.story-dots { color:var(--orange) }
+.oven-start { display:flex; flex-direction:column; align-items:center; margin:18px auto 0; padding:0 20px 14px; border-radius:28px }
+.oven-start:hover .start-label { background:#d8512c; transform:translateY(-2px) }
+.oven-start:active { transform:none!important }
+.start-label { background:var(--orange); color:#fff; border-radius:30px; font-size:13px; font-weight:700; padding:15px 24px; display:flex; align-items:center; gap:26px; transition:background .2s,transform .2s }
+.intro-hint { font-size:11px; color:#83857b; line-height:1.8; margin:0 }
+.oven-scene { position:relative; display:block; width:330px; height:270px; isolation:isolate }
+.oven-shadow { position:absolute; left:20px; right:20px; height:20px; bottom:13px; border-radius:50%; background:#363c2920; filter:blur(10px) }
+.oven-back { position:absolute; left:28px; top:120px; width:274px; height:90px; border-radius:22px; background:#b8b9ab; box-shadow:inset 0 5px 7px #fff7 }
+.peek-phone { position:absolute; top:23px; left:117px; width:98px; height:167px; border:5px solid #30342e; border-radius:20px; background:linear-gradient(135deg,#e4edc9,#bdd0bb); box-shadow:0 0 0 1px #939787,0 8px 16px #26321920; transform:rotate(-8deg); animation:phone-peek 2.8s ease-in-out infinite; padding:27px 9px 10px; text-align:center }
+.peek-island { position:absolute; top:5px; left:28px; width:32px; height:8px; border-radius:10px; background:#30342e }
+.peek-time { display:block; font-size:25px; letter-spacing:-1.2px; line-height:1.3; color:#405039 }
+.peek-notice { display:flex; align-items:center; justify-content:space-between; margin-top:8px; background:#ffffffb3; border-radius:7px; font-size:8px; text-align:left; padding:7px }
+.peek-notice b { background:var(--orange); color:white; width:13px; height:13px; border-radius:50%; text-align:center; font-size:8px }
+.peek-apps { display:flex; gap:5px; margin-top:9px }
+.peek-apps i { width:14px; height:14px; background:#6eab73; border-radius:4px }
+.peek-apps i:nth-child(2) { background:#e28e77 }
+.peek-apps i:nth-child(3) { background:#d5bc6c }
+.peek-apps i:nth-child(4) { background:#a29ac4 }
+.oven-body { position:absolute; left:21px; top:137px; width:288px; height:109px; border:1px solid #b8baac; border-radius:15px 15px 20px 20px; background:linear-gradient(110deg,#eeeee4,#dbded1 65%,#c5caba); box-shadow:inset 0 2px 1px #fff,0 7px 0 #a8ae9e,0 12px 15px #38452c15 }
+.oven-window { position:absolute; top:21px; left:14px; width:208px; height:68px; background:linear-gradient(145deg,#242c24,#4b5140); border:5px solid #838b79; border-radius:9px; overflow:hidden }
+.oven-window:after { content:''; position:absolute; inset:0; background:linear-gradient(115deg,transparent 15%,#ffffff12 16% 26%,transparent 27% 40%,#ffffff09 41% 46%,transparent 47%) }
+.oven-handle { position:absolute; top:12px; left:26px; width:185px; height:9px; background:linear-gradient(#f8f8f0,#c0c5b5); border-radius:5px; box-shadow:0 4px 4px #151c2050 }
+.oven-rack { position:absolute; left:5px; right:5px; bottom:11px; height:14px; background:repeating-linear-gradient(90deg,transparent 0 13px,#b7b99b80 14px 15px); border-block:1px solid #acb49b80; transform:skewX(-18deg) }
+.oven-coil { position:absolute; left:7px; right:7px; bottom:5px; height:2px; background:#e79254; box-shadow:0 0 12px 3px #ef723850 }
+.oven-controls { position:absolute; top:22px; right:19px; display:flex; flex-direction:column; align-items:center; gap:8px }
+.oven-controls i { width:23px; height:23px; border:1px solid #9fa794; border-radius:50%; background:linear-gradient(135deg,#f5f5ec,#b4bdab); box-shadow:0 2px 3px #48543a25 }
+.oven-controls i:after { content:''; display:block; width:2px; height:7px; background:#7b866d; margin:3px auto }
+.oven-controls b { width:4px; height:4px; background:var(--orange); border-radius:50%; box-shadow:0 0 4px #ec613d77 }
+.oven-brand { position:absolute; bottom:4px; left:105px; font-size:6px; letter-spacing:2px; color:#78806b }
+.oven-foot { position:absolute; bottom:14px; width:26px; height:9px; background:#6e7861; border-radius:0 0 5px 5px; z-index:-1 }
+.oven-foot.left { left:49px }
+.oven-foot.right { right:49px }
+@keyframes phone-peek { 0%,100% { transform:translateY(8px) rotate(-8deg) } 45% { transform:translateY(-10px) rotate(3deg) } 65% { transform:translateY(-5px) rotate(0) } }
+.phone-column { width:366px; max-width:100% }
+.phone { width:100%; height:min(694px,calc(100dvh - 186px)); min-height:500px }
+.phone-caption { margin:0 4px 12px; font-size:11px; letter-spacing:0; color:#6d7466 }
+.phone-caption button { font-size:11px; padding:6px 0 }
+.phone-caption button span { margin-left:10px; color:var(--orange) }
+.phone-caption #round-clock { font-size:14px; font-weight:700 }
+#round-clock.running-low { color:#b5442a }
+.phone-footnote { margin:12px 4px; font-size:10px }
+.phone-footnote button { font-size:10px }
+.round-status { font-size:11px; line-height:1.6; padding:0 4px; text-align:center }
+.round-status:empty,#race-status:empty { display:none }
+body.in-round .play-layout { margin:6px auto 24px }
+body.in-round .site-footer { display:none }
+.site-footer { border:0; width:100%; padding:24px 5%; font-size:9px }
+.site-footer>span { color:#96998e }
+@media(max-width:740px) {
+  .site-header { height:72px; min-height:72px; flex-wrap:nowrap; padding:0 22px }
+  .wordmark { font-size:19px }
+  .site-menu nav { width:230px; margin:0; gap:3px }
+  .play-layout { padding:0 20px; margin:30px auto }
+  .story-lead { font-size:12px; max-width:270px; margin:10px auto 18px }
+  .intro-column h1 { font-size:29px; letter-spacing:-1.1px; line-height:1.3; max-width:360px; margin:0 auto }
+  .intro-column h1 br { display:initial }
+  .intro-column h1 .wide-break { display:none }
+  .oven-start { padding:0 0 14px; margin:5px auto 0 }
+  .oven-scene { width:300px; height:256px; transform:scale(.9); transform-origin:center bottom; margin-top:-10px }
+  .oven-back { left:13px }
+  .peek-phone { left:102px }
+  .oven-body { left:6px }
+  .oven-foot.left { left:34px }
+  .oven-foot.right { right:34px }
+  .intro-hint { max-width:250px; margin:auto; font-size:10px }
+  .phone-column { width:346px }
+  .phone { height:calc(100dvh - 168px); max-height:694px; min-height:440px; border-radius:40px }
+  body.in-round .play-layout { padding:0 14px; margin:0 auto 12px }
+  .reveal-card { padding:24px 18px }
+  .reveal-card h2 { font-size:22px }
+  .site-footer { padding:20px; gap:12px }
+  .site-footer>span { display:none }
+}
+@media(prefers-reduced-motion:reduce) {
+  *,*:before,*:after { animation:none!important }
+}

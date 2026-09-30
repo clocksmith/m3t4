@@ -14,16 +14,23 @@ integration path, not fulfillment of that distributed-partition target.
 
 ## Implemented page
 
-- `/`: new Meta Muzil experience, responsive desktop/mobile phone, keyboard focus
-  states, Manrope, original app icons and restrained warm colors.
+- `/`: a short introduction and bouncing phone peeking out of a toaster oven.
+  Opening it expands into the playable phone. One menu holds stand-in, helper,
+  race and reply tools; the round shows the phone, countdown and intention recall.
+  Desktop/mobile layouts and reduced-motion and keyboard paths are supported.
 - `/history`: preserved arena entry. Existing arena routes and assets remain.
   The historical page links back with native navigation.
 - Working Messages, Calendar, Clock, Notes, Contacts, app switching, home/back,
   drafts, notification center and a tempting feed. This is a simulated OS; it
   does not observe or control real phone apps.
-- Two versioned appointment scenarios. The evaluator checks the sent recipient
-  and one explicit correct time. Ambiguous multi-time replies do not win. This
-  intentionally bounded evaluator does not establish arbitrary semantic judgment.
+- Two harder appointment scenarios require a message to Mom with the updated
+  finish time and pickup entrance, plus an alarm ten minutes before pickup.
+  Calendar and Notes hold the facts; Mom's earlier suggestion is stale. Twelve
+  useful and distracting notifications arrive throughout the three-minute round.
+  The message and alarm can be completed in either order. The latest reply must
+  contain one explicit correct time and one recognized entrance; ambiguous
+  alternatives do not win. This bounded evaluator is not semantic judgment.
+  The original two scenarios remain available to qualification tools and replays.
 - The same validated transitions serve humans and agents. Observations contain
   visible controls/text; model memory retains previously observed information.
   Notification arrival alone does not invalidate a pending contextual action.
@@ -281,3 +288,16 @@ model, piece index and asymmetric plan. Its `/__models/` URLs are local proof
 routes. The production selection remains Gemma; the Qwen artifact has not been
 published or selected for the live site. Doppler's conversion-promotion protocol
 requires human coherence review before catalog/Hugging Face publication.
+
+## Simplified opening and harder rounds (2026-09-30)
+
+The browser smoke now completes the multi-app intention on desktop and mobile,
+including persisted drafts, saved demonstrations, replay and two-peer rematches.
+It also checks keyboard entry, reduced motion, initial zero-weight requests and
+the historical route. Engine tests cover both completion orders, wrong and
+ambiguous details, the latest sent reply, continued interruptions and expiration.
+
+The retained Qwen integration evidence above applies to the original appointment
+task. Model completion and latency on the harder task have not been measured.
+The UI mesh smoke teaches the new task for the next qualification run; changing
+the game does not promote a model or change executor readiness or production flags.

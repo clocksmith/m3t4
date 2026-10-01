@@ -78,7 +78,7 @@ test('old times, wrong entrances and ambiguous replies do not complete pickup', 
 test('challenge interruptions continue through the round and expiration replays exactly', () => {
   let s = tap(createPhone({ roundId: 'expired-errands', scenario: PLAY_SCENARIOS[0] }), 'start');
   s = advance(s, 160000);
-  assert.equal(s.notifications.length, 12);
+  assert.equal(s.delivered.length, 12); assert.equal(s.notifications.length, 7); // repeated bait is coalesced
   s = advance(s, RULES.durationMs);
   assert.equal(s.phase, 'expired'); assert.deepEqual(replay(makeReplay(s)), s);
 });

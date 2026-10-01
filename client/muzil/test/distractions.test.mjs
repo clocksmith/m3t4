@@ -52,11 +52,38 @@ test('forceful notifications block app controls for humans and agents, but allow
   let s=act(createPhone({roundId:'forceful',scenario}),'start');
   s=act(s,'app:messages');s=act(s,'contact:mom');s=act(s,'reply','type','My draft');
   s=advance(s,7100);
-  assert.deepEqual(observe(s).actions.map(a=>a.target),['notification:group-urgent','dismiss:group-urgent','recall']);
+  assert.deepEqual(observe(s).actions.map(a=>a.target),['notification:group-urgent','recall']);
   assert.equal(applyAction(s,{roundId:s.roundId,id:'hidden-send',type:'tap',target:'send'}).accepted,false);
   const screen=structuredClone(s.screen);s=act(s,'recall');assert.deepEqual(s.screen,screen);
   assert.ok(observe(s).text.some(t=>t.includes('m3t4.ai task:')));
-  s=act(s,'dismiss:group-urgent');assert.equal(s.drafts.mom,'My draft');
-  assert.ok(observe(s).actions.some(a=>a.target==='send'));
+  for(const target of ['dismiss:group-urgent','home','back','switcher','notifications','send']) assert.equal(applyAction(s,{roundId:s.roundId,id:`reject-${target}`,type:'tap',target}).accepted,false);
+  s=act(s,'notification:group-urgent');
+  for(const target of ['home','back','switcher','notifications','bait:leave','bait:source']) assert.equal(applyAction(s,{roundId:s.roundId,id:`chain-${target}`,type:'tap',target}).accepted,false);
+  for(let i=0;i<3;i++)s=act(s,`bait:tile:${i}`);
+  s=act(s,'bait:replies');assert.equal(observe(s).actions.some(a=>a.target==='bait:source'),false);
+  s=act(s,'bait:react:same');s=act(s,'bait:source');assert.equal(s.screen.app,'feed');assert.equal(s.drafts.mom,'My draft');
+  s=act(s,'back');assert.equal(s.screen.app,'messages');assert.ok(observe(s).actions.some(a=>a.target==='send'));
   assert.deepEqual(replay(makeReplay(s)),s);
+});
+
+test('new banners queue during the chain; time keeps running and queued alerts require opening',()=>{
+ let s=act(createPhone({roundId:'queued',scenario:catalog.challenges[0]}),'start');s=advance(s,7100);s=act(s,'notification:group-urgent');s=advance(s,16000);
+ assert.equal(observe(s).actions.some(a=>a.target==='notification:calendar-update'),false);
+ for(let i=0;i<3;i++)s=act(s,`bait:tile:${i}`);s=act(s,'bait:replies');s=act(s,'bait:react:laugh');s=act(s,'bait:source');
+ assert.ok(observe(s).actions.some(a=>a.target==='home'));s=advance(s,24000);assert.deepEqual(observe(s).actions.map(a=>a.target),['notification:calendar-update','recall']);s=act(s,'notification:calendar-update');assert.equal(s.screen.app,'calendar');assert.equal(s.elapsed,24000);assert.deepEqual(replay(makeReplay(s)),s);
+});
+test('old replays retain dismissal, while new timing detours require the reaction and link even after a miss',()=>{
+ let old=act(createPhone({roundId:'old',scenario:catalog.challenges[0],version:'muzil-phone/1'}),'start');old=advance(old,7100);old=act(old,'dismiss:group-urgent');assert.deepEqual(replay(makeReplay(old)),old);
+ const scenario=structuredClone(catalog.challenges[0]);scenario.interruptions=[{id:'timing',at:1000,app:'feed',title:'One tap',body:'Try it',distraction:'timing',interruptive:true}];
+ let s=act(createPhone({roundId:'required-timing',scenario}),'start');s=advance(s,1100);s=act(s,'notification:timing');s=act(s,'bait:stop');assert.equal(s.distractions.timing.done,false);s=act(s,'bait:replies');s=act(s,'bait:react:nope');s=act(s,'bait:source');assert.equal(s.screen.app,'feed');assert.equal(s.phase,'playing');assert.deepEqual(replay(makeReplay(s)),s);
+});
+test('a mandatory chain expires normally and cannot turn detour progress into task success',()=>{
+ let s=act(createPhone({roundId:'expiry',scenario:catalog.challenges[0]}),'start');s=advance(s,7100);s=act(s,'notification:group-urgent');s=advance(s,180000);assert.equal(s.phase,'expired');assert.deepEqual(observe(s).actions,[]);assert.deepEqual(replay(makeReplay(s)),s);
+});
+
+test('resolved tags never replay, duplicate queued bait coalesces, and each chain grants an input window',()=>{
+ let s=act(createPhone({roundId:'no-loop',scenario:catalog.challenges[0]}),'start');s=advance(s,7100);s=act(s,'notification:group-urgent');
+ for(let i=0;i<3;i++)s=act(s,`bait:tile:${i}`);s=act(s,'bait:replies');s=act(s,'bait:react:same');s=act(s,'bait:source');
+ s=advance(s,15100-1);assert.ok(observe(s).actions.some(a=>a.target==='home'));assert.equal(observe(s).actions.some(a=>a.target.startsWith('dismiss:')),false);
+ s=advance(s,160000);assert.equal(s.notifications.some(n=>n.distraction==='reveal'),false);assert.equal(s.notifications.filter(n=>n.distraction==='pairs').length,1);assert.equal(s.notifications.filter(n=>n.distraction==='timing').length,1);assert.equal(s.delivered.length,12);assert.deepEqual(replay(makeReplay(s)),s);
 });

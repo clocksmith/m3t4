@@ -4,15 +4,18 @@ import { evaluateGoal, contactName, roundDuration, validateChallenge } from './c
 import { miniState, observeMini, validateMini, actMini, shownThreads, cleanMiniNavigation } from './mini-apps.mjs';
 import { doomPost } from './doom-content.mjs';
 const copy = x => structuredClone(x);
-export function createPhone({ roundId, scenario = SCENARIOS[0], controller = 'human' }) {
+export function createPhone({ roundId, scenario = SCENARIOS[0], controller = 'human', version = RULES.version }) {
   if (!roundId) throw new Error('A round identity is required');
   if (scenario.version === 1) scenario = validateChallenge(scenario);
   const messages = scenario.initial ? Object.fromEntries(scenario.initial.contacts.map(c => [c.id, c.messages.map(text => ({ from:c.id, text }))])) : { mom: [{ from: 'mom', text: scenario.incoming }], group: [{ from: 'group', text: 'Would you rather fight one horse-sized duck or finish your errands?' }] };
-  return { version: RULES.version, roundId, scenario: copy(scenario), controller, phase: 'ready', elapsed: 0,
-    ...miniState(scenario, messages), screen: { app: 'home' }, stack: [], revision: 0, notifications: [], delivered: [], seen: [],
+  return { version, roundId, scenario: copy(scenario), controller, phase: 'ready', elapsed: 0,
+    ...miniState(scenario, messages), screen: { app: 'home' }, stack: [], revision: 0, notifications: [], delivered: [], seen: [], resolvedNotifications:[], notificationQuietUntil:0,
     messages, drafts: Object.fromEntries(Object.keys(messages).map(id => [id, ''])), notes: scenario.initial?.notes ?? scenario.initialNotes ?? '', alarms: copy(scenario.initial?.alarms || []), alarmDraft: '07:00', feedIndex: 0, feedLikes: [], distractions: {}, distractionTaps: 0, sent: [], log: [], demonstrations: [], recalled: 0 };
 }
-export const blockingNotification = s => s.phase === 'playing' ? s.notifications.find(n => n.interruptive) : null;
+export const mandatoryNotifications = s => s.version !== 'muzil-phone/1' && s.scenario.version === 1;
+export const lockedDistraction = s => s.phase === 'playing' && s.screen.app === 'distraction' && s.distractions[s.screen.distractionId]?.required;
+const notificationKey = n => JSON.stringify([n.title,n.body,n.distraction || null]);
+export const blockingNotification = s => s.phase === 'playing' && !lockedDistraction(s) && (!mandatoryNotifications(s) || s.elapsed >= s.notificationQuietUntil) ? s.notifications.find(n => mandatoryNotifications(s) || n.interruptive) : null;
 function visit(s, screen) { s.stack.push(copy(s.screen)); s.screen = screen; }
 export function outcome(s) {
   if (s.scenario.goal) return evaluateGoal(s.scenario.goal, s);
@@ -45,10 +48,17 @@ export function observe(s) {
   if (s.phase === 'playing') {
     const blocked = blockingNotification(s);
     if (blocked) {
-      text.push(`${blocked.title}: ${blocked.body}`, 'This notification is covering the phone. Open it or dismiss it to continue.');
-      add(`notification:${blocked.id}`, `Open ${blocked.title}`); add(`dismiss:${blocked.id}`, `Dismiss ${blocked.title}`);
-      add('recall', 'Read the m3t4.ai task note beside the phone');
+      text.push(`${blocked.title}: ${blocked.body}`, mandatoryNotifications(s) ? 'Open this notification to continue. Meta rule: it cannot be dismissed.' : 'Open or dismiss this notification to continue.');
+      add(`notification:${blocked.id}`, `Open ${blocked.title}`); if (!mandatoryNotifications(s)) add(`dismiss:${blocked.id}`, `Dismiss ${blocked.title}`);
+      add('recall', 'Read the m3t4.ai thought above the phone');
       if (s.elapsed <= RULES.revealMs || s.elapsed < (s.taskRecallUntil || 0)) text.push(`m3t4.ai task: ${s.scenario.intention}`);
+      return { roundId:s.roundId, revision:s.revision, phase:s.phase, screen:copy(s.screen), text, actions };
+    }
+    if (lockedDistraction(s)) {
+      const view = distractionObservation(s.distractions[s.screen.distractionId], s.elapsed);
+      text.push(...view.text); actions.push(...view.actions);
+      add('recall', 'Read the m3t4.ai thought above the phone');
+      if (s.elapsed < (s.taskRecallUntil || 0)) text.push(`m3t4.ai task: ${s.scenario.intention}`);
       return { roundId:s.roundId, revision:s.revision, phase:s.phase, screen:copy(s.screen), text, actions };
     }
     add('home', 'Home'); add('back', 'Back'); add('switcher', 'App switcher'); add('notifications', 'Notifications'); add('recall', 'Remember intention');
@@ -70,7 +80,7 @@ export function observe(s) {
       text.push(`Doom Scroll · post ${s.feedIndex + 1}`, `@${post.handle}: ${post.text}`, `Language guess: ${post.language}; nonsense: ${post.nonsense}/100; ${post.label}`, s.feedLikes.includes(s.feedIndex) ? 'Liked' : 'Not liked');
       add('next-post', 'Scroll to next post'); if (s.feedIndex > 0) add('previous-post', 'Scroll to previous post'); add('like-post', 'Like or unlike post');
     }
-    for (const n of (s.screen.app === 'notifications' ? s.notifications : s.notifications.slice(-1).filter(n => s.elapsed - n.at < 5200))) { text.push(`${n.title}: ${n.body}`); add(`notification:${n.id}`, `Open ${n.title}`); add(`dismiss:${n.id}`, `Dismiss ${n.title}`); }
+    for (const n of (s.screen.app === 'notifications' ? s.notifications : s.notifications.slice(-1).filter(n => s.elapsed - n.at < 5200 && (!mandatoryNotifications(s) || s.elapsed >= s.notificationQuietUntil)))) { text.push(`${n.title}: ${n.body}`); add(`notification:${n.id}`, `Open ${n.title}`); if (!mandatoryNotifications(s)) add(`dismiss:${n.id}`, `Dismiss ${n.title}`); }
   }
   return { roundId: s.roundId, revision: s.revision, phase: s.phase, screen: copy(s.screen), text, actions };
 }
@@ -98,11 +108,16 @@ export function applyAction(state, action) {
   else if (target.startsWith('notification:')) {
     const n = s.notifications.find(n => n.id === target.slice(13));
     if (n.distraction) {
-      s.distractions[n.id] ||= newDistraction(n.distraction, `${s.roundId}:${n.id}`, s.elapsed);
+      s.distractions[n.id] ||= newDistraction(n.distraction, `${s.roundId}:${n.id}`, s.elapsed, 0, mandatoryNotifications(s));
       visit(s, { app:'distraction', distractionId:n.id });
     } else visit(s, { app: n.app, ...(n.contact ? { contact: n.contact } : {}) });
-    s.notifications = s.notifications.filter(x => x.id !== n.id);
+    if (mandatoryNotifications(s)) { s.resolvedNotifications.push(notificationKey(n)); if (!n.distraction) s.notificationQuietUntil = s.elapsed + 8000; }
+    s.notifications = s.notifications.filter(x => x.id !== n.id && (!mandatoryNotifications(s) || notificationKey(x) !== notificationKey(n)));
   } else if (target.startsWith('dismiss:')) s.notifications = s.notifications.filter(n => n.id !== target.slice(8));
+  else if (target === 'bait:source') {
+    s.distractionTaps++; s.distractions[s.screen.distractionId].sourceOpened = true; s.notificationQuietUntil = s.elapsed + 8000;
+    visit(s, { app:'feed' }); s.stack = s.stack.filter(screen => screen.app !== 'distraction');
+  }
   else if (target === 'bait:leave') s.screen = s.stack.pop() || { app:'home' };
   else if (target.startsWith('bait:')) { s.distractionTaps++; s.distractions[s.screen.distractionId] = actOnDistraction(s.distractions[s.screen.distractionId], target, s.elapsed); }
   else if (target === 'reply') s.drafts[s.screen.contact] = action.value;
@@ -123,13 +138,17 @@ export function applyAction(state, action) {
 export function advance(state, elapsed) {
   if (state.phase !== 'playing' || !Number.isFinite(elapsed) || elapsed < state.elapsed) return state;
   const s = copy(state); s.elapsed = Math.min(Math.floor(elapsed), roundDuration(s.scenario));
-  for (const n of s.scenario.interruptions) if (n.at <= s.elapsed && !s.delivered.includes(n.id)) { s.delivered.push(n.id); s.notifications.push(copy(n)); }
+  for (const n of s.scenario.interruptions) if (n.at <= s.elapsed && !s.delivered.includes(n.id)) {
+    s.delivered.push(n.id);
+    const repeated = mandatoryNotifications(s) && (s.resolvedNotifications.includes(notificationKey(n)) || s.notifications.some(pending => notificationKey(pending) === notificationKey(n)));
+    if (!repeated) s.notifications.push(copy(n));
+  }
   if (s.elapsed >= roundDuration(s.scenario)) s.phase = 'expired';
   return s;
 }
 export function replay(record, until = Infinity) {
-  if (record.version !== RULES.version) throw new Error('Unsupported replay version');
-  let s = createPhone({ roundId: record.roundId, scenario: record.scenario, controller: record.controller });
+  if (![RULES.version, 'muzil-phone/1'].includes(record.version)) throw new Error('Unsupported replay version');
+  let s = createPhone({ roundId: record.roundId, scenario: record.scenario, controller: record.controller, version:record.version });
   for (const entry of record.log) {
     if (entry.at > until) break;
     s = advance(s, entry.at); const result = applyAction(s, entry.action);

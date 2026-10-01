@@ -18,7 +18,7 @@ test('Calendar browses days and months, edits and deletes events without changin
 });
 test('event drafts survive navigation and forceful interruptions; invalid dates and times cannot save',()=>{
  let s=app(start(),'calendar');s=act(s,'event-new');reject(s,'event-save');s=act(s,'event-title','Lunch');s=act(s,'event-date','2026-02-30');reject(s,'event-save');s=act(s,'event-date','2026-10-02');s=act(s,'event-end','08:00');reject(s,'event-save');s=act(s,'event-end','10:30');
- s=advance(s,7200);reject(s,'event-save');s=act(s,'notification:group-urgent');s=act(s,'bait:leave');assert.equal(s.eventDraft.title,'Lunch');
+ s=advance(s,7200);reject(s,'event-save');s=act(s,'notification:group-urgent');for(let i=0;i<3;i++)s=act(s,`bait:tile:${i}`);s=act(s,'bait:replies');s=act(s,'bait:react:laugh');s=act(s,'bait:source');assert.equal(s.screen.app,'feed');assert.equal(s.eventDraft.title,'Lunch');
  s=app(s,'calendar');s=act(s,'event-resume');s=act(s,'event-save');assert.equal(s.calendarDate,'2026-10-02');s=act(s,'back');assert.ok(!s.screen.edit);identical(s);
  assert.equal(monthShift('2026-12-31',1),'2027-01-01');assert.equal(validDate('2026-02-29'),false);assert.equal(validDate('2028-02-29'),true);
 });

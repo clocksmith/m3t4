@@ -6,7 +6,7 @@ import { APPS, RULES } from './scenarios.mjs';
 import { loadChallenges, validateChallenge, parseCatalog, contactName, roundDuration } from './challenges.mjs';
 import { DoomFeed } from './doom-feed.mjs';
 const SCENARIOS = await loadChallenges();
-import { createPhone, applyAction, advance, observe, displayTime, makeReplay, replay, blockingNotification } from './engine.mjs';
+import { createPhone, applyAction, advance, observe, displayTime, makeReplay, replay, blockingNotification, lockedDistraction, mandatoryNotifications } from './engine.mjs';
 import { LocalController } from './controller.mjs';
 import { PeerController } from './peer.mjs';
 import { createDecisionOwner } from './decision.mjs';
@@ -30,6 +30,7 @@ let profile = read('muzil.profile.v1', { schema: 'muzil.profile/v1', id: uuid(),
 if (!Array.isArray(profile.examples)) profile = { schema: 'muzil.profile/v1', id: uuid(), version: 1, objective: 'finish', rounds: 0, examples: [] };
 let lastReplay = read('muzil.replay.v1', null), state = createPhone({ roundId: uuid(), scenario: SCENARIOS[0] });
 let roundStarted = 0, toastTimer, interval, replayStarted = 0, replayMode = false, agentRunning = false, requestController = null, revealDismissed = false, recorded = false, mode = 'play';
+let lastNotificationMarkup = null;
 let memory = [], inferenceMs = 0, race = null, invitation = null, doomView = null;
 let nextChallenge = Number(profile.rounds || 0) % SCENARIOS.length;
 const selectedChallenge = () => SCENARIOS.find(s => s.id === $('challenge-select').value) || SCENARIOS[nextChallenge % SCENARIOS.length];
@@ -110,7 +111,7 @@ function screen() {
   const mini = miniScreen(state, header, displayTime);
   if (mini !== null) return mini;
   if (app === 'feed') return '';
-  if (app === 'notifications') return header('Notifications', String(state.notifications.length)) + `<div class="app-body">${state.notifications.length ? state.notifications.map(n => `<div class="notification-list-item"><button data-action="notification:${n.id}"><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p>${notificationBait(n.distraction)}</button><button class="text-button" data-action="dismiss:${n.id}">Dismiss</button></div>`).join('') : '<p class="empty-phone">A rare moment of quiet.</p>'}</div>`;
+  if (app === 'notifications') return header('Notifications', String(state.notifications.length)) + `<div class="app-body">${state.notifications.length ? state.notifications.map(n => `<div class="notification-list-item"><button data-action="notification:${n.id}"><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p>${notificationBait(n.distraction)}</button>${mandatoryNotifications(state) ? '' : `<button class="text-button" data-action="dismiss:${n.id}">Dismiss</button>`}</div>`).join('') : '<p class="empty-phone">A rare moment of quiet.</p>'}</div>`;
   if (app === 'switcher') return header('Your apps', 'Pick up where you left off') + `<div class="app-body apps-grid">${APPS.map(launch).join('')}</div>`;
   if (app === 'intention') return header('Remember why') + `<div class="app-body"><div class="appointment"><h3>Your original intention</h3><p>${esc(state.scenario.intention)}</p></div><p class="calendar-note">A reminder is allowed. So is doing the thing.</p><button class="button secondary" data-action="back">Back to it →</button></div>`;
   return '';
@@ -122,6 +123,7 @@ function render() {
   const root = $('phone-screen');
   root.classList.toggle('is-doom', state.screen.app === 'feed');
   if (state.screen.app === 'feed') {
+    root.dataset.screen = JSON.stringify(state.screen);
     if (doomView?.roundId !== state.roundId) { doomView?.destroy(); doomView = null; }
     if (!doomView) doomView = new DoomFeed(root, state, index => {
       while (state.screen.app === 'feed' && state.phase === 'playing' && state.feedIndex !== index && !replayMode) {
@@ -146,20 +148,24 @@ function renderTime() { updateDistractionMotion(state); const remaining = Math.c
 function renderOverlay() {
   let html = '';
   const showTask = state.phase === 'playing' && !revealDismissed && (state.elapsed < RULES.revealMs || state.elapsed < (state.taskRecallUntil || 0));
-  const note = showTask ? `<p>${esc(state.scenario.intention)}</p><button id="dismiss-reveal">Got it ↗</button>` : '<p class="task-folded">You came here for one thing.</p>';
+  const note = showTask ? `<p>${esc(state.scenario.intention)}</p><button id="dismiss-reveal">Got it ↗</button>` : '<p class="task-scattered" aria-label="I was going to…"><span>I was…</span><span>going to…</span></p>';
   if ($('task-note-content').innerHTML !== note) $('task-note-content').innerHTML = note;
   if (['finished','expired'].includes(state.phase)) html = `<div class="reveal-card"><div class="result-symbol">${state.phase === 'finished' ? '↗' : '↻'}</div><div class="eyebrow">${replayMode ? 'REPLAY · ' : ''}${state.phase === 'finished' ? 'INTENTION KEPT' : 'LOST IN THE PHONE'}</div><h2>${state.phase === 'finished' ? 'You can put it down.' : 'The phone won.'}</h2><p>${state.phase === 'finished' ? esc(state.scenario.success || 'Intention kept.') : 'Your task is still unfinished.'}</p><p>${Math.round(state.elapsed / 1000)}s · ${state.log.length} actions · ${state.recalled} reminders${state.distractionTaps ? ` · ${state.distractionTaps} distraction taps` : ''}</p><button class="button primary" id="next-round">Try another day ↗</button><button class="text-button" id="result-profile">Can your stand-in do it? →</button></div>`;
   if ($('phone-overlay').innerHTML !== html) $('phone-overlay').innerHTML = html;
 }
 function renderNotification() {
   const blocked = blockingNotification(state);
-  const n = blocked || state.notifications.at(-1);
+  const locked = lockedDistraction(state);
+  const n = locked || (mandatoryNotifications(state) && state.elapsed < state.notificationQuietUntil) ? null : blocked || state.notifications.at(-1);
   $('notification-banner').classList.toggle('interrupting', !!blocked);
   $('phone-screen').inert = !!blocked;
-  document.querySelector('.phone-navigation').inert = !!blocked;
+  document.querySelector('.phone-navigation').inert = !!blocked || !!locked;
+  $('soundless-notifications').disabled = !!blocked || !!locked;
+  $('phone-rule').textContent = blocked ? 'm3t4.ai rule · Open the notification' : locked ? 'm3t4.ai rule · Follow the thread' : 'Simulated phone';
   const show = n && (blocked || state.elapsed - n.at < 5200) && state.phase === 'playing' && (blocked || state.screen.app !== 'notifications');
-  const html = show ? `<div class="notification-toast"><i class="mini-app ${APPS.find(a => a.id === n.app)?.color || 'green'}">↗</i><button class="notification-open" data-action="notification:${n.id}"><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p>${notificationBait(n.distraction)}</button><button class="notification-dismiss" data-action="dismiss:${n.id}" aria-label="Dismiss ${esc(n.title)}">${blocked ? 'Dismiss' : '×'}</button></div>` : '';
-  if ($('notification-banner').innerHTML !== html) $('notification-banner').innerHTML = html;
+  const app = n && APPS.find(a => a.id === n.app);
+  const html = show ? `<div class="notification-toast"><button class="notification-open" data-action="notification:${n.id}"><span class="notification-meta"><i class="mini-app ${app?.color || 'green'}">${icon(app?.icon || 'message')}</i><span>${esc(app?.label || 'Messages')}</span><time>now</time></span><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p></button>${mandatoryNotifications(state) ? '' : `<button class="notification-dismiss" data-action="dismiss:${n.id}" aria-label="Dismiss ${esc(n.title)}">×</button>`}</div>` : '';
+  if (lastNotificationMarkup !== html) { $('notification-banner').innerHTML = html; lastNotificationMarkup = html; }
 }
 async function agentPlay() {
   if (agentRunning) { stopAgent(); toast('Your turn. The stand-in is paused.'); return; }

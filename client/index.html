@@ -42,7 +42,7 @@
         <p class="intro-hint">One intention. A phone full of distractions.</p>
       </div>
       <div class="phone-column" id="game-stage" hidden>
-        <aside class="task-note" aria-label="m3t4.ai task"><div class="task-note-heading">m3t4.ai task <button id="remember" aria-label="Remember my intention">Remember why ↗</button></div><div id="task-note-content"></div></aside><div class="phone-caption"><span id="round-clock" role="timer" aria-label="Time remaining">03:00</span></div>
+        <aside class="task-thought" aria-label="m3t4.ai task"><div class="task-thought-heading">m3t4.ai task <button id="remember" aria-label="Remember my intention">Remember why ↗</button></div><div id="task-note-content"></div></aside><div class="phone-caption"><span id="round-clock" role="timer" aria-label="Time remaining">03:00</span></div>
         <div class="phone" id="phone" tabindex="-1" aria-label="Simulated phone">
           <div class="phone-hardware"><span class="phone-time">9:41</span><span class="island"></span><span class="phone-signals" aria-label="Full signal and battery">▂▄▆ <span>▰</span></span></div>
           <div id="phone-screen" class="phone-screen"></div>
@@ -50,7 +50,7 @@
           <div id="phone-overlay" class="phone-overlay"></div>
           <div class="phone-navigation"><button id="phone-back" aria-label="Back">‹</button><button id="phone-home" aria-label="Home"><span></span></button><button id="phone-switcher" aria-label="App switcher">▢</button></div>
         </div>
-        <div class="phone-footnote"><span>Simulated phone</span><button id="soundless-notifications" aria-label="Open notifications">Notifications <span id="notification-count">0</span></button></div>
+        <div class="phone-footnote"><span id="phone-rule">Simulated phone</span><button id="soundless-notifications" aria-label="Open notifications">Notifications <span id="notification-count">0</span></button></div>
         <div class="round-status" id="round-status" role="status" aria-live="polite"></div>
       </div>
       <p id="race-status" class="small muted" role="status"></p>
@@ -82,7 +82,7 @@
 <p class="small muted">Contribution downloads only verified weights needed by that stage, plus its tokenizer. Shared embeddings are required by both stages. The player can keep using another prepared helper while this loads.</p>
 <div class="button-row"><button id="partition-drain" class="text-button">Finish work and stop contributing</button><button id="partition-disconnect" class="text-button">Disconnect helpers</button><button id="partition-evidence" class="text-button">Export execution record</button></div>
 </details><p id="mesh-error" class="error-text" role="alert"></p></dialog>
-  <dialog id="about-dialog" class="mesh-dialog"><div class="dialog-heading"><h2>Open your phone. Remember why.</h2><button class="icon-button close-dialog" aria-label="Close">×</button></div><p>Meta Muzil is a simulated-phone game by m3t4.ai. Your apps and notifications here are fictional. Nothing is sent to your actual contacts.</p><p>The phone, saved demonstrations, and replay work without a model. A stand-in needs real Doppler inference, locally or through an explicitly connected Reploid peer. It never substitutes a scripted player.</p><p>Profiles and the last game replay are stored in this browser. Real messages in “Finish a thing” are not saved by this page. Connected peers receive only requests you authorize; they can read that material.</p><p>Independent experiment. Not affiliated with Meta. No diagnostic or treatment claims.</p><a href="/history">Visit the historical m3t4 arena →</a></dialog>
+  <dialog id="about-dialog" class="mesh-dialog"><div class="dialog-heading"><h2>Open your phone. Remember why.</h2><button class="icon-button close-dialog" aria-label="Close">×</button></div><p>Meta Muzil is a simulated-phone game by m3t4.ai. Your apps and notifications here are fictional. Nothing is sent to your actual contacts.</p><p>Hold on to one intention. Notifications must be opened, and some pull you through a chain of distractions before you can get back to it.</p><p>The phone, saved demonstrations, and replay work without a model. A stand-in needs real Doppler inference, locally or through an explicitly connected Reploid peer. It never substitutes a scripted player.</p><p>Profiles and the last game replay are stored in this browser. Real messages in “Finish a thing” are not saved by this page. Connected peers receive only requests you authorize; they can read that material.</p><p>Independent experiment. Not affiliated with Meta. No diagnostic or treatment claims.</p><a href="/history">Visit the historical m3t4 arena →</a></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <script type="module" src="/muzil/app.mjs"></script>
 </body>

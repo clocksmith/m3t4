@@ -81,19 +81,28 @@ Imported entries are available for this page session and are embedded in its
 saved replay. Imports do not publish to the site or synchronize to a friend's
 catalog; paired players need the same challenge configuration.
 
-## Task note and interruptions
+## Original thought and interruptions
 
-The intention appears in an external **m3t4.ai task** note, beside the phone on
-desktop and above it on mobile. After five seconds it folds away. Remember why
-reveals it again without changing apps, including during an interruption.
+The intention appears as a centered **m3t4.ai task** thought above the phone.
+After five seconds the words scatter away. Remember why reveals it again without
+changing apps, including during an interruption. It is outside the simulated OS.
 
-`interruptive: true` makes a notification cover the phone until opened or
-dismissed. The shared action engine enforces this for humans and agents, while
-preserving drafts and allowing the external task reminder. `distraction` selects
-`reveal`, `pairs` or `timing`. Each is a playable detour with a cosmetic reward and
-another attempt; the original clock continues. Leaving returns to the previous
-screen. Neither winning a detour nor dismissing notifications completes the task.
-Actions, card layouts and timing results reconstruct from the replay.
+New rounds use `muzil-phone/2`. A notification appears below the status bar and
+must be opened; there is no dismissal action or Home/Back bypass. Plain alerts
+open their app. `distraction` selects `reveal`, `pairs` or `timing`, followed by
+group-chat replies, a required reaction, and a link into Doom Scroll. A timing
+attempt advances even on a miss; the user must follow the chain, not repeatedly
+retry a precision game. Navigation returns after opening the linked post, with
+the player in the feed rather than automatically back at their task.
+
+The clock continues throughout. Duplicate title/body/distraction payloads are
+coalesced, resolved payloads never recur within a round, and each completed
+interruption gives eight seconds before another mandatory banner. Alerts that
+arrive during a chain wait until it is complete. The shared engine enforces the
+same rules for humans and agents; drafts persist and detours never win the task.
+Actions, reactions, card layouts and timing results reconstruct from replay.
+Version 1 replays preserve their original optional detours and dismissal rules;
+`interruptive` remains part of that legacy format.
 
 ## Doom Scroll
 
@@ -118,8 +127,8 @@ leaving the feed releases its GPU resources. The original round timer continues.
 - `npm run test:muzil:apps`: Calendar, alarms, Notes, Contacts and Messages editing,
   search, app-switch persistence, interrupted drafts and replay at desktop/mobile sizes.
 - `npm run test:muzil:browser`: desktop/mobile phone, drafts, demos, races/rematches.
-- `node tools/muzil-interruption-smoke.mjs`: toaster controls, external task note,
-  forceful notifications, playable detours, preserved drafts and replay.
+- `node tools/muzil-interruption-smoke.mjs`: toaster controls, centered original thought,
+  mandatory top banners, bounded detour chains, preserved drafts and replay.
 - `npm run test:muzil:doom`: WebGPU render, wheel/touch/keyboard input, bounded cards,
   JSON import, non-pickup task completion, CSS fallback and reduced motion.
 

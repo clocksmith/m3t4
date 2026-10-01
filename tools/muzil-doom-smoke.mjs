@@ -1,3 +1,4 @@
+import { handleInterruption } from './muzil-smoke-actions.mjs';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { mkdtemp, writeFile } from 'node:fs/promises';
@@ -12,7 +13,7 @@ const check = text => { report.checks.push(text); console.log(text); };
 console.log('Artifacts:',output);
 async function openFeed(page) {
  page.setDefaultTimeout(15000);
- await page.addLocatorHandler(page.locator('.interrupting .notification-dismiss'), button=>button.click());
+ await page.addLocatorHandler(page.locator('.interrupting .notification-open'), ()=>handleInterruption(page));
  await page.goto(origin);await page.locator('#start-round').click();await page.locator('#dismiss-reveal').click();
  await page.getByRole('button',{name:'Open Doom Scroll',exact:true}).click();await page.locator('.doom-post').first().waitFor();
 }

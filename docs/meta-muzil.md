@@ -16,9 +16,9 @@ integration path, not fulfillment of that distributed-partition target.
 
 - `/`: a short introduction and bouncing phone peeking out of a pop-up toaster.
   The orange lever and start button press, pop and expand it into the playable phone.
-  The menu has only Play, Watch AI play, and Play with a friend. A separate
-  m3t4.ai task note sits beside the phone (above it on mobile); recall reveals
-  that note without navigating the simulated phone.
+  The menu has only Play, Watch AI play, and Play with a friend. A centered
+  m3t4.ai task thought sits above the phone, fading into scattered text after
+  five seconds; recall reveals it without navigating the simulated phone.
   Desktop/mobile layouts and reduced-motion and keyboard paths are supported.
 - `/history`: preserved arena entry. Existing arena routes and assets remain.
   The historical page links back with native navigation.
@@ -45,10 +45,14 @@ integration path, not fulfillment of that distributed-partition target.
   Post navigation and likes are recorded through the shared action engine.
 - The same validated transitions serve humans and agents. Observations contain
   visible controls/text; model memory retains previously observed information.
-  Ordinary notification arrival permits a pending contextual action. Interruptive
-  notifications block app controls until opened or dismissed, for both humans
-  and agents. Optional reveal, pairs and timing games consume round time and
-  record every action; their cosmetic rewards never satisfy the main task.
+  New JSON rounds use phone rules v2: top banners must be opened, with no
+  dismissal or navigation bypass for humans or agents. Distraction banners lead
+  through reveal/pairs/timing, group-chat replies, a reaction, and a link into
+  Doom Scroll. The original task is not automatically restored. Drafts persist;
+  the clock keeps running. Exact duplicate alerts coalesce, resolved alerts stay
+  resolved, and each completed interruption gives eight seconds before the next
+  mandatory banner. These detours never satisfy the task. Version 1 replays keep
+  their old dismissal and optional-game behavior.
 - Local profiles store demonstrations and an explicit imitation/improvement
   objective. No fine-tuning, automatic improvement claim, or behavioral diagnosis.
 - Recorded replay uses actions and scenario data; new agent play uses inference.
@@ -325,3 +329,18 @@ app-switch persistence, search, deletion, completed-round replay and overflow.
 Engine tests also reject invalid saves and stale controls. Existing phone, race,
 interruption and Doom Scroll browser suites cover the surrounding game.
 These checks do not qualify real-model performance on the expanded controls.
+
+## Mandatory attention detours and thought layout (2026-10-01)
+
+The intention is centered above the phone without a card, border, or side offset.
+The simulated iPhone-style banner animates once below the status bar, without a
+full-screen scrim. Banner markup is compared against its last generated string,
+not the browser's normalized SVG serialization, avoiding a repeated entrance
+animation on every timer tick.
+
+The interruption browser suite checks banner position and DOM identity over time,
+forbidden dismissal/navigation, the full reaction/link chain, manual return to a
+saved draft, centered thought geometry and replay at 1440, 390 and 320 pixels.
+Engine tests verify duplicate suppression, the gap between interruptions, queued
+alerts, expiration, and version 1 replay compatibility. Real AI completion on
+these rules has not been qualified.

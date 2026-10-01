@@ -1,3 +1,4 @@
+import { handleInterruption } from './muzil-smoke-actions.mjs';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { mkdtemp, writeFile } from 'node:fs/promises';
@@ -12,7 +13,7 @@ const browser = await chromium.launch({channel:'chrome',headless:true});
 const errors=[], report={scope:'Local Chrome: real UI and Reploid WebRTC; injected executor tests transport only, not inference or remote networks.',checks:[]};
 try {
   const page=await browser.newPage({viewport:{width:1440,height:1050}});
-  await page.addLocatorHandler(page.locator('.interrupting .notification-dismiss'), button => button.click());
+  await page.addLocatorHandler(page.locator('.interrupting .notification-open'), () => handleInterruption(page));
   page.on('pageerror',e=>errors.push(e.message)); const requests=[]; page.on('request',r=>requests.push(r.url()));
   await page.goto(origin); await page.locator('#start-round').waitFor(); await page.evaluate(()=>document.fonts.ready);
   assert.equal(requests.some(u=>u.includes('/vendor/')),false);
@@ -96,7 +97,7 @@ try {
   const disconnected=await a.evaluate(()=>window.requestOutcome);assert.match(disconnected,/disconnect|closed/i);
   report.checks.push('Actual two-tab Reploid connection, bounded request/response, active-request disconnect rejection (fixture executor)');
   const player1=await browser.newPage(),player2=await browser.newPage();
-  for(const p of [player1,player2]) {await p.addLocatorHandler(p.locator('.interrupting .notification-dismiss'), button=>button.click());p.on('pageerror',e=>errors.push(e.message));await p.goto(origin);await openMenu(p);await p.locator('#race-peer').click();}
+  for(const p of [player1,player2]) {await p.addLocatorHandler(p.locator('.interrupting .notification-open'), ()=>handleInterruption(p));p.on('pageerror',e=>errors.push(e.message));await p.goto(origin);await openMenu(p);await p.locator('#race-peer').click();}
   await player1.locator('#make-offer').click();await player1.waitForFunction(()=>document.querySelector('#peer-output').value.startsWith('ey'));
   await player2.locator('#peer-input').fill(await player1.locator('#peer-output').inputValue());await player2.locator('#join-offer').click();await player2.waitForFunction(()=>document.querySelector('#peer-output').value.startsWith('ey'));
   await player1.locator('#peer-input').fill(await player2.locator('#peer-output').inputValue());await player1.locator('#accept-answer').click();

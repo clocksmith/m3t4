@@ -1527,8 +1527,8 @@ body { min-height:100dvh; display:flex; flex-direction:column }
 .toaster-body { position:absolute; z-index:3; left:29px; top:169px; width:288px; height:106px; border:1px solid #abb49e; border-radius:10px 10px 43px 43px; background:linear-gradient(100deg,#dae0cd 0%,#f2f1e4 18%,#e7ebdc 44%,#c9d3ba 76%,#a9b89b 100%); box-shadow:inset 0 3px 2px #fff9,inset -8px -6px 12px #66795720,inset 0 -5px 0 #8d9e7a66,0 4px 0 #778968; }
 .toaster-shine { position:absolute; top:8px; bottom:16px; left:13px; width:45px; border-radius:8px 8px 15px 30px; background:linear-gradient(100deg,#fff8,transparent) }
 .toaster-seam { position:absolute; left:16px; right:17px; bottom:12px; height:1px; background:#9da98e55; box-shadow:0 1px 0 #ffffff70 }
-.toaster-dial { position:absolute; right:46px; top:30px; width:38px; height:38px; border-radius:50%; border:3px solid #bac4ad; outline:1px solid #a0ad91; background:linear-gradient(135deg,#fffff2,#c0cbb1); box-shadow:2px 4px 5px #45513830,inset 1px 1px 1px white }
-.toaster-dial:after { content:''; position:absolute; top:5px; left:14px; width:3px; height:9px; border-radius:2px; background:#6c7f59; transform:rotate(30deg); transform-origin:center 11px }
+.toaster-dial { position:absolute; pointer-events:none; right:7px; top:7px; width:38px; height:38px; border-radius:50%; border:3px solid #bac4ad; outline:1px solid #a0ad91; background:linear-gradient(135deg,#fffff2,#c0cbb1); box-shadow:2px 4px 5px #45513830,inset 1px 1px 1px white }
+.toaster-dial:after { content:''; position:absolute; top:5px; left:14px; width:3px; height:9px; border-radius:2px; background:#6c7f59; transform:rotate(var(--dial-angle,0deg)); transform-origin:center 11px; transition:transform .12s ease-out }
 .toaster-light { position:absolute; width:5px; height:5px; border-radius:50%; left:119px; bottom:28px; background:#a5ad95; box-shadow:inset 0 1px 1px #5c6a4c }
 .toaster-lever { position:absolute; z-index:4; right:11px; top:157px; width:48px; height:87px; padding:0; border-radius:12px; touch-action:manipulation }
 .toaster-lever:active { transform:none!important }
@@ -1746,3 +1746,15 @@ body.in-round .phone { height:min(694px,calc(100dvh - 300px)); min-height:410px;
 .bait-link-preview>span { display:block; font-size:50px; }
 .bait-link-preview strong { display:block; font-size:12px; letter-spacing:2px; }
 .bait-link-preview p { font-size:12px; line-height:1.6; }
+
+/* The toast dial is a native keyboard-accessible range with a physical knob. */
+.toaster-dial-control { position:absolute; z-index:4; right:82px; top:192px; width:52px; height:52px; border-radius:50%; }
+.toaster-dial-control input { position:absolute; inset:0; width:52px; height:52px; padding:0; margin:0; opacity:0; cursor:grab; touch-action:none; }
+.toaster-dial-control input:active { cursor:grabbing; }
+.toaster-dial-control:has(input:focus-visible) { outline:2px solid #387658; outline-offset:3px; }
+.toaster-dial-control:has(input:disabled) { opacity:.7; }
+.toast-setting { position:absolute; z-index:4; top:210px; left:58px; width:130px; text-align:center; font-size:10px; color:#59634a; pointer-events:none; }
+.dial-hint { position:absolute; z-index:4; right:91px; top:180px; font-size:8px; color:#728164; pointer-events:none; }
+.toaster-body::after { content:''; position:absolute; inset:0; border-radius:inherit; background:linear-gradient(90deg,#d48b3700,#eea44d); opacity:calc(var(--toast-heat,.5) * .2); pointer-events:none; transition:opacity .15s; }
+.toasting .toaster-light { box-shadow:0 0 calc(5px + var(--toast-heat,.5) * 12px) #f38638; }
+@media(prefers-reduced-motion:reduce) { .toaster-dial:after,.toaster-body::after { transition:none; } }

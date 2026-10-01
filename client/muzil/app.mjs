@@ -357,3 +357,7 @@ $('prepare-b').onclick = () => pairing(() => mesh.prepare(1));
 $('partition-drain').onclick = () => pairing(() => mesh.drain());
 $('partition-disconnect').onclick = () => pairing(async () => { stopAgent(); await mesh.close(); updateConnection(); });
 $('partition-evidence').onclick = () => download('muzil-execution.json', { ...mesh.metrics, actions: decisions.receipts });
+
+// Fetching the challenge catalog can outlive the first paint on a cold load.
+// Enable entry only after its handlers and initial state are ready.
+document.querySelectorAll('[data-boot-control]').forEach(button => { button.disabled = false; });

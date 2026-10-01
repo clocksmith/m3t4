@@ -32,7 +32,13 @@
             <span class="toaster-shadow" aria-hidden="true"></span>
             <span class="toaster-top" aria-hidden="true"><i></i><i></i></span>
             <span class="phone-pocket" aria-hidden="true"><span class="peek-phone" id="peek-phone"><span class="peek-island"></span><span class="peek-time">9:41</span><span class="peek-notice">Mom <b>2</b></span><span class="peek-apps"><i></i><i></i><i></i><i></i></span></span></span>
-            <span class="toaster-body" aria-hidden="true"><span class="toaster-shine"></span><span class="toaster-seam"></span><span class="toaster-dial"></span><span class="toaster-light"></span></span>
+            <span class="toaster-body" aria-hidden="true"><span class="toaster-shine"></span><span class="toaster-seam"></span><span class="toaster-light"></span></span>
+            <label class="toaster-dial-control" title="Tap or drag to turn the toast dial">
+              <input id="toaster-dial" data-boot-control disabled type="range" min="1" max="5" step="1" value="3" aria-label="Toast setting" aria-valuetext="3 — Golden">
+              <span class="toaster-dial" aria-hidden="true"></span>
+            </label>
+            <output id="toast-setting" class="toast-setting" for="toaster-dial">3 · Golden</output>
+            <span class="dial-hint" aria-hidden="true">turn ↻</span>
             <span class="toaster-foot left" aria-hidden="true"></span><span class="toaster-foot right" aria-hidden="true"></span>
             <button id="toaster-lever" data-boot-control disabled class="toaster-lever" aria-label="Push toaster lever to play"><span class="lever-track" aria-hidden="true"></span><i aria-hidden="true"></i></button>
             <span class="lever-hint" aria-hidden="true">push ↓</span>

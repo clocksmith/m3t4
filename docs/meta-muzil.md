@@ -16,6 +16,9 @@ integration path, not fulfillment of that distributed-partition target.
 
 - `/`: a short introduction and bouncing phone peeking out of a pop-up toaster.
   The orange lever and start button press, pop and expand it into the playable phone.
+  The five-position toast dial supports tap, pointer/touch drag and native arrow
+  keys. It changes the body warmth, warm-up duration and phone pop height. Entry
+  time does not consume the round clock; reduced motion skips the animation.
   The menu has only Play, Watch AI play, and Play with a friend. A centered
   m3t4.ai task thought sits above the phone, fading into scattered text after
   five seconds; recall reveals it without navigating the simulated phone.
@@ -344,3 +347,7 @@ saved draft, centered thought geometry and replay at 1440, 390 and 320 pixels.
 Engine tests verify duplicate suppression, the gap between interruptions, queued
 alerts, expiration, and version 1 replay compatibility. Real AI completion on
 these rules has not been qualified.
+
+`npm run test:muzil:toaster` verifies dial pointer/touch/keyboard input at desktop
+and mobile widths, distinct warm-up/pop animations, shared entry controls, and
+reduced motion. The native range is outside decorative aria-hidden artwork.

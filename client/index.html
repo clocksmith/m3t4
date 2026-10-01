@@ -16,9 +16,9 @@
     <details class="site-menu" id="site-menu">
       <summary aria-label="Open menu">Menu <span>＋</span></summary>
       <nav aria-label="Main">
-        <button class="nav-item active" id="play-human">Play</button>
-        <button class="nav-item" id="agent-round">Watch AI play</button>
-        <button class="nav-item" id="race-peer">Play with a friend</button>
+        <button class="nav-item active" id="play-human" data-boot-control disabled>Play</button>
+        <button class="nav-item" id="agent-round" data-boot-control disabled>Watch AI play</button>
+        <button class="nav-item" id="race-peer" data-boot-control disabled>Play with a friend</button>
       </nav>
     </details>
   </header>
@@ -34,10 +34,10 @@
             <span class="phone-pocket" aria-hidden="true"><span class="peek-phone" id="peek-phone"><span class="peek-island"></span><span class="peek-time">9:41</span><span class="peek-notice">Mom <b>2</b></span><span class="peek-apps"><i></i><i></i><i></i><i></i></span></span></span>
             <span class="toaster-body" aria-hidden="true"><span class="toaster-shine"></span><span class="toaster-seam"></span><span class="toaster-dial"></span><span class="toaster-light"></span></span>
             <span class="toaster-foot left" aria-hidden="true"></span><span class="toaster-foot right" aria-hidden="true"></span>
-            <button id="toaster-lever" class="toaster-lever" aria-label="Push toaster lever to play"><span class="lever-track" aria-hidden="true"></span><i aria-hidden="true"></i></button>
+            <button id="toaster-lever" data-boot-control disabled class="toaster-lever" aria-label="Push toaster lever to play"><span class="lever-track" aria-hidden="true"></span><i aria-hidden="true"></i></button>
             <span class="lever-hint" aria-hidden="true">push ↓</span>
           </div>
-          <button id="start-round" class="start-label" aria-label="Open your phone. Start the game.">Open your phone <span>↗</span></button>
+          <button id="start-round" data-boot-control disabled class="start-label" aria-label="Open your phone. Start the game.">Open your phone <span>↗</span></button>
         </div>
         <p class="intro-hint">One intention. A phone full of distractions.</p>
       </div>

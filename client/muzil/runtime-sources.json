@@ -2,7 +2,7 @@
   "schema": "muzil.local-runtimes/v1",
   "libraries": {
     "reploid": {
-      "revision": "7f3f91d7d625f7dedb089c0b6fc4d6f5ef10c702",
+      "revision": "389d32d86052f25d5fe3a6661f372e9f2c869486",
       "sourceDirty": false,
       "entry": "packages/reploid/src/transport/assignment.js",
       "files": 24,

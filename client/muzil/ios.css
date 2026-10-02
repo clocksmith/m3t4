@@ -1,5 +1,4 @@
 /* The surrounding game stays editorial; the phone uses native-style app surfaces. */
-.play-instructions { max-width:390px; margin:10px auto 0; font-size:13px; line-height:1.6; color:#656b66; }
 .phone-column { width:360px; max-width:100%; display:flex; flex-direction:column; align-items:center; }
 .task-thought { width:100%; min-height:0; margin:0 0 12px; padding:0; color:#272d28; }
 .task-thought-heading { justify-content:center; }
@@ -8,7 +7,7 @@
 .task-thought::after { content:none; }
 #task-note-content { opacity:0; visibility:hidden; transition:opacity .2s ease,visibility .2s; }
 #task-note-content[data-visible="true"] { opacity:1; visibility:visible; }
-.intro-column,.intro-column h1,.story-lead,.intro-hint,.play-instructions { background:transparent; }
+.intro-column,.intro-column h1,.story-lead,.intro-hint { background:transparent; }
 .toaster-scene { overflow:visible; }
 @media(prefers-reduced-motion:reduce) { #task-note-content { transition:none; } }
 #dismiss-reveal { font-size:12px; padding:5px 8px; margin:2px 0 0; }
@@ -152,5 +151,4 @@ body.in-round .phone[data-app="clock"],.phone-screen[data-app="clock"] { backgro
  .task-thought { min-height:0; padding:0; }
  .task-thought p { font-size:15px; }
  .task-thought-heading button { font-size:18px; }
- .play-instructions { max-width:310px; font-size:12px; }
 }

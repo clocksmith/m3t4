@@ -152,3 +152,20 @@ body.in-round .phone[data-app="clock"],.phone-screen[data-app="clock"] { backgro
  .task-thought p { font-size:15px; }
  .task-thought-heading button { font-size:18px; }
 }
+
+/* Fit the complete phone to the window; app content scrolls inside its screen. */
+body.phone-fit { height:100dvh; min-height:0; overflow:hidden; }
+body.phone-fit .site-header { height:64px; min-height:64px; flex-shrink:0; }
+body.phone-fit #main { min-height:0; }
+body.phone-fit .play-layout { margin:0 auto; padding-bottom:20px; }
+.phone-viewport { width:calc(312px * var(--phone-scale,1)); height:calc(676px * var(--phone-scale,1)); position:relative; flex-shrink:0; }
+.phone-viewport .phone { width:312px; height:676px; transform:scale(var(--phone-scale,1)); transform-origin:top left; }
+body.phone-fit .phone { width:312px; height:676px; }
+body.phone-fit .phone-caption { width:min(100%,calc(312px * var(--phone-scale,1))); }
+@media(max-height:720px) {
+ body.phone-fit .site-header { height:52px; min-height:52px; }
+ body.phone-fit .task-thought { margin-bottom:6px; }
+ body.phone-fit .task-thought p { font-size:14px; line-height:1.35; margin-top:3px; }
+ body.phone-fit .task-thought-heading button { padding:5px; }
+ body.phone-fit .phone-footnote { margin-top:8px; gap:2px; }
+}

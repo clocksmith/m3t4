@@ -56,7 +56,27 @@ function updateConnection() {
   document.querySelectorAll('.status-dot').forEach(n => n.classList.toggle('ready', ready));
   $('mesh-state').textContent = peer.ready ? `Prepared peer · ${peer.remote.model}` : `Peer ${peer.state}${peer.state === 'connected' ? ' · waiting for a prepared model' : ''}`;
 }
-function setMode(next) { mode = next; doomView?.setActive(next === 'play' && state.phase === 'playing'); $('site-menu').open = false; for (const name of ['play','train','finish']) $(`${name}-view`).hidden = name !== next; document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === next)); if (next === 'train') renderProfile(); }
+function setMode(next) { mode = next; doomView?.setActive(next === 'play' && state.phase === 'playing'); $('site-menu').open = false; for (const name of ['play','train','finish']) $(`${name}-view`).hidden = name !== next; document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === next)); if (next === 'train') renderProfile(); fitPhone(); }
+function fitPhone() {
+  const active = mode === 'play' && state.phase !== 'ready';
+  document.body.classList.toggle('phone-fit', active);
+  if (!active) return;
+  const viewport = document.querySelector('.phone-viewport');
+  const top = viewport.getBoundingClientRect().top + window.scrollY;
+  const below = ['.phone-footnote', '#round-status', '#race-status'].reduce((sum, selector) => {
+    const el = document.querySelector(selector), css = getComputedStyle(el);
+    if (css.display === 'none') return sum;
+    return sum + el.getBoundingClientRect().height + parseFloat(css.marginTop) + parseFloat(css.marginBottom);
+  }, 0);
+  const height = window.visualViewport?.height || window.innerHeight;
+  const scale = Math.max(.15, Math.min(1, (window.innerWidth - 48) / 312, (height - top - below - 24) / 676));
+  $('game-stage').style.setProperty('--phone-scale', String(scale));
+}
+window.addEventListener('resize', fitPhone);
+window.visualViewport?.addEventListener('resize', fitPhone);
+document.fonts.ready.then(fitPhone);
+const phoneLayoutObserver = new ResizeObserver(fitPhone);
+for (const selector of ['.task-thought', '.phone-footnote', '#round-status', '#race-status']) phoneLayoutObserver.observe(document.querySelector(selector));
 function stopAgent() { decisions.cancel(); agentOwnerId = null; agentRunning = false; requestController?.abort(); requestController = null; $('agent-round').textContent = 'Watch AI play'; }
 function newRound(controller = 'human', options = {}) {
   entryAnimation?.cancel(); entryAnimation = null;
@@ -76,8 +96,8 @@ function newRound(controller = 'human', options = {}) {
     const to = $('phone').getBoundingClientRect();
     $('game-stage').inert = true;
     const animation = entryAnimation = $('phone').animate([
-      { transformOrigin: 'top left', transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width}, ${from.height / to.height})`, opacity: 1 },
-      { transformOrigin: 'top left', transform: 'none', opacity: 1 },
+      { transformOrigin: 'top left', transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / 312}, ${from.height / 676})`, opacity: 1 },
+      { transformOrigin: 'top left', transform: getComputedStyle($('phone')).transform, opacity: 1 },
     ], { duration: 950, easing: 'cubic-bezier(.4,0,.2,1)' });
     renderOverlay();
     animation.finished.catch(() => {}).then(() => {
@@ -165,7 +185,7 @@ function render() {
     const previousScroll = root.dataset.screen === key ? root.scrollTop : 0;
     root.innerHTML = screen(); const conversation=root.querySelector('.messages-scroll');if(conversation)conversation.scrollTop=conversation.scrollHeight; root.scrollTop = previousScroll; root.dataset.screen = key;
   }
-  renderTime(); renderOverlay(); renderNotification();
+  renderTime(); renderOverlay(); renderNotification(); fitPhone();
 }
 function renderTime() { updateDistractionMotion(state); const remaining = Math.ceil((roundDuration(state.scenario) - state.elapsed) / 1000); $('round-clock').textContent = `${String(Math.floor(remaining / 60)).padStart(2,'0')}:${String(remaining % 60).padStart(2,'0')}`; $('round-clock').classList.toggle('running-low', remaining <= 30); $('notification-count').textContent = state.notifications.length; }
 function renderOverlay() {
@@ -256,7 +276,10 @@ function renderProfile() {
 function download(name, data) { const url = URL.createObjectURL(new Blob([JSON.stringify(data,null,2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url),1000); }
 const guarded = fn => async event => { try { await fn(event); } catch (error) { report(error); } };
 document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
-const toasterEntry = bindToasterEntry(entryRect => newRound('human', { entryRect }));
+const toasterEntry = bindToasterEntry(
+  entryRect => newRound('human', { entryRect }),
+  id => { $('challenge-select').value = id; },
+);
 $('play-human').onclick = () => {
   setMode('play');
   if (state.phase === 'ready') { void toasterEntry.play(); return; }

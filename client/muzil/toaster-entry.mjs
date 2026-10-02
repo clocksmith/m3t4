@@ -1,6 +1,13 @@
 // The lever and the text button share one entry sequence. The round starts only
 // after the preview phone has popped, so the introduction costs no game time.
-export function bindToasterEntry(start) {
+export const TOAST_TASKS = Object.freeze([
+  { id:'early-shift', label:'Set an alarm' },
+  { id:'grocery-detour', label:'Shopping list' },
+  { id:'changing-coordinate', label:'Arrange pickup' },
+  { id:'changing-prepare', label:'Prepare to leave' },
+  { id:'changing-repair', label:'Repair the plan' },
+]);
+export function bindToasterEntry(start, onSetting = () => {}) {
   const scene = document.querySelector('.toaster-scene');
   const phone = document.getElementById('peek-phone');
   const lever = document.getElementById('toaster-lever');
@@ -8,7 +15,6 @@ export function bindToasterEntry(start) {
   const knob = lever.querySelector('i');
   const dial = document.getElementById('toaster-dial');
   const setting = document.getElementById('toast-setting');
-  const levels = ['Barely warm', 'Lightly toasted', 'Golden', 'Crunchy', 'Extra crispy'];
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
   let busy = false, generation = 0, animations = [];
   let drag = null;
@@ -16,9 +22,12 @@ export function bindToasterEntry(start) {
     const level = Number(dial.value);
     scene.style.setProperty('--dial-angle', `${(level - 3) * 55}deg`);
     scene.style.setProperty('--toast-heat', String((level - 1) / 4));
+    scene.style.setProperty('--toast-depth', `${(level - 1) * 10}px`);
     scene.dataset.toastLevel = String(level);
-    dial.setAttribute('aria-valuetext', `${level} — ${levels[level - 1]}`);
-    setting.textContent = `${level} · ${levels[level - 1]}`;
+    const task = TOAST_TASKS[level - 1];
+    dial.setAttribute('aria-valuetext', `${level} — ${task.label}`);
+    setting.textContent = `${level} · ${task.label}`;
+    onSetting(task.id);
   }
   const setDial = value => { dial.value = String(Math.max(1, Math.min(5, value))); updateDial(); };
   dial.addEventListener('input', updateDial);
@@ -50,7 +59,7 @@ export function bindToasterEntry(start) {
     generation++;
     animations.forEach(a => a.cancel()); animations = [];
     busy = false; button.disabled = lever.disabled = dial.disabled = false;
-    scene.classList.remove('toasting');
+    scene.classList.remove('toasting', 'launching');
     scene.removeAttribute('aria-busy');
   }
   async function play() {
@@ -59,6 +68,8 @@ export function bindToasterEntry(start) {
     button.disabled = lever.disabled = dial.disabled = true;
     drag = null;
     const level = Number(dial.value), hold = 80 + (level - 1) * 160;
+    const pressed = `translateY(${20 + level * 3}px) rotate(-4deg)`;
+    const resting = getComputedStyle(phone).transform;
     const lift = 172 + level * 9;
     scene.classList.add('toasting'); scene.setAttribute('aria-busy', 'true');
     const animate = (el, frames, options) => {
@@ -69,12 +80,13 @@ export function bindToasterEntry(start) {
       if (!motion.matches) {
         await Promise.all([
           animate(knob, [{ transform:'translateY(0)' }, { transform:'translateY(34px)' }], { duration:180, easing:'ease-in' }),
-          animate(phone, [{ transform:'translateY(0) rotate(-4deg)' }, { transform:'translateY(20px) rotate(-4deg)' }], { duration:180, easing:'ease-in' }),
+          animate(phone, [{ transform:resting }, { transform:pressed }], { duration:180, easing:'ease-in' }),
         ]);
-        await animate(phone, [{ transform:'translateY(20px) rotate(-4deg)' }, { transform:'translateY(20px) rotate(-4deg)' }], { duration:hold });
+        await animate(phone, [{ transform:pressed }, { transform:pressed }], { duration:hold });
+        scene.classList.add('launching');
         await Promise.all([
           animate(phone, [
-            { transform:'translateY(20px) rotate(-4deg)', offset:0 },
+            { transform:pressed, offset:0 },
             { transform:`translateY(-${lift + 4}px) rotate(1deg)`, offset:.78 },
             { transform:`translateY(-${lift}px) rotate(0)`, offset:1 },
           ], { duration:720, easing:'cubic-bezier(.16,.75,.25,1)' }),

@@ -26,7 +26,7 @@ try {
  await cyclePage.clock.runFor(5100);
  await cyclePage.locator('#task-note-content').waitFor({state:'hidden'});
  await cyclePage.clock.runFor(7100);
- await cyclePage.locator('#task-note-content').getByText('Correct your pickup reminder, remove the obsolete alarm, and confirm the latest plan with your driver.',{exact:true}).waitFor();
+ await cyclePage.locator('#task-note-content').getByText('Correct your pickup reminder, remove the old alarm, and confirm with your driver.',{exact:true}).waitFor();
  assert.equal(await cyclePage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
  await cyclePage.screenshot({path:join(output,'repair-goal-320.png'),fullPage:true});
  await cyclePage.locator('#dismiss-reveal').click();
@@ -71,7 +71,7 @@ try {
   assert.equal(await page.locator('.notification-toast').evaluate(el=>el.testIdentity),true);
   await page.locator('.notification-toast').evaluate(async el=>{await Promise.all(el.getAnimations().map(a=>a.finished));});
   const phone=await page.locator('#phone').boundingBox(),banner=await page.locator('.notification-toast').boundingBox();
-  assert.ok(banner.y-phone.y>=40 && banner.y-phone.y<75,JSON.stringify({width,phone,banner}));assert.ok(banner.height<160);
+  assert.ok((banner.y-phone.y)/(phone.width/312)>=40 && (banner.y-phone.y)/(phone.width/312)<75,JSON.stringify({width,phone,banner}));assert.ok(banner.height<160);
   assert.equal(await page.locator('.notification-dismiss').count(),0);
   assert.equal(await page.locator('.phone-navigation').evaluate(el=>el.inert),true);
   await page.screenshot({path:join(output,`top-banner-${width}.png`),fullPage:true});

@@ -34,11 +34,15 @@
             <span class="toaster-top" aria-hidden="true"><i></i><i></i></span>
             <span class="phone-pocket" aria-hidden="true"><span class="peek-phone" id="peek-phone"><span class="peek-island"></span><span class="peek-time">9:41</span><span class="peek-notice">Mom <b>2</b></span><span class="peek-apps"><i></i><i></i><i></i><i></i></span></span></span>
             <span class="toaster-body" aria-hidden="true"><span class="toaster-shine"></span><span class="toaster-seam"></span><span class="toaster-light"></span></span>
-            <label class="toaster-dial-control" title="Tap or drag to turn the toast dial">
-              <input id="toaster-dial" data-boot-control disabled type="range" min="1" max="5" step="1" value="3" aria-label="Toast setting" aria-valuetext="3 — Golden">
+            <span class="toaster-effects" aria-hidden="true">
+              <span class="toaster-smoke"><i></i><i></i><i></i><i></i></span>
+              <svg class="toaster-sparks" viewBox="0 0 300 180" fill="none"><path d="m100 148-22-24 13-3-24-30M185 148l24-22-11-9 23-28M144 131l-8-21 13-8-5-23"/><path d="m65 128-14-7m181 15 13-8M94 75l-5-12m119 8 6-13"/></svg>
+            </span>
+            <label class="toaster-dial-control" title="Turn to choose your starting task">
+              <input id="toaster-dial" data-boot-control disabled type="range" min="1" max="5" step="1" value="3" aria-label="Starting task" aria-valuetext="3 — Arrange pickup">
               <span class="toaster-dial" aria-hidden="true"></span>
             </label>
-            <output id="toast-setting" class="toast-setting" for="toaster-dial">3 · Golden</output>
+            <output id="toast-setting" class="toast-setting" for="toaster-dial">3 · Arrange pickup</output>
             <span class="dial-hint" aria-hidden="true">turn ↻</span>
             <span class="toaster-foot left" aria-hidden="true"></span><span class="toaster-foot right" aria-hidden="true"></span>
             <button id="toaster-lever" data-boot-control disabled class="toaster-lever" aria-label="Push toaster lever to play"><span class="lever-track" aria-hidden="true"></span><i aria-hidden="true"></i></button>
@@ -50,12 +54,13 @@
       </div>
       <div class="phone-column" id="game-stage" hidden>
         <aside class="task-thought" aria-label="Your task"><div class="task-thought-heading"><button id="remember" aria-label="Remember my intention">Remember why ↗</button></div><div id="task-note-content"></div></aside><div class="phone-caption"><span class="clock-label">Time remaining</span><span id="round-clock" role="timer" aria-label="Time remaining">03:00</span></div>
-        <div class="phone" id="phone" tabindex="-1" aria-label="Simulated phone">
+        <div class="phone-viewport"><div class="phone" id="phone" tabindex="-1" aria-label="Simulated phone">
           <div class="phone-hardware"><span class="phone-time">9:41</span><span class="island"></span><span class="phone-signals" aria-label="Full signal and battery">▂▄▆ <span>▰</span></span></div>
           <div id="phone-screen" class="phone-screen"></div>
           <div id="notification-banner" class="notification-banner"></div>
           <div id="phone-overlay" class="phone-overlay"></div>
           <div class="phone-navigation"><button id="phone-home" aria-label="Home"><span></span></button></div>
+        </div>
         </div>
         <div class="phone-footnote"><span id="phone-rule">Simulated phone</span><div class="simulation-controls"><button id="phone-back" aria-label="Back">Back</button><button id="phone-switcher" aria-label="App switcher">Apps</button><button id="soundless-notifications" aria-label="Open notifications">Alerts <span id="notification-count">0</span></button></div></div>
         <div class="round-status" id="round-status" role="status" aria-live="polite"></div>

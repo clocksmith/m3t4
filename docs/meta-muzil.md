@@ -17,7 +17,10 @@ integration path, not fulfillment of that distributed-partition target.
 - `/`: a short introduction and bouncing phone peeking out of a pop-up toaster.
   The orange lever and start button press, pop and expand it into the playable phone.
   The five-position toast dial supports tap, pointer/touch drag and native arrow
-  keys. It changes the body warmth, warm-up duration and phone pop height. Entry
+  keys. Its five positions select an alarm, shopping list, pickup coordination,
+  pickup preparation or plan repair task. Higher settings seat the phone deeper
+  and increase warmth, warm-up time and launch smoke. A single electrical spark
+  and drifting smoke accompany the pop; reduced motion skips those effects. Entry
   time does not consume the round clock; reduced motion skips the animation.
   The menu has only Play, Watch AI play, and Play with a friend. A centered
   task sits above the phone beneath a centered “Remember why ↗”. It appears for
@@ -25,7 +28,9 @@ integration path, not fulfillment of that distributed-partition target.
   hides that appearance; recall reveals it for another five seconds without
   navigating the phone. The text keeps its layout space while hidden, so the
   phone does not move. Hidden text is inert and excluded from accessibility.
-  The phone keeps a narrow 9:19.5 aspect ratio. Messages, Calendar, Notes,
+  The complete phone scales to the viewport with bottom padding and no page
+  scrolling during play, keeping a narrow 9:19.5 aspect ratio. Apps scroll inside
+  the phone. Messages, Calendar, Notes,
   Contacts and Clock use familiar app layouts with working controls.
   The toaster phone rises in front of transparent page copy, settles for 600 ms,
   then expands over 950 ms. The task reveal and game clock start after expansion;

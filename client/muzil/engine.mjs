@@ -19,6 +19,12 @@ export const mandatoryNotifications = s => s.version !== 'muzil-phone/1' && s.sc
 export const lockedDistraction = s => s.phase === 'playing' && s.screen.app === 'distraction' && s.distractions[s.screen.distractionId]?.required;
 const notificationKey = n => JSON.stringify([n.title,n.body,n.distraction || null]);
 export const blockingNotification = s => s.phase === 'playing' && !lockedDistraction(s) && (!mandatoryNotifications(s) || s.elapsed >= s.notificationQuietUntil) ? s.notifications.find(n => mandatoryNotifications(s) || n.interruptive) : null;
+export function taskThoughtVisible(s) {
+  if (s.phase !== 'playing') return false;
+  if (s.elapsed < (s.taskRecallUntil || 0)) return true;
+  if (s.version === 'muzil-phone/3') return s.elapsed % (RULES.revealMs + RULES.hiddenMs) < RULES.revealMs;
+  return s.elapsed < RULES.revealMs;
+}
 function visit(s, screen) { s.stack.push(copy(s.screen)); s.screen = screen; }
 export function outcome(s) {
   if (s.scenario.goal) return evaluateGoal(s.external?.goal || s.scenario.goal, s);
@@ -54,18 +60,18 @@ export function observe(s) {
       text.push(`${blocked.title}: ${blocked.body}`, mandatoryNotifications(s) ? 'Open this notification to continue. Meta rule: it cannot be dismissed.' : 'Open or dismiss this notification to continue.');
       add(`notification:${blocked.id}`, `Open ${blocked.title}`); if (!mandatoryNotifications(s)) add(`dismiss:${blocked.id}`, `Dismiss ${blocked.title}`);
       add('recall', 'Read the m3t4.ai thought above the phone');
-      if (s.elapsed <= RULES.revealMs || s.elapsed < (s.taskRecallUntil || 0)) text.push(`m3t4.ai task: ${s.scenario.intention}`);
+      if (taskThoughtVisible(s)) text.push(`m3t4.ai task: ${s.scenario.intention}`);
       return { roundId:s.roundId, revision:s.revision, phase:s.phase, screen:copy(s.screen), text, actions };
     }
     if (lockedDistraction(s)) {
       const view = distractionObservation(s.distractions[s.screen.distractionId], s.elapsed);
       text.push(...view.text); actions.push(...view.actions);
       add('recall', 'Read the m3t4.ai thought above the phone');
-      if (s.elapsed < (s.taskRecallUntil || 0)) text.push(`m3t4.ai task: ${s.scenario.intention}`);
+      if (taskThoughtVisible(s)) text.push(`m3t4.ai task: ${s.scenario.intention}`);
       return { roundId:s.roundId, revision:s.revision, phase:s.phase, screen:copy(s.screen), text, actions };
     }
     add('home', 'Home'); add('back', 'Back'); add('switcher', 'App switcher'); add('notifications', 'Notifications'); add('recall', 'Remember intention');
-    if (s.elapsed <= RULES.revealMs || s.elapsed < (s.taskRecallUntil || 0) || s.screen.app === 'intention') text.push(s.scenario.intention);
+    if (taskThoughtVisible(s) || s.screen.app === 'intention') text.push(s.scenario.intention);
     if (s.screen.app === 'home') { const event = s.events.find(e => e.date >= s.today); text.push(s.scenario.date, event ? `Up next: ${event.title}, ${displayTime(event.start)}` : 'No upcoming events'); }
     if (s.screen.app === 'home' || s.screen.app === 'switcher') for (const a of APPS) add(`app:${a.id}`, a.label);
     if (s.screen.app === 'messages') {

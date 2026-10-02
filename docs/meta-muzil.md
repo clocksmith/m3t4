@@ -20,8 +20,9 @@ integration path, not fulfillment of that distributed-partition target.
   keys. It changes the body warmth, warm-up duration and phone pop height. Entry
   time does not consume the round clock; reduced motion skips the animation.
   The menu has only Play, Watch AI play, and Play with a friend. A centered
-  m3t4.ai task thought sits above the phone, fading into scattered text after
-  five seconds; recall reveals it without navigating the simulated phone.
+  m3t4.ai task thought sits above the phone. It appears for five seconds,
+  scatters for seven, then returns throughout the round. Dismissing an appearance
+  hides that appearance; recall reveals the thought outside the simulated phone.
   Desktop/mobile layouts and reduced-motion and keyboard paths are supported.
 - `/history`: preserved arena entry. Existing arena routes and assets remain.
   The historical page links back with native navigation.

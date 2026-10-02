@@ -17,6 +17,22 @@ try {
  await cold.goto(origin);assert.equal(await cold.locator('#start-round').isDisabled(),true);assert.equal(await cold.locator('#toaster-lever').isDisabled(),true);
  const firstClick=cold.locator('#toaster-lever').click();releaseCatalog();await firstClick;await cold.locator('#dismiss-reveal').waitFor();await cold.close();
  checks.push('Cold-load entry waits for challenge initialization; the first lever click starts the game');
+ const cyclePage=await browser.newPage({viewport:{width:320,height:844},reducedMotion:'reduce'});
+ await cyclePage.clock.install();await cyclePage.goto(origin);
+ await cyclePage.locator('#start-round:not(:disabled)').waitFor();
+ await cyclePage.locator('#challenge-select').evaluate((el,value)=>el.value=value,'changing-repair');
+ await cyclePage.locator('#start-round').click();
+ await cyclePage.locator('#dismiss-reveal').click();
+ await cyclePage.clock.runFor(5100);
+ await cyclePage.locator('#task-note-content .task-scattered').waitFor();
+ await cyclePage.clock.runFor(7100);
+ await cyclePage.locator('#task-note-content').getByText('Correct your pickup reminder, remove the obsolete alarm, and confirm the latest plan with your driver.',{exact:true}).waitFor();
+ assert.equal(await cyclePage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ await cyclePage.screenshot({path:join(output,'repair-goal-320.png'),fullPage:true});
+ await cyclePage.locator('#dismiss-reveal').click();
+ await cyclePage.locator('#task-note-content .task-scattered').waitFor();
+ await cyclePage.close();
+ checks.push('The three-part pickup goal hides on request, scatters, then returns during the round');
  for(const width of [1440,390,320]) {
   const page=await browser.newPage({viewport:{width,height:width===1440?1000:844}});
   page.on('pageerror',e=>errors.push(e.message));

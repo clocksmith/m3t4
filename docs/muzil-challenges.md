@@ -85,10 +85,11 @@ catalog; paired players need the same challenge configuration.
 ## Original thought and interruptions
 
 The intention appears as a centered **m3t4.ai task** thought above the phone.
-After five seconds the words scatter away. Remember why reveals it again without
+It appears for five seconds, scatters for seven, and repeats until the round ends.
+Got it hides the current appearance. Remember why reveals it again without
 changing apps, including during an interruption. It is outside the simulated OS.
 
-Fixed practice uses the original mandatory detours; saved `muzil-phone/2` rounds retain these rules. New round records use `muzil-phone/3`. A notification appears below the status bar and
+Fixed practice uses the original mandatory detours; saved `muzil-phone/2` rounds retain these rules and the one-time thought. New round records use `muzil-phone/3`. A notification appears below the status bar and
 must be opened; there is no dismissal action or Home/Back bypass. Plain alerts
 open their app. `distraction` selects `reveal`, `pairs` or `timing`, followed by
 group-chat replies, a required reaction, and a link into Doom Scroll. A timing

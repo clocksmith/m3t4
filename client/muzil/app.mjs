@@ -9,7 +9,7 @@ import { APPS, RULES } from './scenarios.mjs';
 import { loadChallenges, validateChallenge, parseCatalog, contactName, roundDuration } from './challenges.mjs';
 import { DoomFeed } from './doom-feed.mjs';
 const SCENARIOS = await loadChallenges();
-import { createPhone, applyAction, advance, observe, displayTime, makeReplay, replay, blockingNotification, lockedDistraction, mandatoryNotifications } from './engine.mjs';
+import { createPhone, applyAction, advance, observe, displayTime, makeReplay, replay, blockingNotification, lockedDistraction, mandatoryNotifications, taskThoughtVisible } from './engine.mjs';
 import { LocalController } from './controller.mjs';
 import { PeerController } from './peer.mjs';
 import { createDecisionOwner } from './decision.mjs';
@@ -32,7 +32,7 @@ const save = (key, value) => { try { localStorage.setItem(key, JSON.stringify(va
 let profile = read('muzil.profile.v1', { schema: 'muzil.profile/v1', id: uuid(), version: 1, objective: 'finish', rounds: 0, examples: [] });
 if (!Array.isArray(profile.examples)) profile = { schema: 'muzil.profile/v1', id: uuid(), version: 1, objective: 'finish', rounds: 0, examples: [] };
 let lastReplay = read('muzil.replay.v1', null), state = createPhone({ roundId: uuid(), scenario: SCENARIOS[0] });
-let roundStarted = 0, toastTimer, interval, replayStarted = 0, replayMode = false, agentRunning = false, requestController = null, revealDismissed = false, recorded = false, mode = 'play';
+let roundStarted = 0, toastTimer, interval, replayStarted = 0, replayMode = false, agentRunning = false, requestController = null, revealDismissed = false, taskThoughtCycle = -1, recorded = false, mode = 'play';
 let lastNotificationMarkup = null;
 let memory = [], inferenceMs = 0, race = null, doomView = null;
 let pendingEdit=null, editTimer=null;
@@ -61,7 +61,7 @@ function stopAgent() { decisions.cancel(); agentOwnerId = null; agentRunning = f
 function newRound(controller = 'human', options = {}) {
   const from = options.entryRect || (!$('intro').hidden && mode === 'play' ? $('peek-phone').getBoundingClientRect() : null);
   clearTimeout(editTimer);pendingEdit=null;
-  stopAgent(); replayMode = false; recorded = false; revealDismissed = false; inferenceMs = 0;
+  stopAgent(); replayMode = false; recorded = false; revealDismissed = false; taskThoughtCycle = -1; inferenceMs = 0;
   if (!options.raceId && race) matches.leave();
   const chosen=selectedChallenge();
   const scenario = options.scenario || (chosen.family ? generateChallenge(chosen,uuid()) : chosen); nextChallenge++;
@@ -159,7 +159,9 @@ function render() {
 function renderTime() { updateDistractionMotion(state); const remaining = Math.ceil((roundDuration(state.scenario) - state.elapsed) / 1000); $('round-clock').textContent = `${String(Math.floor(remaining / 60)).padStart(2,'0')}:${String(remaining % 60).padStart(2,'0')}`; $('round-clock').classList.toggle('running-low', remaining <= 30); $('notification-count').textContent = state.notifications.length; }
 function renderOverlay() {
   let html = '';
-  const showTask = state.phase === 'playing' && !revealDismissed && (state.elapsed < RULES.revealMs || state.elapsed < (state.taskRecallUntil || 0));
+  const cycle = state.version === 'muzil-phone/3' ? Math.floor(state.elapsed / (RULES.revealMs + RULES.hiddenMs)) : 0;
+  if (cycle !== taskThoughtCycle) { revealDismissed = false; taskThoughtCycle = cycle; }
+  const showTask = taskThoughtVisible(state) && !revealDismissed;
   const note = showTask ? `<p>${esc(state.scenario.intention)}</p><button id="dismiss-reveal">Got it ↗</button>` : '<p class="task-scattered" aria-label="I was going to…"><span>I was…</span><span>going to…</span></p>';
   if ($('task-note-content').innerHTML !== note) $('task-note-content').innerHTML = note;
   if (['finished','expired','lost'].includes(state.phase)) html = `<div class="reveal-card"><div class="result-symbol">${state.phase === 'finished' ? '↗' : '↻'}</div><div class="eyebrow">${replayMode ? 'REPLAY · ' : ''}${state.phase === 'finished' ? 'INTENTION KEPT' : state.phase==='lost'?'FRIEND FINISHED':'LOST IN THE PHONE'}</div><h2>${state.phase === 'finished' ? 'You can put it down.' : state.phase==='lost'?'Your friend finished first.':'The phone won.'}</h2><p>${state.phase === 'finished' ? esc(state.scenario.success || 'Intention kept.') : 'Your task is still unfinished.'}</p><p>${esc(roundReport(state))}</p><button class="button primary" id="next-round" ${race && !['finished','intermission','disconnected'].includes(race.phase)?'disabled':''}>${race?.phase==='intermission'?(race.ready[0]?'Waiting for friend…':`Ready for round ${race.round+2} ↗`):race?.phase==='playing'?'Waiting for friend…':'Try another day ↗'}</button><button class="text-button" id="result-profile">Can your stand-in do it? →</button></div>`;

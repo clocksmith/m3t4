@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { createPhone, applyAction, observe, advance, makeReplay, replay } from '../engine.mjs';
+import { createPhone, applyAction, observe, advance, makeReplay, replay, taskThoughtVisible } from '../engine.mjs';
 import { SCENARIOS, RULES } from '../scenarios.mjs';
 import { parseCatalog } from '../challenges.mjs';
 const PLAY_SCENARIOS = parseCatalog(JSON.parse(await readFile(new URL('../challenges.json', import.meta.url))));
@@ -11,6 +11,27 @@ let n = 0;
 const tap = (s, target, extra = {}) => applyAction(s, { roundId:s.roundId, id:`a${++n}`, type:'tap', target, ...extra }).state;
 const type = (s, target, value) => tap(s, target, { type:'type', value });
 const start = () => tap(createPhone({ roundId:'round-a' }), 'start');
+test('the outside task thought returns after each hidden interval and old replays keep their timing', () => {
+  const scenario = PLAY_SCENARIOS[0];
+  let s = tap(createPhone({ roundId:'thought-cycle', scenario }), 'start');
+  assert.equal(taskThoughtVisible(s), true);
+  s = advance(s, RULES.revealMs);
+  assert.equal(taskThoughtVisible(s), false);
+  assert.equal(observe(s).text.includes(scenario.intention), false);
+  s = advance(s, RULES.revealMs + RULES.hiddenMs);
+  assert.equal(taskThoughtVisible(s), true);
+  assert.ok(observe(s).text.some(text => text.includes(scenario.intention)));
+  s = advance(s, 2 * RULES.revealMs + RULES.hiddenMs);
+  assert.equal(taskThoughtVisible(s), false);
+  s = tap(s, 'recall');
+  assert.equal(taskThoughtVisible(s), true);
+  assert.equal(s.screen.app, 'home');
+  assert.deepEqual(replay(makeReplay(s)), s);
+  let old = tap(createPhone({ roundId:'old-thought', scenario, version:'muzil-phone/2' }), 'start');
+  old = advance(old, RULES.revealMs + RULES.hiddenMs);
+  assert.equal(taskThoughtVisible(old), false);
+  assert.deepEqual(replay(makeReplay(old)), old);
+});
 function reply(s, text) { s = tap(s, 'app:messages'); s = tap(s, 'contact:mom'); s = type(s,'reply',text); return tap(s,'send'); }
 test('outcome uses resulting recipient and current time, not a click checklist', () => {
   const s = reply(start(),'Pick me up at 5:40 PM, please.');

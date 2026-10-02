@@ -21,10 +21,10 @@ export function createDecisionOwner({ id = () => crypto.randomUUID(), now = () =
     },
     accept(state, result, { matchId, controllerId }) {
       const pending = active;
-      const reject = reason => {
+      const reject = (reason, stale = false) => {
         receipts.push({ ...result.binding, accepted: false, reason, timeToValidActionMs: null,
           execution: result.execution || null });
-        return { state, accepted: false, reason };
+        return { state, accepted: false, reason, stale };
       };
       if (!pending || pending.abort.signal.aborted) return reject('Decision owner retired');
       const binding = pending.binding;
@@ -39,6 +39,11 @@ export function createDecisionOwner({ id = () => crypto.randomUUID(), now = () =
       catch (error) { return reject(error.message); }
       const applied = applyAction(state, { ...action, id: binding.attemptId, roundId: binding.roundId,
         screen: pending.observation.screen, decision: binding });
+      if(!applied.accepted && ['Control is no longer available','Screen changed'].includes(applied.reason)) {
+        const current=observe(state);
+        const changed=JSON.stringify(current.actions)!==JSON.stringify(pending.observation.actions);
+        if(changed)return reject(applied.reason,true);
+      }
       receipts.push({ ...binding, accepted: applied.accepted, reason: applied.reason || null,
         timeToValidActionMs: applied.accepted ? now() - pending.started : null,
         execution: result.execution || null });

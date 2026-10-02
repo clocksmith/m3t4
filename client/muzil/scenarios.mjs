@@ -1,4 +1,4 @@
-export const RULES = Object.freeze({ version: 'muzil-phone/2', durationMs: 180000, maxActions: 400, revealMs: 5000 });
+export const RULES = Object.freeze({ version: 'muzil-phone/3', durationMs: 180000, maxActions: 400, maxEdits: 4000, revealMs: 5000 });
 export const SCENARIOS = Object.freeze([
   { id: 'pickup', title: 'A small favor', intention: 'Tell Mom what time to pick you up after your appointment.', contact: 'mom', name: 'Mom', event: 'Dentist', start: '16:50', end: '17:40', date: 'Monday, September 28', incoming: 'What time should I pick you up? Outside the dentist, right?', note: 'Appointment moved. Use the updated finish time.',
     interruptions: [

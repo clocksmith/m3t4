@@ -12,7 +12,7 @@ try {
  for(const width of [1440,390,320]) {
   const page=await browser.newPage({viewport:{width,height:1000},reducedMotion:'reduce'});
   page.on('pageerror',e=>errors.push(e.message));
-  await page.clock.install({time:new Date('2026-09-30T12:00:00Z')});await page.goto(origin);await page.clock.pauseAt(new Date('2026-09-30T12:00:01Z'));
+  await page.clock.install({time:new Date('2026-09-30T12:00:00Z')});await page.goto(origin);await page.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await page.locator('#challenge-select').evaluate((el,value)=>el.value=value,'pickup-errands');await page.clock.pauseAt(new Date('2026-09-30T12:00:01Z'));
   const tap=target=>page.locator(`[data-action="${target}"]`).first().click();
   const app=async name=>{await page.locator('#phone-home').click();await tap(`app:${name}`);};
   const field=(target,value)=>page.locator(`[data-field="${target}"]`).fill(value);

@@ -1,5 +1,10 @@
-import { DISTRACTIONS, timingPosition } from './distractions.mjs';
-export function distractionScreen(game) {
+import { DISTRACTIONS, timingPosition, decisionObservation } from './distractions.mjs';
+const escape = x => String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+export function distractionScreen(game, elapsed = 0) {
+  if(game.decision && !(game.interaction==='media' && !game.done)) {
+    const view=decisionObservation(game,elapsed);
+    return `<div class="bait-app bait-thread"><div class="bait-eyebrow">${escape(game.interaction.toUpperCase())}</div><h2>${escape(view.text[0])}</h2>${view.text.slice(1).map(t=>`<p class="bait-hint">${escape(t)}</p>`).join('')}${game.interaction==='timing'&&game.stopped===null&&game.stage==='choose'?'<div class="bait-timing"><span class="bait-target"></span><span class="bait-marker" id="bait-marker"></span></div>':''}${view.actions.map(a=>`<button class="bait-primary" data-action="${escape(a.target)}">${escape(a.label)}</button>`).join('')}</div>`;
+  }
   const copy = DISTRACTIONS[game.kind];
   if (game.required && game.chainStage === 'replies') return `<div class="bait-app bait-thread"><div class="bait-eyebrow">MESSAGES <span>now</span></div><h2>The group chat</h2><div class="bait-comment"><strong>Lila</strong><p>That is absolutely your face.</p></div><div class="bait-comment"><strong>Noor</strong><p>Wait until you see the original. React first.</p></div><p class="bait-hint">React to the post</p>${[['laugh','That got me 😂'],['same','Literally me 🫠'],['nope','Absolutely not 🙃']].map(([id,label])=>`<button class="bait-primary" data-action="bait:react:${id}">${label}</button>`).join('')}</div>`;
   if (game.required && game.chainStage === 'source') return `<div class="bait-app bait-thread"><div class="bait-eyebrow">MESSAGES <span>now</span></div><h2>Noor sent a link</h2><div class="bait-comment"><strong>Noor</strong><p>The original is even better. Read the next bit.</p></div><div class="bait-link-preview"><span>↗</span><strong>JUST ONE MORE</strong><p>The post everyone is talking about</p></div><button class="bait-primary" data-action="bait:source">Open the original post ↗</button></div>`;

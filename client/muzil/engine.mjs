@@ -1,4 +1,5 @@
-import { newDistraction, distractionObservation, actOnDistraction } from './distractions.mjs';
+import { directed, signal, deliverNext, recovery } from './notification-director.mjs';
+import { newDistraction, distractionObservation, actOnDistraction, decisionDistraction, actOnDecision } from './distractions.mjs';
 import { RULES, SCENARIOS, APPS } from './scenarios.mjs';
 import { evaluateGoal, contactName, roundDuration, validateChallenge } from './challenges.mjs';
 import { miniState, observeMini, validateMini, actMini, shownThreads, cleanMiniNavigation } from './mini-apps.mjs';
@@ -6,19 +7,21 @@ import { doomPost } from './doom-content.mjs';
 const copy = x => structuredClone(x);
 export function createPhone({ roundId, scenario = SCENARIOS[0], controller = 'human', version = RULES.version }) {
   if (!roundId) throw new Error('A round identity is required');
-  if (scenario.version === 1) scenario = validateChallenge(scenario);
+  if(scenario.version===2 && version!=='muzil-phone/3')throw new Error('Evolving challenges require phone rules v3');
+  if (scenario.version >= 1) scenario = validateChallenge(scenario);
   const messages = scenario.initial ? Object.fromEntries(scenario.initial.contacts.map(c => [c.id, c.messages.map(text => ({ from:c.id, text }))])) : { mom: [{ from: 'mom', text: scenario.incoming }], group: [{ from: 'group', text: 'Would you rather fight one horse-sized duck or finish your errands?' }] };
   return { version, roundId, scenario: copy(scenario), controller, phase: 'ready', elapsed: 0,
+    ...(scenario.version===2 ? {external:{goal:copy(scenario.goal),facts:{},revision:0},director:{signals:{},events:[],nextAt:0,followups:[]},metrics:{interruptionMs:0,oldCalendarChecks:0,mistakes:0}} : {}), semanticActions:0, editEvents:0,
     ...miniState(scenario, messages), screen: { app: 'home' }, stack: [], revision: 0, notifications: [], delivered: [], seen: [], resolvedNotifications:[], notificationQuietUntil:0,
     messages, drafts: Object.fromEntries(Object.keys(messages).map(id => [id, ''])), notes: scenario.initial?.notes ?? scenario.initialNotes ?? '', alarms: copy(scenario.initial?.alarms || []), alarmDraft: '07:00', feedIndex: 0, feedLikes: [], distractions: {}, distractionTaps: 0, sent: [], log: [], demonstrations: [], recalled: 0 };
 }
-export const mandatoryNotifications = s => s.version !== 'muzil-phone/1' && s.scenario.version === 1;
+export const mandatoryNotifications = s => s.version !== 'muzil-phone/1' && s.scenario.version >= 1;
 export const lockedDistraction = s => s.phase === 'playing' && s.screen.app === 'distraction' && s.distractions[s.screen.distractionId]?.required;
 const notificationKey = n => JSON.stringify([n.title,n.body,n.distraction || null]);
 export const blockingNotification = s => s.phase === 'playing' && !lockedDistraction(s) && (!mandatoryNotifications(s) || s.elapsed >= s.notificationQuietUntil) ? s.notifications.find(n => mandatoryNotifications(s) || n.interruptive) : null;
 function visit(s, screen) { s.stack.push(copy(s.screen)); s.screen = screen; }
 export function outcome(s) {
-  if (s.scenario.goal) return evaluateGoal(s.scenario.goal, s);
+  if (s.scenario.goal) return evaluateGoal(s.external?.goal || s.scenario.goal, s);
   const correct = timeMinutes(s.scenario.end);
   if (s.scenario.requiredAlarm && !s.alarms.includes(s.scenario.requiredAlarm)) return false;
   const messages = s.scenario.location ? s.sent.filter(m => m.contact === s.scenario.contact).slice(-1) : s.sent;
@@ -87,8 +90,9 @@ export function observe(s) {
 export function applyAction(state, action) {
   if (!action || action.roundId !== state.roundId || typeof action.id !== 'string' || action.id.length > 160) return { state, accepted: false, reason: 'Wrong round or missing action identity' };
   if (state.seen.includes(action.id)) return { state, accepted: false, reason: 'Duplicate action' };
-  if (state.phase === 'finished' || state.phase === 'expired') return { state, accepted: false, reason: 'Round is over' };
-  if (state.seen.length >= RULES.maxActions) return { state, accepted: false, reason: 'Round action limit reached' };
+  if (['finished','expired','lost'].includes(state.phase)) return { state, accepted: false, reason: 'Round is over' };
+  if (state.version==='muzil-phone/3' && action.type==='type' && state.editEvents>=RULES.maxEdits) return {state,accepted:false,reason:'Round edit limit reached'};
+  if ((state.version==='muzil-phone/3' ? action.type!=='type' && state.semanticActions>=RULES.maxActions : state.seen.length>=RULES.maxActions)) return { state, accepted: false, reason: 'Round action limit reached' };
   const before = observe(state), allowed = before.actions.find(a => a.type === action.type && a.target === action.target);
   if (!allowed) return { state, accepted: false, reason: 'Control is no longer available' };
   if (action.type === 'type' && (typeof action.value !== 'string' || action.value.length > (allowed.maxLength || 5))) return { state, accepted: false, reason: 'Invalid field value' };
@@ -96,24 +100,51 @@ export function applyAction(state, action) {
   if (invalid) return { state, accepted:false, reason:invalid };
   // Bind contextual controls to the observed screen; unrelated notifications may arrive meanwhile.
   if (action.screen && JSON.stringify(action.screen) !== JSON.stringify(state.screen) && !['home','recall'].includes(action.target)) return { state, accepted: false, reason: 'Screen changed' };
-  const s = copy(state); s.seen.push(action.id); s.revision++;
+  const s = copy(state); s.seen.push(action.id); s.revision++; if(action.type==='type')s.editEvents++;else s.semanticActions++;
   const target = action.target;
   if (target === 'start') s.phase = 'playing';
   else if (target === 'home') { s.screen = { app: 'home' }; s.stack = []; }
   else if (target === 'back') s.screen = s.stack.pop() || { app: 'home' };
   else if (target === 'switcher' || target === 'notifications') visit(s, { app: target });
-  else if (target === 'recall') { s.recalled++; if (s.scenario.version === 1) s.taskRecallUntil = s.elapsed + RULES.revealMs; else visit(s, { app: 'intention' }); }
+  else if (target === 'recall') { s.recalled++; if (s.scenario.version >= 1) s.taskRecallUntil = s.elapsed + RULES.revealMs; else visit(s, { app: 'intention' }); }
   else if (target.startsWith('app:')) visit(s, { app: target.slice(4) });
   else if (target.startsWith('contact:')) visit(s, { app: 'messages', contact: target.slice(8) });
   else if (target.startsWith('notification:')) {
     const n = s.notifications.find(n => n.id === target.slice(13));
-    if (n.distraction) {
+    if (directed(s) && n.interaction) {
+      s.distractions[n.id] = {...decisionDistraction(n,`${s.scenario.seed}:${n.id}`,s.elapsed),returnScreen:copy(s.screen)};
+      visit(s,{app:'distraction',distractionId:n.id});
+    } else if (n.distraction) {
       s.distractions[n.id] ||= newDistraction(n.distraction, `${s.roundId}:${n.id}`, s.elapsed, 0, mandatoryNotifications(s));
       visit(s, { app:'distraction', distractionId:n.id });
     } else visit(s, { app: n.app, ...(n.contact ? { contact: n.contact } : {}) });
-    if (mandatoryNotifications(s)) { s.resolvedNotifications.push(notificationKey(n)); if (!n.distraction) s.notificationQuietUntil = s.elapsed + 8000; }
-    s.notifications = s.notifications.filter(x => x.id !== n.id && (!mandatoryNotifications(s) || notificationKey(x) !== notificationKey(n)));
+    if (mandatoryNotifications(s)) { s.resolvedNotifications.push(directed(s)?n.id:notificationKey(n)); if (!n.distraction && !n.interaction) {if(directed(s))recovery(s);else s.notificationQuietUntil = s.elapsed + 8000;} }
+    s.notifications = s.notifications.filter(x => x.id !== n.id && (directed(s) || !mandatoryNotifications(s) || notificationKey(x) !== notificationKey(n)));
   } else if (target.startsWith('dismiss:')) s.notifications = s.notifications.filter(n => n.id !== target.slice(8));
+  else if (target.startsWith('bait:') && s.distractions[s.screen.distractionId]?.decision) {
+    const game=s.distractions[s.screen.distractionId]; s.distractionTaps++;
+    actOnDecision(game,target,s.elapsed);
+    if(target==='bait:stop' && !game.done) s.metrics.mistakes++;
+    if(game.completed) {
+      if(['vague','postpone','retain'].includes(game.resolution)) s.metrics.mistakes++;
+      if(['vague','postpone'].includes(game.resolution)) {
+        for(const followup of s.scenario.followups || []) if(followup.episode===game.notification.episode && !s.director.followups.some(n=>n.id===followup.id)) s.director.followups.push({...copy(followup),at:s.elapsed+(followup.delayMs || 12000)});
+      }
+      if(game.interaction==='group') {
+        const contact=game.notification.contact;
+        const text={clear:'I cannot join. I am arranging my pickup.',vague:'Sure, maybe!',postpone:'Ask me again in a moment'}[game.resolution];
+        s.messages[contact].push({from:'you',contact,text,actionId:action.id});
+        if(game.resolution==='clear')s.messages[contact].push({from:contact,text:'Thanks for telling us. We will book without you.'});
+      }
+      recovery(s,game.interaction);
+      if(game.resolution==='retain') s.screen=copy(game.returnScreen);
+      else if(game.resolution==='source') s.screen={app:'feed'};
+      else if(game.resolution==='inspect') s.screen=game.notification.app==='messages'?{app:'messages',contact:game.notification.contact}:{app:'calendar',eventId:'event-0'};
+      else if(game.interaction==='call') s.screen=game.route==='answer'?copy(game.returnScreen):{app:'home'};
+      else s.screen={app:'home'};
+      s.stack=s.stack.filter(screen=>screen.app!=='distraction');
+    }
+  }
   else if (target === 'bait:source') {
     s.distractionTaps++; s.distractions[s.screen.distractionId].sourceOpened = true; s.notificationQuietUntil = s.elapsed + 8000;
     visit(s, { app:'feed' }); s.stack = s.stack.filter(screen => screen.app !== 'distraction');
@@ -130,7 +161,25 @@ export function applyAction(state, action) {
     s.messages[s.screen.contact].push(message); s.sent.push(message); s.drafts[s.screen.contact] = '';
   }
   cleanMiniNavigation(s);
+  if (directed(s)) {
+    if(state.screen.app==='calendar' && s.screen.app!=='calendar')signal(s,'calendar-left');
+    if(target==='reply')signal(s,'draft-started');
+    if(target==='save-alarm' || target==='note')signal(s,'plan-saved');
+    if(s.screen.app==='messages' && s.screen.contact==='reception')signal(s,'fact-read');
+    if(target==='app:calendar' || target.startsWith('event:')) {
+      if(s.external.facts.finish && s.events.some(e=>e.end!==s.external.facts.finish))s.metrics.oldCalendarChecks++;
+    }
+    if(target==='send') {
+      const goal=s.external.goal;
+      const messageGoals=g=>g.kind==='message'?[g]:(g.all||g.any||[]).flatMap(messageGoals);
+      const goals=messageGoals(goal).filter(g=>g.contact===s.screen.contact);
+      const correct=goals.length && goals.every(g=>evaluateGoal(g,s));
+      if(!correct)s.metrics.mistakes++;
+      s.messages[s.screen.contact].push({from:s.screen.contact,text:correct?'That is the plan I needed. Thank you.':goals.length?'Please check the latest time and entrance.':'Please confirm with the person collecting you.'});
+    }
+  }
   if (outcome(s)) s.phase = 'finished';
+  else if(directed(s)) deliverNext(s,s.elapsed);
   s.log.push({ at: s.elapsed, action: copy(action) });
   s.demonstrations.push({ observation: before, action: { type: action.type, target, ...(action.value !== undefined ? { value: action.value } : {}) }, after: observe(s) });
   return { state: s, accepted: true };
@@ -138,7 +187,11 @@ export function applyAction(state, action) {
 export function advance(state, elapsed) {
   if (state.phase !== 'playing' || !Number.isFinite(elapsed) || elapsed < state.elapsed) return state;
   const s = copy(state); s.elapsed = Math.min(Math.floor(elapsed), roundDuration(s.scenario));
-  for (const n of s.scenario.interruptions) if (n.at <= s.elapsed && !s.delivered.includes(n.id)) {
+  if(directed(s)) {
+    if(blockingNotification(state) || lockedDistraction(state)) s.metrics.interruptionMs+=s.elapsed-state.elapsed;
+    deliverNext(s,state.elapsed);
+  }
+  else for (const n of s.scenario.interruptions) if (n.at <= s.elapsed && !s.delivered.includes(n.id)) {
     s.delivered.push(n.id);
     const repeated = mandatoryNotifications(s) && (s.resolvedNotifications.includes(notificationKey(n)) || s.notifications.some(pending => notificationKey(pending) === notificationKey(n)));
     if (!repeated) s.notifications.push(copy(n));
@@ -147,14 +200,19 @@ export function advance(state, elapsed) {
   return s;
 }
 export function replay(record, until = Infinity) {
-  if (![RULES.version, 'muzil-phone/1'].includes(record.version)) throw new Error('Unsupported replay version');
+  if (![RULES.version, 'muzil-phone/2', 'muzil-phone/1'].includes(record.version)) throw new Error('Unsupported replay version');
   let s = createPhone({ roundId: record.roundId, scenario: record.scenario, controller: record.controller, version:record.version });
+  let previousAt=0;
   for (const entry of record.log) {
+    if(!Number.isFinite(entry.at)||entry.at<previousAt||entry.at>record.elapsed)throw new Error('Invalid replay clock');
+    previousAt=entry.at;
     if (entry.at > until) break;
     s = advance(s, entry.at); const result = applyAction(s, entry.action);
     if (!result.accepted) throw new Error(`Invalid replay: ${result.reason}`);
     s = result.state;
   }
-  return advance(s, Math.min(until, record.elapsed));
+  s=advance(s, Math.min(until, record.elapsed));
+  if(record.version==='muzil-phone/3' && record.ending==='lost' && until>=record.elapsed && s.phase==='playing')s.phase='lost';
+  return s;
 }
-export function makeReplay(s) { return copy({ version: s.version, roundId: s.roundId, scenario: s.scenario, controller: s.controller, elapsed: s.elapsed, log: s.log }); }
+export function makeReplay(s) { return copy({ ...(s.director?{directorEvents:s.director.events}:{}), ...(s.phase==='lost'?{ending:'lost'}:{}), version: s.version, roundId: s.roundId, scenario: s.scenario, controller: s.controller, elapsed: s.elapsed, log: s.log }); }

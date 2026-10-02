@@ -10,7 +10,7 @@ historical deterministic arena.
 ## Authority
 
 m3t4 owns phone transitions, permitted observations/actions, task evaluation,
-scoring, demonstrations and replay. Reploid owns peer transport and execution
+scoring, match readiness and series progression, demonstrations and replay. Reploid owns peer transport and execution
 coordination. Doppler owns model loading and inference. Historical ranked
 results remain server-owned; historical plasma-lab work remains advisory.
 
@@ -21,7 +21,8 @@ simulation, server and sidecar boundaries.
 
 ## Contracts
 
-Inputs: versioned scenarios, player actions, model proposals and profiles.
+Inputs: versioned seeded scenarios and declarative world events, player actions,
+model proposals and profiles.
 Outputs: validated state transitions, outcome results and recorded replays.
 Historical contracts remain documented in docs/history/CATSCAN.md.
 

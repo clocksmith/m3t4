@@ -20,7 +20,7 @@ try {
  for(const width of [1440,390,320]) {
   const page=await browser.newPage({viewport:{width,height:width===1440?1000:844}});
   page.on('pageerror',e=>errors.push(e.message));
-  await page.clock.install();await page.goto(origin);await page.evaluate(()=>document.fonts.ready);
+  await page.clock.install();await page.goto(origin);await page.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await page.locator('#challenge-select').evaluate((el,value)=>el.value=value,'pickup-errands');await page.evaluate(()=>document.fonts.ready);
   assert.deepEqual(await page.locator('#site-menu nav button').allTextContents(),['Play','Watch AI play','Play with a friend']);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await page.screenshot({path:join(output,`toaster-${width}.png`),fullPage:true});
@@ -56,7 +56,7 @@ try {
  checks.push('Lever starts real rounds at 1440, 390 and 320px; three-choice menu; external task recall preserves Calendar; no overflow; banners stay below the status bar, cannot dismiss, and force a complete detour into Doom Scroll');
  const page=await browser.newPage({viewport:{width:390,height:844},reducedMotion:'reduce'});
  page.on('pageerror',e=>errors.push(e.message));
- await page.clock.install();await page.goto(origin);
+ await page.clock.install();await page.goto(origin);await page.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await page.locator('#challenge-select').evaluate((el,value)=>el.value=value,'pickup-errands');
  await page.locator('#start-round').click();await page.locator('#dismiss-reveal').click();
  assert.equal(await page.locator('#phone').evaluate(el=>el.getAnimations().length),0);
  await page.locator('[data-action="app:messages"]').first().click();await page.locator('[data-action="contact:mom"]').click();

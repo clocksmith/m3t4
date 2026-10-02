@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { parseCatalog, validateChallenge, matchesTime } from '../challenges.mjs';
 import { createPhone, applyAction, observe, makeReplay, replay, advance } from '../engine.mjs';
 const catalog = JSON.parse(await readFile(new URL('../challenges.json',import.meta.url)));
-const scenarios = parseCatalog(catalog);
+const scenarios = parseCatalog(catalog).filter(c=>c.version===1);
 let n = 0;
 function act(s,target,value) { const result=applyAction(s,{roundId:s.roundId,id:`c${n++}`,type:value===undefined?'tap':'type',target,...(value===undefined?{}:{value})}); assert.equal(result.accepted,true,result.reason); return result.state; }
 function run(s,steps) {
@@ -26,7 +26,7 @@ const solutions = [
  [['message','alex','19:45, platform 6']],
  [['message','sam','42 Willow Lane, apartment 3']],
 ];
-test('every JSON challenge completes using shared controls and reproduces through replay',()=>{
+test('every legacy JSON challenge completes using shared controls and reproduces through replay',()=>{
  assert.equal(scenarios.length,solutions.length);
  scenarios.forEach((scenario,i)=>{
   let s=act(createPhone({roundId:`json-${i}`,scenario}),'start');
@@ -35,7 +35,7 @@ test('every JSON challenge completes using shared controls and reproduces throug
   assert.deepEqual(replay(makeReplay(s)),s);
  });
 });
-test('shipped challenges have one result, with information gathered across apps',()=>{
+test('legacy challenges have one result, with information gathered across apps',()=>{
  for(const scenario of scenarios) assert.ok(['message','alarm','note'].includes(scenario.goal.kind));
  let s=act(createPhone({roundId:'shift',scenario:scenarios[3]}),'start');
  s=run(s,[['alarm','06:50']]); assert.equal(s.phase,'playing');

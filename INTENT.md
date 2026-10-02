@@ -16,8 +16,9 @@ must not require a model download on the requesting phone.
 ## Invariants
 
 Task outcome belongs to m3t4. Remote results are proposals. Every accepted action
-belongs to one round and identity. No hidden evaluator information enters model
-observations. Replays use recorded actions; new agent matches use real inference.
+belongs to one round and identity. External task facts remain separate from editable phone data. Delivered events
+may revise obligations; an earned win is final. No hidden evaluator information
+enters model observations. Replays use recorded actions; new agent matches use real inference.
 Personalization is distinguished from weight training. No scripted substitution
 for an unavailable model. Permission scope applies to replacements as well as
 initial executors. The historical arena remains available with its authority and

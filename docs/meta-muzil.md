@@ -36,34 +36,60 @@ integration path, not fulfillment of that distributed-partition target.
   replay. Deleting a contact preserves the conversation and recipient identity.
   Each new round starts from its challenge data; these are round-local changes.
   This is a simulated OS; it does not observe or control real phone apps.
-- Eight JSON-defined challenges compose contacts, messages, calendar events,
-  notes, alarms and interruptions. Each shipped challenge has one outcome: a
-  message, an alarm, or a note update, using information distributed across apps.
-  The predicate format also supports `all`/`any` for authoring.
-  [Authoring guide](muzil-challenges.md) covers catalog edits and local imports.
-  The original two scenarios remain available to qualification tools and replays.
+- Three seeded task families now lead normal play: Coordinate a pickup, Prepare
+  a pickup plan, and Repair a plan that becomes obsolete. Names, times, entrances,
+  app sources and linked obligations vary together. Eight fixed JSON challenges
+  remain available as practice and saved-replay fixtures. The two original calm
+  model-qualification scenarios remain in the tooling; they are not evidence of
+  model performance on the fast evolving tasks.
+  [Authoring guide](muzil-challenges.md) covers versioned data and imports.
 - Doom Scroll is a native scrolling fictional social feed with seeded multilingual
   posts, local language/nonsense heuristics, likes, and scroll-reactive WebGPU
   effects. Five cards stay mounted; CSS fallback and reduced motion are supported.
   Post navigation and likes are recorded through the shared action engine.
 - The same validated transitions serve humans and agents. Observations contain
   visible controls/text; model memory retains previously observed information.
-  New JSON rounds use phone rules v2: top banners must be opened, with no
-  dismissal or navigation bypass for humans or agents. Distraction banners lead
-  through reveal/pairs/timing, group-chat replies, a reaction, and a link into
-  Doom Scroll. The original task is not automatically restored. Drafts persist;
-  the clock keeps running. Exact duplicate alerts coalesce, resolved alerts stay
-  resolved, and each completed interruption gives eight seconds before the next
-  mandatory banner. These detours never satisfy the task. Version 1 replays keep
-  their old dismissal and optional-game behavior.
+  New rounds use phone rules v3. Evolving challenge version 2 events update
+  external facts and the current goal independently of editable Calendar, Notes,
+  alarms and drafts. A correct resulting state wins immediately; later events
+  cannot revoke it. Some sources update Calendar; other updates only arrive in
+  Messages, leaving the editable calendar obsolete.
+- Top banners cannot be dismissed or bypassed with Home/Back. Calls offer a full
+  four-second answer or a partial voicemail pointing to Messages. Vague/postponed
+  group replies arm one follow-up; a definite response closes the episode.
+  Calendar conflicts offer inspection or retaining the old plan. Timing precision
+  exits immediately after stopping; a miss waits four seconds, and the guaranteed
+  exit waits six. Media resolution offers a return or optional continued reading.
+  Fixed practice and v1/v2 saved replays retain their original detour rules.
+- The deterministic notification director uses scenario timing, dependencies and
+  first-occurrence progress signals, with one pending blocker and type-specific
+  3–8 second recovery windows in shipped data; Prepare and Repair progressively
+  tighten the recovery window while adding linked obligations. Event IDs prevent retransmission;
+  distinct developments can share an episode. The scenario seed and actual event
+  deliveries are recorded. Opponent progress never enters this policy.
+- Text editing has a separate 4,000-edit safety bound, outside the 400 semantic
+  actions. UI typing coalesces for 120 ms and flushes before navigation, field
+  changes and timer advancement; drafts and accepted edits remain replayable.
+  Obsolete but originally legal agent actions get at most three consecutive
+  re-observations. Malformed output and identity mismatches still stop execution.
+  The clock is the same for human and model-controlled play.
+- Results describe time in blocking interruptions, observed obsolete-calendar
+  visits and meaningful mistakes. Partial task obligations remain hidden during
+  play; no evaluator checklist enters the phone or model observation.
 - Local profiles store demonstrations and an explicit imitation/improvement
   objective. No fine-tuning, automatic improvement claim, or behavioral diagnosis.
 - Recorded replay uses actions and scenario data; new agent play uses inference.
   Profiles and the last replay can be exported. Real reply material is not stored.
-- Real Reploid WebRTC pairing with copied codes. Both players accept the same
-  scenario; received outcomes are reconstructed through the evaluator. Rematches
-  use fresh round IDs. Friendly time comparison is unranked and trusts reported
-  timing; it does not establish cheat resistance or competitive latency fairness.
+- Real Reploid WebRTC pairing with copied codes. A dedicated match owner runs
+  best-of-three Coordinate/Prepare/Repair rounds with common seeds, explicit
+  readiness and a three-second countdown. It retains the peer connection and
+  exposes only playing/interrupted/finished/disconnected opponent status. A verified correct finish
+  stops a still-playing opponent, preserving their partial replay as a match loss.
+  Earlier elapsed time breaks two finishes that cross in transit; two timeouts compare distinct
+  fulfilled obligations, then fewer mistakes. Ties add no points. Two wins or
+  three played rounds finish the match. Fresh invitations preserve the connection.
+  This friendly client-owned match trusts device clocks and reported action times;
+  it does not establish cheat resistance or network latency fairness.
 - Local or paired Doppler inference. Pairing authorizes simulated observations
   and the selected profile for requested agent play. Real reply text needs a
   separate checkbox; no automatic sending. The contributor explicitly enables
@@ -351,3 +377,15 @@ these rules has not been qualified.
 `npm run test:muzil:toaster` verifies dial pointer/touch/keyboard input at desktop
 and mobile widths, distinct warm-up/pop animations, shared entry controls, and
 reduced motion. The native range is outside decorative aria-hidden artwork.
+
+## Evolving-task validation
+
+`test:muzil` covers deterministic seeds, changed facts versus player edits,
+permanent wins, stale drafts and replies, precise versus failed timing, bounded
+follow-ups, sparse versus stepped clocks, edit budgets, agent stale decisions,
+match readiness, three families, replay validation, ties and early series wins.
+`test:muzil:evolving` exercises changed details, call waits, vague follow-ups,
+coalesced typing, alarm obligations and result replay at 1440/390/320 pixels.
+`test:muzil:match` plays three rounds through actual two-tab Reploid transport,
+retains the connection and starts another match. Those browser tests use human
+controls and simulated clocks; they make no real-model or separate-device claim.

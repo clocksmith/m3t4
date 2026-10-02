@@ -7,7 +7,7 @@ const string = (x, max = 1000) => typeof x === 'string' && x.trim().length > 0 &
 const identifier = x => typeof x === 'string' && ID.test(x) && !['constructor', 'prototype'].includes(x);
 const require = (valid, message) => { if (!valid) throw new Error(`Invalid challenge: ${message}`); };
 export function validateChallenge(value) {
-  require(plain(value) && value.version === 1, 'expected version 1');
+  require(plain(value) && [1,2].includes(value.version), 'expected version 1 or 2');
   const c = structuredClone(value);
   require(identifier(c.id) && string(c.title, 100) && string(c.intention, 500), 'id, title and intention are required');
   require(string(c.success, 300) && string(c.date, 100), 'success text and date are required');
@@ -36,7 +36,7 @@ export function validateChallenge(value) {
       children.forEach(child => checkGoal(child, depth + 1)); return;
     }
     require(['message', 'alarm', 'note'].includes(goal.kind), 'unknown result predicate');
-    if (goal.kind === 'alarm') { require(TIME.test(goal.time), 'alarm goal needs HH:MM'); return; }
+    if (goal.kind === 'alarm') { require(TIME.test(goal.time), 'alarm goal needs HH:MM'); require(goal.absent === undefined || c.version===2 && typeof goal.absent==='boolean', 'invalid alarm absence predicate'); return; }
     if (goal.kind === 'message') require(ids.has(goal.contact), 'message goal references a missing contact');
     require(goal.time !== undefined || goal.includes !== undefined || goal.choice !== undefined, 'text goals need conditions');
     if (goal.time !== undefined) require(goal.kind === 'message' && TIME.test(goal.time), 'invalid message time');
@@ -45,14 +45,43 @@ export function validateChallenge(value) {
   }
   checkGoal(c.goal);
   require(Array.isArray(c.interruptions) && c.interruptions.length <= 50, 'invalid interruptions');
+  require(c.followups === undefined || Array.isArray(c.followups)&&c.followups.length<=4, 'invalid followups');
   const delivered = new Set();
-  for (const n of c.interruptions) {
+  for (const n of [...c.interruptions,...(c.followups || [])]) {
     require(plain(n) && identifier(n.id) && !delivered.has(n.id) && APPS.has(n.app), 'invalid notification identity or app');
     require(Number.isInteger(n.at) && n.at >= 0 && n.at < c.durationMs && string(n.title, 100) && string(n.body, 500), 'invalid notification content or time');
     require(n.contact === undefined || (n.app === 'messages' && ids.has(n.contact)), 'notification references a missing contact');
     require(n.interruptive === undefined || typeof n.interruptive === 'boolean', 'invalid notification interruption');
     require(n.distraction === undefined || ['reveal','pairs','timing'].includes(n.distraction), 'unknown notification distraction');
+    if (c.version === 2) {
+      require(n.episode === undefined || identifier(n.episode), 'invalid episode');
+      require(n.after === undefined || identifier(n.after), 'invalid prerequisite');
+      require(n.trigger === undefined || ['calendar-left','fact-read','draft-started','detour-return','plan-saved'].includes(n.trigger), 'invalid trigger');
+      require(n.delayMs === undefined || Number.isInteger(n.delayMs) && n.delayMs >= 0 && n.delayMs <= c.durationMs, 'invalid trigger delay');
+      require(n.interaction === undefined || ['call','group','conflict','timing','media'].includes(n.interaction), 'invalid interaction');
+      require(!['call','group'].includes(n.interaction) || n.app==='messages' && ids.has(n.contact), 'interaction needs a message contact');
+      require(n.followup === undefined || typeof n.followup==='boolean', 'invalid follow-up flag');
+      for (const key of ['detail','voicemail']) require(n[key] === undefined || string(n[key],500), 'invalid interaction text');
+      if (n.effects !== undefined) {
+        require(plain(n.effects), 'invalid effects');
+        if(n.effects.goal) {count=0;checkGoal(n.effects.goal);}
+        if(n.effects.facts) require(plain(n.effects.facts) && Object.entries(n.effects.facts).every(([k,v])=>identifier(k)&&string(v,100)), 'invalid facts');
+        if(n.effects.messages) require(Array.isArray(n.effects.messages) && n.effects.messages.length<=12 && n.effects.messages.every(m=>plain(m)&&ids.has(m.contact)&&string(m.text,500)), 'invalid external messages');
+        if(n.effects.calendar) {
+          const {index,event}=n.effects.calendar;
+          require(Number.isInteger(index)&&index>=0&&index<calendar.length&&plain(event)&&string(event.title,100)&&TIME.test(event.start)&&TIME.test(event.end)&&event.end>event.start&&string(event.note,500)&&Object.keys(event).every(k=>['title','start','end','note'].includes(k)), 'invalid calendar update');
+        }
+      }
+    }
     delivered.add(n.id);
+  }
+  if(c.version === 2) {
+    require(c.family === undefined || ['coordinate','prepare','repair'].includes(c.family), 'invalid task family');
+    require(c.seed === undefined || string(c.seed,100), 'invalid seed');
+    require(plain(c.pressure) && Number.isInteger(c.pressure.minimumGapMs) && c.pressure.minimumGapMs>=1000 && c.pressure.minimumGapMs<=30000, 'invalid pressure gap');
+    require(plain(c.pressure.recoveryMs) && Number.isInteger(c.pressure.recoveryMs.message) && Object.values(c.pressure.recoveryMs).every(v=>Number.isInteger(v)&&v>=2000&&v<=15000), 'invalid recovery windows');
+    require(c.followups === undefined || Array.isArray(c.followups)&&c.followups.length<=4, 'invalid followups');
+    for(const n of c.interruptions) require(!n.after || c.interruptions.some(p=>p.id===n.after&&p.at<n.at), 'invalid event dependency');
   }
   c.interruptions.sort((a, b) => a.at - b.at);
   return c;
@@ -83,7 +112,7 @@ export function matchesTime(text, expected) {
 export function evaluateGoal(goal, state) {
   if (goal.all) return goal.all.every(g => evaluateGoal(g, state));
   if (goal.any) return goal.any.some(g => evaluateGoal(g, state));
-  if (goal.kind === 'alarm') return state.alarms.includes(goal.time);
+  if (goal.kind === 'alarm') return goal.absent ? !state.alarms.includes(goal.time) : state.alarms.includes(goal.time);
   if (goal.kind === 'note' && state.extraNotes?.length) return [state.notes,...state.extraNotes.map(n=>n.text)].some(notes=>evaluateGoal(goal,{...state,notes,extraNotes:[]}));
   const raw = goal.kind === 'note' ? state.notes : state.sent.filter(m => m.contact === goal.contact).at(-1)?.text;
   if (typeof raw !== 'string') return false;

@@ -1,3 +1,6 @@
+import { generateChallenge } from './task-templates.mjs';
+import { roundReport } from './round-report.mjs';
+import { createMatchOwner } from './match.mjs';
 import { miniScreen, searchField } from './mini-app-view.mjs';
 import { shownThreads } from './mini-apps.mjs';
 import { distractionScreen, updateDistractionMotion, notificationBait } from './distraction-view.mjs';
@@ -31,10 +34,12 @@ if (!Array.isArray(profile.examples)) profile = { schema: 'muzil.profile/v1', id
 let lastReplay = read('muzil.replay.v1', null), state = createPhone({ roundId: uuid(), scenario: SCENARIOS[0] });
 let roundStarted = 0, toastTimer, interval, replayStarted = 0, replayMode = false, agentRunning = false, requestController = null, revealDismissed = false, recorded = false, mode = 'play';
 let lastNotificationMarkup = null;
-let memory = [], inferenceMs = 0, race = null, invitation = null, doomView = null;
+let memory = [], inferenceMs = 0, race = null, doomView = null;
+let pendingEdit=null, editTimer=null;
+const templates=SCENARIOS.filter(s=>s.version===2 && s.family);
 let nextChallenge = Number(profile.rounds || 0) % SCENARIOS.length;
-const selectedChallenge = () => SCENARIOS.find(s => s.id === $('challenge-select').value) || SCENARIOS[nextChallenge % SCENARIOS.length];
-function renderChallengeMenu() { $('challenge-select').innerHTML = '<option value="">Next challenge</option>' + SCENARIOS.map(s => `<option value="${esc(s.id)}">${esc(s.title)}</option>`).join(''); }
+const selectedChallenge = () => SCENARIOS.find(s => s.id === $('challenge-select').value) || templates[nextChallenge % templates.length];
+function renderChallengeMenu() { $('challenge-select').innerHTML = '<option value="">Next challenge</option>' + SCENARIOS.map(s => `<option value="${esc(s.id)}">${s.version===2?'Fast · ':'Fixed practice · '}${esc(s.title)}</option>`).join(''); }
 renderChallengeMenu();
 const local = new LocalController();
 export const mesh = new MeshController({ onChange: updateConnection });
@@ -44,7 +49,7 @@ const peer = new PeerController({ local, onChange: updateConnection, onGame: han
 function toast(message) { clearTimeout(toastTimer); $('toast').textContent = message; $('toast').hidden = false; toastTimer = setTimeout(() => { $('toast').hidden = true; }, 6000); }
 function report(error) { toast(error.message || String(error)); }
 function updateConnection() {
-  if (race && ['closed','failed','offline'].includes(peer.state)) { $('race-status').textContent = 'Peer disconnected. This race is interrupted; you can keep playing.'; race = null; }
+  if (['closed','failed','offline'].includes(peer.state)) matches.disconnect();
   const ready = mesh.ready || peer.ready || !!local.session;
   if ($('partition-state')) $('partition-state').textContent = mesh.status;
   $('connection-label').textContent = mesh.ready ? 'Distributed helper ready' : peer.ready ? 'Peer ready' : local.session ? 'Helper ready here' : 'Connect a helper';
@@ -55,10 +60,12 @@ function setMode(next) { mode = next; doomView?.setActive(next === 'play' && sta
 function stopAgent() { decisions.cancel(); agentOwnerId = null; agentRunning = false; requestController?.abort(); requestController = null; $('agent-round').textContent = 'Watch AI play'; }
 function newRound(controller = 'human', options = {}) {
   const from = options.entryRect || (!$('intro').hidden && mode === 'play' ? $('peek-phone').getBoundingClientRect() : null);
+  clearTimeout(editTimer);pendingEdit=null;
   stopAgent(); replayMode = false; recorded = false; revealDismissed = false; inferenceMs = 0;
-  if (!options.raceId) { if (race && peer.state === 'connected') peer.sendGame({ type: 'leave', raceId: race.id }); race = null; $('race-status').textContent = ''; }
-  const scenario = options.scenario || selectedChallenge(); nextChallenge = (SCENARIOS.indexOf(scenario) + 1) % SCENARIOS.length;
-  state = createPhone({ roundId: options.raceId || uuid(), scenario, controller }); memory = [observe(state)]; roundStarted = performance.now();
+  if (!options.raceId && race) matches.leave();
+  const chosen=selectedChallenge();
+  const scenario = options.scenario || (chosen.family ? generateChallenge(chosen,uuid()) : chosen); nextChallenge++;
+  state = createPhone({ roundId: options.raceId || uuid(), scenario, controller }); memory = [observe(state)]; roundStarted = performance.now()-(options.lateMs || 0);
   dispatch({ type: 'tap', target: 'start' }, false); setMode('play');
   $('round-status').textContent = controller === 'agent' ? 'Your stand-in is reading the phone.' : '';
   render();
@@ -74,9 +81,14 @@ function newRound(controller = 'human', options = {}) {
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
 function remember(observation) { memory.push(observation); if (memory.length > 12) memory.splice(1, 1); }
-function dispatch(action, human = true, renderAfter = true) {
+function flushEdit() {
+  clearTimeout(editTimer);const edit=pendingEdit;pendingEdit=null;
+  if(edit) dispatch(edit.action,true,false,edit.at);
+}
+function dispatch(action, human = true, renderAfter = true, at = performance.now()) {
+  if(action.type!=='type')flushEdit();
   if (replayMode) return;
-  if (state.phase === 'playing') { state = advance(state,performance.now() - roundStarted); if (state.phase === 'expired') { complete(); render(); return; } }
+  if (state.phase === 'playing') { state = advance(state,Math.max(state.elapsed,at - roundStarted)); if (state.phase === 'expired') { complete(); render(); return; } }
   if (human && state.controller !== 'human') { stopAgent(); state.controller = 'mixed'; }
   const result = applyAction(state, { ...action, roundId: state.roundId, id: uuid(), screen: structuredClone(state.screen) });
   if (!result.accepted) { if (state.phase !== 'ready') toast(result.reason); return; }
@@ -88,12 +100,12 @@ function complete() {
   stopAgent();
   if (recorded || replayMode) return;
   recorded = true; lastReplay = makeReplay(state);
-  if (race?.id === state.roundId) { race.local = { finished: state.phase === 'finished', elapsed: state.elapsed }; try { peer.sendGame({ type:'result', raceId:race.id, record:lastReplay }); } catch (e) { report(e); } raceSummary(); } lastReplay.profile = { id:profile.id, version:profile.version, objective:profile.objective }; lastReplay.inferenceMs = Math.round(inferenceMs); save('muzil.replay.v1', lastReplay);
+  if (race && state.roundId===`${race.id}:${race.round}`) {try {matches.complete(lastReplay);}catch(e){report(e);}} lastReplay.profile = { id:profile.id, version:profile.version, objective:profile.objective }; lastReplay.inferenceMs = Math.round(inferenceMs); save('muzil.replay.v1', lastReplay);
   if (state.controller === 'human') {
     const examples = state.demonstrations.filter((e,i,all) => e.action.target !== 'start' && !(e.action.type === 'type' && all[i+1]?.action.type === 'type' && all[i+1]?.action.target === e.action.target)).map(e => ({ observation: e.observation, action: e.action, after: e.after }));
     profile.examples = [...profile.examples, ...examples].slice(-36); profile.rounds = (profile.rounds || 0) + 1; profile.version++; save('muzil.profile.v1', profile);
   }
-  $('round-status').textContent = state.phase === 'finished' ? 'Intention kept. Your replay is saved.' : 'The phone won this one. Your replay is saved.';
+  $('round-status').textContent = state.phase === 'finished' ? 'Intention kept. Your replay is saved.' : state.phase==='lost'?'Your friend finished first. Your replay is saved.':'The phone won this one. Your replay is saved.';
 }
 const launch = a => `<button class="app-launch" data-action="app:${a.id}" aria-label="Open ${a.label}"><span class="app-tile ${a.color}">${a.id === 'calendar' ? `<span class="calendar-tile"><small>${state.scenario.date.startsWith('Monday') ? 'MON' : 'TUE'}</small>${state.scenario.date.startsWith('Monday') ? '28' : '29'}</span>` : icon(a.icon)}</span><span>${a.label}</span>${a.id === 'messages' ? '<i class="badge">2</i>' : ''}</button>`;
 function home() {
@@ -104,7 +116,7 @@ const header = (title, detail = '') => `<div class="app-header"><h2>${title}</h2
 function screen() {
   const { app, contact } = state.screen;
   if (app === 'home') return home();
-  if (app === 'distraction') return distractionScreen(state.distractions[state.screen.distractionId]);
+  if (app === 'distraction') return distractionScreen(state.distractions[state.screen.distractionId],state.elapsed);
   const thread = c => `<button class="thread-row" data-action="contact:${esc(c)}"><span class="thread-avatar">${esc(contactName(state,c).slice(0,1))}</span><span><strong>${esc(contactName(state,c))}</strong><p>${esc(state.messages[c].at(-1)?.text || 'No messages yet')}</p></span></button>`;
   if (app === 'messages' && !contact) return header('Messages', `${Object.keys(state.messages).length} conversations`) + `<div class="app-body"><div class="mini-toolbar"><button class="mini-button" data-action="message-new">New message</button></div>${searchField('messages',state.searches.messages)}<div class="mini-search-results">${shownThreads(state).map(thread).join('') || '<p class="empty-phone">No conversations found.</p>'}</div></div>`;
   if (app === 'messages') return header(esc(contactName(state,contact)), 'Messages') + `<div class="app-body"><div class="chat-date">Today · 9:41 AM</div>${state.messages[contact].map(m => `<div class="bubble ${m.from === 'you' ? 'outgoing' : ''}">${esc(m.text)}</div>`).join('')}<form class="message-compose" id="message-compose"><textarea data-field="reply" id="phone-reply" rows="2" maxlength="500" aria-label="Message to ${esc(contactName(state,contact))}" placeholder="Message">${esc(state.drafts[contact])}</textarea><button class="send-button" aria-label="Send message" type="submit" ${state.drafts[contact].trim() ? '' : 'disabled'}>↑</button></form><p class="app-subtitle">Messages stay in this simulated phone.</p></div>`;
@@ -150,7 +162,7 @@ function renderOverlay() {
   const showTask = state.phase === 'playing' && !revealDismissed && (state.elapsed < RULES.revealMs || state.elapsed < (state.taskRecallUntil || 0));
   const note = showTask ? `<p>${esc(state.scenario.intention)}</p><button id="dismiss-reveal">Got it ↗</button>` : '<p class="task-scattered" aria-label="I was going to…"><span>I was…</span><span>going to…</span></p>';
   if ($('task-note-content').innerHTML !== note) $('task-note-content').innerHTML = note;
-  if (['finished','expired'].includes(state.phase)) html = `<div class="reveal-card"><div class="result-symbol">${state.phase === 'finished' ? '↗' : '↻'}</div><div class="eyebrow">${replayMode ? 'REPLAY · ' : ''}${state.phase === 'finished' ? 'INTENTION KEPT' : 'LOST IN THE PHONE'}</div><h2>${state.phase === 'finished' ? 'You can put it down.' : 'The phone won.'}</h2><p>${state.phase === 'finished' ? esc(state.scenario.success || 'Intention kept.') : 'Your task is still unfinished.'}</p><p>${Math.round(state.elapsed / 1000)}s · ${state.log.length} actions · ${state.recalled} reminders${state.distractionTaps ? ` · ${state.distractionTaps} distraction taps` : ''}</p><button class="button primary" id="next-round">Try another day ↗</button><button class="text-button" id="result-profile">Can your stand-in do it? →</button></div>`;
+  if (['finished','expired','lost'].includes(state.phase)) html = `<div class="reveal-card"><div class="result-symbol">${state.phase === 'finished' ? '↗' : '↻'}</div><div class="eyebrow">${replayMode ? 'REPLAY · ' : ''}${state.phase === 'finished' ? 'INTENTION KEPT' : state.phase==='lost'?'FRIEND FINISHED':'LOST IN THE PHONE'}</div><h2>${state.phase === 'finished' ? 'You can put it down.' : state.phase==='lost'?'Your friend finished first.':'The phone won.'}</h2><p>${state.phase === 'finished' ? esc(state.scenario.success || 'Intention kept.') : 'Your task is still unfinished.'}</p><p>${esc(roundReport(state))}</p><button class="button primary" id="next-round" ${race && !['finished','intermission','disconnected'].includes(race.phase)?'disabled':''}>${race?.phase==='intermission'?(race.ready[0]?'Waiting for friend…':`Ready for round ${race.round+2} ↗`):race?.phase==='playing'?'Waiting for friend…':'Try another day ↗'}</button><button class="text-button" id="result-profile">Can your stand-in do it? →</button></div>`;
   if ($('phone-overlay').innerHTML !== html) $('phone-overlay').innerHTML = html;
 }
 function renderNotification() {
@@ -168,12 +180,14 @@ function renderNotification() {
   if (lastNotificationMarkup !== html) { $('notification-banner').innerHTML = html; lastNotificationMarkup = html; }
 }
 async function agentPlay() {
+  flushEdit();
   if (agentRunning) { stopAgent(); toast('Your turn. The stand-in is paused.'); return; }
   if (!mesh.ready && !peer.ready && !local.session) { $('mesh-dialog').showModal(); return; }
-  if (race?.id === state.roundId && state.phase === 'playing') state.controller = 'agent'; else newRound('agent'); agentRunning = true; $('agent-round').textContent = 'Watch AI play';
+  if (race && state.roundId===`${race.id}:${race.round}` && state.phase === 'playing') state.controller = 'agent'; else newRound('agent'); agentRunning = true; $('agent-round').textContent = 'Watch AI play';
   const roundId = state.roundId;
   const ownerId = agentOwnerId = uuid();
   const matchId = race?.id || roundId;
+  let staleRetries=0;
   try {
     while (agentRunning && state.phase === 'playing' && state.roundId === roundId) {
       const pending = decisions.begin(state, { matchId, controllerId: ownerId });
@@ -182,8 +196,10 @@ async function agentPlay() {
       const result = await (mesh.ready ? mesh : peer.ready ? peer : local).generate({ kind: 'action', binding: pending.binding, observation, memory, history: state.log.map(e => ({type:e.action.type,target:e.action.target,...(e.action.value !== undefined ? {value:e.action.value} : {})})), profile: { id: profile.id, objective: profile.objective, version: profile.version, examples: profile.examples.slice(-6) } }, AbortSignal.any([requestController.signal, pending.signal]));
       inferenceMs += performance.now() - started;
       if (!agentRunning || agentOwnerId !== ownerId || state.roundId !== roundId) break;
+      state=advance(state,performance.now()-roundStarted);
       const applied = decisions.accept(state, result, { matchId: race?.id || state.roundId, controllerId: agentOwnerId });
-      if (!applied.accepted) throw new Error(applied.reason);
+      if (!applied.accepted) {if(applied.stale && staleRetries++<3){remember(observe(state));render();continue;}throw new Error(applied.reason);}
+      staleRetries=0;
       state = applied.state; remember(observe(state)); render();
       $('round-status').textContent = `Stand-in: ${state.log.at(-1).action.target.replace('app:', 'opened ')} · ${mesh.ready ? 'distributed helper' : peer.ready ? 'connected peer' : 'this device'}`;
       if (state.phase === 'finished') complete();
@@ -192,38 +208,25 @@ async function agentPlay() {
   } catch (error) { if (agentRunning) { report(error); $('round-status').textContent = `${error.message} You can take over.`; } }
   finally { if (agentOwnerId === ownerId) stopAgent(); }
 }
+const matches=createMatchOwner({templates,send:message=>peer.sendGame(message),
+  onChange:match=>{race=match;raceSummary();renderOverlay();},
+  onInvite:invitation=>{$('race-invite').hidden=!invitation;if(invitation&&!$('mesh-dialog').open)$('mesh-dialog').showModal();},
+  onOpponentFinished:()=>{if(state.phase==='playing'){flushEdit();state=advance(state,performance.now()-roundStarted);if(state.phase==='playing')state.phase='lost';complete();render();}},
+  onStart:({roundId,scenario,lateMs})=>newRound('human',{raceId:roundId,scenario,lateMs}),
+});
 function raceSummary() {
-  if (!race) return;
-  const seconds = x => `${(x.elapsed / 1000).toFixed(1)}s`;
-  $('race-status').textContent = race.local && race.remote
-    ? `You: ${race.local.finished ? seconds(race.local) : 'unfinished'} · Friend: ${race.remote.finished ? seconds(race.remote) : 'unfinished'}. Friendly comparison; no ranking.`
-    : race.remote ? 'Your friend finished. Keep your intention.' : race.local ? 'Your round is saved. Waiting for your friend.' : 'Same task. Two phones. Finish the intention.';
+  if(!race){$('race-status').textContent='';return;}
+  const last=race.history.at(-1),partial=last && last.results.every(r=>!r.finished) ? ` Both timed out: ${last.results[0].obligations} parts completed vs ${last.results[1].obligations}; ${last.results[0].mistakes} mistakes vs ${last.results[1].mistakes}.` : '';
+  const score=`You ${race.score[0]} · Friend ${race.score[1]}`;
+  $('race-status').textContent=race.phase==='countdown'?`Round ${race.round+1} starts in ${Math.max(0,Math.ceil((race.startAt-Date.now())/1000))}…`:
+    race.phase==='finished'?`${score}. ${race.score[0]===race.score[1]?'Match tied.':race.score[0]>race.score[1]?'You won the match.':'Your friend won the match.'}`:
+    race.phase==='disconnected'?'Friend disconnected. You can finish this phone on your own.':
+    race.phase==='intermission'?`${score}. Round ${race.round+1} complete. Ready for the next?`:
+    race.phase==='waiting'?`${score}. Waiting for your friend to get ready.`:
+    `Round ${race.round+1} of 3 · ${score} · Friend: ${race.opponent}`;
+  if(['intermission','finished'].includes(race.phase))$('race-status').textContent+=partial;
 }
-function handleGame(message) {
-  try {
-    if (typeof message.raceId !== 'string' || message.raceId.length > 100) return;
-    if (message.type === 'invite' && SCENARIOS.some(s => s.id === message.scenarioId)) {
-      if (state.phase === 'playing') { peer.sendGame({type:'declined',raceId:message.raceId}); return; }
-      invitation = { id: message.raceId, scenarioId: message.scenarioId }; $('race-invite').hidden = false;
-      if (!$('mesh-dialog').open) $('mesh-dialog').showModal(); return;
-    }
-    if (message.type === 'ready' && race?.id === message.raceId && race.role === 'host' && race.phase === 'waiting') {
-      race.phase = 'playing'; peer.sendGame({type:'start',raceId:race.id}); newRound('human',{raceId:race.id,scenario:SCENARIOS.find(s=>s.id===race.scenarioId)}); raceSummary(); return;
-    }
-    if (message.type === 'start' && race?.id === message.raceId && race.role === 'guest' && race.phase === 'waiting') {
-      race.phase = 'playing'; newRound('human',{raceId:race.id,scenario:SCENARIOS.find(s=>s.id===race.scenarioId)}); raceSummary(); return;
-    }
-    if (!race || race.id !== message.raceId) return;
-    if (message.type === 'leave' || message.type === 'declined') { $('race-status').textContent = 'Friend left or declined this round. You can keep playing.'; race = null; return; }
-    if (message.type === 'result' && !race.remote) {
-      const record = message.record, scenario = SCENARIOS.find(s=>s.id===race.scenarioId);
-      if (record?.roundId !== race.id || record.version !== RULES.version || !Array.isArray(record.log) || record.log.length > RULES.maxActions || !Number.isFinite(record.elapsed) || record.elapsed < 0 || record.elapsed > roundDuration(scenario) || record.log.some(e=>!Number.isFinite(e.at)||e.at<0||e.at>record.elapsed)) throw new Error('Invalid peer replay');
-      const verified = replay({...record,scenario});
-      if (!['finished','expired'].includes(verified.phase)) throw new Error('Peer replay does not finish the task');
-      race.remote = {finished:verified.phase==='finished',elapsed:record.elapsed}; raceSummary();
-    }
-  } catch (error) { report(error); }
-}
+function handleGame(message) {try{matches.receive(message,state.phase==='playing');}catch(error){report(error);}}
 function renderProfile() {
   $('profile-summary').textContent = `${profile.rounds || 0} completed demonstrations · ${profile.examples.length} remembered decisions · profile v${profile.version}`;
   $('training-objective').value = profile.objective;
@@ -263,18 +266,22 @@ $('soundless-notifications').onclick = () => dispatch({ type: 'tap', target: 'no
 $('phone').addEventListener('click', e => {
   const control = e.target.closest('[data-action]'); if (control) dispatch({ type: 'tap', target: control.dataset.action });
   if (e.target.closest('#dismiss-reveal')) { revealDismissed = true; renderOverlay(); }
-  if (e.target.closest('#next-round')) newRound();
+  if (e.target.closest('#next-round')) {if(race?.phase==='intermission')matches.ready();else newRound();}
   if (e.target.closest('#result-profile')) setMode('train');
 });
 $('phone').addEventListener('input', e => {
   if (!e.target.dataset.field) return;
-  dispatch({ type: 'type', target: e.target.dataset.field, value: e.target.value }, true, false);
+  if(state.controller!=='human'){stopAgent();state.controller='mixed';}
+  if(pendingEdit && pendingEdit.action.target!==e.target.dataset.field)flushEdit();
+  pendingEdit={action:{type:'type',target:e.target.dataset.field,value:e.target.value},at:performance.now()};
+  clearTimeout(editTimer);editTimer=setTimeout(flushEdit,120);
+  if(e.target.dataset.field.startsWith('search-'))flushEdit();
   if (e.target.dataset.field.startsWith('search-')) {
     const results = document.createElement('div'); results.innerHTML = screen();
     const current = $('phone-screen').querySelector('.mini-search-results');
     if (current) current.innerHTML = results.querySelector('.mini-search-results').innerHTML;
   }
-  const send = $('message-compose')?.querySelector('button'); if (send) send.disabled = !state.drafts[state.screen.contact]?.trim();
+  const send = $('message-compose')?.querySelector('button'); if (send) send.disabled = !(e.target.dataset.field==='reply'?e.target.value:state.drafts[state.screen.contact])?.trim();
 });
 $('phone').addEventListener('submit', e => { if (e.target.id === 'message-compose') { e.preventDefault(); dispatch({ type: 'tap', target: 'send' }); } });
 $('train-play').onclick = () => newRound(); $('watch-agent').onclick = guarded(agentPlay);
@@ -293,12 +300,10 @@ $('race-peer').onclick = guarded(() => {
   toasterEntry.cancel();
   if (peer.state !== 'connected') { $('mesh-dialog').showModal(); return; }
   if (state.phase === 'playing') throw new Error('Finish this round before inviting a friend.');
-  race = {id:uuid(),scenarioId:selectedChallenge().id,role:'host',phase:'waiting'};
-  peer.sendGame({type:'invite',raceId:race.id,scenarioId:race.scenarioId}); $('race-status').textContent = 'Invitation sent. Waiting for your friend.';
+  matches.invite();
 });
 $('accept-race').onclick = guarded(() => {
-  if (!invitation) return; race = {...invitation,role:'guest',phase:'waiting'}; invitation = null; $('race-invite').hidden = true; $('mesh-dialog').close();
-  peer.sendGame({type:'ready',raceId:race.id}); $('race-status').textContent = 'Ready. Waiting for the round to start.';
+  $('race-invite').hidden = true; $('mesh-dialog').close(); matches.accept();
 });
 $('connection').onclick = () => { updateConnection(); $('mesh-dialog').showModal(); }; $('about-button').onclick = () => $('about-dialog').showModal();
 document.querySelectorAll('.close-dialog').forEach(b => b.onclick = () => b.closest('dialog').close());
@@ -330,10 +335,15 @@ $('reply-form').onsubmit = guarded(async e => {
 });
 $('copy-reply').onclick = guarded(async () => { if (!$('reply-output').value.trim()) throw new Error('There is no reply to copy yet.'); await navigator.clipboard.writeText($('reply-output').value); toast('Reply copied. You choose where to send it.'); });
 interval = setInterval(() => {
+  matches.tick(); if(race?.phase==='countdown')raceSummary();
+  flushEdit();
   if (replayMode) { const at = performance.now() - replayStarted; state = replay(lastReplay,at); render(); if (at >= lastReplay.elapsed) replayMode = false; return; }
   if (state.phase !== 'playing') return;
   const prevCount = state.notifications.length; state = advance(state,performance.now() - roundStarted);
   renderTime(); renderOverlay(); renderNotification();
+  const game=state.distractions[state.screen.distractionId];
+  if(game?.decision&&game.stage==='wait'){const key=`${game.readyAt}:${Math.ceil((game.readyAt-state.elapsed)/1000)}`;if($('phone-screen').dataset.waitKey!==key){$('phone-screen').innerHTML=screen();$('phone-screen').dataset.waitKey=key;}}
+  if(race)matches.status(blockingNotification(state)||lockedDistraction(state)?'interrupted':state.phase==='playing'?'playing':'finished');
   if (state.notifications.length !== prevCount) remember(observe(state));
   if (state.phase === 'expired') { complete(); render(); }
 },250);

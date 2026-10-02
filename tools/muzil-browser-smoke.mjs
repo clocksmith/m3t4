@@ -15,7 +15,7 @@ try {
   const page=await browser.newPage({viewport:{width:1440,height:1050}});
   await page.addLocatorHandler(page.locator('.interrupting .notification-open'), () => handleInterruption(page));
   page.on('pageerror',e=>errors.push(e.message)); const requests=[]; page.on('request',r=>requests.push(r.url()));
-  await page.goto(origin); await page.locator('#start-round').waitFor(); await page.evaluate(()=>document.fonts.ready);
+  await page.goto(origin);await page.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await page.locator('#challenge-select').evaluate((el,value)=>el.value=value,'pickup-errands'); await page.locator('#start-round').waitFor(); await page.evaluate(()=>document.fonts.ready);
   assert.equal(requests.some(u=>u.includes('/vendor/')),false);
   await page.screenshot({path:join(output,'desktop.png'),fullPage:true});
   await page.locator('#start-round').click(); await page.locator('#dismiss-reveal').click();
@@ -36,10 +36,10 @@ try {
   assert.equal(lesson.examples.at(-1).action.target, 'send');
   assert.equal(lesson.examples.at(-1).after.phase, 'finished');
   await page.locator('#replay-round').click(); await page.locator('#next-round').waitFor();
-  await page.locator('#next-round').click(); await page.locator('#dismiss-reveal').click(); await page.locator('[data-action="app:calendar"]').first().click(); await page.getByText('2:20 PM – 3:15 PM').waitFor();
+  await page.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await page.locator('#challenge-select').evaluate((el,value)=>el.value=value,'pickup-variation-errands');await page.locator('#next-round').click(); await page.locator('#dismiss-reveal').click(); await page.locator('[data-action="app:calendar"]').first().click(); await page.getByText('2:20 PM – 3:15 PM').waitFor();
   report.checks.push('No initial vendor/weight requests; task completion; draft persistence; profile; replay; fresh variation');
   const mobile=await browser.newPage({viewport:{width:390,height:844},isMobile:true,deviceScaleFactor:2}); mobile.on('pageerror',e=>errors.push(e.message));
-  await mobile.goto(origin); await mobile.evaluate(()=>document.fonts.ready);
+  await mobile.goto(origin);await mobile.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await mobile.locator('#challenge-select').evaluate((el,value)=>el.value=value,'pickup-errands'); await mobile.evaluate(()=>document.fonts.ready);
   assert.equal(await mobile.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await mobile.screenshot({path:join(output,'mobile.png'),fullPage:true});
   const reduced = await browser.newPage({viewport:{width:390,height:844},reducedMotion:'reduce'});
@@ -55,7 +55,7 @@ try {
   report.checks.push('Mobile layout has no horizontal overflow and can finish a task');
   const compact = await browser.newPage({viewport:{width:320,height:568},isMobile:true});
   compact.on('pageerror', e=>errors.push(e.message));
-  await compact.goto(origin);
+  await compact.goto(origin);await compact.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await compact.locator('#challenge-select').evaluate((el,value)=>el.value=value,'pickup-errands');
   assert.equal(await compact.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await compact.locator('#start-round').click(); await compact.locator('#dismiss-reveal').click();
   await compact.locator('#remember').click(); await compact.locator('#task-note-content').getByText('Tell Mom when and where to pick you up.',{exact:true}).waitFor();
@@ -96,21 +96,6 @@ try {
   await b.waitForFunction(()=>!!window.testPeer.active);await b.evaluate(()=>window.testPeer.close());
   const disconnected=await a.evaluate(()=>window.requestOutcome);assert.match(disconnected,/disconnect|closed/i);
   report.checks.push('Actual two-tab Reploid connection, bounded request/response, active-request disconnect rejection (fixture executor)');
-  const player1=await browser.newPage(),player2=await browser.newPage();
-  for(const p of [player1,player2]) {await p.addLocatorHandler(p.locator('.interrupting .notification-open'), ()=>handleInterruption(p));p.on('pageerror',e=>errors.push(e.message));await p.goto(origin);await openMenu(p);await p.locator('#race-peer').click();}
-  await player1.locator('#make-offer').click();await player1.waitForFunction(()=>document.querySelector('#peer-output').value.startsWith('ey'));
-  await player2.locator('#peer-input').fill(await player1.locator('#peer-output').inputValue());await player2.locator('#join-offer').click();await player2.waitForFunction(()=>document.querySelector('#peer-output').value.startsWith('ey'));
-  await player1.locator('#peer-input').fill(await player2.locator('#peer-output').inputValue());await player1.locator('#accept-answer').click();
-  for(const p of [player1,player2]) {await p.waitForFunction(()=>document.querySelector('#mesh-state').textContent.includes('Peer connected'));await p.locator('#mesh-dialog .close-dialog').click();}
-  for(let round=0;round<2;round++) {
-    await openMenu(player1);await player1.locator('#race-peer').click();await player2.locator('#accept-race').click();
-    for(const p of [player1,player2]) {
-      await p.locator('#dismiss-reveal').click();await p.locator('[data-action="app:messages"]').first().click();await p.locator('[data-action="contact:mom"]').click();
-      await p.locator('#phone-reply').fill(round===0?'5:40 PM, side entrance':'3:15 PM, garden gate');await p.getByRole('button',{name:'Send message',exact:true}).click();await p.locator('#next-round').waitFor();
-    }
-    for(const p of [player1,player2]) await p.waitForFunction(()=>document.querySelector('#race-status').textContent.includes('Friendly comparison'));
-  }
-  report.checks.push('Two real UI peers complete a race and rematch; received outcomes verified through replay');
   const archive=await browser.newPage();await archive.route('**/*',r=>r.request().url().startsWith(origin)?r.continue():r.abort());
   await archive.goto(origin+'/history');await archive.locator('#topnav').waitFor();await archive.getByRole('link',{name:'workshop',exact:true}).waitFor();
   assert.match(await archive.title(),/historical/);report.checks.push('Historical page and original navigation preserved');

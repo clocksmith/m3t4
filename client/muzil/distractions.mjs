@@ -13,6 +13,7 @@ export function newDistraction(kind, seed, elapsed, attempt = 0, required = fals
 }
 export const timingPosition = (game, elapsed) => game.stopped ?? Math.abs(((elapsed - game.startedAt) % 2200) / 1100 - 1) * 100;
 export function distractionObservation(game, elapsed) {
+  if(game.decision) return decisionObservation(game,elapsed);
   const copy = DISTRACTIONS[game.kind], text = [copy.title, copy.hint], actions = [];
   const add = (target,label) => actions.push({type:'tap',target,label});
   if (game.required && game.chainStage === 'replies') {
@@ -60,4 +61,54 @@ export function actOnDistraction(game, target, elapsed) {
   }
   if (target === 'bait:stop') { game.stopped = timingPosition(game,elapsed); game.done = game.stopped >= 43 && game.stopped <= 57; }
   return game;
+}
+
+// Decision interruptions use a separate version so old replay chains remain exact.
+export function decisionDistraction(n, seed, elapsed) {
+  return {...newDistraction(n.distraction || 'reveal',seed,elapsed,0,true),decision:true,
+    interaction:n.interaction || 'media',notification:n,title:n.title,detail:n.detail || n.body,
+    stage:'choose',readyAt:elapsed,resolution:null,completed:false};
+}
+export function decisionObservation(g, elapsed) {
+  const text=[g.title],actions=[],add=(target,label)=>actions.push({type:'tap',target,label});
+  if(g.stage==='wait') {
+    text.push(g.resolution,elapsed<g.readyAt?`Continue in ${Math.ceil((g.readyAt-elapsed)/1000)} seconds.`:g.detail);
+    if(elapsed>=g.readyAt)add('bait:finish','Return to the phone');
+  } else if(g.interaction==='call') {
+    text.push('Incoming call. Answer for the full update, or decline and read the voicemail.');
+    add('bait:voicemail','Decline and read voicemail');add('bait:answer','Answer and listen');
+  } else if(g.interaction==='group') {
+    text.push(g.detail);
+    if(!g.notification.followup) {add('bait:vague','Sure, maybe!');add('bait:postpone','Ask me again in a moment');}
+    add('bait:clear','I cannot join. I am arranging my pickup.');
+  } else if(g.interaction==='conflict') {
+    text.push(g.detail,'Your draft will stay as you left it.');
+    add('bait:retain','Keep working from my previous plan');add('bait:inspect',g.notification.app==='messages'?'Read the clinic update':'Inspect the updated appointment');
+  } else if(g.interaction==='timing') {
+    text.push('An accurate stop lets you leave immediately. A miss costs four seconds.');
+    if(g.stopped===null) {text.push(`Marker at ${Math.round(timingPosition(g,elapsed))}%; target 43–57%.`);add('bait:stop','Stop the marker');add('bait:long-exit','Take the guaranteed six-second exit');}
+    else add('bait:finish','Return to the phone');
+  } else if(g.done) {
+    text.push(DISTRACTIONS[g.kind].reward);add('bait:finish','Back to my task');add('bait:source','Keep reading in Doom Scroll');
+  } else {
+    const view=distractionObservation({...g,decision:false,required:false},elapsed);
+    text.push(...view.text);actions.push(...view.actions.filter(a=>a.target!=='bait:leave'));
+  }
+  return {text,actions};
+}
+export function actOnDecision(g,target,elapsed) {
+  g.taps++;
+  if(['bait:finish','bait:source','bait:clear','bait:vague','bait:postpone','bait:inspect','bait:retain'].includes(target)) {g.completed=true;g.resolution=target.slice(5);return g;}
+  if(target==='bait:answer' || target==='bait:voicemail') {
+    g.route=target==='bait:answer'?'answer':'voicemail';
+    g.stage='wait';g.readyAt=elapsed+(target==='bait:answer'?4000:0);
+    g.resolution=target==='bait:answer'?'Listening…':g.notification.voicemail || 'Read the latest message for the update.';
+    if(target==='bait:voicemail') g.detail=g.resolution;
+  } else if(target==='bait:stop' || target==='bait:long-exit') {
+    if(target==='bait:stop') {g.stopped=timingPosition(g,elapsed);g.done=g.stopped>=43&&g.stopped<=57;}
+    g.stage='wait';g.readyAt=elapsed+(g.done?0:target==='bait:stop'?4000:6000);
+    g.resolution=g.done?'Perfect stop. You can go.':target==='bait:stop'?'Missed. Wait for the clip to end.':'Taking the longer exit.';
+    g.detail=g.resolution;
+  } else actOnDistraction(g,target,elapsed);
+  return g;
 }

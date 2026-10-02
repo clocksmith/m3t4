@@ -3,10 +3,10 @@
 The live catalog is `client/muzil/challenges.json`, a `muzil-challenges/v1`
 object containing a `challenges` array. Add a JSON entry to add a round; no new
 controller or screen code is needed for the existing apps. The catalog currently
-contains eight tasks: two pickups, a locker handoff, an early-shift alarm, a moved
+contains three seeded evolving task families plus eight fixed practice tasks: two pickups, a locker handoff, an early-shift alarm, a moved
 meeting, groceries, a train departure and an address to send.
 
-Each shipped round has one outcome. Make it difficult through app navigation,
+Each round has one coherent intention, which can entail linked obligations. Make it difficult through app navigation,
 information gathering and interruptions; do not bundle unrelated errands.
 
 A challenge owns its ID/version, title, intention, success copy, displayed date,
@@ -58,7 +58,8 @@ stand-in workspace after a round:
   requires all listed words/phrases. `choice` takes `options` and `expected` and
   rejects messages mentioning multiple alternatives.
 - `note`: checks each saved note using `includes` and/or `choice`; one note must satisfy all conditions. Deleted notes do not count.
-- `alarm`: the specified 24-hour `time` must exist in the saved alarm list.
+- `alarm`: the specified 24-hour `time` must exist in the enabled alarm list.
+  Version 2 can set `absent: true` to require disabling or deleting an obsolete alarm.
 
 Text matching normalizes case, Unicode and punctuation and matches whole phrases.
 It is deliberately bounded and does not interpret negation, synonyms, or arbitrary
@@ -87,7 +88,7 @@ The intention appears as a centered **m3t4.ai task** thought above the phone.
 After five seconds the words scatter away. Remember why reveals it again without
 changing apps, including during an interruption. It is outside the simulated OS.
 
-New rounds use `muzil-phone/2`. A notification appears below the status bar and
+Fixed practice uses the original mandatory detours; saved `muzil-phone/2` rounds retain these rules. New round records use `muzil-phone/3`. A notification appears below the status bar and
 must be opened; there is no dismissal action or Home/Back bypass. Plain alerts
 open their app. `distraction` selects `reveal`, `pairs` or `timing`, followed by
 group-chat replies, a required reaction, and a link into Doom Scroll. A timing
@@ -103,6 +104,42 @@ same rules for humans and agents; drafts persist and detours never win the task.
 Actions, reactions, card layouts and timing results reconstruct from replay.
 Version 1 replays preserve their original optional detours and dismissal rules;
 `interruptive` remains part of that legacy format.
+
+## Evolving challenges (version 2)
+
+Challenge version 2 retains the initial-state and goal shapes, and adds:
+
+- `pressure.minimumGapMs` (1,000–30,000) and `pressure.recoveryMs`, mapping
+  interruption types to 2,000–15,000 ms windows with a required `message` default.
+- An optional `family` (`coordinate`, `prepare`, `repair`) and recorded `seed`.
+  These shipped templates regenerate a coherent phone at selection; a custom
+  version 2 import without `family` plays exactly its authored configuration.
+- Notification `episode`, optional `after` prerequisite event ID, and optional
+  first-occurrence `trigger` (`calendar-left`, `fact-read`, `draft-started`,
+  `detour-return`, `plan-saved`) with `delayMs`. `at` is the fallback deadline.
+  Dependencies, active blockers and recovery windows can defer delivery.
+- Optional `effects`: a replacement `goal`, bounded string `facts`, incoming
+  `messages` (`contact`, `text`), and/or a Calendar update (`index`, full `event`
+  containing title/start/end/note). Effects apply when the banner is delivered.
+  External requirements never derive from the player's editable copy. Opening a
+  message notification reveals its persisted text. Already-earned wins are final.
+- Optional `interaction`: `call`, `group`, `conflict`, `timing`, or `media`, plus
+  `detail` and optional `voicemail`. Calls require a contact. Media uses the
+  existing `distraction` game. Timing accuracy earns a faster exit; misses and the
+  guaranteed exit are bounded waits, with the original clock still running.
+- Up to four uniquely identified `followups`. Shipped group choices arm one
+  clarification twelve seconds later; its definite response closes the thread.
+
+The director presents one pending blocking event at a time. It records delivered
+IDs, episode IDs and timestamps in `directorEvents`; it never replays an event
+just because its conversation continues. Phone rules v3 separate semantic actions
+from text-edit events. The same seed and scenario produce the same facts for both
+players; progress signals can differ because players take different actions.
+
+The result report counts actual time blocked, visits to a Calendar whose finish
+is obsolete, unsuccessful task messages, misses and unhelpful interruption
+choices. Match timeout scoring uses fulfilled goal leaves (`all` sums, `any`
+takes the best branch), then mistakes. It never awards notification taps.
 
 ## Doom Scroll
 
@@ -126,7 +163,9 @@ leaving the feed releases its GPU resources. The original round timer continues.
   deterministic feed content, shared actions and replay.
 - `npm run test:muzil:apps`: Calendar, alarms, Notes, Contacts and Messages editing,
   search, app-switch persistence, interrupted drafts and replay at desktop/mobile sizes.
-- `npm run test:muzil:browser`: desktop/mobile phone, drafts, demos, races/rematches.
+- `npm run test:muzil:browser`: desktop/mobile phone, drafts, demos and actual peer transport.
+- `npm run test:muzil:evolving`: current-information decisions and mobile replay.
+- `npm run test:muzil:match`: three-round match and fresh invitation over retained transport.
 - `node tools/muzil-interruption-smoke.mjs`: toaster controls, centered original thought,
   mandatory top banners, bounded detour chains, preserved drafts and replay.
 - `npm run test:muzil:doom`: WebGPU render, wheel/touch/keyboard input, bounded cards,

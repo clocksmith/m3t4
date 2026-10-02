@@ -939,6 +939,929 @@
           "interruptive": true
         }
       ]
+    },
+    {
+      "version": 2,
+      "id": "changing-coordinate",
+      "family": "coordinate",
+      "seed": "intro-coordinate",
+      "title": "Coordinate a pickup",
+      "intention": "Arrange your pickup after the appointment. Keep up with any changes.",
+      "success": "Your driver has the current plan.",
+      "date": "Monday, September 28",
+      "durationMs": 180000,
+      "initial": {
+        "contacts": [
+          {
+            "id": "parent",
+            "name": "Maya",
+            "messages": [
+              "I’m collecting you. Send me the finish time and entrance when you know."
+            ]
+          },
+          {
+            "id": "driver",
+            "name": "Sam",
+            "messages": [
+              "Let me know if you need a lift."
+            ]
+          },
+          {
+            "id": "reception",
+            "name": "Reception",
+            "messages": [
+              "Pickup is at the side entrance. Calendar has the finish time."
+            ]
+          },
+          {
+            "id": "group",
+            "name": "The group chat",
+            "messages": [
+              "We are deciding where to go after. Can you come?"
+            ]
+          }
+        ],
+        "calendar": [
+          {
+            "title": "Bike fitting",
+            "start": "14:20",
+            "end": "15:00",
+            "note": "Pickup at the side entrance."
+          }
+        ],
+        "notes": "Pickup: check the latest Reception message for the entrance. Allow ten minutes to get ready.",
+        "alarms": []
+      },
+      "goal": {
+        "kind": "message",
+        "contact": "parent",
+        "time": "15:00",
+        "choice": {
+          "options": [
+            "north entrance",
+            "garden entrance",
+            "side entrance"
+          ],
+          "expected": "side entrance"
+        }
+      },
+      "pressure": {
+        "minimumGapMs": 2500,
+        "recoveryMs": {
+          "message": 8000,
+          "call": 7000,
+          "group": 6000,
+          "conflict": 8000,
+          "timing": 5000,
+          "media": 6000
+        }
+      },
+      "interruptions": [
+        {
+          "id": "finish-changed",
+          "episode": "pickup",
+          "at": 6500,
+          "app": "calendar",
+          "title": "Appointment updated",
+          "body": "Bike fitting now finishes at 15:25. The old finish time was 15:00.",
+          "trigger": "calendar-left",
+          "delayMs": 0,
+          "interaction": "conflict",
+          "detail": "Clinic update: pickup is now 15:25, at the side entrance.",
+          "effects": {
+            "facts": {
+              "finish": "15:25"
+            },
+            "calendar": {
+              "index": 0,
+              "event": {
+                "title": "Bike fitting",
+                "start": "14:20",
+                "end": "15:25",
+                "note": "Clinic update: finishes at 15:25. Pickup at the side entrance."
+              }
+            },
+            "goal": {
+              "kind": "message",
+              "contact": "parent",
+              "time": "15:25",
+              "choice": {
+                "options": [
+                  "north entrance",
+                  "garden entrance",
+                  "side entrance"
+                ],
+                "expected": "side entrance"
+              }
+            }
+          }
+        },
+        {
+          "id": "driver-changed",
+          "episode": "pickup",
+          "at": 22000,
+          "app": "messages",
+          "title": "Maya",
+          "body": "Sam is collecting you instead. Please send the plan to Sam.",
+          "after": "finish-changed",
+          "trigger": "draft-started",
+          "delayMs": 1000,
+          "contact": "parent",
+          "effects": {
+            "facts": {
+              "driver": "driver"
+            },
+            "goal": {
+              "kind": "message",
+              "contact": "driver",
+              "time": "15:25",
+              "choice": {
+                "options": [
+                  "north entrance",
+                  "garden entrance",
+                  "side entrance"
+                ],
+                "expected": "side entrance"
+              }
+            }
+          }
+        },
+        {
+          "id": "entrance-changed",
+          "episode": "pickup",
+          "at": 40000,
+          "app": "messages",
+          "title": "Reception is calling",
+          "body": "There has been a change to pickup.",
+          "after": "driver-changed",
+          "contact": "reception",
+          "interaction": "call",
+          "detail": "Pickup has moved to the north entrance. The finish time is still 15:25.",
+          "voicemail": "The old entrance is closed. Check our latest message for the replacement.",
+          "effects": {
+            "facts": {
+              "entrance": "north entrance"
+            },
+            "messages": [
+              {
+                "contact": "reception",
+                "text": "Pickup moved to the north entrance; side entrance is closed. Finish time: 15:25."
+              }
+            ],
+            "goal": {
+              "kind": "message",
+              "contact": "driver",
+              "time": "15:25",
+              "choice": {
+                "options": [
+                  "north entrance",
+                  "garden entrance",
+                  "side entrance"
+                ],
+                "expected": "north entrance"
+              }
+            }
+          }
+        },
+        {
+          "id": "group-plan",
+          "episode": "group-plan",
+          "at": 55000,
+          "app": "messages",
+          "title": "The group chat",
+          "body": "Are you coming with us, or arranging your pickup?",
+          "contact": "group",
+          "trigger": "fact-read",
+          "delayMs": 25000,
+          "interaction": "group",
+          "detail": "They need a definite answer before reserving a table."
+        },
+        {
+          "id": "reminder-request",
+          "episode": "pickup",
+          "at": 76000,
+          "app": "messages",
+          "title": "Sam",
+          "body": "Set a reminder for 15:15 before you leave, then send me the pickup time and entrance.",
+          "after": "entrance-changed",
+          "contact": "driver",
+          "effects": {
+            "facts": {
+              "alarm": "15:15"
+            },
+            "goal": {
+              "all": [
+                {
+                  "kind": "message",
+                  "contact": "driver",
+                  "time": "15:25",
+                  "choice": {
+                    "options": [
+                      "north entrance",
+                      "garden entrance",
+                      "side entrance"
+                    ],
+                    "expected": "north entrance"
+                  }
+                },
+                {
+                  "kind": "alarm",
+                  "time": "15:15"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "timing-invite",
+          "episode": "timing",
+          "at": 98000,
+          "app": "feed",
+          "title": "One perfect tap",
+          "body": "Stop in the green zone to get out quickly. Or take the longer exit.",
+          "interaction": "timing",
+          "distraction": "timing"
+        },
+        {
+          "id": "photo-tag",
+          "episode": "photo",
+          "at": 125000,
+          "app": "feed",
+          "title": "Someone tagged you",
+          "body": "A pigeon has your exact expression. Three tiles. Then you can leave.",
+          "interaction": "media",
+          "distraction": "reveal"
+        }
+      ],
+      "followups": [
+        {
+          "id": "group-clarify",
+          "episode": "group-plan",
+          "at": 179000,
+          "app": "messages",
+          "title": "The group chat",
+          "body": "We still need a yes or no. Are you joining us?",
+          "contact": "group",
+          "interaction": "group",
+          "followup": true,
+          "delayMs": 12000,
+          "detail": "One definite answer will close this thread."
+        }
+      ]
+    },
+    {
+      "version": 2,
+      "id": "changing-prepare",
+      "family": "prepare",
+      "seed": "intro-prepare",
+      "title": "Prepare to leave",
+      "intention": "Get your pickup plan ready: save the entrance, set a reminder ten minutes before pickup, and confirm with your driver.",
+      "success": "Your driver has the current plan.",
+      "date": "Monday, September 28",
+      "durationMs": 180000,
+      "initial": {
+        "contacts": [
+          {
+            "id": "parent",
+            "name": "Maya",
+            "messages": [
+              "I’m collecting you. Send me the finish time and entrance when you know."
+            ]
+          },
+          {
+            "id": "driver",
+            "name": "Sam",
+            "messages": [
+              "Let me know if you need a lift."
+            ]
+          },
+          {
+            "id": "reception",
+            "name": "Reception",
+            "messages": [
+              "Pickup is at the side entrance. Calendar has the finish time."
+            ]
+          },
+          {
+            "id": "group",
+            "name": "The group chat",
+            "messages": [
+              "We are deciding where to go after. Can you come?"
+            ]
+          }
+        ],
+        "calendar": [
+          {
+            "title": "Eye appointment",
+            "start": "14:50",
+            "end": "15:30",
+            "note": "Pickup at the side entrance."
+          }
+        ],
+        "notes": "Pickup: check the latest Reception message for the entrance. Allow ten minutes to get ready.",
+        "alarms": []
+      },
+      "goal": {
+        "all": [
+          {
+            "kind": "message",
+            "contact": "parent",
+            "time": "15:30",
+            "choice": {
+              "options": [
+                "north entrance",
+                "garden entrance",
+                "side entrance"
+              ],
+              "expected": "side entrance"
+            }
+          },
+          {
+            "kind": "alarm",
+            "time": "15:20"
+          },
+          {
+            "kind": "note",
+            "includes": [
+              "side entrance"
+            ]
+          }
+        ]
+      },
+      "pressure": {
+        "minimumGapMs": 2500,
+        "recoveryMs": {
+          "message": 7000,
+          "call": 6000,
+          "group": 5000,
+          "conflict": 7000,
+          "timing": 4000,
+          "media": 5000
+        }
+      },
+      "interruptions": [
+        {
+          "id": "finish-changed",
+          "episode": "pickup",
+          "at": 6500,
+          "app": "calendar",
+          "title": "Appointment updated",
+          "body": "Eye appointment now finishes at 15:55. The old finish time was 15:30.",
+          "trigger": "calendar-left",
+          "delayMs": 0,
+          "interaction": "conflict",
+          "detail": "Clinic update: pickup is now 15:55, at the side entrance.",
+          "effects": {
+            "facts": {
+              "finish": "15:55"
+            },
+            "calendar": {
+              "index": 0,
+              "event": {
+                "title": "Eye appointment",
+                "start": "14:50",
+                "end": "15:55",
+                "note": "Clinic update: finishes at 15:55. Pickup at the side entrance."
+              }
+            },
+            "goal": {
+              "all": [
+                {
+                  "kind": "message",
+                  "contact": "parent",
+                  "time": "15:55",
+                  "choice": {
+                    "options": [
+                      "north entrance",
+                      "garden entrance",
+                      "side entrance"
+                    ],
+                    "expected": "side entrance"
+                  }
+                },
+                {
+                  "kind": "alarm",
+                  "time": "15:45"
+                },
+                {
+                  "kind": "note",
+                  "includes": [
+                    "side entrance"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "driver-changed",
+          "episode": "pickup",
+          "at": 22000,
+          "app": "messages",
+          "title": "Maya",
+          "body": "Sam is collecting you instead. Please send the plan to Sam.",
+          "after": "finish-changed",
+          "trigger": "draft-started",
+          "delayMs": 1000,
+          "contact": "parent",
+          "effects": {
+            "facts": {
+              "driver": "driver"
+            },
+            "goal": {
+              "all": [
+                {
+                  "kind": "message",
+                  "contact": "driver",
+                  "time": "15:55",
+                  "choice": {
+                    "options": [
+                      "north entrance",
+                      "garden entrance",
+                      "side entrance"
+                    ],
+                    "expected": "side entrance"
+                  }
+                },
+                {
+                  "kind": "alarm",
+                  "time": "15:45"
+                },
+                {
+                  "kind": "note",
+                  "includes": [
+                    "side entrance"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "entrance-changed",
+          "episode": "pickup",
+          "at": 40000,
+          "app": "messages",
+          "title": "Reception is calling",
+          "body": "There has been a change to pickup.",
+          "after": "driver-changed",
+          "contact": "reception",
+          "interaction": "call",
+          "detail": "Pickup has moved to the garden entrance. The finish time is still 15:55.",
+          "voicemail": "The old entrance is closed. Check our latest message for the replacement.",
+          "effects": {
+            "facts": {
+              "entrance": "garden entrance"
+            },
+            "messages": [
+              {
+                "contact": "reception",
+                "text": "Pickup moved to the garden entrance; side entrance is closed. Finish time: 15:55."
+              }
+            ],
+            "goal": {
+              "all": [
+                {
+                  "kind": "message",
+                  "contact": "driver",
+                  "time": "15:55",
+                  "choice": {
+                    "options": [
+                      "north entrance",
+                      "garden entrance",
+                      "side entrance"
+                    ],
+                    "expected": "garden entrance"
+                  }
+                },
+                {
+                  "kind": "alarm",
+                  "time": "15:45"
+                },
+                {
+                  "kind": "note",
+                  "includes": [
+                    "garden entrance"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "group-plan",
+          "episode": "group-plan",
+          "at": 55000,
+          "app": "messages",
+          "title": "The group chat",
+          "body": "Are you coming with us, or arranging your pickup?",
+          "contact": "group",
+          "trigger": "fact-read",
+          "delayMs": 25000,
+          "interaction": "group",
+          "detail": "They need a definite answer before reserving a table."
+        },
+        {
+          "id": "reminder-request",
+          "episode": "pickup",
+          "at": 76000,
+          "app": "messages",
+          "title": "Sam",
+          "body": "Set a reminder for 15:45 before you leave, then send me the pickup time and entrance.",
+          "after": "entrance-changed",
+          "contact": "driver",
+          "effects": {
+            "facts": {
+              "alarm": "15:45"
+            },
+            "goal": {
+              "all": [
+                {
+                  "kind": "message",
+                  "contact": "driver",
+                  "time": "15:55",
+                  "choice": {
+                    "options": [
+                      "north entrance",
+                      "garden entrance",
+                      "side entrance"
+                    ],
+                    "expected": "garden entrance"
+                  }
+                },
+                {
+                  "kind": "alarm",
+                  "time": "15:45"
+                },
+                {
+                  "kind": "note",
+                  "includes": [
+                    "garden entrance"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "timing-invite",
+          "episode": "timing",
+          "at": 98000,
+          "app": "feed",
+          "title": "One perfect tap",
+          "body": "Stop in the green zone to get out quickly. Or take the longer exit.",
+          "interaction": "timing",
+          "distraction": "timing"
+        },
+        {
+          "id": "photo-tag",
+          "episode": "photo",
+          "at": 125000,
+          "app": "feed",
+          "title": "Someone tagged you",
+          "body": "A pigeon has your exact expression. Three tiles. Then you can leave.",
+          "interaction": "media",
+          "distraction": "reveal"
+        }
+      ],
+      "followups": [
+        {
+          "id": "group-clarify",
+          "episode": "group-plan",
+          "at": 179000,
+          "app": "messages",
+          "title": "The group chat",
+          "body": "We still need a yes or no. Are you joining us?",
+          "contact": "group",
+          "interaction": "group",
+          "followup": true,
+          "delayMs": 12000,
+          "detail": "One definite answer will close this thread."
+        }
+      ]
+    },
+    {
+      "version": 2,
+      "id": "changing-repair",
+      "family": "repair",
+      "seed": "intro-repair",
+      "title": "Repair the plan",
+      "intention": "Correct your pickup reminder, remove the obsolete alarm, and confirm the latest plan with your driver.",
+      "success": "Your driver has the current plan.",
+      "date": "Monday, September 28",
+      "durationMs": 180000,
+      "initial": {
+        "contacts": [
+          {
+            "id": "parent",
+            "name": "Maya",
+            "messages": [
+              "I’m collecting you. Send me the finish time and entrance when you know."
+            ]
+          },
+          {
+            "id": "driver",
+            "name": "Alex",
+            "messages": [
+              "Let me know if you need a lift."
+            ]
+          },
+          {
+            "id": "reception",
+            "name": "Reception",
+            "messages": [
+              "Pickup is at the garden entrance. Calendar has the finish time."
+            ]
+          },
+          {
+            "id": "group",
+            "name": "The group chat",
+            "messages": [
+              "We are deciding where to go after. Can you come?"
+            ]
+          }
+        ],
+        "calendar": [
+          {
+            "title": "Bike fitting",
+            "start": "14:50",
+            "end": "15:30",
+            "note": "Pickup at the garden entrance."
+          }
+        ],
+        "notes": "Pickup: garden entrance. Allow ten minutes to get ready.",
+        "alarms": [
+          "15:20"
+        ]
+      },
+      "goal": {
+        "all": [
+          {
+            "kind": "message",
+            "contact": "parent",
+            "time": "15:30",
+            "choice": {
+              "options": [
+                "north entrance",
+                "garden entrance",
+                "side entrance"
+              ],
+              "expected": "garden entrance"
+            }
+          },
+          {
+            "kind": "alarm",
+            "time": "15:20"
+          }
+        ]
+      },
+      "pressure": {
+        "minimumGapMs": 2500,
+        "recoveryMs": {
+          "message": 6000,
+          "call": 5000,
+          "group": 4000,
+          "conflict": 6000,
+          "timing": 3000,
+          "media": 4000
+        }
+      },
+      "interruptions": [
+        {
+          "id": "finish-changed",
+          "episode": "pickup",
+          "at": 6500,
+          "app": "calendar",
+          "title": "Appointment updated",
+          "body": "Bike fitting now finishes at 15:55. The old finish time was 15:30.",
+          "trigger": "calendar-left",
+          "delayMs": 0,
+          "interaction": "conflict",
+          "detail": "Clinic update: pickup is now 15:55, at the garden entrance.",
+          "effects": {
+            "facts": {
+              "finish": "15:55"
+            },
+            "calendar": {
+              "index": 0,
+              "event": {
+                "title": "Bike fitting",
+                "start": "14:50",
+                "end": "15:55",
+                "note": "Clinic update: finishes at 15:55. Pickup at the garden entrance."
+              }
+            },
+            "goal": {
+              "all": [
+                {
+                  "kind": "message",
+                  "contact": "parent",
+                  "time": "15:55",
+                  "choice": {
+                    "options": [
+                      "north entrance",
+                      "garden entrance",
+                      "side entrance"
+                    ],
+                    "expected": "garden entrance"
+                  }
+                },
+                {
+                  "kind": "alarm",
+                  "time": "15:45"
+                },
+                {
+                  "kind": "alarm",
+                  "time": "15:20",
+                  "absent": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "driver-changed",
+          "episode": "pickup",
+          "at": 22000,
+          "app": "messages",
+          "title": "Maya",
+          "body": "Alex is collecting you instead. Please send the plan to Alex.",
+          "after": "finish-changed",
+          "trigger": "draft-started",
+          "delayMs": 1000,
+          "contact": "parent",
+          "effects": {
+            "facts": {
+              "driver": "driver"
+            },
+            "goal": {
+              "all": [
+                {
+                  "kind": "message",
+                  "contact": "driver",
+                  "time": "15:55",
+                  "choice": {
+                    "options": [
+                      "north entrance",
+                      "garden entrance",
+                      "side entrance"
+                    ],
+                    "expected": "garden entrance"
+                  }
+                },
+                {
+                  "kind": "alarm",
+                  "time": "15:45"
+                },
+                {
+                  "kind": "alarm",
+                  "time": "15:20",
+                  "absent": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "entrance-changed",
+          "episode": "pickup",
+          "at": 40000,
+          "app": "messages",
+          "title": "Reception is calling",
+          "body": "There has been a change to pickup.",
+          "after": "driver-changed",
+          "contact": "reception",
+          "interaction": "call",
+          "detail": "Pickup has moved to the north entrance. The finish time is still 15:55.",
+          "voicemail": "The old entrance is closed. Check our latest message for the replacement.",
+          "effects": {
+            "facts": {
+              "entrance": "north entrance"
+            },
+            "messages": [
+              {
+                "contact": "reception",
+                "text": "Pickup moved to the north entrance; garden entrance is closed. Finish time: 15:55."
+              }
+            ],
+            "goal": {
+              "all": [
+                {
+                  "kind": "message",
+                  "contact": "driver",
+                  "time": "15:55",
+                  "choice": {
+                    "options": [
+                      "north entrance",
+                      "garden entrance",
+                      "side entrance"
+                    ],
+                    "expected": "north entrance"
+                  }
+                },
+                {
+                  "kind": "alarm",
+                  "time": "15:45"
+                },
+                {
+                  "kind": "alarm",
+                  "time": "15:20",
+                  "absent": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "group-plan",
+          "episode": "group-plan",
+          "at": 55000,
+          "app": "messages",
+          "title": "The group chat",
+          "body": "Are you coming with us, or arranging your pickup?",
+          "contact": "group",
+          "trigger": "fact-read",
+          "delayMs": 25000,
+          "interaction": "group",
+          "detail": "They need a definite answer before reserving a table."
+        },
+        {
+          "id": "reminder-request",
+          "episode": "pickup",
+          "at": 76000,
+          "app": "messages",
+          "title": "Alex",
+          "body": "Set a reminder for 15:45 before you leave, then send me the pickup time and entrance.",
+          "after": "entrance-changed",
+          "contact": "driver",
+          "effects": {
+            "facts": {
+              "alarm": "15:45"
+            },
+            "goal": {
+              "all": [
+                {
+                  "kind": "message",
+                  "contact": "driver",
+                  "time": "15:55",
+                  "choice": {
+                    "options": [
+                      "north entrance",
+                      "garden entrance",
+                      "side entrance"
+                    ],
+                    "expected": "north entrance"
+                  }
+                },
+                {
+                  "kind": "alarm",
+                  "time": "15:45"
+                },
+                {
+                  "kind": "alarm",
+                  "time": "15:20",
+                  "absent": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "timing-invite",
+          "episode": "timing",
+          "at": 98000,
+          "app": "feed",
+          "title": "One perfect tap",
+          "body": "Stop in the green zone to get out quickly. Or take the longer exit.",
+          "interaction": "timing",
+          "distraction": "timing"
+        },
+        {
+          "id": "photo-tag",
+          "episode": "photo",
+          "at": 125000,
+          "app": "feed",
+          "title": "Someone tagged you",
+          "body": "A pigeon has your exact expression. Three tiles. Then you can leave.",
+          "interaction": "media",
+          "distraction": "reveal"
+        }
+      ],
+      "followups": [
+        {
+          "id": "group-clarify",
+          "episode": "group-plan",
+          "at": 179000,
+          "app": "messages",
+          "title": "The group chat",
+          "body": "We still need a yes or no. Are you joining us?",
+          "contact": "group",
+          "interaction": "group",
+          "followup": true,
+          "delayMs": 12000,
+          "detail": "One definite answer will close this thread."
+        }
+      ]
     }
   ]
 }

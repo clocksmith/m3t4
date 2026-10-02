@@ -26,10 +26,24 @@ try {
   }
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await page.screenshot({path:join(output,`dial-${width}.png`),fullPage:true});
-  await page.locator('#toaster-lever').click();assert.equal(await dial.isDisabled(),true);await page.locator('#dismiss-reveal').waitFor();assert.match(await page.locator('#round-clock').textContent(),/^03:00$/);
+  await page.locator('#toaster-lever').click();assert.equal(await dial.isDisabled(),true);
+  await page.waitForFunction(()=>document.getElementById('peek-phone').getAnimations().some(a=>a.playState==='running'&&a.effect.getTiming().duration===600));
+  const apex=await page.locator('#peek-phone').evaluate(el=>{
+   const a=el.getAnimations().find(a=>a.playState==='running'&&a.effect.getTiming().duration===600);a.pause();window.apex=a;
+   const box=el.getBoundingClientRect(),scene=el.closest('.toaster-scene').getBoundingClientRect();
+   el.style.pointerEvents='auto';const front=document.elementFromPoint(box.x+box.width/2,box.y+12)?.closest('#peek-phone')===el;el.style.pointerEvents='';
+   return {aboveScene:box.y<scene.y,front};
+  });assert.deepEqual(apex,{aboveScene:true,front:true});
+  await page.screenshot({path:join(output,`apex-${width}.png`),fullPage:true});
+  await page.evaluate(()=>window.apex.play());
+  await page.waitForFunction(()=>document.getElementById('phone').getAnimations().some(a=>a.playState==='running'));
+  assert.equal(await page.locator('#game-stage').evaluate(el=>el.inert),true);
+  assert.equal(await page.locator('#task-note-content').getAttribute('data-visible'),'false');
+  await page.locator('#dismiss-reveal').waitFor();assert.match(await page.locator('#round-clock').textContent(),/^03:00$/);
+  assert.equal(await page.locator('#game-stage').evaluate(el=>el.inert),false);
   await page.close();
  }
- checks.push('1440/390/320px: keyboard, click and drag dial; real touch input without scrolling; label and pointer update; lever starts round with full clock');
+ checks.push('1440/390/320px: keyboard, click and drag dial; real touch input without scrolling; label and pointer update; unclipped phone holds above scene; expansion blocks input and starts round with full clock');
  const settings=[];
  for(const level of [1,5]) {
   const page=await browser.newPage({viewport:{width:1440,height:1000}});

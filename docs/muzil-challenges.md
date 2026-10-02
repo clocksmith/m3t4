@@ -84,8 +84,8 @@ catalog; paired players need the same challenge configuration.
 
 ## Original thought and interruptions
 
-The intention appears as a centered **m3t4.ai task** thought above the phone.
-It appears for five seconds, scatters for seven, and repeats until the round ends.
+The intention appears above the phone beneath a centered **Remember why ↗**.
+It appears for five seconds, fades out for seven, and repeats until the round ends.
 Got it hides the current appearance. Remember why reveals it again without
 changing apps, including during an interruption. It is outside the simulated OS.
 

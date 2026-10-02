@@ -20,7 +20,7 @@ try {
   await page.screenshot({path:join(output,'desktop.png'),fullPage:true});
   await page.locator('#start-round').click(); await page.locator('#dismiss-reveal').click();
   await page.screenshot({path:join(output,'desktop-game.png'),fullPage:true});
-  await page.locator('[data-action="app:calendar"]').first().click(); await page.getByText('4:50 PM – 5:40 PM').waitFor();
+  await page.locator('[data-action="app:calendar"]').first().click(); await page.locator('.event-times').filter({hasText:'4:50 PM'}).getByText('5:40 PM',{exact:true}).waitFor();
   await page.locator('#phone-home').click(); await page.locator('[data-action="app:notes"]').click();
   assert.match(await page.getByRole('textbox',{name:'Notes',exact:true}).inputValue(),/side entrance/);
   await page.locator('#phone-home').click(); await page.locator('[data-action="app:messages"]').first().click(); await page.locator('[data-action="contact:mom"]').click();
@@ -36,7 +36,7 @@ try {
   assert.equal(lesson.examples.at(-1).action.target, 'send');
   assert.equal(lesson.examples.at(-1).after.phase, 'finished');
   await page.locator('#replay-round').click(); await page.locator('#next-round').waitFor();
-  await page.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await page.locator('#challenge-select').evaluate((el,value)=>el.value=value,'pickup-variation-errands');await page.locator('#next-round').click(); await page.locator('#dismiss-reveal').click(); await page.locator('[data-action="app:calendar"]').first().click(); await page.getByText('2:20 PM – 3:15 PM').waitFor();
+  await page.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await page.locator('#challenge-select').evaluate((el,value)=>el.value=value,'pickup-variation-errands');await page.locator('#next-round').click(); await page.locator('#dismiss-reveal').click(); await page.locator('[data-action="app:calendar"]').first().click(); await page.locator('.event-times').filter({hasText:'2:20 PM'}).getByText('3:15 PM',{exact:true}).waitFor();
   report.checks.push('No initial vendor/weight requests; task completion; draft persistence; profile; replay; fresh variation');
   const mobile=await browser.newPage({viewport:{width:390,height:844},isMobile:true,deviceScaleFactor:2}); mobile.on('pageerror',e=>errors.push(e.message));
   await mobile.goto(origin);await mobile.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await mobile.locator('#challenge-select').evaluate((el,value)=>el.value=value,'pickup-errands'); await mobile.evaluate(()=>document.fonts.ready);

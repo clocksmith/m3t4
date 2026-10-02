@@ -59,7 +59,7 @@ export function bindToasterEntry(start) {
     button.disabled = lever.disabled = dial.disabled = true;
     drag = null;
     const level = Number(dial.value), hold = 80 + (level - 1) * 160;
-    const lift = 76 + level * 9;
+    const lift = 172 + level * 9;
     scene.classList.add('toasting'); scene.setAttribute('aria-busy', 'true');
     const animate = (el, frames, options) => {
       const animation = el.animate(frames, { fill:'forwards', ...options });
@@ -75,12 +75,16 @@ export function bindToasterEntry(start) {
         await Promise.all([
           animate(phone, [
             { transform:'translateY(20px) rotate(-4deg)', offset:0 },
-            { transform:'translateY(20px) rotate(-4deg)', offset:.2 },
-            { transform:`translateY(-${lift + 8}px) rotate(${level}deg)`, offset:.8 },
+            { transform:`translateY(-${lift + 4}px) rotate(1deg)`, offset:.78 },
             { transform:`translateY(-${lift}px) rotate(0)`, offset:1 },
-          ], { duration:480, easing:'cubic-bezier(.2,.7,.2,1)' }),
+          ], { duration:720, easing:'cubic-bezier(.16,.75,.25,1)' }),
           animate(knob, [{ transform:'translateY(34px)' }, { transform:'translateY(0)' }], { delay:190, duration:200, easing:'ease-out' }),
         ]);
+        // Settle at the apex before the same rectangle grows into the game.
+        await animate(phone, [
+          { transform:`translateY(-${lift}px) rotate(0)` },
+          { transform:`translateY(-${lift}px) rotate(0)` },
+        ], { duration:600 });
       }
       if (current !== generation) return;
       start(phone.getBoundingClientRect());

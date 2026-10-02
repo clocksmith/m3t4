@@ -9,6 +9,7 @@
   <link rel="icon" href="/muzil/assets/mark.svg" type="image/svg+xml">
   <link rel="preload" href="/muzil/assets/Manrope.ttf" as="font" type="font/ttf" crossorigin>
   <link rel="stylesheet" href="/muzil/style.css">
+  <link rel="stylesheet" href="/muzil/ios.css">
 </head>
 <body>
   <header class="site-header">
@@ -45,18 +46,18 @@
           </div>
           <button id="start-round" data-boot-control disabled class="start-label" aria-label="Open your phone. Start the game.">Open your phone <span>↗</span></button>
         </div>
-        <p class="intro-hint">One intention. A phone full of distractions.</p>
+        <p class="intro-hint">One intention. A phone full of distractions.</p><p class="play-instructions">Complete a task using the phone’s apps. Handle interruptions and use the latest information before time runs out.</p>
       </div>
       <div class="phone-column" id="game-stage" hidden>
-        <aside class="task-thought" aria-label="m3t4.ai task"><div class="task-thought-heading">m3t4.ai task <button id="remember" aria-label="Remember my intention">Remember why ↗</button></div><div id="task-note-content"></div></aside><div class="phone-caption"><span id="round-clock" role="timer" aria-label="Time remaining">03:00</span></div>
+        <aside class="task-thought" aria-label="Your task"><div class="task-thought-heading"><button id="remember" aria-label="Remember my intention">Remember why ↗</button></div><div id="task-note-content"></div></aside><div class="phone-caption"><span class="clock-label">Time remaining</span><span id="round-clock" role="timer" aria-label="Time remaining">03:00</span></div>
         <div class="phone" id="phone" tabindex="-1" aria-label="Simulated phone">
           <div class="phone-hardware"><span class="phone-time">9:41</span><span class="island"></span><span class="phone-signals" aria-label="Full signal and battery">▂▄▆ <span>▰</span></span></div>
           <div id="phone-screen" class="phone-screen"></div>
           <div id="notification-banner" class="notification-banner"></div>
           <div id="phone-overlay" class="phone-overlay"></div>
-          <div class="phone-navigation"><button id="phone-back" aria-label="Back">‹</button><button id="phone-home" aria-label="Home"><span></span></button><button id="phone-switcher" aria-label="App switcher">▢</button></div>
+          <div class="phone-navigation"><button id="phone-home" aria-label="Home"><span></span></button></div>
         </div>
-        <div class="phone-footnote"><span id="phone-rule">Simulated phone</span><button id="soundless-notifications" aria-label="Open notifications">Notifications <span id="notification-count">0</span></button></div>
+        <div class="phone-footnote"><span id="phone-rule">Simulated phone</span><div class="simulation-controls"><button id="phone-back" aria-label="Back">Back</button><button id="phone-switcher" aria-label="App switcher">Apps</button><button id="soundless-notifications" aria-label="Open notifications">Alerts <span id="notification-count">0</span></button></div></div>
         <div class="round-status" id="round-status" role="status" aria-live="polite"></div>
       </div>
       <p id="race-status" class="small muted" role="status"></p>

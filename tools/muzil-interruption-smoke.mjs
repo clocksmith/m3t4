@@ -24,15 +24,15 @@ try {
  await cyclePage.locator('#start-round').click();
  await cyclePage.locator('#dismiss-reveal').click();
  await cyclePage.clock.runFor(5100);
- await cyclePage.locator('#task-note-content .task-scattered').waitFor();
+ await cyclePage.locator('#task-note-content').waitFor({state:'hidden'});
  await cyclePage.clock.runFor(7100);
  await cyclePage.locator('#task-note-content').getByText('Correct your pickup reminder, remove the obsolete alarm, and confirm the latest plan with your driver.',{exact:true}).waitFor();
  assert.equal(await cyclePage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
  await cyclePage.screenshot({path:join(output,'repair-goal-320.png'),fullPage:true});
  await cyclePage.locator('#dismiss-reveal').click();
- await cyclePage.locator('#task-note-content .task-scattered').waitFor();
+ await cyclePage.locator('#task-note-content').waitFor({state:'hidden'});
  await cyclePage.close();
- checks.push('The three-part pickup goal hides on request, scatters, then returns during the round');
+ checks.push('The three-part pickup goal hides on request, fades, then returns during the round');
  for(const width of [1440,390,320]) {
   const page=await browser.newPage({viewport:{width,height:width===1440?1000:844}});
   page.on('pageerror',e=>errors.push(e.message));
@@ -47,13 +47,25 @@ try {
   assert.ok(Math.abs(thought.x+thought.width/2-frame.x-frame.width/2)<2);
   assert.ok(thought.y+thought.height<frame.y);
   assert.equal(await page.locator('.task-thought').evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
+  assert.equal(await page.locator('#remember').getAttribute('aria-expanded'),'true');
   await page.locator('#dismiss-reveal').click();
+  await page.locator('#dismiss-reveal').waitFor({state:'hidden'});
+  assert.equal(await page.locator('#remember').getAttribute('aria-expanded'),'false');
+  assert.equal(await page.locator('#task-note-content').evaluate(el=>el.inert),true);
+  assert.deepEqual(await page.locator('#phone').boundingBox(),frame);
   await page.locator('[data-action="app:calendar"]').first().click();
   await page.locator('#remember').click();await page.locator('#task-note-content').getByText('Tell Mom when and where to pick you up.',{exact:true}).waitFor();
   await page.locator('#phone-screen').getByRole('heading',{name:'Calendar',exact:true}).waitFor();
   await page.screenshot({path:join(output,`task-note-${width}.png`),fullPage:true});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
-  await page.clock.runFor(7300);await page.locator('.interrupting .notification-open').waitFor();
+  await page.clock.runFor(5500);
+  await page.locator('#dismiss-reveal').waitFor({state:'hidden'});
+  assert.equal(await page.locator('#remember').getAttribute('aria-expanded'),'false');
+  assert.deepEqual(await page.locator('#phone').boundingBox(),frame);
+  await page.locator('#remember').click();
+  assert.equal(await page.locator('#remember').getAttribute('aria-expanded'),'true');
+  await page.locator('#dismiss-reveal').click();
+  await page.clock.runFor(1800);await page.locator('.interrupting .notification-open').waitFor();
   await page.locator('.notification-toast').evaluate(el=>{el.testIdentity=true;});
   await page.clock.runFor(1000);
   assert.equal(await page.locator('.notification-toast').evaluate(el=>el.testIdentity),true);
@@ -69,7 +81,7 @@ try {
   assert.equal(await page.locator('.phone-navigation').evaluate(el=>el.inert),false);
   await page.close();
  }
- checks.push('Lever starts real rounds at 1440, 390 and 320px; three-choice menu; external task recall preserves Calendar; no overflow; banners stay below the status bar, cannot dismiss, and force a complete detour into Doom Scroll');
+ checks.push('Lever starts real rounds at 1440, 390 and 320px; three-choice menu; task fades after five seconds or Got it, repeated recall preserves Calendar and phone position; no overflow; banners stay below the status bar, cannot dismiss, and force a complete detour into Doom Scroll');
  const page=await browser.newPage({viewport:{width:390,height:844},reducedMotion:'reduce'});
  page.on('pageerror',e=>errors.push(e.message));
  await page.clock.install();await page.goto(origin);await page.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await page.locator('#challenge-select').evaluate((el,value)=>el.value=value,'pickup-errands');

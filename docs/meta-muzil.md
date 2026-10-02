@@ -20,9 +20,16 @@ integration path, not fulfillment of that distributed-partition target.
   keys. It changes the body warmth, warm-up duration and phone pop height. Entry
   time does not consume the round clock; reduced motion skips the animation.
   The menu has only Play, Watch AI play, and Play with a friend. A centered
-  m3t4.ai task thought sits above the phone. It appears for five seconds,
-  scatters for seven, then returns throughout the round. Dismissing an appearance
-  hides that appearance; recall reveals the thought outside the simulated phone.
+  task sits above the phone beneath a centered “Remember why ↗”. It appears for
+  five seconds, fades out for seven, then repeats throughout the round. “Got it”
+  hides that appearance; recall reveals it for another five seconds without
+  navigating the phone. The text keeps its layout space while hidden, so the
+  phone does not move. Hidden text is inert and excluded from accessibility.
+  The phone keeps a narrow 9:19.5 aspect ratio. Messages, Calendar, Notes,
+  Contacts and Clock use familiar app layouts with working controls.
+  The toaster phone rises in front of transparent page copy, settles for 600 ms,
+  then expands over 950 ms. The task reveal and game clock start after expansion;
+  reduced motion skips the entry animation.
   Desktop/mobile layouts and reduced-motion and keyboard paths are supported.
 - `/history`: preserved arena entry. Existing arena routes and assets remain.
   The historical page links back with native navigation.

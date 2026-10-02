@@ -33,7 +33,7 @@ let profile = read('muzil.profile.v1', { schema: 'muzil.profile/v1', id: uuid(),
 if (!Array.isArray(profile.examples)) profile = { schema: 'muzil.profile/v1', id: uuid(), version: 1, objective: 'finish', rounds: 0, examples: [] };
 let lastReplay = read('muzil.replay.v1', null), state = createPhone({ roundId: uuid(), scenario: SCENARIOS[0] });
 let roundStarted = 0, toastTimer, interval, replayStarted = 0, replayMode = false, agentRunning = false, requestController = null, revealDismissed = false, taskThoughtCycle = -1, recorded = false, mode = 'play';
-let lastNotificationMarkup = null;
+let lastNotificationMarkup = null, entryAnimation = null;
 let memory = [], inferenceMs = 0, race = null, doomView = null;
 let pendingEdit=null, editTimer=null;
 const templates=SCENARIOS.filter(s=>s.version===2 && s.family);
@@ -59,6 +59,8 @@ function updateConnection() {
 function setMode(next) { mode = next; doomView?.setActive(next === 'play' && state.phase === 'playing'); $('site-menu').open = false; for (const name of ['play','train','finish']) $(`${name}-view`).hidden = name !== next; document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === next)); if (next === 'train') renderProfile(); }
 function stopAgent() { decisions.cancel(); agentOwnerId = null; agentRunning = false; requestController?.abort(); requestController = null; $('agent-round').textContent = 'Watch AI play'; }
 function newRound(controller = 'human', options = {}) {
+  entryAnimation?.cancel(); entryAnimation = null;
+  $('game-stage').inert = false;
   const from = options.entryRect || (!$('intro').hidden && mode === 'play' ? $('peek-phone').getBoundingClientRect() : null);
   clearTimeout(editTimer);pendingEdit=null;
   stopAgent(); replayMode = false; recorded = false; revealDismissed = false; taskThoughtCycle = -1; inferenceMs = 0;
@@ -70,12 +72,20 @@ function newRound(controller = 'human', options = {}) {
   $('round-status').textContent = controller === 'agent' ? 'Your stand-in is reading the phone.' : '';
   render();
   window.scrollTo({ top: 0, behavior: 'instant' });
-  if (from && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  if (from && controller === 'human' && !options.raceId && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const to = $('phone').getBoundingClientRect();
-    $('phone').animate([
-      { transformOrigin: 'top left', transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width}, ${from.height / to.height})`, opacity: .5 },
+    $('game-stage').inert = true;
+    const animation = entryAnimation = $('phone').animate([
+      { transformOrigin: 'top left', transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width}, ${from.height / to.height})`, opacity: 1 },
       { transformOrigin: 'top left', transform: 'none', opacity: 1 },
-    ], { duration: 650, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    ], { duration: 950, easing: 'cubic-bezier(.4,0,.2,1)' });
+    renderOverlay();
+    animation.finished.catch(() => {}).then(() => {
+      if (entryAnimation !== animation) return;
+      entryAnimation = null; $('game-stage').inert = false;
+      roundStarted = performance.now(); renderOverlay();
+      $('phone').focus({ preventScroll:true });
+    });
   }
   $('phone').focus({ preventScroll: true });
   window.scrollTo({ top: 0, behavior: 'instant' });
@@ -105,21 +115,21 @@ function complete() {
     const examples = state.demonstrations.filter((e,i,all) => e.action.target !== 'start' && !(e.action.type === 'type' && all[i+1]?.action.type === 'type' && all[i+1]?.action.target === e.action.target)).map(e => ({ observation: e.observation, action: e.action, after: e.after }));
     profile.examples = [...profile.examples, ...examples].slice(-36); profile.rounds = (profile.rounds || 0) + 1; profile.version++; save('muzil.profile.v1', profile);
   }
-  $('round-status').textContent = state.phase === 'finished' ? 'Intention kept. Your replay is saved.' : state.phase==='lost'?'Your friend finished first. Your replay is saved.':'The phone won this one. Your replay is saved.';
+  $('round-status').textContent = state.phase === 'finished' ? 'Intention kept. Your replay is saved.' : state.phase==='lost'?'Your friend finished first. Your replay is saved.':'Time ran out. Your replay is saved.';
 }
 const launch = a => `<button class="app-launch" data-action="app:${a.id}" aria-label="Open ${a.label}"><span class="app-tile ${a.color}">${a.id === 'calendar' ? `<span class="calendar-tile"><small>${state.scenario.date.startsWith('Monday') ? 'MON' : 'TUE'}</small>${state.scenario.date.startsWith('Monday') ? '28' : '29'}</span>` : icon(a.icon)}</span><span>${a.label}</span>${a.id === 'messages' ? '<i class="badge">2</i>' : ''}</button>`;
 function home() {
   const event = state.events.find(e => e.date >= state.today);
-  return `<div class="home-screen"><div class="home-date">${esc(state.scenario.date)}</div><div class="home-time">9:41</div><div class="weather">☀ <span>19° · A perfectly ordinary day</span></div><div class="home-widgets"><button class="home-widget" data-action="app:calendar"><small>UP NEXT</small><p>${esc(event?.title || 'A little breathing room')}</p><strong>${event ? esc(displayTime(event.start).replace(' PM','')) : '—'}</strong><p>Open Calendar ↗</p></button><button class="home-widget" data-action="app:clock"><small>TAKE YOUR TIME</small>${icon('sun')}<p>Mostly clear.<br>Unlike your notifications.</p></button></div><div class="apps-grid">${APPS.map(launch).join('')}</div><div class="home-dock">${[APPS[0], APPS[2], APPS[5]].map(launch).join('')}</div></div>`;
+  return `<div class="home-screen"><div class="home-date">${esc(state.scenario.date)}</div><div class="home-time">9:41</div><div class="weather">☀ <span>19° · Sunny</span></div><div class="home-widgets"><button class="home-widget" data-action="app:calendar"><small>UP NEXT</small><p>${esc(event?.title || 'A little breathing room')}</p><strong>${event ? esc(displayTime(event.start).replace(' PM','')) : '—'}</strong><p>Open Calendar ↗</p></button><button class="home-widget" data-action="app:clock"><small>TAKE YOUR TIME</small>${icon('sun')}<p>Sunny<br>High 21° · Low 14°</p></button></div><div class="apps-grid">${APPS.map(launch).join('')}</div><div class="home-dock">${[APPS[0], APPS[2], APPS[5]].map(launch).join('')}</div></div>`;
 }
 const header = (title, detail = '') => `<div class="app-header"><h2>${title}</h2><span>${detail}</span></div>`;
 function screen() {
   const { app, contact } = state.screen;
   if (app === 'home') return home();
   if (app === 'distraction') return distractionScreen(state.distractions[state.screen.distractionId],state.elapsed);
-  const thread = c => `<button class="thread-row" data-action="contact:${esc(c)}"><span class="thread-avatar">${esc(contactName(state,c).slice(0,1))}</span><span><strong>${esc(contactName(state,c))}</strong><p>${esc(state.messages[c].at(-1)?.text || 'No messages yet')}</p></span></button>`;
-  if (app === 'messages' && !contact) return header('Messages', `${Object.keys(state.messages).length} conversations`) + `<div class="app-body"><div class="mini-toolbar"><button class="mini-button" data-action="message-new">New message</button></div>${searchField('messages',state.searches.messages)}<div class="mini-search-results">${shownThreads(state).map(thread).join('') || '<p class="empty-phone">No conversations found.</p>'}</div></div>`;
-  if (app === 'messages') return header(esc(contactName(state,contact)), 'Messages') + `<div class="app-body"><div class="chat-date">Today · 9:41 AM</div>${state.messages[contact].map(m => `<div class="bubble ${m.from === 'you' ? 'outgoing' : ''}">${esc(m.text)}</div>`).join('')}<form class="message-compose" id="message-compose"><textarea data-field="reply" id="phone-reply" rows="2" maxlength="500" aria-label="Message to ${esc(contactName(state,contact))}" placeholder="Message">${esc(state.drafts[contact])}</textarea><button class="send-button" aria-label="Send message" type="submit" ${state.drafts[contact].trim() ? '' : 'disabled'}>↑</button></form><p class="app-subtitle">Messages stay in this simulated phone.</p></div>`;
+  const thread = c => `<button class="thread-row" data-action="contact:${esc(c)}"><span class="thread-avatar">${esc(contactName(state,c).slice(0,1))}</span><span><strong>${esc(contactName(state,c))}</strong><p>${esc(state.messages[c].at(-1)?.text || 'No messages yet')}</p></span><span class="thread-chevron" aria-hidden="true">›</span></button>`;
+  if (app === 'messages' && !contact) return header('Messages', '<button class="ios-compose" data-action="message-new" aria-label="New message">＋</button>') + `<div class="app-body">${searchField('messages',state.searches.messages)}<div class="mini-search-results">${shownThreads(state).map(thread).join('') || '<p class="empty-phone">No conversations found.</p>'}</div></div>`;
+  if (app === 'messages') return `<section class="ios-conversation"><div class="conversation-header"><button data-action="back" aria-label="Back to conversations">‹</button><div><span class="thread-avatar">${esc(contactName(state,contact).slice(0,1))}</span><h2>${esc(contactName(state,contact))}</h2></div></div><div class="messages-scroll"><div class="chat-date">Today 9:41 AM</div>${state.messages[contact].map(m => `<div class="bubble ${m.from === 'you' ? 'outgoing' : ''}">${esc(m.text)}</div>`).join('')}</div><form class="message-compose" id="message-compose"><textarea data-field="reply" id="phone-reply" rows="1" maxlength="500" aria-label="Message to ${esc(contactName(state,contact))}" placeholder="iMessage">${esc(state.drafts[contact])}</textarea><button class="send-button" aria-label="Send message" type="submit" ${state.drafts[contact].trim() ? '' : 'disabled'}>↑</button></form></section>`;
   const mini = miniScreen(state, header, displayTime);
   if (mini !== null) return mini;
   if (app === 'feed') return '';
@@ -133,6 +143,7 @@ function render() {
   $('intro').hidden = state.phase !== 'ready';
   $('game-stage').hidden = state.phase === 'ready';
   const root = $('phone-screen');
+  root.dataset.app=state.screen.app; $('phone').dataset.app=state.screen.app;
   root.classList.toggle('is-doom', state.screen.app === 'feed');
   if (state.screen.app === 'feed') {
     root.dataset.screen = JSON.stringify(state.screen);
@@ -152,7 +163,7 @@ function render() {
     doomView?.destroy(); doomView = null;
     const key = JSON.stringify(state.screen);
     const previousScroll = root.dataset.screen === key ? root.scrollTop : 0;
-    root.innerHTML = screen(); root.scrollTop = previousScroll; root.dataset.screen = key;
+    root.innerHTML = screen(); const conversation=root.querySelector('.messages-scroll');if(conversation)conversation.scrollTop=conversation.scrollHeight; root.scrollTop = previousScroll; root.dataset.screen = key;
   }
   renderTime(); renderOverlay(); renderNotification();
 }
@@ -161,10 +172,15 @@ function renderOverlay() {
   let html = '';
   const cycle = state.version === 'muzil-phone/3' ? Math.floor(state.elapsed / (RULES.revealMs + RULES.hiddenMs)) : 0;
   if (cycle !== taskThoughtCycle) { revealDismissed = false; taskThoughtCycle = cycle; }
-  const showTask = taskThoughtVisible(state) && !revealDismissed;
-  const note = showTask ? `<p>${esc(state.scenario.intention)}</p><button id="dismiss-reveal">Got it ↗</button>` : '<p class="task-scattered" aria-label="I was going to…"><span>I was…</span><span>going to…</span></p>';
+  const showTask = !entryAnimation && taskThoughtVisible(state) && !revealDismissed;
+  const note = `<p>${esc(state.scenario.intention)}</p><button id="dismiss-reveal">Got it</button>`;
   if ($('task-note-content').innerHTML !== note) $('task-note-content').innerHTML = note;
-  if (['finished','expired','lost'].includes(state.phase)) html = `<div class="reveal-card"><div class="result-symbol">${state.phase === 'finished' ? '↗' : '↻'}</div><div class="eyebrow">${replayMode ? 'REPLAY · ' : ''}${state.phase === 'finished' ? 'INTENTION KEPT' : state.phase==='lost'?'FRIEND FINISHED':'LOST IN THE PHONE'}</div><h2>${state.phase === 'finished' ? 'You can put it down.' : state.phase==='lost'?'Your friend finished first.':'The phone won.'}</h2><p>${state.phase === 'finished' ? esc(state.scenario.success || 'Intention kept.') : 'Your task is still unfinished.'}</p><p>${esc(roundReport(state))}</p><button class="button primary" id="next-round" ${race && !['finished','intermission','disconnected'].includes(race.phase)?'disabled':''}>${race?.phase==='intermission'?(race.ready[0]?'Waiting for friend…':`Ready for round ${race.round+2} ↗`):race?.phase==='playing'?'Waiting for friend…':'Try another day ↗'}</button><button class="text-button" id="result-profile">Can your stand-in do it? →</button></div>`;
+  $('task-note-content').dataset.visible = String(showTask);
+  $('task-note-content').inert = !showTask;
+  $('task-note-content').setAttribute('aria-hidden', String(!showTask));
+  $('remember').setAttribute('aria-expanded', String(showTask));
+  $('remember').setAttribute('aria-controls', 'task-note-content');
+  if (['finished','expired','lost'].includes(state.phase)) html = `<div class="reveal-card"><div class="result-symbol">${state.phase === 'finished' ? '↗' : '↻'}</div><div class="eyebrow">${replayMode ? 'REPLAY · ' : ''}${state.phase === 'finished' ? 'INTENTION KEPT' : state.phase==='lost'?'FRIEND FINISHED':'TASK UNFINISHED'}</div><h2>${state.phase === 'finished' ? 'Task complete.' : state.phase==='lost'?'Your friend finished first.':'Time’s up.'}</h2><p>${state.phase === 'finished' ? esc(state.scenario.success || 'Intention kept.') : 'Your task is still unfinished.'}</p><p>${esc(roundReport(state))}</p><button class="button primary" id="next-round" ${race && !['finished','intermission','disconnected'].includes(race.phase)?'disabled':''}>${race?.phase==='intermission'?(race.ready[0]?'Waiting for friend…':`Ready for round ${race.round+2} ↗`):race?.phase==='playing'?'Waiting for friend…':'Try another day ↗'}</button><button class="text-button" id="result-profile">Can your stand-in do it? →</button></div>`;
   if ($('phone-overlay').innerHTML !== html) $('phone-overlay').innerHTML = html;
 }
 function renderNotification() {
@@ -175,7 +191,8 @@ function renderNotification() {
   $('phone-screen').inert = !!blocked;
   document.querySelector('.phone-navigation').inert = !!blocked || !!locked;
   $('soundless-notifications').disabled = !!blocked || !!locked;
-  $('phone-rule').textContent = blocked ? 'm3t4.ai rule · Open the notification' : locked ? 'm3t4.ai rule · Follow the thread' : 'Simulated phone';
+  $('phone-back').disabled=!!blocked||!!locked; $('phone-switcher').disabled=!!blocked||!!locked;
+  $('phone-rule').textContent = blocked ? 'Open the notification to continue' : locked ? 'Resolve the interruption to continue' : 'Simulated phone';
   const show = n && (blocked || state.elapsed - n.at < 5200) && state.phase === 'playing' && (blocked || state.screen.app !== 'notifications');
   const app = n && APPS.find(a => a.id === n.app);
   const html = show ? `<div class="notification-toast"><button class="notification-open" data-action="notification:${n.id}"><span class="notification-meta"><i class="mini-app ${app?.color || 'green'}">${icon(app?.icon || 'message')}</i><span>${esc(app?.label || 'Messages')}</span><time>now</time></span><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p></button>${mandatoryNotifications(state) ? '' : `<button class="notification-dismiss" data-action="dismiss:${n.id}" aria-label="Dismiss ${esc(n.title)}">×</button>`}</div>` : '';
@@ -338,6 +355,7 @@ $('reply-form').onsubmit = guarded(async e => {
 $('copy-reply').onclick = guarded(async () => { if (!$('reply-output').value.trim()) throw new Error('There is no reply to copy yet.'); await navigator.clipboard.writeText($('reply-output').value); toast('Reply copied. You choose where to send it.'); });
 interval = setInterval(() => {
   matches.tick(); if(race?.phase==='countdown')raceSummary();
+  if (entryAnimation) return;
   flushEdit();
   if (replayMode) { const at = performance.now() - replayStarted; state = replay(lastReplay,at); render(); if (at >= lastReplay.elapsed) replayMode = false; return; }
   if (state.phase !== 'playing') return;

@@ -1,3 +1,4 @@
+import { preparePageShell } from './page-shell.mjs';
 import { patchPhoneScreen } from './phone-render.mjs';
 import { bindNotificationGestures } from './notification-gestures.mjs';
 import { configuredNotifications, notificationPolicy, notificationActions, notificationGesture } from './notification-policy.mjs';
@@ -11,6 +12,7 @@ import { bindToasterEntry } from './toaster-entry.mjs';
 import { APPS, RULES } from './scenarios.mjs';
 import { loadChallenges, validateChallenge, parseCatalog, contactName, roundDuration } from './challenges.mjs';
 import { DoomFeed } from './doom-feed.mjs';
+preparePageShell(document);
 const SCENARIOS = await loadChallenges();
 import { createPhone, applyAction, advance, observe, displayTime, makeReplay, replay, blockingNotification, lockedDistraction, mandatoryNotifications, taskThoughtVisible } from './engine.mjs';
 import { LocalController } from './controller.mjs';

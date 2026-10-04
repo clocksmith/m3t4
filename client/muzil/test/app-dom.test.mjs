@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {webcrypto} from 'node:crypto';
 const base=fileURLToPath(new URL('../',import.meta.url));
-const modules=['task-templates','round-report','match','mini-app-view','mini-apps','distraction-view','scenarios','challenges','engine','decision','notification-policy','notification-gestures','phone-render'];
+const modules=['page-shell','task-templates','round-report','match','mini-app-view','mini-apps','distraction-view','scenarios','challenges','engine','decision','notification-policy','notification-gestures','phone-render'];
 const imports=Object.assign({},...await Promise.all(modules.map(m=>import(`${base}${m}.mjs`))));
 test('phone UI preserves composition and selection, defers the round clock, and keeps real exits available',async()=>{
 const window=new Window({url:'http://localhost/muzil/',settings:{disableCSSFileLoading:true,disableJavaScriptFileLoading:true,disableJavaScriptEvaluation:true}});

@@ -1,9 +1,12 @@
+import { patchPhoneScreen } from './phone-render.mjs';
+import { bindNotificationGestures } from './notification-gestures.mjs';
+import { configuredNotifications, notificationPolicy, notificationActions, notificationGesture } from './notification-policy.mjs';
 import { generateChallenge } from './task-templates.mjs';
 import { roundReport } from './round-report.mjs';
 import { createMatchOwner } from './match.mjs';
 import { miniScreen, searchField } from './mini-app-view.mjs';
 import { shownThreads } from './mini-apps.mjs';
-import { distractionScreen, updateDistractionMotion, notificationBait } from './distraction-view.mjs';
+import { distractionScreen, updateDistractionMotion } from './distraction-view.mjs';
 import { bindToasterEntry } from './toaster-entry.mjs';
 import { APPS, RULES } from './scenarios.mjs';
 import { loadChallenges, validateChallenge, parseCatalog, contactName, roundDuration } from './challenges.mjs';
@@ -35,7 +38,9 @@ let lastReplay = read('muzil.replay.v1', null), state = createPhone({ roundId: u
 let roundStarted = 0, toastTimer, interval, replayStarted = 0, replayMode = false, agentRunning = false, requestController = null, revealDismissed = false, taskThoughtCycle = -1, recorded = false, mode = 'play';
 let lastNotificationMarkup = null, entryAnimation = null;
 let memory = [], inferenceMs = 0, race = null, doomView = null;
-let pendingEdit=null, editTimer=null;
+let pendingEdit=null, editTimer=null, composing=null;
+let pausedAt=null, preparing=false, revealTimer=null, entryGeneration=0;
+let noticeAudio=null; const sounded=new Set();
 const templates=SCENARIOS.filter(s=>s.version===2 && s.family);
 let nextChallenge = Number(profile.rounds || 0) % SCENARIOS.length;
 const selectedChallenge = () => SCENARIOS.find(s => s.id === $('challenge-select').value) || templates[nextChallenge % templates.length];
@@ -51,6 +56,8 @@ function report(error) { toast(error.message || String(error)); }
 function updateConnection() {
   if (['closed','failed','offline'].includes(peer.state)) matches.disconnect();
   const ready = mesh.ready || peer.ready || !!local.session;
+  for(const id of ['agent-round','watch-agent']) {$(id).disabled=id==='watch-agent'&&!ready;$(id).textContent=ready?'Let your stand-in try':id==='agent-round'?'Connect a stand-in':'Stand-in unavailable';$(id).title=ready?'Run a new attempt with a prepared executor':'Connect a prepared helper first';}
+  $('watch-replay').disabled=!lastReplay;
   if ($('partition-state')) $('partition-state').textContent = mesh.status;
   $('connection-label').textContent = mesh.ready ? 'Distributed helper ready' : peer.ready ? 'Peer ready' : local.session ? 'Helper ready here' : 'Connect a helper';
   document.querySelectorAll('.status-dot').forEach(n => n.classList.toggle('ready', ready));
@@ -58,7 +65,7 @@ function updateConnection() {
 }
 function setMode(next) { mode = next; doomView?.setActive(next === 'play' && state.phase === 'playing'); $('site-menu').open = false; for (const name of ['play','train','finish']) $(`${name}-view`).hidden = name !== next; document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === next)); if (next === 'train') renderProfile(); fitPhone(); }
 function fitPhone() {
-  const active = mode === 'play' && state.phase !== 'ready';
+  const active = mode === 'play' && (state.phase !== 'ready' || preparing);
   document.body.classList.toggle('phone-fit', active);
   if (!active) return;
   const viewport = document.querySelector('.phone-viewport');
@@ -77,24 +84,37 @@ window.visualViewport?.addEventListener('resize', fitPhone);
 document.fonts.ready.then(fitPhone);
 const phoneLayoutObserver = new ResizeObserver(fitPhone);
 for (const selector of ['.task-thought', '.phone-footnote', '#round-status', '#race-status']) phoneLayoutObserver.observe(document.querySelector(selector));
-function stopAgent() { decisions.cancel(); agentOwnerId = null; agentRunning = false; requestController?.abort(); requestController = null; $('agent-round').textContent = 'Watch AI play'; }
+function stopAgent() { decisions.cancel(); agentOwnerId = null; agentRunning = false; requestController?.abort(); requestController = null; updateConnection(); }
+function cancelEntry() {entryGeneration++;clearTimeout(revealTimer);revealTimer=null;entryAnimation?.cancel();entryAnimation=null;preparing=false;document.body.classList.remove('opening-phone');}
+function beginPreparedRound() {
+  if(!preparing || pausedAt!==null)return;clearTimeout(revealTimer);revealTimer=null;preparing=false;
+  document.body.classList.remove('opening-phone');$('phone').inert=false;
+  roundStarted=performance.now();dispatch({type:'tap',target:'start'},false);revealDismissed=true;renderOverlay();
+}
 function newRound(controller = 'human', options = {}) {
+  if(preparing)return;
+  cancelEntry();pausedAt=null;
+  const generation=entryGeneration;
+  if(selectedChallenge().notificationPolicies && [...selectedChallenge().interruptions,...(selectedChallenge().followups||[])].some(n=>notificationPolicy({scenario:selectedChallenge()},n).sound)){noticeAudio ||= new AudioContext();void noticeAudio.resume();}
   entryAnimation?.cancel(); entryAnimation = null;
   $('game-stage').inert = false;
   const from = options.entryRect || (!$('intro').hidden && mode === 'play' ? $('peek-phone').getBoundingClientRect() : null);
-  clearTimeout(editTimer);pendingEdit=null;
+  clearTimeout(editTimer);pendingEdit=null;composing=null;
   stopAgent(); replayMode = false; recorded = false; revealDismissed = false; taskThoughtCycle = -1; inferenceMs = 0;
   if (!options.raceId && race) matches.leave();
   const chosen=selectedChallenge();
   const scenario = options.scenario || (chosen.family ? generateChallenge(chosen,uuid()) : chosen); nextChallenge++;
   state = createPhone({ roundId: options.raceId || uuid(), scenario, controller }); memory = [observe(state)]; roundStarted = performance.now()-(options.lateMs || 0);
-  dispatch({ type: 'tap', target: 'start' }, false); setMode('play');
+  preparing=controller==='human' && !options.raceId;
+  if(!preparing)dispatch({ type: 'tap', target: 'start' }, false);
+  setMode('play');
   $('round-status').textContent = controller === 'agent' ? 'Your stand-in is reading the phone.' : '';
   render();
   window.scrollTo({ top: 0, behavior: 'instant' });
-  if (from && controller === 'human' && !options.raceId && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  if (from && typeof $('phone').animate==='function' && controller === 'human' && !options.raceId && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const to = $('phone').getBoundingClientRect();
-    $('game-stage').inert = true;
+    document.body.classList.add('opening-phone');$('intro').hidden=false;$('intro').inert=true;
+    $('phone').inert = true;
     const animation = entryAnimation = $('phone').animate([
       { transformOrigin: 'top left', transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / 312}, ${from.height / 676})`, opacity: 1 },
       { transformOrigin: 'top left', transform: getComputedStyle($('phone')).transform, opacity: 1 },
@@ -102,25 +122,28 @@ function newRound(controller = 'human', options = {}) {
     renderOverlay();
     animation.finished.catch(() => {}).then(() => {
       if (entryAnimation !== animation) return;
-      entryAnimation = null; $('game-stage').inert = false;
-      roundStarted = performance.now(); renderOverlay();
+      entryAnimation = null;document.body.classList.remove('opening-phone');$('intro').inert=false;$('intro').hidden=true;
+      if(generation!==entryGeneration || pausedAt!==null)return;
+      revealTimer=setTimeout(beginPreparedRound,RULES.revealMs);renderOverlay();
       $('phone').focus({ preventScroll:true });
     });
   }
+  if(preparing&&!entryAnimation){$('phone').inert=true;revealTimer=setTimeout(beginPreparedRound,RULES.revealMs);renderOverlay();}
   $('phone').focus({ preventScroll: true });
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
 function remember(observation) { memory.push(observation); if (memory.length > 12) memory.splice(1, 1); }
 function flushEdit() {
+  if(composing)return;
   clearTimeout(editTimer);const edit=pendingEdit;pendingEdit=null;
   if(edit) dispatch(edit.action,true,false,edit.at);
 }
 function dispatch(action, human = true, renderAfter = true, at = performance.now()) {
   if(action.type!=='type')flushEdit();
-  if (replayMode) return;
-  if (state.phase === 'playing') { state = advance(state,Math.max(state.elapsed,at - roundStarted)); if (state.phase === 'expired') { complete(); render(); return; } }
+  if (replayMode || pausedAt!==null && action.type!=='type' || preparing || composing) return;
+  if (state.phase === 'playing' && (action.type!=='type' || pausedAt===null && at-roundStarted>=roundDuration(state.scenario))) { state = advance(state,Math.max(state.elapsed,at - roundStarted)); if (state.phase === 'expired') { complete(); render(); return; } }
   if (human && state.controller !== 'human') { stopAgent(); state.controller = 'mixed'; }
-  const result = applyAction(state, { ...action, roundId: state.roundId, id: uuid(), screen: structuredClone(state.screen) });
+  const result = applyAction(state, { ...action, roundId: state.roundId, id: uuid(), screen: action.screen || structuredClone(state.screen) });
   if (!result.accepted) { if (state.phase !== 'ready') toast(result.reason); return; }
   state = result.state; remember(observe(state));
   if (state.phase === 'finished') complete();
@@ -135,6 +158,7 @@ function complete() {
     const examples = state.demonstrations.filter((e,i,all) => e.action.target !== 'start' && !(e.action.type === 'type' && all[i+1]?.action.type === 'type' && all[i+1]?.action.target === e.action.target)).map(e => ({ observation: e.observation, action: e.action, after: e.after }));
     profile.examples = [...profile.examples, ...examples].slice(-36); profile.rounds = (profile.rounds || 0) + 1; profile.version++; save('muzil.profile.v1', profile);
   }
+  updateConnection();
   $('round-status').textContent = state.phase === 'finished' ? 'Intention kept. Your replay is saved.' : state.phase==='lost'?'Your friend finished first. Your replay is saved.':'Time ran out. Your replay is saved.';
 }
 const launch = a => `<button class="app-launch" data-action="app:${a.id}" aria-label="Open ${a.label}"><span class="app-tile ${a.color}">${a.id === 'calendar' ? `<span class="calendar-tile"><small>${state.scenario.date.startsWith('Monday') ? 'MON' : 'TUE'}</small>${state.scenario.date.startsWith('Monday') ? '28' : '29'}</span>` : icon(a.icon)}</span><span>${a.label}</span>${a.id === 'messages' ? '<i class="badge">2</i>' : ''}</button>`;
@@ -153,15 +177,19 @@ function screen() {
   const mini = miniScreen(state, header, displayTime);
   if (mini !== null) return mini;
   if (app === 'feed') return '';
-  if (app === 'notifications') return header('Notifications', String(state.notifications.length)) + `<div class="app-body">${state.notifications.length ? state.notifications.map(n => `<div class="notification-list-item"><button data-action="notification:${n.id}"><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p>${notificationBait(n.distraction)}</button>${mandatoryNotifications(state) ? '' : `<button class="text-button" data-action="dismiss:${n.id}">Dismiss</button>`}</div>`).join('') : '<p class="empty-phone">A rare moment of quiet.</p>'}</div>`;
+  if (app === 'notifications') return header('Notifications', String(state.notifications.length)) + `<div class="app-body">${state.notifications.map(n=>`<div class="notification-list-item" data-notification="${n.id}"><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p>${n.expanded&&n.detail&&n.detail!==n.body?`<p>${esc(n.detail)}</p>`:''}${notificationActions(state,n).map(a=>`<button class="text-button" data-action="${a.target}">${esc(a.label)}</button>`).join('')}</div>`).join('')}${(state.notificationHistory||[]).map(n=>`<article class="notification-list-item"><strong>${esc(n.title)}</strong><p>${esc(n.detail || n.body)}</p></article>`).join('')}${!state.notifications.length&&!state.notificationHistory?.length?'<p class="empty-phone">No notifications.</p>':''}</div>`;
   if (app === 'switcher') return header('Your apps', 'Pick up where you left off') + `<div class="app-body apps-grid">${APPS.map(launch).join('')}</div>`;
   if (app === 'intention') return header('Remember why') + `<div class="app-body"><div class="appointment"><h3>Your original intention</h3><p>${esc(state.scenario.intention)}</p></div><p class="calendar-note">A reminder is allowed. So is doing the thing.</p><button class="button secondary" data-action="back">Back to it →</button></div>`;
   return '';
 }
 function render() {
-  document.body.classList.toggle('in-round', state.phase !== 'ready');
-  $('intro').hidden = state.phase !== 'ready';
-  $('game-stage').hidden = state.phase === 'ready';
+  document.body.classList.toggle('in-round', state.phase !== 'ready' || preparing);
+  $('intro').hidden = state.phase !== 'ready' || preparing;
+  $('game-stage').hidden = state.phase === 'ready' && !preparing;
+  $('round-controls').hidden=state.phase==='ready'&&!preparing;
+  $('pause-round').textContent=pausedAt!==null?'Resume':'Pause';
+  $('pause-round').disabled=false;
+  $('phone').inert=pausedAt!==null||preparing;
   const root = $('phone-screen');
   root.dataset.app=state.screen.app; $('phone').dataset.app=state.screen.app;
   root.classList.toggle('is-doom', state.screen.app === 'feed');
@@ -178,21 +206,21 @@ function render() {
       return state;
     });
     else doomView.update(state);
-    doomView.setActive(mode === 'play' && state.phase === 'playing');
+    doomView.setActive(mode === 'play' && state.phase === 'playing' && pausedAt===null);
   } else {
     doomView?.destroy(); doomView = null;
     const key = JSON.stringify(state.screen);
-    const previousScroll = root.dataset.screen === key ? root.scrollTop : 0;
-    root.innerHTML = screen(); const conversation=root.querySelector('.messages-scroll');if(conversation)conversation.scrollTop=conversation.scrollHeight; root.scrollTop = previousScroll; root.dataset.screen = key;
+    const previousScroll = root.dataset.screen === `${state.roundId}:${key}` ? root.scrollTop : 0;
+    patchPhoneScreen(root,`${state.roundId}:${key}`,screen(),{editing:!!pendingEdit||!!composing}); const conversation=root.querySelector('.messages-scroll');if(conversation)conversation.scrollTop=conversation.scrollHeight; root.scrollTop = previousScroll; root.dataset.screen = `${state.roundId}:${key}`;
   }
   renderTime(); renderOverlay(); renderNotification(); fitPhone();
 }
-function renderTime() { updateDistractionMotion(state); const remaining = Math.ceil((roundDuration(state.scenario) - state.elapsed) / 1000); $('round-clock').textContent = `${String(Math.floor(remaining / 60)).padStart(2,'0')}:${String(remaining % 60).padStart(2,'0')}`; $('round-clock').classList.toggle('running-low', remaining <= 30); $('notification-count').textContent = state.notifications.length; }
+function renderTime() { updateDistractionMotion(pausedAt!==null?{...state,phase:'paused'}:state); const remaining = Math.ceil((roundDuration(state.scenario) - state.elapsed) / 1000); $('round-clock').textContent = `${String(Math.floor(remaining / 60)).padStart(2,'0')}:${String(remaining % 60).padStart(2,'0')}`; $('round-clock').classList.toggle('running-low', remaining <= 30); $('notification-count').textContent = state.notifications.length; }
 function renderOverlay() {
   let html = '';
   const cycle = state.version === 'muzil-phone/3' ? Math.floor(state.elapsed / (RULES.revealMs + RULES.hiddenMs)) : 0;
   if (cycle !== taskThoughtCycle) { revealDismissed = false; taskThoughtCycle = cycle; }
-  const showTask = !entryAnimation && taskThoughtVisible(state) && !revealDismissed;
+  const showTask = !entryAnimation && pausedAt===null && (preparing || taskThoughtVisible(state) && !revealDismissed);
   const note = `<p>${esc(state.scenario.intention)}</p><button id="dismiss-reveal">Got it</button>`;
   if ($('task-note-content').innerHTML !== note) $('task-note-content').innerHTML = note;
   $('task-note-content').dataset.visible = String(showTask);
@@ -206,23 +234,31 @@ function renderOverlay() {
 function renderNotification() {
   const blocked = blockingNotification(state);
   const locked = lockedDistraction(state);
-  const n = locked || (mandatoryNotifications(state) && state.elapsed < state.notificationQuietUntil) ? null : blocked || state.notifications.at(-1);
+  const n = locked || (!configuredNotifications(state) && mandatoryNotifications(state) && state.elapsed < state.notificationQuietUntil) ? null : blocked || state.notifications.at(-1);
   $('notification-banner').classList.toggle('interrupting', !!blocked);
   $('phone-screen').inert = !!blocked;
   document.querySelector('.phone-navigation').inert = !!blocked || !!locked;
   $('soundless-notifications').disabled = !!blocked || !!locked;
   $('phone-back').disabled=!!blocked||!!locked; $('phone-switcher').disabled=!!blocked||!!locked;
-  $('phone-rule').textContent = blocked ? 'Open the notification to continue' : locked ? 'Resolve the interruption to continue' : 'Simulated phone';
+  $('phone-rule').textContent = blocked ? (notificationPolicy(state,blocked).requireOpen?'Open the notification to continue':'Choose how to handle the notification') : locked ? 'Resolve the interruption to continue' : 'Simulated phone';
   const show = n && (blocked || state.elapsed - n.at < 5200) && state.phase === 'playing' && (blocked || state.screen.app !== 'notifications');
   const app = n && APPS.find(a => a.id === n.app);
-  const html = show ? `<div class="notification-toast"><button class="notification-open" data-action="notification:${n.id}"><span class="notification-meta"><i class="mini-app ${app?.color || 'green'}">${icon(app?.icon || 'message')}</i><span>${esc(app?.label || 'Messages')}</span><time>now</time></span><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p></button>${mandatoryNotifications(state) ? '' : `<button class="notification-dismiss" data-action="dismiss:${n.id}" aria-label="Dismiss ${esc(n.title)}">×</button>`}</div>` : '';
+  const actions=n?notificationActions(state,n):[];
+  const tap=n?notificationGesture(state,n,'tap'):null;
+  const html = show ? `<div class="notification-toast" data-notification="${n.id}" data-expanded="${!!n.expanded}"><button class="notification-open" ${tap?`data-action="${tap}"`:'disabled'}><span class="notification-meta"><i class="mini-app ${app?.color || 'green'}">${icon(app?.icon || 'message')}</i><span>${esc(notificationPolicy(state,n).presentation==='incoming-call'?'Phone':app?.label || 'Messages')}</span><time>now</time></span><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p>${n.expanded&&n.detail&&n.detail!==n.body?`<p>${esc(n.detail)}</p>`:''}</button><div class="notification-choices">${actions.map(a=>`<button data-action="${a.target}">${esc(a.label)}</button>`).join('')}</div></div>` : '';
+  if(show&&!sounded.has(`${state.roundId}:${n.id}`)){
+    sounded.add(`${state.roundId}:${n.id}`);
+    if(notificationPolicy(state,n).sound && noticeAudio?.state==='running'){const tone=noticeAudio.createOscillator(),gain=noticeAudio.createGain();tone.frequency.value=660;gain.gain.setValueAtTime(.04,noticeAudio.currentTime);gain.gain.exponentialRampToValueAtTime(.001,noticeAudio.currentTime+.12);tone.connect(gain).connect(noticeAudio.destination);tone.start();tone.stop(noticeAudio.currentTime+.12);}
+  }
   if (lastNotificationMarkup !== html) { $('notification-banner').innerHTML = html; lastNotificationMarkup = html; }
 }
 async function agentPlay() {
   flushEdit();
   if (agentRunning) { stopAgent(); toast('Your turn. The stand-in is paused.'); return; }
   if (!mesh.ready && !peer.ready && !local.session) { $('mesh-dialog').showModal(); return; }
-  if (race && state.roundId===`${race.id}:${race.round}` && state.phase === 'playing') state.controller = 'agent'; else newRound('agent'); agentRunning = true; $('agent-round').textContent = 'Watch AI play';
+  if(preparing)return;
+  if(pausedAt!==null)resumeRound();
+  if (race && state.roundId===`${race.id}:${race.round}` && state.phase === 'playing') state.controller = 'agent'; else newRound('agent'); agentRunning = true; updateConnection();
   const roundId = state.roundId;
   const ownerId = agentOwnerId = uuid();
   const matchId = race?.id || roundId;
@@ -240,7 +276,7 @@ async function agentPlay() {
       if (!applied.accepted) {if(applied.stale && staleRetries++<3){remember(observe(state));render();continue;}throw new Error(applied.reason);}
       staleRetries=0;
       state = applied.state; remember(observe(state)); render();
-      $('round-status').textContent = `Stand-in: ${state.log.at(-1).action.target.replace('app:', 'opened ')} · ${mesh.ready ? 'distributed helper' : peer.ready ? 'connected peer' : 'this device'}`;
+      $('round-status').textContent = `Stand-in: ${observation.actions.find(a=>a.target===state.log.at(-1).action.target)?.label || 'Continuing'} · ${mesh.ready ? 'distributed helper' : peer.ready ? 'connected peer' : 'this device'}`;
       if (state.phase === 'finished') complete();
       await new Promise(r => setTimeout(r, 350));
     }
@@ -302,21 +338,52 @@ $('site-menu').querySelectorAll('button').forEach(button => button.addEventListe
 document.addEventListener('keydown', event => { if (event.key === 'Escape') $('site-menu').open = false; });
 document.addEventListener('click', event => { if (!$('site-menu').contains(event.target)) $('site-menu').open = false; });
 $('remember').onclick = () => { revealDismissed = false; if (state.phase === 'ready') newRound(); else dispatch({ type: 'tap', target: 'recall' }); };
-$('task-note-content').onclick = event => { if (event.target.closest('#dismiss-reveal')) { revealDismissed = true; renderOverlay(); } };
+$('task-note-content').onclick = event => { if (event.target.closest('#dismiss-reveal')) { if(preparing)beginPreparedRound();else{revealDismissed = true; renderOverlay();} } };
 $('phone-back').onclick = () => dispatch({ type: 'tap', target: 'back' }); $('phone-home').onclick = () => dispatch({ type: 'tap', target: 'home' }); $('phone-switcher').onclick = () => dispatch({ type: 'tap', target: 'switcher' });
 $('soundless-notifications').onclick = () => dispatch({ type: 'tap', target: 'notifications' });
+function resumeRound() {
+  if(pausedAt===null)return;
+  const duration=performance.now()-pausedAt;roundStarted+=duration;replayStarted+=duration;pausedAt=null;
+  if(preparing)revealTimer=setTimeout(beginPreparedRound,RULES.revealMs);render();
+}
+$('pause-round').onclick=()=>{
+  if(pausedAt!==null){resumeRound();return;}
+  flushEdit();stopAgent();
+  if(preparing){clearTimeout(revealTimer);entryAnimation?.cancel();entryAnimation=null;document.body.classList.remove('opening-phone');$('intro').inert=false;}
+  if(race){matches.leave();toast('The race ended. Your solo round is paused.');}
+  pausedAt=performance.now();
+  if(state.phase==='playing'&&!replayMode&&!composing)state=advance(state,pausedAt-roundStarted);
+  doomView?.setActive(false);render();
+};
+$('leave-round').onclick=()=>{
+  toasterEntry.cancel();cancelEntry();stopAgent();if(race)matches.leave();
+  clearTimeout(editTimer);pendingEdit=null;composing=null;pausedAt=null;replayMode=false;
+  $('intro').inert=false;state=createPhone({roundId:uuid(),scenario:selectedChallenge()});
+  $('round-status').textContent='';setMode('play');render();
+};
+for(const root of [$('notification-banner'),$('phone-screen')])bindNotificationGestures(root,{
+  getNotification:id=>state.notifications.find(n=>n.id===id),
+  getThresholds:n=>notificationPolicy(state,n).gestureThresholds || {distancePx:40,axisRatio:1},
+  resolve:(n,gesture)=>notificationGesture(state,n,gesture),dispatch:target=>dispatch({type:'tap',target})
+});
 $('phone').addEventListener('click', e => {
   const control = e.target.closest('[data-action]'); if (control) dispatch({ type: 'tap', target: control.dataset.action });
   if (e.target.closest('#dismiss-reveal')) { revealDismissed = true; renderOverlay(); }
   if (e.target.closest('#next-round')) {if(race?.phase==='intermission')matches.ready();else newRound();}
   if (e.target.closest('#result-profile')) setMode('train');
 });
+$('phone').addEventListener('compositionstart',e=>{if(e.target.dataset.field){flushEdit();composing=e.target;}});
+$('phone').addEventListener('compositionend',e=>{
+  if(composing!==e.target)return;composing=null;
+  pendingEdit={action:{type:'type',target:e.target.dataset.field,value:e.target.value,screen:structuredClone(state.screen)},at:performance.now()};flushEdit();
+});
 $('phone').addEventListener('input', e => {
-  if (!e.target.dataset.field) return;
+  if (!e.target.dataset.field || replayMode || pausedAt!==null) return;
+  if(e.isComposing)composing=e.target;
   if(state.controller!=='human'){stopAgent();state.controller='mixed';}
   if(pendingEdit && pendingEdit.action.target!==e.target.dataset.field)flushEdit();
-  pendingEdit={action:{type:'type',target:e.target.dataset.field,value:e.target.value},at:performance.now()};
-  clearTimeout(editTimer);editTimer=setTimeout(flushEdit,120);
+  pendingEdit={action:{type:'type',target:e.target.dataset.field,value:e.target.value,screen:structuredClone(state.screen)},at:performance.now()};
+  clearTimeout(editTimer);if(!composing)editTimer=setTimeout(flushEdit,120);
   if(e.target.dataset.field.startsWith('search-'))flushEdit();
   if (e.target.dataset.field.startsWith('search-')) {
     const results = document.createElement('div'); results.innerHTML = screen();
@@ -336,7 +403,8 @@ $('import-profile').onchange = guarded(async e => {
   if (p.schema !== 'muzil.profile/v1' || !['finish','imitate'].includes(p.objective) || !Array.isArray(p.examples) || p.examples.length > 36 || !Number.isSafeInteger(p.version) || p.version < 1 || !Number.isSafeInteger(p.rounds) || p.rounds < 0 || p.examples.some(e => !e.observation?.screen?.app || !Array.isArray(e.observation.actions) || !['tap','type'].includes(e.action?.type) || typeof e.action.target !== 'string')) throw new Error('Unsupported profile');
   profile = { schema: p.schema, id: typeof p.id === 'string' ? p.id.slice(0,100) : uuid(), version: p.version, rounds: p.rounds, objective: p.objective, examples: p.examples }; save('muzil.profile.v1',profile); renderProfile(); toast('Profile imported.');
 });
-$('replay-round').onclick = guarded(() => { stopAgent(); replayMode = true; replayStarted = performance.now(); state = replay(lastReplay,0); setMode('play'); $('round-status').textContent = 'Recorded replay. No new inference.'; render(); });
+const watchReplay=guarded(() => { if(!lastReplay)return;toasterEntry.cancel();cancelEntry();pausedAt=null;stopAgent(); replayMode = true; replayStarted = performance.now(); state = replay(lastReplay,0); setMode('play'); $('round-status').textContent = 'Recorded replay. No new inference.'; render(); });
+$('replay-round').onclick=watchReplay;$('watch-replay').onclick=watchReplay;
 $('export-replay').onclick = () => { if (lastReplay) download('meta-muzil-replay.json',lastReplay); };
 $('race-peer').onclick = guarded(() => {
   toasterEntry.cancel();
@@ -378,7 +446,7 @@ $('reply-form').onsubmit = guarded(async e => {
 $('copy-reply').onclick = guarded(async () => { if (!$('reply-output').value.trim()) throw new Error('There is no reply to copy yet.'); await navigator.clipboard.writeText($('reply-output').value); toast('Reply copied. You choose where to send it.'); });
 interval = setInterval(() => {
   matches.tick(); if(race?.phase==='countdown')raceSummary();
-  if (entryAnimation) return;
+  if (entryAnimation || preparing || pausedAt!==null || composing) return;
   flushEdit();
   if (replayMode) { const at = performance.now() - replayStarted; state = replay(lastReplay,at); render(); if (at >= lastReplay.elapsed) replayMode = false; return; }
   if (state.phase !== 'playing') return;
@@ -414,3 +482,4 @@ $('partition-evidence').onclick = () => download('muzil-execution.json', { ...me
 // Fetching the challenge catalog can outlive the first paint on a cold load.
 // Enable entry only after its handlers and initial state are ready.
 document.querySelectorAll('[data-boot-control]').forEach(button => { button.disabled = false; });
+updateConnection();

@@ -14,7 +14,7 @@ integration path, not fulfillment of that distributed-partition target.
 
 ## Implemented page
 
-- `/`: a short introduction and bouncing phone peeking out of a pop-up toaster.
+- `/muzil/`: a short introduction and bouncing phone peeking out of a pop-up toaster.
   The orange lever and start button press, pop and expand it into the playable phone.
   The five-position toast dial supports tap, pointer/touch drag and native arrow
   keys. Its five positions select an alarm, shopping list, pickup coordination,
@@ -22,7 +22,7 @@ integration path, not fulfillment of that distributed-partition target.
   and increase warmth, warm-up time and launch smoke. A single electrical spark
   and drifting smoke accompany the pop; reduced motion skips those effects. Entry
   time does not consume the round clock; reduced motion skips the animation.
-  The menu has only Play, Watch AI play, and Play with a friend. A centered
+  The menu offers Play, Let your stand-in try, Watch replay, and Play with a friend. Without a ready executor, the live entry reads “Connect a stand-in”; replay uses saved actions without inference. A centered
   task sits above the phone beneath a centered “Remember why ↗”. It appears for
   five seconds, fades out for seven, then repeats throughout the round. “Got it”
   hides that appearance; recall reveals it for another five seconds without
@@ -33,7 +33,7 @@ integration path, not fulfillment of that distributed-partition target.
   the phone. Messages, Calendar, Notes,
   Contacts and Clock use familiar app layouts with working controls.
   The toaster phone rises in front of transparent page copy, settles for 600 ms,
-  then expands over 950 ms. The task reveal and game clock start after expansion;
+  then expands over 950 ms. Opening copy stays visible through expansion. The task reveal follows, and the game clock starts after “Got it” or five seconds;
   reduced motion skips the entry animation.
   Desktop/mobile layouts and reduced-motion and keyboard paths are supported.
 - `/history`: preserved arena entry. Existing arena routes and assets remain.
@@ -67,7 +67,9 @@ integration path, not fulfillment of that distributed-partition target.
   alarms and drafts. A correct resulting state wins immediately; later events
   cannot revoke it. Some sources update Calendar; other updates only arrive in
   Messages, leaving the editable calendar obsolete.
-- Top banners cannot be dismissed or bypassed with Home/Back. Calls offer a full
+- Configured blocking banners cannot be bypassed with Home/Back; optional banners
+  can be expanded, dismissed or deferred. Opening and finishing have separate
+  requirements. Calls offer a full
   four-second answer or a partial voicemail pointing to Messages. Vague/postponed
   group replies arm one follow-up; a definite response closes the episode.
   Calendar conflicts offer inspection or retaining the old plan. Timing precision
@@ -75,9 +77,9 @@ integration path, not fulfillment of that distributed-partition target.
   exit waits six. Media resolution offers a return or optional continued reading.
   Fixed practice and v1/v2 saved replays retain their original detour rules.
 - The deterministic notification director uses scenario timing, dependencies and
-  first-occurrence progress signals, with one pending blocker and type-specific
-  3–8 second recovery windows in shipped data; Prepare and Repair progressively
-  tighten the recovery window while adding linked obligations. Event IDs prevent retransmission;
+  first-occurrence progress signals, with one pending blocker and
+  four-second recovery windows in the current policy data. Prepare and Repair
+  add linked obligations. Historical scenarios keep their original recovery values. Event IDs prevent retransmission;
   distinct developments can share an episode. The scenario seed and actual event
   deliveries are recorded. Opponent progress never enters this policy.
 - Text editing has a separate 4,000-edit safety bound, outside the 400 semantic
@@ -86,7 +88,7 @@ integration path, not fulfillment of that distributed-partition target.
   Obsolete but originally legal agent actions get at most three consecutive
   re-observations. Malformed output and identity mismatches still stop execution.
   The clock is the same for human and model-controlled play.
-- Results describe time in blocking interruptions, observed obsolete-calendar
+- Results distinguish task-update handling and unrelated detours, observed obsolete-calendar
   visits and meaningful mistakes. Partial task obligations remain hidden during
   play; no evaluator checklist enters the phone or model observation.
 - Local profiles store demonstrations and an explicit imitation/improvement
@@ -402,3 +404,33 @@ coalesced typing, alarm obligations and result replay at 1440/390/320 pixels.
 `test:muzil:match` plays three rounds through actual two-tab Reploid transport,
 retains the connection and starts another match. Those browser tests use human
 controls and simulated clocks; they make no real-model or separate-device claim.
+
+## Configurable notification entry (October 2026)
+
+The evolving pickup families now embed named notification policies in their
+scenario and replay: optional, handle-first, open-required, and explicitly
+required follow-through. The default demanding events require entry, then permit
+leaving the interaction. The photo alert is optional. Policies without reachable
+opening controls are rejected before the round starts. Historical scenarios
+without policy data retain their original notification rules.
+
+The banner owns swipe gestures and visible equivalent controls. Cancelled
+pointers dispatch nothing; completed swipes dispatch one action and suppress the
+synthetic click. Engine permissions still reject Home, Back and app switching
+while a banner or explicitly compulsory interaction blocks the phone.
+Pause/Resume and Leave are real controls outside the simulated phone. Pausing a
+race leaves the match first, so a local pause cannot improve a competitive time.
+
+Messages retain the editor element during renders and preserve exact whitespace
+in new configured rounds and their replays. Ongoing composition commits before
+queued notification delivery; elapsed wall time still counts when it commits.
+No underlying task action runs while composition is pending. Reports distinguish
+handling task updates, unrelated detours, and mixed interruptions where authored
+classification exists. Arrival effects remain in source apps after dismissal.
+
+Validation: Node engine/gesture tests plus a Happy DOM application check cover
+policy permissions, persistent facts, replay, editor identity/selection, composition,
+start timing, pause, leave, and executor availability. These are not native browser,
+autocorrect, dictation, or physical-device swipe qualification. No browser was
+opened and no screenshots were taken for this change. Compute flags and executor
+provisioning are unchanged; requesting play does not install model weights.

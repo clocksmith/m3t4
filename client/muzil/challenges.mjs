@@ -1,3 +1,4 @@
+import { validateNotificationConfig } from './notification-policy.mjs';
 // Declarative phone state and result predicates. No executable code in a challenge.
 const APPS = new Set(['messages', 'calendar', 'clock', 'notes', 'feed', 'contacts']);
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -46,6 +47,16 @@ export function validateChallenge(value) {
   checkGoal(c.goal);
   require(Array.isArray(c.interruptions) && c.interruptions.length <= 50, 'invalid interruptions');
   require(c.followups === undefined || Array.isArray(c.followups)&&c.followups.length<=4, 'invalid followups');
+  // Per-event tuning is normalized before the ordinary event/effect validators.
+  // Identity stays immutable so aliases cannot bypass duplicate/replay checks.
+  if(c.notificationOverrides) {
+    require(plain(c.notificationOverrides),'invalid notification overrides');
+    for(const [id,override] of Object.entries(c.notificationOverrides)) {
+      require(plain(override)&&!Object.hasOwn(override,'id'),'invalid notification override');
+      const n=[...c.interruptions,...(c.followups||[])].find(n=>n?.id===id);
+      require(!!n,'unknown notification override');Object.assign(n,structuredClone(override));
+    }
+  }
   const delivered = new Set();
   for (const n of [...c.interruptions,...(c.followups || [])]) {
     require(plain(n) && identifier(n.id) && !delivered.has(n.id) && APPS.has(n.app), 'invalid notification identity or app');
@@ -83,6 +94,7 @@ export function validateChallenge(value) {
     require(c.followups === undefined || Array.isArray(c.followups)&&c.followups.length<=4, 'invalid followups');
     for(const n of c.interruptions) require(!n.after || c.interruptions.some(p=>p.id===n.after&&p.at<n.at), 'invalid event dependency');
   }
+  validateNotificationConfig(c);
   c.interruptions.sort((a, b) => a.at - b.at);
   return c;
 }

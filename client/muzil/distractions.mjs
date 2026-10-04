@@ -70,7 +70,7 @@ export function decisionDistraction(n, seed, elapsed) {
     stage:'choose',readyAt:elapsed,resolution:null,completed:false};
 }
 export function decisionObservation(g, elapsed) {
-  const text=[g.title],actions=[],add=(target,label)=>actions.push({type:'tap',target,label});
+  const text=[g.title],actions=g.required?[]:[{type:'tap',target:'bait:leave',label:'Back to my task'}],add=(target,label)=>actions.push({type:'tap',target,label});
   if(g.stage==='wait') {
     text.push(g.resolution,elapsed<g.readyAt?`Continue in ${Math.ceil((g.readyAt-elapsed)/1000)} seconds.`:g.detail);
     if(elapsed>=g.readyAt)add('bait:finish','Return to the phone');
@@ -85,8 +85,8 @@ export function decisionObservation(g, elapsed) {
     text.push(g.detail,'Your draft will stay as you left it.');
     add('bait:retain','Keep working from my previous plan');add('bait:inspect',g.notification.app==='messages'?'Read the clinic update':'Inspect the updated appointment');
   } else if(g.interaction==='timing') {
-    text.push('An accurate stop lets you leave immediately. A miss costs four seconds.');
-    if(g.stopped===null) {text.push(`Marker at ${Math.round(timingPosition(g,elapsed))}%; target 43–57%.`);add('bait:stop','Stop the marker');add('bait:long-exit','Take the guaranteed six-second exit');}
+    text.push(`An accurate stop lets you leave immediately. A miss costs ${(g.notification.resolutionTimingMs?.miss ?? 4000)/1000} seconds.`);
+    if(g.stopped===null) {text.push(`Marker at ${Math.round(timingPosition(g,elapsed))}%; target 43–57%.`);add('bait:stop','Stop the marker');add('bait:long-exit',`Wait ${(g.notification.resolutionTimingMs?.longExit ?? 6000)/1000} seconds and leave`);}
     else add('bait:finish','Return to the phone');
   } else if(g.done) {
     text.push(DISTRACTIONS[g.kind].reward);add('bait:finish','Back to my task');add('bait:source','Keep reading in Doom Scroll');
@@ -98,15 +98,15 @@ export function decisionObservation(g, elapsed) {
 }
 export function actOnDecision(g,target,elapsed) {
   g.taps++;
-  if(['bait:finish','bait:source','bait:clear','bait:vague','bait:postpone','bait:inspect','bait:retain'].includes(target)) {g.completed=true;g.resolution=target.slice(5);return g;}
+  if(['bait:leave','bait:finish','bait:source','bait:clear','bait:vague','bait:postpone','bait:inspect','bait:retain'].includes(target)) {g.completed=true;g.resolution=target.slice(5);return g;}
   if(target==='bait:answer' || target==='bait:voicemail') {
     g.route=target==='bait:answer'?'answer':'voicemail';
-    g.stage='wait';g.readyAt=elapsed+(target==='bait:answer'?4000:0);
+    g.stage='wait';g.readyAt=elapsed+(target==='bait:answer'?(g.notification.resolutionTimingMs?.answer ?? 4000):(g.notification.resolutionTimingMs?.voicemail ?? 0));
     g.resolution=target==='bait:answer'?'Listening…':g.notification.voicemail || 'Read the latest message for the update.';
     if(target==='bait:voicemail') g.detail=g.resolution;
   } else if(target==='bait:stop' || target==='bait:long-exit') {
     if(target==='bait:stop') {g.stopped=timingPosition(g,elapsed);g.done=g.stopped>=43&&g.stopped<=57;}
-    g.stage='wait';g.readyAt=elapsed+(g.done?0:target==='bait:stop'?4000:6000);
+    g.stage='wait';g.readyAt=elapsed+(g.done?0:target==='bait:stop'?(g.notification.resolutionTimingMs?.miss ?? 4000):(g.notification.resolutionTimingMs?.longExit ?? 6000));
     g.resolution=g.done?'Perfect stop. You can go.':target==='bait:stop'?'Missed. Wait for the clip to end.':'Taking the longer exit.';
     g.detail=g.resolution;
   } else actOnDistraction(g,target,elapsed);

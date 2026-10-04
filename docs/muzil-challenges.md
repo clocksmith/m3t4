@@ -174,3 +174,41 @@ leaving the feed releases its GPU resources. The original round timer continues.
 
 Real model completion on these new tasks has not been qualified. The retained
 Qwen success/latency evidence applies to the original pickup task.
+
+## Notification interaction configuration
+
+For new evolving scenarios, `notificationPolicies` defines named objects with
+`blocksPhone`, `requireOpen`, `requireResolution`, `gestures`, and `controls`.
+`gestures` maps `tap`, `swipeDown`, `swipeUp`, `swipeLeft`, or `swipeRight` to
+`open`, `expand`, `dismiss`, `defer`, `read`, `later`, `answer`, `decline`, or `none`.
+Every assigned gesture also has a visible keyboard-operable control.
+Answer/Decline require a call interaction. A required opening cannot expose a
+dismiss/defer action. Requiring resolution is independent of requiring entry.
+
+The shipped catalog contains complete examples. `notificationDefaults` supplies
+`policy`, `quietAfterResolutionMs`, `maxSimultaneousBlocking`, `maxPending`,
+`maxEventsPerEpisode`, `sound`, and `gestureThresholds` (`distancePx`, `axisRatio`).
+These are tuning values, not qualified optimal difficulty settings. Audio defaults
+to off. Browser audio permission is requested only during a user start when a
+scenario requests sound.
+
+Each event can name a policy. `notificationOverrides[eventId]` overrides its
+policy or its ordinary validated event fields, including arrival `at`, progress
+`trigger`/`delayMs`, copy and `effects`. Event identity cannot be overridden.
+Resolution delays are `resolutionTimingMs.answer`, `voicemail`, `miss`, and
+`longExit`. Recurrence requires distinct authored events in the same `episode`;
+identical event IDs are still delivered only once. The episode cap bounds those
+developments. A group’s Later choice can arm its single authored follow-up.
+
+Each configured event also provides `presentation` (incoming-call, message,
+calendar-update, video, system-sheet) and `classification` (task-update,
+useful-information, unrelated-detour, mixed). These classifications inform
+post-round accounting; they are not shown as hints during play. Player consequences
+are recorded separately in notification history. Essential call handling is not
+counted as an unrelated detour or automatically scored as a mistake. `bait:*`
+identifiers remain replay-compatible; the UI displays their action labels.
+
+Legacy scenarios without these fields keep their existing replay behavior.
+`npm run test:muzil` includes policy/gesture tests and a Node DOM check; native
+IME, dictation, touch, and browser animation behavior require separate device
+verification.

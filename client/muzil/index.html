@@ -18,7 +18,7 @@
       <summary aria-label="Open menu">Menu <span>＋</span></summary>
       <nav aria-label="Main">
         <button class="nav-item active" id="play-human" data-boot-control disabled>Play</button>
-        <button class="nav-item" id="agent-round" data-boot-control disabled>Watch AI play</button>
+        <button class="nav-item" id="agent-round" data-boot-control disabled>Stand-in unavailable</button><button class="nav-item" id="watch-replay" disabled>Watch replay</button>
         <button class="nav-item" id="race-peer" data-boot-control disabled>Play with a friend</button>
       </nav>
     </details>
@@ -53,7 +53,7 @@
         <p class="intro-hint">One intention. A phone full of distractions.</p>
       </div>
       <div class="phone-column" id="game-stage" hidden>
-        <aside class="task-thought" aria-label="Your task"><div class="task-thought-heading"><button id="remember" aria-label="Remember my intention">Remember why ↗</button></div><div id="task-note-content"></div></aside><div class="phone-caption"><span class="clock-label">Time remaining</span><span id="round-clock" role="timer" aria-label="Time remaining">03:00</span></div>
+        <aside class="task-thought" aria-label="Your task"><div class="task-thought-heading"><button id="remember" aria-label="Remember my intention">Remember why ↗</button></div><div id="task-note-content"></div></aside><div class="round-controls" id="round-controls" hidden><button id="pause-round">Pause</button><button id="leave-round">Leave</button></div><div class="phone-caption"><span class="clock-label">Time remaining</span><span id="round-clock" role="timer" aria-label="Time remaining">03:00</span></div>
         <div class="phone-viewport"><div class="phone" id="phone" tabindex="-1" aria-label="Simulated phone">
           <div class="phone-hardware"><span class="phone-time">9:41</span><span class="island"></span><span class="phone-signals" aria-label="Full signal and battery">▂▄▆ <span>▰</span></span></div>
           <div id="phone-screen" class="phone-screen"></div>

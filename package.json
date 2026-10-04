@@ -46,6 +46,7 @@
     "deploy:hosting": "firebase deploy --only hosting --project m3ta-ai"
   },
   "devDependencies": {
+    "happy-dom": "20.14.5",
     "playwright": "1.58.0"
   },
   "license": "MIT"

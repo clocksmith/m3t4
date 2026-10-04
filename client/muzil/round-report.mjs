@@ -14,5 +14,6 @@ export function roundResult(s) {
 export function roundReport(s) {
   if (!s.metrics) return `${Math.round(s.elapsed/1000)} seconds · ${s.log.length} actions · ${s.recalled} reminders.`;
   const {interruptionMs,oldCalendarChecks,mistakes} = s.metrics;
-  return `You spent ${Math.round(interruptionMs/1000)} seconds resolving interruptions${oldCalendarChecks ? `, checked the old appointment ${oldCalendarChecks === 1 ? 'once' : `${oldCalendarChecks} times`}` : ''}, and ${s.phase==='finished' ? 'finished using the current details' : s.phase==='lost'?'were still working when your friend finished':'ran out of time before finishing'}${mistakes ? ` after ${mistakes} ${mistakes===1?'mistake':'mistakes'}` : ''}.`;
+  const handling=s.scenario.notificationPolicies ? `${Math.round((s.metrics.taskUpdateMs||0)/1000)} seconds handling task updates and ${Math.round((s.metrics.detourMs||0)/1000)} seconds on unrelated detours${s.metrics.mixedMs ? `, plus ${Math.round(s.metrics.mixedMs/1000)} seconds on mixed interruptions` : ''}` : `${Math.round(interruptionMs/1000)} seconds resolving interruptions`;
+  return `You spent ${handling}${oldCalendarChecks ? `, checked the old appointment ${oldCalendarChecks === 1 ? 'once' : `${oldCalendarChecks} times`}` : ''}, and ${s.phase==='finished' ? 'finished using the current details' : s.phase==='lost'?'were still working when your friend finished':'ran out of time before finishing'}${mistakes ? ` after ${mistakes} ${mistakes===1?'mistake':'mistakes'}` : ''}.`;
 }

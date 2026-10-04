@@ -1207,7 +1207,131 @@
           "delayMs": 12000,
           "detail": "One definite answer will close this thread."
         }
-      ]
+      ],
+      "notificationPolicies": {
+        "optional": {
+          "blocksPhone": false,
+          "requireOpen": false,
+          "requireResolution": false,
+          "gestures": {
+            "tap": "open",
+            "swipeDown": "expand",
+            "swipeUp": "dismiss",
+            "swipeLeft": "defer"
+          },
+          "controls": [
+            "open",
+            "expand",
+            "dismiss",
+            "defer"
+          ]
+        },
+        "handleFirst": {
+          "blocksPhone": true,
+          "requireOpen": false,
+          "requireResolution": false,
+          "gestures": {
+            "tap": "read",
+            "swipeDown": "expand",
+            "swipeUp": "none",
+            "swipeLeft": "none"
+          },
+          "controls": [
+            "read",
+            "later"
+          ]
+        },
+        "openRequired": {
+          "blocksPhone": true,
+          "requireOpen": true,
+          "requireResolution": false,
+          "gestures": {
+            "tap": "open",
+            "swipeDown": "open",
+            "swipeUp": "none",
+            "swipeLeft": "none"
+          },
+          "controls": [
+            "open"
+          ]
+        },
+        "finishRequired": {
+          "blocksPhone": true,
+          "requireOpen": true,
+          "requireResolution": true,
+          "gestures": {
+            "tap": "open",
+            "swipeDown": "open",
+            "swipeUp": "none",
+            "swipeLeft": "none"
+          },
+          "controls": [
+            "open"
+          ]
+        }
+      },
+      "notificationDefaults": {
+        "policy": "optional",
+        "quietAfterResolutionMs": 4000,
+        "maxSimultaneousBlocking": 1,
+        "maxPending": 4,
+        "maxEventsPerEpisode": 6,
+        "gestureThresholds": {
+          "distancePx": 40,
+          "axisRatio": 1
+        },
+        "sound": false
+      },
+      "notificationOverrides": {
+        "finish-changed": {
+          "policy": "openRequired",
+          "presentation": "calendar-update",
+          "classification": "task-update"
+        },
+        "driver-changed": {
+          "policy": "openRequired",
+          "presentation": "message",
+          "classification": "task-update"
+        },
+        "entrance-changed": {
+          "policy": "openRequired",
+          "presentation": "incoming-call",
+          "classification": "task-update",
+          "resolutionTimingMs": {
+            "answer": 4000,
+            "voicemail": 0
+          }
+        },
+        "group-plan": {
+          "policy": "handleFirst",
+          "presentation": "message",
+          "classification": "unrelated-detour"
+        },
+        "reminder-request": {
+          "policy": "openRequired",
+          "presentation": "message",
+          "classification": "task-update"
+        },
+        "timing-invite": {
+          "policy": "openRequired",
+          "presentation": "system-sheet",
+          "classification": "unrelated-detour",
+          "resolutionTimingMs": {
+            "miss": 4000,
+            "longExit": 6000
+          }
+        },
+        "photo-tag": {
+          "policy": "optional",
+          "presentation": "video",
+          "classification": "unrelated-detour"
+        },
+        "group-clarify": {
+          "policy": "handleFirst",
+          "presentation": "message",
+          "classification": "unrelated-detour"
+        }
+      }
     },
     {
       "version": 2,
@@ -1538,7 +1662,131 @@
           "delayMs": 12000,
           "detail": "One definite answer will close this thread."
         }
-      ]
+      ],
+      "notificationPolicies": {
+        "optional": {
+          "blocksPhone": false,
+          "requireOpen": false,
+          "requireResolution": false,
+          "gestures": {
+            "tap": "open",
+            "swipeDown": "expand",
+            "swipeUp": "dismiss",
+            "swipeLeft": "defer"
+          },
+          "controls": [
+            "open",
+            "expand",
+            "dismiss",
+            "defer"
+          ]
+        },
+        "handleFirst": {
+          "blocksPhone": true,
+          "requireOpen": false,
+          "requireResolution": false,
+          "gestures": {
+            "tap": "read",
+            "swipeDown": "expand",
+            "swipeUp": "none",
+            "swipeLeft": "none"
+          },
+          "controls": [
+            "read",
+            "later"
+          ]
+        },
+        "openRequired": {
+          "blocksPhone": true,
+          "requireOpen": true,
+          "requireResolution": false,
+          "gestures": {
+            "tap": "open",
+            "swipeDown": "open",
+            "swipeUp": "none",
+            "swipeLeft": "none"
+          },
+          "controls": [
+            "open"
+          ]
+        },
+        "finishRequired": {
+          "blocksPhone": true,
+          "requireOpen": true,
+          "requireResolution": true,
+          "gestures": {
+            "tap": "open",
+            "swipeDown": "open",
+            "swipeUp": "none",
+            "swipeLeft": "none"
+          },
+          "controls": [
+            "open"
+          ]
+        }
+      },
+      "notificationDefaults": {
+        "policy": "optional",
+        "quietAfterResolutionMs": 4000,
+        "maxSimultaneousBlocking": 1,
+        "maxPending": 4,
+        "maxEventsPerEpisode": 6,
+        "gestureThresholds": {
+          "distancePx": 40,
+          "axisRatio": 1
+        },
+        "sound": false
+      },
+      "notificationOverrides": {
+        "finish-changed": {
+          "policy": "openRequired",
+          "presentation": "calendar-update",
+          "classification": "task-update"
+        },
+        "driver-changed": {
+          "policy": "openRequired",
+          "presentation": "message",
+          "classification": "task-update"
+        },
+        "entrance-changed": {
+          "policy": "openRequired",
+          "presentation": "incoming-call",
+          "classification": "task-update",
+          "resolutionTimingMs": {
+            "answer": 4000,
+            "voicemail": 0
+          }
+        },
+        "group-plan": {
+          "policy": "handleFirst",
+          "presentation": "message",
+          "classification": "unrelated-detour"
+        },
+        "reminder-request": {
+          "policy": "openRequired",
+          "presentation": "message",
+          "classification": "task-update"
+        },
+        "timing-invite": {
+          "policy": "openRequired",
+          "presentation": "system-sheet",
+          "classification": "unrelated-detour",
+          "resolutionTimingMs": {
+            "miss": 4000,
+            "longExit": 6000
+          }
+        },
+        "photo-tag": {
+          "policy": "optional",
+          "presentation": "video",
+          "classification": "unrelated-detour"
+        },
+        "group-clarify": {
+          "policy": "handleFirst",
+          "presentation": "message",
+          "classification": "unrelated-detour"
+        }
+      }
     },
     {
       "version": 2,
@@ -1861,7 +2109,131 @@
           "delayMs": 12000,
           "detail": "One definite answer will close this thread."
         }
-      ]
+      ],
+      "notificationPolicies": {
+        "optional": {
+          "blocksPhone": false,
+          "requireOpen": false,
+          "requireResolution": false,
+          "gestures": {
+            "tap": "open",
+            "swipeDown": "expand",
+            "swipeUp": "dismiss",
+            "swipeLeft": "defer"
+          },
+          "controls": [
+            "open",
+            "expand",
+            "dismiss",
+            "defer"
+          ]
+        },
+        "handleFirst": {
+          "blocksPhone": true,
+          "requireOpen": false,
+          "requireResolution": false,
+          "gestures": {
+            "tap": "read",
+            "swipeDown": "expand",
+            "swipeUp": "none",
+            "swipeLeft": "none"
+          },
+          "controls": [
+            "read",
+            "later"
+          ]
+        },
+        "openRequired": {
+          "blocksPhone": true,
+          "requireOpen": true,
+          "requireResolution": false,
+          "gestures": {
+            "tap": "open",
+            "swipeDown": "open",
+            "swipeUp": "none",
+            "swipeLeft": "none"
+          },
+          "controls": [
+            "open"
+          ]
+        },
+        "finishRequired": {
+          "blocksPhone": true,
+          "requireOpen": true,
+          "requireResolution": true,
+          "gestures": {
+            "tap": "open",
+            "swipeDown": "open",
+            "swipeUp": "none",
+            "swipeLeft": "none"
+          },
+          "controls": [
+            "open"
+          ]
+        }
+      },
+      "notificationDefaults": {
+        "policy": "optional",
+        "quietAfterResolutionMs": 4000,
+        "maxSimultaneousBlocking": 1,
+        "maxPending": 4,
+        "maxEventsPerEpisode": 6,
+        "gestureThresholds": {
+          "distancePx": 40,
+          "axisRatio": 1
+        },
+        "sound": false
+      },
+      "notificationOverrides": {
+        "finish-changed": {
+          "policy": "openRequired",
+          "presentation": "calendar-update",
+          "classification": "task-update"
+        },
+        "driver-changed": {
+          "policy": "openRequired",
+          "presentation": "message",
+          "classification": "task-update"
+        },
+        "entrance-changed": {
+          "policy": "openRequired",
+          "presentation": "incoming-call",
+          "classification": "task-update",
+          "resolutionTimingMs": {
+            "answer": 4000,
+            "voicemail": 0
+          }
+        },
+        "group-plan": {
+          "policy": "handleFirst",
+          "presentation": "message",
+          "classification": "unrelated-detour"
+        },
+        "reminder-request": {
+          "policy": "openRequired",
+          "presentation": "message",
+          "classification": "task-update"
+        },
+        "timing-invite": {
+          "policy": "openRequired",
+          "presentation": "system-sheet",
+          "classification": "unrelated-detour",
+          "resolutionTimingMs": {
+            "miss": 4000,
+            "longExit": 6000
+          }
+        },
+        "photo-tag": {
+          "policy": "optional",
+          "presentation": "video",
+          "classification": "unrelated-detour"
+        },
+        "group-clarify": {
+          "policy": "handleFirst",
+          "presentation": "message",
+          "classification": "unrelated-detour"
+        }
+      }
     }
   ]
 }

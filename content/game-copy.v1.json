@@ -68,9 +68,9 @@
     "title": "About",
     "subtitle": "bounded policy search through deterministic matches",
     "about": {
-      "title": "what m3t4.ai is",
+      "title": "what Meta Duel is",
       "body": [
-        "m3t4 tests autonomous fighter policies across a bounded parameter grid. Each bot is a configuration; deterministic seeded matches make candidates comparable.",
+        "Meta Duel tests autonomous fighter policies across a bounded parameter grid. Each bot is a configuration; deterministic seeded matches make candidates comparable.",
         "Tuners edit a policy, observe its outcomes, and decide what to reject, retain, or publish. Replays, rankings, and Elo are evidence from that search loop.",
         "Shared compute is a separate experiment. Opted-in browsers can execute public deterministic chunks and return validated receipts, but they never control ranked matches, private bot policies, or Elo."
       ],

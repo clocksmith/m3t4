@@ -1784,3 +1784,19 @@ body.in-round .phone { height:min(694px,calc(100dvh - 300px)); min-height:410px;
   .peek-phone { transition:none; }
   .launching .toaster-smoke i,.launching .toaster-sparks { animation:none; }
 }
+
+/* The real session controls remain outside all simulated notification locks. */
+.round-controls { display:flex; justify-content:center; gap:20px; margin:0 0 8px }
+.round-controls[hidden] { display:none }
+.round-controls button { padding:4px 8px; font:inherit; background:transparent; border:0; text-decoration:underline; text-underline-offset:4px }
+.notification-toast[data-notification], .notification-list-item[data-notification] { touch-action:none }
+.notification-choices { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; padding:0 12px 10px }
+.notification-choices button { font:inherit; font-size:12px; padding:5px 8px; border:1px solid currentColor; border-radius:8px; background:transparent }
+.notification-toast .notification-open:disabled { opacity:1; color:inherit }
+.bubble { white-space:pre-wrap; overflow-wrap:anywhere }
+.message-compose textarea { white-space:pre-wrap; word-spacing:normal; letter-spacing:normal }
+body.opening-phone #intro { display:flex; position:absolute; inset:0; pointer-events:none; z-index:2 }
+body.opening-phone #intro .toaster-scene, body.opening-phone #intro .start-label { visibility:hidden }
+body.opening-phone #game-stage { position:relative; z-index:3 }
+.notification-banner .notification-toast[data-notification] { flex-direction:column; align-items:stretch }
+.notification-banner [data-expanded="true"] .notification-open p { display:block; overflow:visible }

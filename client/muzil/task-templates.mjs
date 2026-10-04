@@ -23,6 +23,7 @@ export function generateChallenge(template, seed) {
     success:'Your driver has the current plan.',date:'Monday, September 28',durationMs:180000,
     initial:{contacts:[{id:'parent',name:parent,messages:[`I’m collecting you. Send me the finish time and entrance when you know.`]},{id:'driver',name:driver,messages:['Let me know if you need a lift.']},{id:'reception',name:'Reception',messages:[`Pickup is at the ${oldPlace}. Calendar has the finish time.`]},{id:'group',name:'The group chat',messages:['We are deciding where to go after. Can you come?']}],calendar:[event],notes:`Pickup: ${oldPlace}. Allow ten minutes to get ready.`,alarms:family==='repair'?[time(start+30)]:[]},
     goal:goalFor('parent',oldEnd,oldPlace),
+    ...Object.fromEntries(['notificationPolicies','notificationDefaults','notificationOverrides'].filter(k=>template[k]).map(k=>[k,structuredClone(template[k])])),
     pressure:structuredClone(pressure),
     interruptions:[]};
   c.interruptions=[
@@ -31,8 +32,8 @@ export function generateChallenge(template, seed) {
     notification('entrance-changed',40000,'messages','Reception is calling','There has been a change to pickup.',{after:'driver-changed',contact:'reception',interaction:'call',detail:`Pickup has moved to the ${place}. The finish time is still ${end}.`,voicemail:`The old entrance is closed. Check our latest message for the replacement.`,effects:{facts:{entrance:place},messages:[{contact:'reception',text:`Pickup moved to the ${place}; ${oldPlace} is closed. Finish time: ${end}.`}],goal:goalFor('driver',end,place)}}),
     notification('group-plan',55000,'messages','The group chat','Are you coming with us, or arranging your pickup?',{contact:'group',episode:'group-plan',trigger:'fact-read',delayMs:25000,interaction:'group',detail:'They need a definite answer before reserving a table.'}),
     notification('reminder-request',76000,'messages',driver,`Set a reminder for ${alarm} before you leave, then send me the pickup time and entrance.`,{after:'entrance-changed',contact:'driver',effects:{facts:{alarm},goal:goalFor('driver',end,place,true)}}),
-    notification('timing-invite',98000,'feed','One perfect tap','Stop in the green zone to get out quickly. Or take the longer exit.',{episode:'timing',interaction:'timing',distraction:'timing'}),
-    notification('photo-tag',125000,'feed','Someone tagged you','A pigeon has your exact expression. Three tiles. Then you can leave.',{episode:'photo',interaction:'media',distraction:'reveal'}),
+    notification('timing-invite',98000,'feed','One perfect tap','Can you stop in the green zone?',{episode:'timing',interaction:'timing',distraction:'timing'}),
+    notification('photo-tag',125000,'feed','Someone tagged you','A pigeon has your exact expression. Three tiles hide the photo.',{episode:'photo',interaction:'media',distraction:'reveal'}),
   ];
   // A legitimate follow-up in one episode; only a vague/postponed response arms it.
   // Some clinics update Calendar; others only send a message. The editable copy

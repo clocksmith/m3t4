@@ -1,11 +1,13 @@
+import { configuredNotifications, notificationPolicy, accountNotificationTime } from './notification-policy.mjs';
 // Policy is scenario data. No wall clock, opponent state or unrecorded randomness.
 export const directed = s => s.scenario.version === 2;
 export function signal(s, name) {
   if (directed(s) && s.director.signals[name] === undefined) s.director.signals[name] = s.elapsed;
 }
 export function deliverNext(s, from) {
-  if (!directed(s) || s.notifications.length || s.screen.app === 'distraction' && s.distractions[s.screen.distractionId]?.required) return;
-  const candidates = [...s.scenario.interruptions,...s.director.followups].filter(n => !s.delivered.includes(n.id) && (!n.after || s.delivered.includes(n.after))).map(n => {
+  const configured=configuredNotifications(s);
+  if (!directed(s) || (!configured && s.notifications.length) || configured && s.notifications.length>=s.scenario.notificationDefaults.maxPending || s.screen.app === 'distraction' && s.distractions[s.screen.distractionId]?.required) return;
+  const candidates = [...s.scenario.interruptions,...s.director.followups].filter(n => !s.delivered.includes(n.id) && (!configured || (s.director.events.filter(e=>e.episode===(n.episode||n.id)).length<s.scenario.notificationDefaults.maxEventsPerEpisode && (!notificationPolicy(s,n).blocksPhone || s.notifications.filter(e=>notificationPolicy(s,e).blocksPhone).length<s.scenario.notificationDefaults.maxSimultaneousBlocking))) && (!n.after || s.delivered.includes(n.after))).map(n => {
     const triggerAt = n.trigger ? s.director.signals[n.trigger] : 0;
     const due = !n.trigger || triggerAt === undefined ? n.at : Math.min(n.at, triggerAt + (n.delayMs || 0));
     return { n, at:Math.max(from, due, s.notificationQuietUntil, s.director.nextAt) };
@@ -28,9 +30,10 @@ export function deliverNext(s, from) {
   }
   if (n.contact && !(n.effects?.messages || []).some(m=>m.contact===n.contact && m.text===n.body)) s.messages[n.contact].push({from:n.contact,text:n.body,eventId:n.id});
   s.notifications.push({...structuredClone(n),at});
-  s.metrics.interruptionMs += s.elapsed-at;
+  if(!configured)accountNotificationTime(s,n,s.elapsed-at);
+  else deliverNext(s,from);
 }
-export function recovery(s, kind = 'message') {
-  s.notificationQuietUntil = s.elapsed + (s.scenario.pressure.recoveryMs[kind] ?? s.scenario.pressure.recoveryMs.message);
+export function recovery(s, kind = 'message', n) {
+  s.notificationQuietUntil = s.elapsed + (configuredNotifications(s) ? (n ? notificationPolicy(s,n).quietAfterResolutionMs : s.scenario.notificationDefaults.quietAfterResolutionMs) : (s.scenario.pressure.recoveryMs[kind] ?? s.scenario.pressure.recoveryMs.message));
   signal(s,'detour-return');
 }

@@ -41,7 +41,9 @@
     "test:muzil:apps": "node tools/muzil-mini-apps-smoke.mjs",
     "test:muzil:interruptions": "node tools/muzil-interruption-smoke.mjs",
     "test:muzil:evolving": "node tools/muzil-evolving-smoke.mjs",
-    "test:muzil:match": "node tools/muzil-match-smoke.mjs"
+    "test:muzil:match": "node tools/muzil-match-smoke.mjs",
+    "sync:mandate": "node tools/sync-mandate.mjs",
+    "deploy:hosting": "firebase deploy --only hosting --project m3ta-ai"
   },
   "devDependencies": {
     "playwright": "1.58.0"

@@ -73,7 +73,7 @@ async function page(instance, url, { requester = false, persistent = false } = {
       await route.fulfill({ response, body });
     });
   }
-  await p.goto(url);
+  await p.goto(new URL('/muzil/', url).href);
   await p.evaluate(async sources => {
     for (const [path, expected] of Object.entries(sources)) {
       if (!path.startsWith('client/')) continue;

@@ -14,7 +14,7 @@ console.log('Artifacts:',output);
 async function openFeed(page) {
  page.setDefaultTimeout(15000);
  await page.addLocatorHandler(page.locator('.interrupting .notification-open'), ()=>handleInterruption(page));
- await page.goto(origin);await page.locator('#start-round:not(:disabled)').waitFor();await page.locator('#challenge-select').evaluate(el=>el.value='pickup-errands');await page.locator('#start-round').click();await page.locator('#dismiss-reveal').click();
+ await page.goto(origin + '/muzil/');await page.locator('#start-round:not(:disabled)').waitFor();await page.locator('#challenge-select').evaluate(el=>el.value='pickup-errands');await page.locator('#start-round').click();await page.locator('#dismiss-reveal').click();
  await page.getByRole('button',{name:'Open Doom Scroll',exact:true}).click();await page.locator('.doom-post').first().waitFor();
 }
 async function select(page,id) {
@@ -34,7 +34,7 @@ try {
    };
  });
  page.on('pageerror',e=>errors.push(e.message));const requests=[];page.on('request',r=>requests.push(r.url()));
- await page.goto(origin);await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:join(output,'toaster-desktop.png'),fullPage:true});
+ await page.goto(origin + '/muzil/');await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:join(output,'toaster-desktop.png'),fullPage:true});
  await openFeed(page);
  await page.waitForFunction(()=>document.querySelector('.doom-canvas')?.dataset.renderer==='webgpu');
  await page.waitForFunction(()=>Number(document.querySelector('.doom-canvas')?.dataset.frames)>2);
@@ -75,7 +75,7 @@ try {
  await page.locator('[data-action="app:messages"]').first().click();await page.locator('[data-action="contact:jo"]').click();await page.locator('#phone-reply').fill('violet code');await page.getByRole('button',{name:'Send message',exact:true}).click();await page.locator('#next-round').waitFor();
  check('Local JSON import introduces a new contact and intention without application code changes');
  const mobile=await browser.newPage({viewport:{width:390,height:844},isMobile:true,deviceScaleFactor:2});mobile.on('pageerror',e=>errors.push(e.message));
- await mobile.goto(origin);await mobile.evaluate(()=>document.fonts.ready);await mobile.screenshot({path:join(output,'toaster-mobile.png'),fullPage:true});await openFeed(mobile);
+ await mobile.goto(origin + '/muzil/');await mobile.evaluate(()=>document.fonts.ready);await mobile.screenshot({path:join(output,'toaster-mobile.png'),fullPage:true});await openFeed(mobile);
  await mobile.waitForFunction(()=>document.querySelector('.doom-canvas')?.dataset.renderer==='webgpu');
  const cdp=await mobile.context().newCDPSession(mobile),box=await mobile.locator('.doom-scroller').boundingBox();
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:box.x+box.width/2,y:box.y+box.height*.85}]});

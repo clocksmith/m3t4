@@ -15,7 +15,7 @@ try {
   const page=await browser.newPage({viewport:{width:1440,height:1050}});
   await page.addLocatorHandler(page.locator('.interrupting .notification-open'), () => handleInterruption(page));
   page.on('pageerror',e=>errors.push(e.message)); const requests=[]; page.on('request',r=>requests.push(r.url()));
-  await page.goto(origin);await page.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await page.locator('#challenge-select').evaluate((el,value)=>el.value=value,'pickup-errands'); await page.locator('#start-round').waitFor(); await page.evaluate(()=>document.fonts.ready);
+  await page.goto(origin + '/muzil/');await page.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await page.locator('#challenge-select').evaluate((el,value)=>el.value=value,'pickup-errands'); await page.locator('#start-round').waitFor(); await page.evaluate(()=>document.fonts.ready);
   assert.equal(requests.some(u=>u.includes('/vendor/')),false);
   await page.screenshot({path:join(output,'desktop.png'),fullPage:true});
   await page.locator('#start-round').click(); await page.locator('#dismiss-reveal').click();
@@ -39,11 +39,11 @@ try {
   await page.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await page.locator('#challenge-select').evaluate((el,value)=>el.value=value,'pickup-variation-errands');await page.locator('#next-round').click(); await page.locator('#dismiss-reveal').click(); await page.locator('[data-action="app:calendar"]').first().click(); await page.locator('.event-times').filter({hasText:'2:20 PM'}).getByText('3:15 PM',{exact:true}).waitFor();
   report.checks.push('No initial vendor/weight requests; task completion; draft persistence; profile; replay; fresh variation');
   const mobile=await browser.newPage({viewport:{width:390,height:844},isMobile:true,deviceScaleFactor:2}); mobile.on('pageerror',e=>errors.push(e.message));
-  await mobile.goto(origin);await mobile.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await mobile.locator('#challenge-select').evaluate((el,value)=>el.value=value,'pickup-errands'); await mobile.evaluate(()=>document.fonts.ready);
+  await mobile.goto(origin + '/muzil/');await mobile.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await mobile.locator('#challenge-select').evaluate((el,value)=>el.value=value,'pickup-errands'); await mobile.evaluate(()=>document.fonts.ready);
   assert.equal(await mobile.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await mobile.screenshot({path:join(output,'mobile.png'),fullPage:true});
   const reduced = await browser.newPage({viewport:{width:390,height:844},reducedMotion:'reduce'});
-  await reduced.goto(origin);
+  await reduced.goto(origin + '/muzil/');
   assert.equal(await reduced.locator('#peek-phone').evaluate(el=>getComputedStyle(el).animationName),'none');
   await reduced.locator('#start-round').focus(); await reduced.keyboard.press('Enter'); await reduced.locator('#dismiss-reveal').waitFor();
   assert.equal(await reduced.locator('#phone').evaluate(el=>el.getAnimations().length),0);
@@ -55,7 +55,7 @@ try {
   report.checks.push('Mobile layout has no horizontal overflow and can finish a task');
   const compact = await browser.newPage({viewport:{width:320,height:568},isMobile:true});
   compact.on('pageerror', e=>errors.push(e.message));
-  await compact.goto(origin);await compact.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await compact.locator('#challenge-select').evaluate((el,value)=>el.value=value,'pickup-errands');
+  await compact.goto(origin + '/muzil/');await compact.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await compact.locator('#challenge-select').evaluate((el,value)=>el.value=value,'pickup-errands');
   assert.equal(await compact.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await compact.locator('#start-round').click(); await compact.locator('#dismiss-reveal').click();
   await compact.locator('#remember').click(); await compact.locator('#task-note-content').getByText('Tell Mom when and where to pick you up.',{exact:true}).waitFor();
@@ -65,7 +65,7 @@ try {
   report.checks.push('Small 320px phone can enter the game and recall its intention');
   const policyPage = await browser.newPage(), policyRequests = [];
   policyPage.on('request', request => policyRequests.push(request.url()));
-  await policyPage.goto(origin);
+  await policyPage.goto(origin + '/muzil/');
   const policyResult = await policyPage.evaluate(async () => {
     const { MeshController } = await import('/muzil/mesh.mjs');
     const controller = new MeshController();
@@ -81,7 +81,7 @@ try {
   report.checks.push('Mesh policy resolves explicit artifact URLs without importing Doppler or acquiring weights');
   await policyPage.close();
   const a=await browser.newPage(),b=await browser.newPage();
-  for(const p of [a,b]) {p.on('pageerror',e=>errors.push(e.message));await p.goto(origin); await p.evaluate(async()=>{
+  for(const p of [a,b]) {p.on('pageerror',e=>errors.push(e.message));await p.goto(origin + '/muzil/'); await p.evaluate(async()=>{
     const {PeerController}=await import('/muzil/peer.mjs');
     window.testPeer=new PeerController({local:{session:{},model:'transport-fixture',busy:false,generate:async(job,signal)=>{
       if(job.message==='wait') await new Promise((resolve,reject)=>{signal.addEventListener('abort',()=>reject(new Error('cancelled')),{once:true});setTimeout(resolve,15000);});

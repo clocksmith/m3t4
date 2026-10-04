@@ -11,7 +11,7 @@ const menu=async p=>{if(!await p.locator('#site-menu').evaluate(el=>el.open))awa
 try {
  const pages=await Promise.all([browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'}),browser.newPage({viewport:{width:390,height:844},reducedMotion:'reduce'})]);
  const [a,b]=pages;
- for(const p of pages){p.on('pageerror',e=>errors.push(e.message));await p.goto(origin);await menu(p);await p.locator('#race-peer').click();}
+ for(const p of pages){p.on('pageerror',e=>errors.push(e.message));await p.goto(origin + '/muzil/');await menu(p);await p.locator('#race-peer').click();}
  await a.locator('#make-offer').click();await a.waitForFunction(()=>document.querySelector('#peer-output').value.startsWith('ey'));
  await b.locator('#peer-input').fill(await a.locator('#peer-output').inputValue());await b.locator('#join-offer').click();await b.waitForFunction(()=>document.querySelector('#peer-output').value.startsWith('ey'));
  await a.locator('#peer-input').fill(await b.locator('#peer-output').inputValue());await a.locator('#accept-answer').click();

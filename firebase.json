@@ -25,7 +25,8 @@
     "predeploy": [
       "npm run sync:content",
       "npm run check:client-sim",
-      "npm run sync:runtime"
+      "npm run sync:runtime",
+      "npm run sync:mandate"
     ],
     "ignore": [
       "firebase.json",

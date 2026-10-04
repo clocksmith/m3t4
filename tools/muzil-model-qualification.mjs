@@ -39,7 +39,7 @@ try {
     : await chromium.launch({ channel: 'chrome', headless: true, args: ['--enable-unsafe-webgpu'] });
   page = remoteCdp ? await browser.contexts()[0].newPage() : await browser.newPage();
   page.on('pageerror', error => report.errors.push(error.message));
-  await page.goto(remoteCdp ? value('--origin') : `http://127.0.0.1:${server.address().port}/`);
+  await page.goto(remoteCdp ? value('--origin') : `http://127.0.0.1:${server.address().port}/muzil/`);
   report.preparation = await page.evaluate(async ({ directory, modelUrl, identity, sources }) => {
     for (const [path, expected] of Object.entries(sources)) {
       if (!path.startsWith('client/')) continue;

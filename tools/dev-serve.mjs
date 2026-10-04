@@ -18,7 +18,8 @@ export function createDevServer({ modelRoot = null } = {}) {
       else if (modelRoot && rel.startsWith('__models/')) { root = resolve(modelRoot); rel = rel.slice(9); if (!['.json','.bin'].includes(extname(rel))) throw new Error('Missing'); }
       else if (historical.has(rel)) rel = 'history/index.html';
       else if (!rel) rel = 'index.html';
-      const file = resolve(root, rel);
+      let file = resolve(root, rel);
+      if (statSync(file).isDirectory()) file = resolve(file, 'index.html');
       if (!file.startsWith(resolve(root) + sep) || !statSync(file).isFile()) throw new Error('Missing');
       const size = statSync(file).size;
       const headers = { 'Content-Type': MIME[extname(file)] || 'application/octet-stream', 'Cache-Control':'no-store', 'Accept-Ranges':'bytes' };

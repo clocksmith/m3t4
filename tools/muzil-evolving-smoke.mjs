@@ -10,7 +10,7 @@ const browser=await chromium.launch({channel:'chrome',headless:true}),errors=[],
 try {
  for(const width of [1440,390,320]) {
   const page=await browser.newPage({viewport:{width,height:width===1440?1000:844},reducedMotion:'reduce'});
-  page.on('pageerror',e=>errors.push(e.message));await page.clock.install();await page.goto(origin);
+  page.on('pageerror',e=>errors.push(e.message));await page.clock.install();await page.goto(origin + '/muzil/');
   await page.locator('#start-round:not(:disabled)').waitFor();await page.clock.pauseAt(new Date());
   await page.locator('#start-round:not(:disabled)').waitFor({state:'attached'});await page.locator('#challenge-select').evaluate((el,value)=>el.value=value,'changing-coordinate');await page.locator('#start-round').click();await page.locator('#dismiss-reveal').click();
   const tap=t=>page.locator(`[data-action="${t}"]`).first().click();

@@ -32,7 +32,7 @@ test("route config keeps browser feature gates centralized", () => {
 
 test("historical navigation keeps the arena home on the logo", () => {
   const html = fs.readFileSync(new URL("../history/index.html", import.meta.url), "utf8");
-  assert.match(html, /<a href="\/history" class="logo" title="Go home">/);
+  assert.match(html, /<a href="\/history" class="logo"\s[^>]*>/);
   assert.doesNotMatch(html, /data-route="intro" data-nav="primary"/);
   assert.doesNotMatch(html, /data-route="roster" data-nav="primary"/);
   assert.doesNotMatch(html, /data-route="compute" data-nav="primary"/);

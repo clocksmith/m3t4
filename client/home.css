@@ -1,7 +1,7 @@
 @import './styles/tokens.css';
 
 :root {
-  --home-prism: linear-gradient(110deg, #91b4ff 0%, #c6a0ff 28%, #ff9bce 52%, #ffd296 76%, #b8f3d9 100%);
+  --home-prism: linear-gradient(90deg, #ff5454 0%, #ffad42 16%, #ffe45e 32%, #53e879 48%, #42d9ff 64%, #5475ff 82%, #cf79ff 100%);
 }
 
 * { box-sizing: border-box; }
@@ -18,7 +18,8 @@ body {
 }
 main { width: min(100%, 340px); container-type: inline-size; }
 h1 {
-  margin: 0 0 48px;
+  width: fit-content;
+  margin: 0 auto 48px;
   text-align: center;
   font-size: 42px;
   font-weight: 700;

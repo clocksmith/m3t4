@@ -16,7 +16,7 @@ body {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color-scheme: dark;
 }
-main { width: min(100%, 340px); }
+main { width: min(100%, 340px); container-type: inline-size; }
 h1 {
   margin: 0 0 48px;
   text-align: center;
@@ -32,14 +32,12 @@ h1 {
 h1 span { font-weight: 400; }
 nav { display: grid; gap: 24px; }
 .game-option p {
-  max-width: 31ch;
-  min-height: 3em;
-  margin: 10px auto 0;
+  margin: 10px 0 0;
   color: var(--ui-text);
-  font-size: 12px;
+  font-size: min(12px, 3.4cqi);
   line-height: 1.5;
   text-align: center;
-  text-wrap: balance;
+  white-space: nowrap;
 }
 a {
   position: relative;

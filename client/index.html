@@ -4,18 +4,27 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#040404">
-  <meta name="description" content="Play Meta Muzil, Meta Fighter, or Mandate 2038.">
+  <meta name="description" content="Play Meta Muzil, Meta Duel, or Mandate 2038.">
   <title>m3t4.ai</title>
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/home-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/home.css">
 </head>
 <body>
   <main>
     <h1>m3t4<span>.ai</span></h1>
     <nav aria-label="Choose a game">
-      <a href="/muzil/">Meta Muzil <span aria-hidden="true">↗</span></a>
-      <a href="/history">Meta Fighter <span aria-hidden="true">↗</span></a>
-      <a href="/mandate-2038/">Mandate 2038 <span aria-hidden="true">↗</span></a>
+      <div class="game-option">
+        <a href="/muzil/" aria-describedby="muzil-description">Meta Muzil <span aria-hidden="true">↗</span></a>
+        <p id="muzil-description">Complete one task while your phone interrupts.</p>
+      </div>
+      <div class="game-option">
+        <a href="/history" aria-describedby="duel-description">Meta Duel <span aria-hidden="true">↗</span></a>
+        <p id="duel-description">Tune your fighters and watch strategies evolve.</p>
+      </div>
+      <div class="game-option">
+        <a href="/mandate-2038/" aria-describedby="mandate-description">Mandate 2038 <span aria-hidden="true">↗</span></a>
+        <p id="mandate-description">Guide your faction through the AI transition.</p>
+      </div>
     </nav>
   </main>
 </body>

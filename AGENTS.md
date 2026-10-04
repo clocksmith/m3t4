@@ -6,7 +6,7 @@ These instructions apply to the whole `m3t4` repo unless a nested
 ## Current Product Direction
 
 The user has authorized a minimal three-game home page at `/`: Meta Muzil at
-`/muzil/`, Meta Fighter at `/history`, and Mandate 2038 at `/mandate-2038/`.
+`/muzil/`, Meta Duel at `/history`, and Mandate 2038 at `/mandate-2038/`.
 Gamma owns Mandate sources; `tools/sync-mandate.mjs` packages its public allowlist. `client/muzil/` owns
 the simulated phone and controllers; `client/history/index.html` preserves the
 old arena entry. `tools/sync-muzil-runtime.mjs` copies sibling Reploid/Doppler

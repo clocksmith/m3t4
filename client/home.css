@@ -1,5 +1,9 @@
 @import './styles/tokens.css';
 
+:root {
+  --home-prism: linear-gradient(110deg, #91b4ff 0%, #c6a0ff 28%, #ff9bce 52%, #ffd296 76%, #b8f3d9 100%);
+}
+
 * { box-sizing: border-box; }
 body {
   margin: 0;
@@ -19,11 +23,28 @@ h1 {
   font-size: 42px;
   font-weight: 700;
   letter-spacing: .04em;
-  color: var(--ui-accent);
+  color: var(--ui-text);
+  background: var(--home-prism);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
-h1 span { color: var(--ui-text-soft); font-weight: 400; }
-nav { display: grid; gap: 14px; }
+h1 span { font-weight: 400; }
+nav { display: grid; gap: 24px; }
+.game-option p {
+  max-width: 31ch;
+  min-height: 3em;
+  margin: 10px auto 0;
+  color: var(--ui-text);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  text-wrap: balance;
+}
 a {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -37,7 +58,31 @@ a {
   text-decoration: none;
   transition: border-color 150ms, background 150ms;
 }
-a span { color: var(--ui-accent); }
-a:hover { background: var(--ui-hover); border-color: var(--ui-accent); }
-a:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 5px; }
-@media (prefers-reduced-motion: reduce) { a { transition: none; } }
+a::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--home-prism);
+  opacity: 0;
+  transition: opacity 180ms;
+}
+a span {
+  background: var(--home-prism);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+a:hover, a:focus-visible {
+  border-color: transparent;
+  background: linear-gradient(var(--ui-surface), var(--ui-surface)) padding-box, var(--home-prism) border-box;
+}
+a:hover::before, a:focus-visible::before { opacity: .1; }
+a:active::before { opacity: .2; }
+a:focus-visible { outline: 2px solid var(--ui-text); outline-offset: 5px; }
+@media (prefers-reduced-motion: reduce) { a, a::before { transition: none; } }
+@media (forced-colors: active) {
+  h1, a span { background: none; -webkit-text-fill-color: currentColor; }
+  a::before { display: none; }
+  a:hover, a:focus-visible { border-color: LinkText; }
+}

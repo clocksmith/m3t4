@@ -11,7 +11,7 @@ const origin=`http://127.0.0.1:${server.address().port}`;
 const browser=await chromium.launch({channel:'chrome',headless:true,args:['--enable-unsafe-webgpu']});
 try {
  const a=await browser.newPage(),b=await browser.newPage();const requesterRequests=[];a.on('request',r=>requesterRequests.push(r.url()));
- for(const p of [a,b]){await p.goto(origin);p.on('pageerror',e=>console.log('pageerror',e.message));}
+ for(const p of [a,b]){await p.goto(origin + '/muzil/');p.on('pageerror',e=>console.log('pageerror',e.message));}
  await b.evaluate(async()=>{
   const {LocalController}=await import('/muzil/controller.mjs');const {PeerController}=await import('/muzil/peer.mjs');
   const source={manifest:await(await fetch('/__models/create-gemma-3-1b-qualification/manifest.json')).json(),baseUrl:location.origin+'/__models/gemma-3-1b-it-q4k-ehf16-af32'};

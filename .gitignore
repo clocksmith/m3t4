@@ -48,3 +48,6 @@ service-account*.json
 
 # Regenerated from the sibling Reploid and Doppler checkouts.
 client/vendor/
+
+# Generated public playtest from the Gamma source owner
+client/mandate-2038/

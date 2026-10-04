@@ -1,7 +1,9 @@
-# m3t4.ai / Meta Muzil
+# m3t4.ai
 
-A simulated-phone game about finishing what you opened your phone to do.
-The new homepage contains working apps, outcome-based tasks, demonstrations,
+Three games: Meta Muzil, Meta Fighter, and Mandate 2038.
+
+Meta Muzil at `/muzil/` is a simulated-phone game about finishing what you opened your phone to do.
+It contains working apps, outcome-based tasks, demonstrations,
 replay, paired races, and opt-in model controllers. The previous arena remains
 at `/history` and its original routes.
 
@@ -223,3 +225,8 @@ GPL-3.0 dependencies used by the optional proof tooling.
 Live player stables, credentials, and production database contents remain
 private operational data and must not be committed. See the
 [public-source review](docs/public-source-review.md) for the publication scope.
+
+## Game entry points
+
+The minimal [m3t4.ai](https://m3t4.ai/) home links to [Meta Muzil](https://m3t4.ai/muzil/), [Meta Fighter](https://m3t4.ai/history), and [Mandate 2038](https://m3t4.ai/mandate-2038/).
+Mandate is packaged from `../gamma/games/2038` by `npm run sync:mandate`; its public-playtest allowlist remains Gamma-owned.

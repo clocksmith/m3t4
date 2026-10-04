@@ -14,7 +14,7 @@ const browser=await chromium.launch({channel:'chrome',headless:true}),errors=[],
 try {
  for(const width of [1440,390,320]) {
   const page=await browser.newPage({viewport:{width,height:900},hasTouch:width!==1440,isMobile:width!==1440});
-  page.on('pageerror',e=>errors.push(e.message));await page.goto(origin);await page.locator('#toaster-dial:not(:disabled)').waitFor();
+  page.on('pageerror',e=>errors.push(e.message));await page.goto(origin + '/muzil/');await page.locator('#toaster-dial:not(:disabled)').waitFor();
   const dial=page.locator('#toaster-dial');await dial.press('Home');assert.equal(await dial.inputValue(),'1');assert.match(await dial.getAttribute('aria-valuetext'),/Set an alarm/);
   await dial.press('ArrowRight');assert.equal(await dial.inputValue(),'2');await dial.click();assert.equal(await dial.inputValue(),'3');
   const box=await dial.boundingBox(),x=box.x+box.width/2,y=box.y+box.height/2;
@@ -59,15 +59,15 @@ try {
   const page=await browser.newPage({viewport:{width:1440,height:1000}});
   page.on('pageerror',e=>errors.push(e.message));
   await page.addInitScript(()=>{window.toastAnimations=[];const animate=Element.prototype.animate;Element.prototype.animate=function(frames,options){if(this.id==='peek-phone')window.toastAnimations.push({frames,options});return animate.call(this,frames,options);};});
-  await page.goto(origin);await page.locator('#toaster-dial:not(:disabled)').waitFor();await page.locator('#toaster-dial').press(level===1?'Home':'End');await page.locator('#start-round').click();await page.locator('#dismiss-reveal').waitFor();settings.push(await page.evaluate(()=>window.toastAnimations));await page.close();
+  await page.goto(origin + '/muzil/');await page.locator('#toaster-dial:not(:disabled)').waitFor();await page.locator('#toaster-dial').press(level===1?'Home':'End');await page.locator('#start-round').click();await page.locator('#dismiss-reveal').waitFor();settings.push(await page.evaluate(()=>window.toastAnimations));await page.close();
  }
  assert.ok(settings[1][1].options.duration>settings[0][1].options.duration);assert.notEqual(settings[1][2].frames.at(-1).transform,settings[0][2].frames.at(-1).transform);
  checks.push('Toast setting changes actual warm-up duration and pop height; lever and start button share the same entry');
- const reduced=await browser.newPage({reducedMotion:'reduce'});await reduced.goto(origin);await reduced.locator('#toaster-dial:not(:disabled)').waitFor();await reduced.locator('#toaster-dial').press('End');await reduced.locator('#start-round').click();await reduced.locator('#dismiss-reveal').waitFor();assert.equal(await reduced.locator('#phone').evaluate(el=>el.getAnimations().length),0);await reduced.close();
+ const reduced=await browser.newPage({reducedMotion:'reduce'});await reduced.goto(origin + '/muzil/');await reduced.locator('#toaster-dial:not(:disabled)').waitFor();await reduced.locator('#toaster-dial').press('End');await reduced.locator('#start-round').click();await reduced.locator('#dismiss-reveal').waitFor();assert.equal(await reduced.locator('#phone').evaluate(el=>el.getAnimations().length),0);await reduced.close();
  checks.push('Reduced motion keeps the dial functional and skips the animated entry');
  for(let index=0;index<TOAST_TASKS.length;index++) {
   const task=TOAST_TASKS[index],page=await browser.newPage({viewport:{width:390,height:844},reducedMotion:'reduce'});
-  await page.goto(origin);await page.locator('#toaster-dial:not(:disabled)').waitFor();
+  await page.goto(origin + '/muzil/');await page.locator('#toaster-dial:not(:disabled)').waitFor();
   await page.locator('#toaster-dial').press('Home');
   for(let step=0;step<index;step++)await page.locator('#toaster-dial').press('ArrowRight');
   assert.equal(await page.locator('#challenge-select').inputValue(),task.id);

@@ -3,99 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f7f6f2">
-  <meta name="description" content="You opened your phone for a reason. A game about remembering it. Teach a stand-in to finish what you started.">
-  <title>Meta Muzil — remember why.</title>
-  <link rel="icon" href="/muzil/assets/mark.svg" type="image/svg+xml">
-  <link rel="preload" href="/muzil/assets/Manrope.ttf" as="font" type="font/ttf" crossorigin>
-  <link rel="stylesheet" href="/muzil/style.css">
-  <link rel="stylesheet" href="/muzil/ios.css">
+  <meta name="theme-color" content="#040404">
+  <meta name="description" content="Play Meta Muzil, Meta Fighter, or Mandate 2038.">
+  <title>m3t4.ai</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/home.css">
 </head>
 <body>
-  <header class="site-header">
-    <a class="wordmark" href="/" aria-label="Meta Muzil home"><span class="brand-mark">m<span>↗</span></span>meta muzil</a>
-    <details class="site-menu" id="site-menu">
-      <summary aria-label="Open menu">Menu <span>＋</span></summary>
-      <nav aria-label="Main">
-        <button class="nav-item active" id="play-human" data-boot-control disabled>Play</button>
-        <button class="nav-item" id="agent-round" data-boot-control disabled>Watch AI play</button>
-        <button class="nav-item" id="race-peer" data-boot-control disabled>Play with a friend</button>
-      </nav>
-    </details>
-  </header>
-  <main id="main">
-    <section id="play-view" class="play-layout">
-      <div class="intro-column" id="intro">
-        <p class="story-lead">Years of promised AI assistants.</p>
-        <h1>They come and they go.<br>One problem remains<span class="story-dots">…</span></h1>
-        <div class="toaster-entry">
-          <div class="toaster-scene">
-            <span class="toaster-shadow" aria-hidden="true"></span>
-            <span class="toaster-top" aria-hidden="true"><i></i><i></i></span>
-            <span class="phone-pocket" aria-hidden="true"><span class="peek-phone" id="peek-phone"><span class="peek-island"></span><span class="peek-time">9:41</span><span class="peek-notice">Mom <b>2</b></span><span class="peek-apps"><i></i><i></i><i></i><i></i></span></span></span>
-            <span class="toaster-body" aria-hidden="true"><span class="toaster-shine"></span><span class="toaster-seam"></span><span class="toaster-light"></span></span>
-            <span class="toaster-effects" aria-hidden="true">
-              <span class="toaster-smoke"><i></i><i></i><i></i><i></i></span>
-              <svg class="toaster-sparks" viewBox="0 0 300 180" fill="none"><path d="m100 148-22-24 13-3-24-30M185 148l24-22-11-9 23-28M144 131l-8-21 13-8-5-23"/><path d="m65 128-14-7m181 15 13-8M94 75l-5-12m119 8 6-13"/></svg>
-            </span>
-            <label class="toaster-dial-control" title="Turn to choose your starting task">
-              <input id="toaster-dial" data-boot-control disabled type="range" min="1" max="5" step="1" value="3" aria-label="Starting task" aria-valuetext="3 — Arrange pickup">
-              <span class="toaster-dial" aria-hidden="true"></span>
-            </label>
-            <output id="toast-setting" class="toast-setting" for="toaster-dial">3 · Arrange pickup</output>
-            <span class="dial-hint" aria-hidden="true">turn ↻</span>
-            <span class="toaster-foot left" aria-hidden="true"></span><span class="toaster-foot right" aria-hidden="true"></span>
-            <button id="toaster-lever" data-boot-control disabled class="toaster-lever" aria-label="Push toaster lever to play"><span class="lever-track" aria-hidden="true"></span><i aria-hidden="true"></i></button>
-            <span class="lever-hint" aria-hidden="true">push ↓</span>
-          </div>
-          <button id="start-round" data-boot-control disabled class="start-label" aria-label="Open your phone. Start the game.">Open your phone <span>↗</span></button>
-        </div>
-        <p class="intro-hint">One intention. A phone full of distractions.</p>
-      </div>
-      <div class="phone-column" id="game-stage" hidden>
-        <aside class="task-thought" aria-label="Your task"><div class="task-thought-heading"><button id="remember" aria-label="Remember my intention">Remember why ↗</button></div><div id="task-note-content"></div></aside><div class="phone-caption"><span class="clock-label">Time remaining</span><span id="round-clock" role="timer" aria-label="Time remaining">03:00</span></div>
-        <div class="phone-viewport"><div class="phone" id="phone" tabindex="-1" aria-label="Simulated phone">
-          <div class="phone-hardware"><span class="phone-time">9:41</span><span class="island"></span><span class="phone-signals" aria-label="Full signal and battery">▂▄▆ <span>▰</span></span></div>
-          <div id="phone-screen" class="phone-screen"></div>
-          <div id="notification-banner" class="notification-banner"></div>
-          <div id="phone-overlay" class="phone-overlay"></div>
-          <div class="phone-navigation"><button id="phone-home" aria-label="Home"><span></span></button></div>
-        </div>
-        </div>
-        <div class="phone-footnote"><span id="phone-rule">Simulated phone</span><div class="simulation-controls"><button id="phone-back" aria-label="Back">Back</button><button id="phone-switcher" aria-label="App switcher">Apps</button><button id="soundless-notifications" aria-label="Open notifications">Alerts <span id="notification-count">0</span></button></div></div>
-        <div class="round-status" id="round-status" role="status" aria-live="polite"></div>
-      </div>
-      <p id="race-status" class="small muted" role="status"></p>
-    </section>
-    <section id="train-view" class="secondary-view" hidden>
-      <div class="eyebrow">YOUR STAND-IN</div><h1>A little more <em>you.</em></h1><p class="intro-copy">Teach it with the choices you make. Then see what it does with a different day.</p>
-      <div class="challenge-tools">
-        <label for="challenge-select">Challenge</label><select id="challenge-select" aria-label="Challenge"><option value="">Next challenge</option></select><button class="nav-item" id="new-round">New round ↻</button><label class="nav-item file-label">Load challenge JSON<input id="import-challenge" type="file" accept="application/json" hidden></label>
-        <button class="connection-button" id="connection"><span class="status-dot"></span><span id="connection-label">Connect a helper</span></button>
-      </div>
-      <div class="workspace-grid"><section class="workspace-card"><div class="standin-avatar large">m<span>↗</span></div><h2>Your understudy</h2><p id="profile-summary"></p><label class="field-label" for="training-objective">What are we teaching?</label><select id="training-objective"><option value="finish">Help me finish</option><option value="imitate">Imitate me, distractions included</option></select><p class="muted small">Personalization from your demonstrations. Model weights stay unchanged.</p><button id="train-play" class="button primary">Teach by playing ↗</button><button id="watch-agent" class="button secondary">Watch a new attempt →</button></section><section class="workspace-card"><h2>Things you showed it</h2><div id="demonstration-list"></div><div class="button-row"><button id="export-profile" class="button secondary">Export profile</button><label class="button secondary file-label">Import profile<input id="import-profile" type="file" accept="application/json" hidden></label><button id="clear-profile" class="text-button">Forget demonstrations</button></div><hr><h3>The last round</h3><p id="replay-summary" class="muted"></p><button id="replay-round" class="button secondary">Watch replay ↻</button><button id="export-replay" class="text-button">Save replay ↓</button></section></div>
-    </section>
-    <section id="finish-view" class="secondary-view" hidden>
-      <div class="eyebrow">FINISH A THING · EARLY EXPERIMENT</div><h1>Send the <em>reply.</em></h1><p class="intro-copy">The message, the details, and a little help getting to the point.</p>
-      <div class="workspace-grid"><form id="reply-form" class="workspace-card"><label class="field-label" for="real-message">The message you need to answer</label><textarea id="real-message" maxlength="3000" rows="4" placeholder="What time should I pick you up?"></textarea><label class="field-label" for="real-context">The details it needs</label><textarea id="real-context" maxlength="4000" rows="4" placeholder="My appointment ends at 5:40 PM. Same entrance as last time."></textarea><label class="check-label"><input id="reply-consent" type="checkbox"> If using a connected peer, send it this message and context for this reply.</label><button class="button primary" id="draft-reply" type="submit">Help me reply ↗</button></form><section class="workspace-card"><div class="card-kicker">YOUR INTENTION</div><h2>A reply, ready for you.</h2><p class="muted">Use the supplied details. Keep it brief. You decide what gets sent.</p><textarea id="reply-output" rows="7" aria-label="Draft reply" placeholder="Your draft will appear here."></textarea><button id="copy-reply" class="button secondary">Copy reply</button><p id="reply-status" class="small muted" role="status"></p></section></div>
-    </section>
+  <main>
+    <h1>m3t4<span>.ai</span></h1>
+    <nav aria-label="Choose a game">
+      <a href="/muzil/">Meta Muzil <span aria-hidden="true">↗</span></a>
+      <a href="/history">Meta Fighter <span aria-hidden="true">↗</span></a>
+      <a href="/mandate-2038/">Mandate 2038 <span aria-hidden="true">↗</span></a>
+    </nav>
   </main>
-  <footer class="site-footer"><div><a href="/history">Play a meta fighter instead ↗</a><a href="https://d4da.com/about">About ↗</a><button id="about-button">How it works</button></div></footer>
-  <dialog id="mesh-dialog" class="mesh-dialog"><div class="dialog-heading"><div><div class="eyebrow">A LITTLE HELP FROM ANOTHER DEVICE</div><h2>Bring your stand-in online.</h2></div><button class="icon-button close-dialog" aria-label="Close">×</button></div><p>Use a prepared computer without downloading a model on this phone. Pairing shares simulated observations and your selected profile when you ask the stand-in to play.</p><div id="race-invite" hidden><p>A connected friend invited you to a best-of-three match. Both phones get the same task each round.</p><button id="accept-race" class="button primary">Accept match ↗</button></div><div class="connection-state"><span class="status-dot"></span><span id="mesh-state">No peer connected</span></div><div class="button-row"><button id="make-offer" class="button primary">Create connection</button><button id="join-offer" class="button secondary">Answer a connection</button><button id="disconnect-peer" class="text-button">Disconnect</button></div><label class="field-label" for="peer-input">Code from the other device</label><textarea id="peer-input" rows="2" placeholder="Paste the connection or answer code"></textarea><button id="accept-answer" class="button secondary">Apply answer</button><label class="field-label" for="peer-output">Your code — send this to the other device</label><textarea id="peer-output" readonly rows="2"></textarea><button id="copy-code" class="text-button">Copy code</button><p class="small muted">Pair directly with someone you trust. Some networks need a relay; connection codes do not guarantee access through every network.</p><details><summary>Prepare this computer to help</summary><p>Load Gemma 3 1B through Doppler (approximately 1.05 GB, cached when supported). This is optional. Human play never needs it.</p><button id="load-model" class="button secondary">Load model on this device</button><p id="model-state" class="small" role="status">Model not loaded</p><label class="check-label"><input id="share-compute" type="checkbox"> Accept bounded inference requests from my paired device.</label><button id="unload-model" class="text-button">Stop sharing and unload</button></details><details><summary>Use a distributed helper</summary>
-<p>Your phone sends the task to a prepared pair of computers. No model weights are needed here. Only connect helpers you trust with the observations and profile you choose to share.</p>
-<p id="partition-state" role="status">No prepared path</p>
-<label class="field-label" for="partition-kind">Connection</label>
-<select id="partition-kind"><option value="entry">Player → prepared helper</option><option value="stage">Contributor A → contributor B</option></select>
-<div class="button-row"><button id="partition-offer" class="button secondary">Create connection</button><button id="partition-join" class="button secondary">Answer connection</button></div>
-<label class="field-label" for="partition-input">Code from the other device</label><textarea id="partition-input" rows="2"></textarea><button id="partition-answer" class="text-button">Apply answer</button>
-<label class="field-label" for="partition-output">Your code</label><textarea id="partition-output" rows="2" readonly></textarea><button id="partition-copy" class="text-button">Copy code</button>
-<p class="small muted">Contributors: prepare A and B on separate computers, connect A to B, then connect the player to A. Additional prepared pairs can handle a restarted request if a pair disconnects.</p>
-<div class="button-row"><button id="prepare-a" class="button secondary">Contribute stage A</button><button id="prepare-b" class="button secondary">Contribute stage B</button></div>
-<p class="small muted">Contribution downloads only verified weights needed by that stage, plus its tokenizer. Shared embeddings are required by both stages. The player can keep using another prepared helper while this loads.</p>
-<div class="button-row"><button id="partition-drain" class="text-button">Finish work and stop contributing</button><button id="partition-disconnect" class="text-button">Disconnect helpers</button><button id="partition-evidence" class="text-button">Export execution record</button></div>
-</details><p id="mesh-error" class="error-text" role="alert"></p></dialog>
-  <dialog id="about-dialog" class="mesh-dialog"><div class="dialog-heading"><h2>Open your phone. Remember why.</h2><button class="icon-button close-dialog" aria-label="Close">×</button></div><p>Meta Muzil is a simulated-phone game by m3t4.ai. Your apps and notifications here are fictional. Nothing is sent to your actual contacts.</p><p>Hold on to one intention. Notifications must be opened. Some change the plan; others demand a decision. Handle them well, recover your intention, and finish with the current details.</p><p>The phone, saved demonstrations, and replay work without a model. A stand-in needs real Doppler inference, locally or through an explicitly connected Reploid peer. It never substitutes a scripted player.</p><p>Profiles and the last game replay are stored in this browser. Real messages in “Finish a thing” are not saved by this page. Connected peers receive only requests you authorize; they can read that material.</p><p>Independent experiment. Not affiliated with Meta. No diagnostic or treatment claims.</p><a href="/history">Visit the historical m3t4 arena →</a></dialog>
-  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script type="module" src="/muzil/app.mjs"></script>
 </body>
 </html>

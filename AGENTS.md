@@ -1,46 +1,35 @@
 # m3t4 Agent Instructions
 
-These instructions apply to the whole `m3t4` repo unless a nested
-`AGENTS.md` is added later.
+Applies to the whole `m3t4` repo unless a nested `AGENTS.md` overrides it.
 
 ## Current Product Direction
 
 The user has authorized a minimal three-game home page at `/`: Meta Muzil at
 `/muzil/`, Meta Duel at `/history`, and Mandate 2038 at `/mandate-2038/`.
-Gamma owns Mandate sources; `tools/sync-mandate.mjs` packages its public allowlist. `client/muzil/` owns
-the simulated phone and controllers; `client/history/index.html` preserves the
-old arena entry. `tools/sync-muzil-runtime.mjs` copies sibling Reploid/Doppler
-sources into ignored `client/vendor/`, without model weights. Read
-`docs/meta-muzil.md` for implemented and target integration boundaries.
-Historical ranked/sidecar rules below remain in effect for those surfaces.
+Gamma owns Mandate sources; `tools/sync-mandate.mjs` packages its public
+allowlist. `client/muzil/` owns the simulated phone and controllers;
+`client/history/index.html` preserves the old arena entry.
+`tools/sync-muzil-runtime.mjs` copies sibling Reploid/Doppler sources into
+ignored `client/vendor/`, without model weights. `docs/meta-muzil.md` holds
+implemented and target integration boundaries. Meta Muzil is the product
+intent; historical ranked-arena and sidecar rules below still govern those
+surfaces, whose evidence must not extend into broad mesh claims.
 
 ## Project Shape
 
-- `client/` is the Firebase-hosted browser app.
-- `sim/` is the deterministic TypeScript arena simulation.
-- `server/` is the ranked arena API/worker service.
-- `plasma-lab/` is the isolated distributed-compute sidecar.
-- `pareto/` is the analysis/sweep toolkit.
-- `docs/compute-lab-plan.md` is the canonical local compute-lab runbook.
-- `docs/distributed-compute.md` is the public-safe distributed-compute claim
-  boundary.
-- Related cross-repo contracts and strategy live in `../plasma` and
-  `../ouroboros`.
+- `client/` Firebase-hosted browser app; `sim/` deterministic TypeScript arena
+  simulation; `server/` ranked arena API/worker service; `plasma-lab/`
+  isolated distributed-compute sidecar; `pareto/` analysis/sweep toolkit.
 
 ## Git workflow: direct to main
 
-- Work and commit directly on the owning repository's `main` branch, then push
-  directly to its existing `origin/main` remote branch.
-- Do not create feature/task branches, branch-backed worktrees, or GitHub pull
-  requests. Do not use a branch/PR workflow unless the user explicitly requests it.
-- If the checkout is on another branch, preserve its work and move the task to
-  `main` safely; never discard changes to switch branches.
-- Stage only task-related changes, run the applicable checks, and integrate remote
-  updates without overwriting unrelated work. Never force-push `main`.
+- Commit on the owning repo's `main` and push to `origin/main`. No feature
+  branches, branch-backed worktrees, or PRs unless the user asks for them.
+- On another branch, preserve its work and move the task to `main` safely;
+  never discard changes to switch. Never force-push `main`.
+- Stage only task-related changes; integrate remote updates without
+  overwriting unrelated work.
 - Report the pushed commit or the concrete blocker. A local commit is not a push.
-- Never revert unrelated dirty files. Current art/render/theme work is often
-  dirty during generation passes.
-- Keep commits narrow and named for the behavior or status change.
 
 ## Development verification
 
@@ -51,6 +40,9 @@ Historical ranked/sidecar rules below remain in effect for those surfaces.
   GPU/model campaigns, benchmarks, or full release qualification. Run them when
   explicitly requested or when a named correctness question cannot be answered by
   focused checks; state that reason before starting.
+- Config-contract, mirror, drift, and freshness checks run only when the change
+  edits what they check. Don't add tests that just restate another file or pin
+  config literals. Time-box long processes.
 - Once relevant checks pass, continue. Repeat or broaden verification only after
   another relevant change, a failure, or a concrete unresolved concern.
 - For documentation-only edits, inspect the diff and changed links. Do not run
@@ -64,136 +56,121 @@ Historical ranked/sidecar rules below remain in effect for those surfaces.
 
 ## Local Dirty Files
 
-- Treat dirty assets, generated sprites, render experiments, and theme status
-  files as user-owned unless the task specifically targets them.
-- Before deploys, prefer a clean temporary detached worktree so unrelated local
-  files do not ship accidentally.
+- Dirty assets, generated sprites, render experiments, and theme status files
+  are user-owned unless the task targets them. Never revert unrelated dirty files.
+- Keep commits narrow, named for the behavior or status change.
 - `client/config.js` is tracked public deploy config. Do not put secrets in it.
 
 ## Verification Commands
 
-Run the smallest set that covers your change, then broaden for shared behavior.
+Run the one that covers your change:
 
-- Sim changes: `npm -w sim test`
-- Client tests: `npm run test:client`
-- Server changes: `npm -w server test`
-- Plasma-lab changes: `npm -w plasma-lab test`
-- Full app build: `npm run build`
-- Static content check: `npm run check:content`
-- Client sim check: `npm run check:client-sim`
-- JS syntax spot checks: `node --check <file>`
-- Whitespace check before commit: `git diff --check`
+- Tests: sim `npm -w sim test`, client `npm run test:client`, server
+  `npm -w server test`, plasma-lab `npm -w plasma-lab test`.
+- Full app build: `npm run build`. Static content: `npm run check:content`.
+  Client sim copy: `npm run check:client-sim`.
+- Spot checks: `node --check <file>`, `git diff --check`.
 
-When touching `sim/src`, run `npm -w sim run build` and sync/check the browser
-copy with `npm run sync:client-sim` or `npm run check:client-sim`.
+When touching `sim/src`, run `npm -w sim run build` and update the browser copy
+with `npm run sync:client-sim` (Hosting predeploy checks it).
 
 ## Distributed Compute Guardrails
 
 - Ranked arena authority stays in `server`; `plasma-lab` is advisory sidecar
   compute.
-- Public compute flags stay off by default.
-- `COMPUTE_ACCEPT_ASSIGNMENTS=false` is the safe default and the primary
-  rollback.
-- Open assignment intake only with bounded admin windows, usually
-  `durationMs: 30000`, and verify it returns to false afterward.
-- Production validation work requires receipt signatures.
-- Workers must not receive server-held expected output hashes.
-- Strict WebRTC proof tasks require `requiredTransport: "webrtc"` and
-  `requiredPeerSubreceipt: true`.
-- A strict WebRTC parent receipt must link to an accepted server-issued peer
-  subassignment and a verified peer-signed subreceipt.
+- Public compute flags stay off and change only on explicit user request.
+  `COMPUTE_ACCEPT_ASSIGNMENTS=false` is the safe default and primary rollback;
+  open intake only when asked or intentionally smoking, in bounded admin
+  windows (usually `durationMs: 30000`), then verify it returns to false.
+- Production validation work requires receipt signatures. Workers must not
+  receive server-held expected output hashes.
+- Strict WebRTC proof claims need an explicit request and supporting smoke
+  artifacts. Its tasks require `requiredTransport: "webrtc"` and
+  `requiredPeerSubreceipt: true`; its parent receipt must link to an accepted
+  server-issued peer subassignment and a verified peer-signed subreceipt.
 - TURN is not a broad coverage claim until NAT-diverse testing says so.
 - Do not claim public anonymous proof-of-useful-work, Sybil resistance,
   trusted browser/GPU execution, shared-buffer compute, or fused-kernel compute
-  until the docs and implementation actually support those claims.
+  until docs and implementation support them.
 
 ## Intent-First Operations
 
-- Meta Muzil is the new product intent. Preserve the historical ranked arena and bounded compute experiments; do not extend their evidence into broad mesh claims.
-- If the user asks what works, produce a current scoreboard from server state, client build, plasma-lab smoke artifacts, production flags, and docs claim boundary.
-- Do not open public compute intake, change production flags, or claim strict WebRTC proof unless the user explicitly asks for that operation and the smoke artifacts support it.
-- Ranked arena behavior belongs to `server`; advisory compute belongs to `plasma-lab`. Keep those authority boundaries explicit.
-- If deployed status is requested, answer with Firebase/app URL, config state, smoke result, and whether compute flags are enabled or safe-off.
+- Asked what works: give a current scoreboard from server state, client build, plasma-lab smoke artifacts, production flags, and the docs claim boundary.
+- Asked for deployed status: give the Firebase/app URL, config state, smoke result, and whether compute flags are enabled or safe-off.
 - For visual/game behavior, verify deterministic sim and browser render state before changing public copy.
 
 ## Plasma-Lab Smoke Tests
 
-- Local sidecar smoke: `npm -w plasma-lab run smoke`
-- Hosted WebRTC artifact smoke:
-  `npm -w plasma-lab run smoke:webrtc-client-artifact`
-- Hosted replay verify smoke:
-  `npm -w plasma-lab run smoke:webrtc-replay-verify`
-- Hosted seed sweep smoke:
-  `npm -w plasma-lab run smoke:webrtc-seed-sweep`
+Opt-in, not gates; run them when asked or when changing their path.
 
-For hosted smokes, set:
+- Local sidecar: `npm -w plasma-lab run smoke`
+- Hosted WebRTC artifact: `npm -w plasma-lab run smoke:webrtc-client-artifact`
+- Hosted replay verify: `npm -w plasma-lab run smoke:webrtc-replay-verify`
+- Hosted seed sweep: `npm -w plasma-lab run smoke:webrtc-seed-sweep`
 
-- `PLASMA_LAB_SMOKE_ORIGIN`
-- `PLASMA_LAB_SMOKE_ADMIN_TOKEN`
-- `M3T4_SMOKE_GAME_ORIGIN`
-
-Use `PLASMA_LAB_SMOKE_REPEAT=N` for repeat soaks. Keep public flags off unless
-the user explicitly asks for a controlled public window.
+Hosted smokes need `PLASMA_LAB_SMOKE_ORIGIN`, `PLASMA_LAB_SMOKE_ADMIN_TOKEN`,
+and `M3T4_SMOKE_GAME_ORIGIN`. `PLASMA_LAB_SMOKE_REPEAT=N` runs repeat soaks.
 
 ## Deployment
 
-- Use `PROVISIONING.md` as the deployment runbook.
-- Firebase Hosting has predeploy checks for content and client sim sync.
-- For a clean Hosting deploy while the worktree has unrelated dirt:
+- `PROVISIONING.md` is the deployment runbook.
+- Hosting predeploy runs content sync, the client-sim sync check, runtime
+  sync, and Mandate sync.
+- With unrelated dirt, deploy from a clean temporary detached worktree so
+  local files do not ship. For Hosting:
   1. create a temporary detached worktree at `HEAD` (`git worktree add --detach`)
   2. link or install dependencies
   3. run `npm -w sim run build`
   4. run `firebase deploy --only hosting --project m3ta-ai`
   5. remove the temporary worktree
-- After Hosting deploy, verify `/config.js` serves JavaScript and do a browser
-  load check with no page errors when relevant.
-- Deploy `plasma-lab` separately from arena services. Keep
-  `COMPUTE_ACCEPT_ASSIGNMENTS=false` unless intentionally smoking.
+- After Hosting deploy, verify `/config.js` serves JavaScript and, when
+  relevant, a browser load with no page errors.
+- Deploy `plasma-lab` separately from arena services.
 - Never print or commit admin tokens, TURN credentials, Firebase service
   accounts, or scheduler secrets.
 
 ## Docs And Claims
 
-- Update `docs/compute-lab-plan.md` for operational status, smoke IDs, flags,
-  and rollback notes.
-- Update `docs/distributed-compute.md` for public-safe claim language.
-- Update `../plasma` when task, receipt, validation, or proof contracts change.
-- Update `../ouroboros` when product strategy or cross-repo roadmap status
-  changes.
-- Prefer section names and stable concepts over brittle line-number anchors.
-- Keep About-page language shorter than the docs and inside the same claim
+- Update `docs/compute-lab-plan.md` (canonical local compute-lab runbook) for
+  operational status, smoke IDs, flags, and rollback notes;
+  `docs/distributed-compute.md` (public-safe claim boundary) for claim
+  language; `../plasma` when task, receipt, validation,
+  or proof contracts change; `../ouroboros` when product strategy or
+  cross-repo roadmap status changes.
+- Prefer section names and stable concepts over line-number anchors.
+- Keep About-page language shorter than the docs, inside the same claim
   boundary.
 
 ## Frontend And Game Work
 
-- Do not hide useful app functionality behind landing-page copy.
-- Keep the first screen usable.
+- Keep the first screen usable; do not hide app functionality behind
+  landing-page copy.
 - Preserve deterministic sim behavior unless the task is explicitly balance or
   mechanics work.
 - Do not ship private bot logic or opponent configs to public clients.
-- When editing render code, verify both desktop and mobile layouts or canvas
-  behavior as appropriate.
-- When changing sprites, confirm facing, wall-slide, and mirrored animation
-  behavior in the browser, not only by inspecting assets.
+- Render and sprite fixes are provable only in a browser, not from assets:
+  before claiming one, check the affected desktop/mobile layout or canvas, or
+  sprite facing, wall-slide, and mirrored animation.
 
 ## Before Final Response
 
-- Report what changed, what was verified, and what remains intentionally
-  unverified.
-- Mention production flags if compute behavior was touched.
-- Mention unrelated dirty files that were left untouched.
+- Mention production flags if compute behavior changed, and unrelated dirty
+  files left alone.
 - Keep the next recommendation concrete and short.
 
 ## No speculative engineering timelines
 
-- Do not predict how long a coding, software-engineering, product-implementation, refactor, migration, launch, or similar work item will take. Avoid speculative delivery statements such as "1-2 weeks", "four months", or "a quick fix".
-- Describe planned work through concrete deltas, dependencies, risks, and validation instead of calendar duration.
-- This restriction does not apply to factual status for an already-running command, script, benchmark, training run, skill, deployment, or algorithm. You may report elapsed time, measured runtime, progress, and a grounded ETA when the active process exposes enough evidence.
-- Do not invent an ETA for an active process. If it does not expose one, report its current phase, latest output, and whether it is still making progress.
+- Never predict how long engineering work will take ("1-2 weeks", "a quick
+  fix"). Describe concrete deltas, dependencies, risks, and validation instead.
+- For an already-running process, report measured elapsed time, progress, or a
+  grounded ETA only when the process exposes one; otherwise report its phase,
+  latest output, and whether it is still progressing.
 
 ## Pick the real fix
 
-- when you find a correctness bug, the default is to fix it, not to relabel it
-- do not use effort or scope framing ("non-trivial", "real engineering effort", "worth its own thread", "we'll address later") as cover for choosing a lesser fix
-- do not propose "mark experimental", "add a TODO", or "rewrite the misleading comment" as a substitute for the actual engineering work when the underlying behavior is wrong
-- if scope genuinely must be split, describe the concrete deltas and ask the user which path to take, do not pre-decide a smaller version
+- Fix correctness bugs; don't relabel them. Effort or scope framing
+  ("non-trivial", "worth its own thread", "later") is no reason for a lesser fix.
+- "Mark experimental", "add a TODO", or "reword the misleading comment" does not
+  substitute for fixing wrong behavior.
+- If scope must be split, list the concrete deltas and ask the user which path
+  to take; don't pre-decide a smaller version.

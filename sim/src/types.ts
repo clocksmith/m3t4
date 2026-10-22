@@ -342,6 +342,12 @@ export interface BrainState {
   // Cross-mode, observation-only progress memory. Bounded failed plans survive
   // ordinary mode switches, not deaths, objective changes or round resets.
   tactics: TacticalMemory | null;
+  // Commit to a visible landing surface through the jump, rather than
+  // selecting a different intermediate platform each airborne frame.
+  navigation: {
+    targetX: number; targetY: number; startedAt: number;
+    x1: number; x2: number; y: number; move: "walk" | "jump" | "drop";
+  } | null;
 
   // Debug hook — reason for last mode transition. Not used in decisions.
   lastTransitionReason: string;
@@ -358,6 +364,8 @@ export interface TacticalMemory {
   movedTick: number;
   lastAttackTick: number;
   lastKillTick: number;
+  lastOppHp: number;
+  clashEscapeDirection: -1 | 1 | null;
   attempts: number;
   lastAction: Action;
   failures: Array<{ tactic: RecoveryTactic; tick: number }>;

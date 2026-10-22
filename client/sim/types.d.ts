@@ -186,6 +186,15 @@ export interface BrainState {
     escapeTicksThisRound: number;
     zoneTicksThisRound: number;
     tactics: TacticalMemory | null;
+    navigation: {
+        targetX: number;
+        targetY: number;
+        startedAt: number;
+        x1: number;
+        x2: number;
+        y: number;
+        move: "walk" | "jump" | "drop";
+    } | null;
     lastTransitionReason: string;
 }
 export type RecoveryTactic = "route" | "flank" | "reset-spacing" | "drop";
@@ -198,6 +207,8 @@ export interface TacticalMemory {
     movedTick: number;
     lastAttackTick: number;
     lastKillTick: number;
+    lastOppHp: number;
+    clashEscapeDirection: -1 | 1 | null;
     attempts: number;
     lastAction: Action;
     failures: Array<{

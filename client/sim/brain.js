@@ -26,7 +26,10 @@ import { GOAL_DWELL_RADIUS, GOAL_DWELL_S, KILL_RESPAWN_S, GRAVITY, RESPAWN_INVUL
 // v25: observe outcomes across mode changes, remember unsuccessful plans, and
 // choose context-appropriate route/spacing/angle changes instead of repeating
 // the same trait-dominant response. No RNG, private opponent state or lookahead.
-export const BEHAVIOR_VERSION = 25;
+// v26: land on supported scoring stances, commit intermediate jump waypoints,
+// preserve wall-crossing arcs and failed-plan evidence, and unbind passive
+// clashes. Navigation uses visible geometry and shared physical capabilities.
+export const BEHAVIOR_VERSION = 26;
 // ---------- Opp-model buffer sizing ----------
 //
 // Bounded ring: max 16 entries per stream, hard decay at 240 ticks (2 s).
@@ -116,6 +119,7 @@ export function createBrainState(id) {
         escapeTicksThisRound: 0,
         zoneTicksThisRound: 0,
         tactics: null,
+        navigation: null,
         lastTransitionReason: "init",
     };
 }
@@ -125,6 +129,7 @@ export function createBrainState(id) {
 // spacing situation.
 export function resetBrainStateForRound(state, tick) {
     state.tactics = null;
+    state.navigation = null;
     state.mode = "neutral";
     state.substate = null;
     state.modeEnterTick = tick;
@@ -400,7 +405,9 @@ function navEdge(obs, params, from, to, targetX, targetY) {
         return { to: to.id, move, cost };
     }
     if (rise > 0) {
-        const maxRise = 220 + lift * 45;
+        // Style changes preference, not the shared fighter's physical jump cap.
+        // Low-lift carriers still need valid stepping stones on tall stages.
+        const maxRise = STATS.jump * STATS.jump / (2 * GRAVITY) - 12;
         const maxGap = 145 + networking * 90 + lift * 80;
         if (rise > maxRise || gap > maxGap)
             return null;
@@ -471,9 +478,13 @@ function platformRouteStep(obs, tx, ty, params) {
 }
 function driveTowardRouteStep(obs, tx, step) {
     const s = step.surface;
-    const waypointX = clamp(tx, s.x1, s.x2);
+    const inset = Math.min(20, (s.x2 - s.x1) / 4);
+    const waypointX = clamp(tx, s.x1 + inset, s.x2 - inset);
     const nearestX = clamp(obs.self.x, s.x1, s.x2);
-    const dx = (obs.self.x < s.x1 || obs.self.x > s.x2) ? nearestX - obs.self.x : waypointX - obs.self.x;
+    const stoppingX = obs.self.x + (obs.self.onGround ? 0 :
+        obs.self.vx * Math.abs(obs.self.vx) / (2 * STATS.airAccel));
+    const dx = (obs.self.x < s.x1 || obs.self.x > s.x2)
+        ? nearestX - stoppingX : waypointX - stoppingX;
     const left = dx < -10;
     const right = dx > 10;
     if (step.move === "drop") {
@@ -522,7 +533,11 @@ function blockingVerticalWall(obs, tx) {
             continue;
         const bodyTop = obs.self.y - STATS.bodyH * 0.5;
         const bodyBot = obs.self.y + STATS.bodyH * 0.5;
-        if (bodyBot <= p.y + 2 || bodyTop >= p.y + p.h - 2)
+        // Keep the obstacle in the route while the jump is still rising. Clearing
+        // its top vertically does not mean we have crossed it horizontally: a
+        // premature down input cuts the arc before wall-jump recoil can reverse.
+        const above = bodyBot <= p.y + 2;
+        if ((above && (obs.self.onGround || obs.self.vy >= 0)) || bodyTop >= p.y + p.h - 2)
             continue;
         const dist = dir > 0 ? left - sx : sx - right;
         if (dist >= 0 && dist < bestDist) {
@@ -562,7 +577,27 @@ function wallRouteToward(obs, tx) {
     const wall = blockingVerticalWall(obs, tx);
     return wall ? driveAroundVerticalWall(obs, tx, wall) : null;
 }
-function navigateTo(obs, tx, ty, params, forceDirectJumpEligible = false) {
+function navigateTo(obs, tx, ty, params, forceDirectJumpEligible = false, state) {
+    if (state?.navigation) {
+        const n = state.navigation;
+        const landed = obs.self.onGround && Math.abs(obs.self.y - n.y) < 10 &&
+            obs.self.x > n.x1 - 10 && obs.self.x < n.x2 + 10;
+        if (landed || obs.tick - n.startedAt > 180 ||
+            Math.hypot(tx - n.targetX, ty - n.targetY) > 80)
+            state.navigation = null;
+        else
+            return driveTowardRouteStep(obs, tx, {
+                surface: { id: -1, x1: n.x1, x2: n.x2, y: n.y, platform: null }, move: n.move,
+            });
+    }
+    const commitStep = (step) => {
+        if (state)
+            state.navigation = {
+                targetX: tx, targetY: ty, startedAt: obs.tick,
+                x1: step.surface.x1, x2: step.surface.x2, y: step.surface.y, move: step.move,
+            };
+        return driveTowardRouteStep(obs, tx, step);
+    };
     const wallRoute = wallRouteToward(obs, tx);
     if (wallRoute)
         return wallRoute;
@@ -571,6 +606,12 @@ function navigateTo(obs, tx, ty, params, forceDirectJumpEligible = false) {
         return { left: dx < -10, right: dx > 10, down: true };
     }
     if (ty < obs.self.y - 50) {
+        if (!obs.self.onGround) {
+            // A descending fighter has no launch surface. Re-selecting a higher
+            // waypoint here makes it abandon the platform it is about to land on.
+            const dx = tx - obs.self.x;
+            return { left: dx < -10, right: dx > 10, up: obs.self.vy < -150 };
+        }
         const lift = unit(params?.lift);
         if (directJumpReachable(obs, tx, ty, lift, forceDirectJumpEligible)) {
             const dx = tx - obs.self.x;
@@ -579,21 +620,14 @@ function navigateTo(obs, tx, ty, params, forceDirectJumpEligible = false) {
         if (params) {
             const route = platformRouteStep(obs, tx, ty, params);
             if (route)
-                return driveTowardRouteStep(obs, tx, route);
+                return commitStep(route);
         }
         const step = climbStep(obs, ty);
         if (step) {
-            const platL = step.x + 12;
-            const platR = step.x + step.w - 12;
-            let dir = 0;
-            if (obs.self.x < platL)
-                dir = 1;
-            else if (obs.self.x > platR)
-                dir = -1;
-            const launchZone = obs.self.x > platL - 110 && obs.self.x < platR + 110;
-            const stillRising = !obs.self.onGround && obs.self.vy < -150;
-            const jump = (obs.self.onGround && launchZone) || stillRising;
-            return { left: dir < 0, right: dir > 0, up: jump };
+            return commitStep({
+                surface: { id: -1, x1: step.x + NAV_MARGIN, x2: step.x + step.w - NAV_MARGIN,
+                    y: step.y - STATS.bodyH * 0.5, platform: step }, move: "jump",
+            });
         }
         const dx2 = tx - obs.self.x;
         const stillRising = !obs.self.onGround && obs.self.vy < -150;
@@ -604,6 +638,18 @@ function navigateTo(obs, tx, ty, params, forceDirectJumpEligible = false) {
 }
 function goalBodyY(obs) {
     return obs.goal.y + STATS.bodyH * 0.5;
+}
+// Goal coordinates track the body top, not a landing surface. Reaching the
+// radius while rising is not enough: cutting the jump there can leave the feet
+// below the platform forever. Aim for a physically supported scoring stance.
+function goalLandingY(obs) {
+    const bodyY = goalBodyY(obs);
+    const surfaces = buildNavSurfaces(obs);
+    const support = targetSurface(obs.goal.x, bodyY, surfaces);
+    if (support && Math.hypot(pointRangeGap(obs.goal.x, support), support.y - bodyY) < GOAL_DWELL_RADIUS) {
+        return support.y;
+    }
+    return bodyY;
 }
 function dwellDistance(obs) {
     return Math.hypot(obs.self.x - obs.goal.x, obs.self.y - STATS.bodyH * 0.5 - obs.goal.y);
@@ -1285,11 +1331,11 @@ function runObjectiveMode(obs, params, state, sig) {
             (params.greed ?? 0.5) * 0.35 +
             selfishBias * 0.20;
         const dxGoal = obs.goal.x - obs.self.x;
-        const targetY = goalBodyY(obs);
+        const targetY = goalLandingY(obs);
         const dyGoal = targetY - obs.self.y;
         const atGoal = dwellDistance(obs) < GOAL_DWELL_RADIUS;
         const discipline = unit(params.discipline);
-        if (atGoal) {
+        if (atGoal && obs.self.onGround) {
             // Dwell hold. Don't chase opp. Defensive swing if opp walks into
             // reach while we dwell. Small altitude adjust if opp above.
             let action = false;
@@ -1303,6 +1349,10 @@ function runObjectiveMode(obs, params, state, sig) {
             if (obs.opp.y < obs.self.y - 40 && obs.opp.diveT > 0)
                 jumpD = true; // escape incoming dive
             return { action, up: jumpD };
+        }
+        if (atGoal && !obs.self.onGround && obs.self.y > targetY - 6) {
+            const dx = obs.goal.x - obs.self.x;
+            return { left: dx < -8, right: dx > 8, up: obs.self.vy < -150 };
         }
         // Committed route to goal. Shouldn't-fight-blocker unless dangerous
         // AND not time-urgent.
@@ -1364,7 +1414,7 @@ function runObjectiveMode(obs, params, state, sig) {
             return { left: toGoalSign < 0, right: toGoalSign > 0, up: true };
         }
         // Default (direct tactic, or fall-through): navigate to goal.
-        return navigateTo(obs, obs.goal.x, targetY, params, plan.tactic === "direct");
+        return navigateTo(obs, obs.goal.x, targetY, params, plan.tactic === "direct", state);
     }
     // INTERCEPT: opp has token. Split on distance — far → block the goal
     // line; close → kill-for-reset.
@@ -1400,7 +1450,7 @@ function runObjectiveMode(obs, params, state, sig) {
             if (sig.absDist < 120)
                 return { left: sig.absDir < 0, right: sig.absDir > 0, action: sig.canSwing };
         }
-        return navigateTo(obs, tx, ty, params);
+        return navigateTo(obs, tx, ty, params, false, state);
     }
     // PICKUP: token on ground, neither holds. Race.
     if (obs.token.exists && obs.token.carrier === -1) {
@@ -1413,13 +1463,13 @@ function runObjectiveMode(obs, params, state, sig) {
         const oppDist = Math.hypot(tx - obs.opp.x, ty - obs.opp.y);
         const pickupCommit = 20 + (params.shipRate ?? 0.5) * 90 + Math.max(0, params.spite ?? 0) * 30;
         if (myDist <= oppDist + pickupCommit) {
-            return navigateTo(obs, tx, ty, params);
+            return navigateTo(obs, tx, ty, params, false, state);
         }
         // Opp will reach first. Preempt with a swipe if we can catch them.
         if (sig.canSwing && sig.absDist < swingRange(params)) {
             return { action: true, left: sig.absDir < 0, right: sig.absDir > 0 };
         }
-        return navigateTo(obs, tx, ty, params);
+        return navigateTo(obs, tx, ty, params, false, state);
     }
     // Fallback — shouldn't reach here because objective-active triggered
     // the mode entry.
@@ -1476,7 +1526,7 @@ function runEscapeMode(obs, params, sig) {
 // actual attacks and kills across mode changes. All inputs are public Observation.
 function tacticalTarget(obs) {
     if (obs.self.hasToken && obs.goal.exists) {
-        return { x: obs.goal.x, y: goalBodyY(obs), context: `deliver:${deliveryGoalKey(obs)}` };
+        return { x: obs.goal.x, y: goalLandingY(obs), context: `deliver:${deliveryGoalKey(obs)}` };
     }
     if (obs.token.exists && obs.token.carrier === -1) {
         return { x: obs.token.x, y: obs.token.y, context: "pickup" };
@@ -1488,6 +1538,7 @@ function freshTacticalMemory(obs, context, distance) {
         context, bestDistance: distance, progressTick: obs.tick,
         anchorX: obs.self.x, anchorY: obs.self.y, movedTick: obs.tick,
         lastAttackTick: obs.self.lastAttackStartTick, lastKillTick: obs.self.lastKillTick,
+        lastOppHp: obs.opp.hp, clashEscapeDirection: null,
         attempts: 0, lastAction: {}, failures: [], plan: null,
     };
 }
@@ -1515,7 +1566,7 @@ function chooseRecovery(obs, params, memory, target) {
     eligible.sort((a, b) => b[1] - a[1]);
     return eligible[0][0];
 }
-function runRecoveryPlan(obs, params, memory, target, sig) {
+function runRecoveryPlan(obs, params, memory, target, sig, state) {
     const plan = memory.plan;
     const age = obs.tick - plan.startedAt;
     const ready = obs.self.swipeCD <= 0 && obs.self.swipeT <= 0 && obs.self.diveT <= 0;
@@ -1539,7 +1590,19 @@ function runRecoveryPlan(obs, params, memory, target, sig) {
     if (plan.tactic === "drop" && onDropThroughPlatform(obs)) {
         return { down: true, left: target.x < obs.self.x - 15, right: target.x > obs.self.x + 15 };
     }
-    const action = navigateTo(obs, target.x, target.y, params, true);
+    const action = navigateTo(obs, target.x, target.y, params, true, state);
+    // A route that walks into a live blocker is not an alternative to the failed
+    // base approach. Cross the blocker on a jump arc, retaining directional
+    // commitment while rising instead of reversing every time they cross us.
+    const toTarget = Math.sign(target.x - obs.self.x);
+    const blocker = !obs.opp.dead && Math.sign(obs.dx) === toTarget &&
+        obs.absDx < 145 && Math.abs(obs.dy) < 70;
+    if (plan.tactic === "route" && blocker && obs.self.onGround && !obs.self.wall) {
+        action.up = true;
+    }
+    if (plan.tactic === "route" && !obs.self.onGround && obs.self.vy < -150 &&
+        Math.abs(obs.dy) < 150)
+        action.up = true;
     // Keep legitimate goal dwell and routes ahead of opportunistic combat.
     if (!obs.self.hasToken && canHit)
         action.action = true;
@@ -1550,6 +1613,8 @@ function adaptTactics(obs, params, state, sig, base) {
     const distance = Math.hypot(obs.self.x - target.x, obs.self.y - target.y);
     let memory = state.tactics;
     if (!memory || memory.context !== target.context) {
+        if (memory)
+            state.navigation = null;
         state.tactics = memory = freshTacticalMemory(obs, target.context, distance);
     }
     memory.failures = memory.failures.filter(f => obs.tick - f.tick < 720).slice(-8);
@@ -1558,8 +1623,10 @@ function adaptTactics(obs, params, state, sig, base) {
         memory.lastAttackTick = obs.self.lastAttackStartTick;
     }
     const kill = obs.self.lastKillTick !== memory.lastKillTick;
+    const damage = obs.opp.hp < memory.lastOppHp;
     memory.lastKillTick = obs.self.lastKillTick;
-    if (distance < memory.bestDistance - 36 || kill) {
+    memory.lastOppHp = obs.opp.hp;
+    if (distance < memory.bestDistance - 36 || kill || damage) {
         memory.bestDistance = distance;
         memory.progressTick = obs.tick;
         memory.attempts = 0;
@@ -1572,16 +1639,40 @@ function adaptTactics(obs, params, state, sig, base) {
     // Do not interrupt scoring or a stun, which is not a failed decision.
     // A dead opponent is not a reason to chase its last location.
     const dwelling = obs.self.hasToken && obs.goal.exists && dwellDistance(obs) < GOAL_DWELL_RADIUS;
-    if (dwelling || obs.self.stun > 0 || (obs.opp.dead && !obs.self.hasToken)) {
+    if (dwelling || (obs.opp.dead && !obs.self.hasToken)) {
         memory.plan = null;
         memory.progressTick = obs.tick;
         memory.lastAction = base;
         return base;
     }
+    if (sig.clashLoop && obs.self.stun > 0 && obs.absDx < PASSIVE_FOIL_DANGER_RANGE &&
+        Math.abs(obs.dy) < 14) {
+        // In a repeated passive clash, turning away makes the recoil push inward.
+        // Face through the bind until separated instead of repeatedly crossing and
+        // turning back into each other. Facing still works during stun; movement
+        // and attacks remain physics-gated. Exact overlap uses opposite ID ties.
+        // Recoil from the previous clash can cross the bodies before this input
+        // is integrated. Keep the chosen facing through that crossing rather than
+        // swapping it each tick and recreating the same bind.
+        const direction = memory.clashEscapeDirection ??=
+            (Math.sign(obs.dx) || (state.id === 0 ? -1 : 1));
+        const action = { left: direction < 0, right: direction > 0 };
+        memory.lastAction = action;
+        return action;
+    }
+    memory.clashEscapeDirection = null;
+    if (obs.self.stun > 0) {
+        // A stun is not a chosen action, but it must not erase repeated failed
+        // approaches or falsely count as progress. Preserve the bounded plan and
+        // let its outcome be evaluated when the fighter can act again.
+        memory.movedTick = obs.tick;
+        memory.lastAction = base;
+        return base;
+    }
     if (memory.plan) {
         memory.plan.bestDistance = Math.min(memory.plan.bestDistance, distance);
-        if (obs.tick >= memory.plan.expiresAt || kill) {
-            const succeeded = kill || memory.plan.startDistance - memory.plan.bestDistance > 45;
+        if (obs.tick >= memory.plan.expiresAt || kill || damage) {
+            const succeeded = kill || damage || memory.plan.startDistance - memory.plan.bestDistance > 45;
             if (!succeeded)
                 memory.failures.push({ tactic: memory.plan.tactic, tick: obs.tick });
             memory.plan = null;
@@ -1593,7 +1684,7 @@ function adaptTactics(obs, params, state, sig, base) {
         }
     }
     const stalled = obs.tick - memory.progressTick > 240;
-    const blocked = obs.tick - memory.movedTick > 100 &&
+    const blocked = obs.tick - memory.movedTick > 100 && obs.tick - memory.progressTick > 100 &&
         (memory.lastAction.left || memory.lastAction.right || memory.lastAction.up);
     const repeatedMisses = memory.attempts >= 4 && obs.tick - memory.progressTick > 150;
     if (!memory.plan && (stalled || blocked || repeatedMisses)) {
@@ -1608,7 +1699,7 @@ function adaptTactics(obs, params, state, sig, base) {
     // running, so repeatedly fleeing does not erase an unsuccessful attempt.
     const danger = sig.oppCommittedAtUs && obs.self.invuln <= 0 &&
         obs.self.swipeCD > 0 && obs.self.swipeT <= 0 && obs.self.diveT <= 0;
-    const action = memory.plan && !danger ? runRecoveryPlan(obs, params, memory, target, sig) : base;
+    const action = memory.plan && !danger ? runRecoveryPlan(obs, params, memory, target, sig, state) : base;
     memory.lastAction = action;
     return action;
 }
@@ -1616,6 +1707,7 @@ function adaptTactics(obs, params, state, sig, base) {
 export function runParamBrain(obs, params, state) {
     if (obs.self.dead) {
         state.tactics = null;
+        state.navigation = null;
         return {};
     }
     updateOppModel(state, obs);

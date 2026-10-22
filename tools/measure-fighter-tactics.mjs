@@ -1,24 +1,29 @@
 // Matched-seed behavioral diagnostic, not a balance or release qualification.
 // Run after npm -w sim run build. All metrics use observable transitions,
 // not the planner's own claim that a tactic succeeded.
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 const args = process.argv.slice(2);
 const option = (key, fallback) => args.includes(key) ? args[args.indexOf(key) + 1] : fallback;
+const outputPath = option('--output', null);
+if (outputPath && existsSync(outputPath)) throw new Error(`refusing to overwrite evaluation evidence: ${outputPath}`);
 const sim = await import(pathToFileURL(resolve(option('--sim', 'sim/dist/index.js'))));
 const seeds = option('--seeds', '7,43').split(',').map(Number);
-const pairs = [
+const defaultPairs = [
   ['standby', 'standby'], ['blitz', 'operator'], ['oracle', 'shipper'],
   ['incumbent', 'moonshot'], ['founder', 'disruptor'], ['intern', 'regulatory'],
   ['troll', 'acquirer'], ['pivot', 'unicorn'],
 ];
+const pairs = option('--pairs', '') ? option('--pairs', '').split(',').map(p => p.split(':')) : defaultPairs;
+const stages = option('--stages', '').split(',').filter(Boolean);
+const selectedStages = Object.values(sim.STAGES).filter(s => !stages.length || stages.includes(s.id));
 const rows = [];
-for (const stage of Object.values(sim.STAGES)) for (const [a,b] of pairs) for (const seed of seeds) {
+for (const stage of selectedStages) for (const [a,b] of pairs) for (const seed of seeds) {
   const w = sim.createStepperWorld({ stage, seed });
   w.telemetry = [sim.emptyFighterTelemetry(), sim.emptyFighterTelemetry()];
   const brains = [sim.compileBrain(sim.STRATEGIES[a]), sim.compileBrain(sim.STRATEGIES[b])];
-  const stats = [0,1].map(() => ({ ticks:0, stuckTicks:0, repeatedFailedTicks:0, stagnantWindows:0, windows:0, progressWindows:0, effective:{}, window:null, lastAction:null, repeated:0, anchor:null, lastMove:0 }));
+  const stats = [0,1].map(() => ({ ticks:0, stuckTicks:0, goalHoldTicks:0, stunnedTicks:0, unproductiveStuckTicks:0, dwellResets:0, repeatedFailedTicks:0, unproductiveRepeatedFailedTicks:0, stagnantWindows:0, windows:0, progressWindows:0, effective:{}, window:null, lastAction:null, repeated:0, anchor:null, lastMove:0 }));
   let timeouts=0, deliveries=0, hash=2166136261;
   while(w.tick < 28800 && w.matchWinner === -1) {
     const active = w.freeze <= 0 && w.roundPause <= 0;
@@ -38,7 +43,14 @@ for (const stage of Object.values(sim.STAGES)) for (const [a,b] of pairs) for (c
       s.ticks++;
       if(!s.anchor || Math.hypot(f.x-s.anchor.x,f.y-s.anchor.y)>24) {s.anchor={x:f.x,y:f.y};s.lastMove=w.tick;}
       const stuck=w.tick-s.lastMove>90;
+      const goalHold = o.self.hasToken && o.goal.exists &&
+        Math.hypot(f.x-o.goal.x, f.y-sim.STATS.bodyH/2-o.goal.y)<sim.GOAL_DWELL_RADIUS;
+      const stunned = f.stun > 0;
+      if(goalHold) s.goalHoldTicks++;
+      if(stunned) s.stunnedTicks++;
       if(stuck) s.stuckTicks++;
+      if(stuck && !goalHold && !stunned) s.unproductiveStuckTicks++;
+      if(o.token.dwellT > 0 && (w.gold?.dwellT??0) === 0 && n.score===f.score && w.gold?.carrier===i) s.dwellResets++;
       const category=act.action ? (!f.onGround && act.down ? 'dive' : 'swipe') : act.down ? 'drop' : act.up ? 'jump' : act.left || act.right ? (((act.right?1:0)-(act.left?1:0))*Math.sign(o.dx)>=0?'approach':'retreat') : 'hold';
       const moved=Math.hypot(n.x-f.x,n.y-f.y)>0.5;
       const attack=n.lastAttackStartTick!==f.lastAttackStartTick;
@@ -60,7 +72,10 @@ for (const stage of Object.values(sim.STAGES)) for (const [a,b] of pairs) for (c
       if(category===s.lastAction) s.repeated++;else {s.repeated=1;s.lastAction=category;}
       // Repeated ineffective input: static movement/hold, or repeated attacks
       // without observable progress after 1.5s. A chase making distance is not failure.
-      if(!progress && w.tick-win.start>=180 && ((stuck && s.repeated>=60) || (win.attacks>=3 && category==='swipe'))) s.repeatedFailedTicks++;
+      if(!progress && w.tick-win.start>=180 && ((stuck && s.repeated>=60) || (win.attacks>=3 && category==='swipe'))) {
+        s.repeatedFailedTicks++;
+        if(!goalHold && !stunned) s.unproductiveRepeatedFailedTicks++;
+      }
       if(w.tick-win.start>=240) {
         s.windows++;if(progress)s.progressWindows++;else s.stagnantWindows++;
         s.window=null;
@@ -73,7 +88,7 @@ const all=rows.flatMap(r=>r.fighters);
 const sum=k=>all.reduce((n,s)=>n+s[k],0);
 const ticks=sum('ticks'), windows=sum('windows');
 const mean=values=>values.reduce((a,b)=>a+b,0)/values.length;
-const summary={matches:rows.length,completed:rows.filter(r=>r.winner!==-1).length,scoreCompleted:rows.filter(r=>r.winner!==-1&&r.timeouts===0).length,meanSeconds:mean(rows.map(r=>r.ticks/120)),timeouts:rows.reduce((n,r)=>n+r.timeouts,0),deliveries:rows.reduce((n,r)=>n+r.deliveries,0),kills:rows.reduce((n,r)=>n+r.kills,0),stuckRate:sum('stuckTicks')/ticks,repeatedFailedRate:sum('repeatedFailedTicks')/ticks,stagnantWindowRate:sum('stagnantWindows')/windows,progressWindowRate:sum('progressWindows')/windows,meanEffectiveActionKinds:mean(all.map(s=>Object.keys(s.effective).length)),decisionTicks:ticks};
-const result={behaviorVersion:sim.BEHAVIOR_VERSION,seeds,summary,rows};
-const out=option('--output',null);if(out)writeFileSync(out,JSON.stringify(result,null,2)+'\n');
+const summary={matches:rows.length,completed:rows.filter(r=>r.winner!==-1).length,scoreCompleted:rows.filter(r=>r.winner!==-1&&r.timeouts===0).length,meanSeconds:mean(rows.map(r=>r.ticks/120)),timeouts:rows.reduce((n,r)=>n+r.timeouts,0),deliveries:rows.reduce((n,r)=>n+r.deliveries,0),kills:rows.reduce((n,r)=>n+r.kills,0),stuckRate:sum('stuckTicks')/ticks,goalHoldRate:sum('goalHoldTicks')/ticks,stunnedRate:sum('stunnedTicks')/ticks,unproductiveStuckRate:sum('unproductiveStuckTicks')/ticks,dwellResets:sum('dwellResets'),unproductiveRepeatedFailedRate:sum('unproductiveRepeatedFailedTicks')/ticks,repeatedFailedRate:sum('repeatedFailedTicks')/ticks,stagnantWindowRate:sum('stagnantWindows')/windows,progressWindowRate:sum('progressWindows')/windows,meanEffectiveActionKinds:mean(all.map(s=>Object.keys(s.effective).length)),decisionTicks:ticks};
+const result={behaviorVersion:sim.BEHAVIOR_VERSION,goalDwellSeconds:sim.GOAL_DWELL_S,rulesVersion:sim.RULES_VERSION??null,seeds,pairs,summary,rows};
+if(outputPath)writeFileSync(outputPath,JSON.stringify(result,null,2)+'\n',{flag:'wx'});
 console.log(JSON.stringify(summary,null,2));

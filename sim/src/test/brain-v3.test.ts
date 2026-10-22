@@ -55,8 +55,8 @@ function defaultParams(overrides: Partial<Params> = {}): Params {
 
 // --- Tests ---
 
-test("BEHAVIOR_VERSION is 25", () => {
-  assert.equal(BEHAVIOR_VERSION, 25);
+test("BEHAVIOR_VERSION is 26", () => {
+  assert.equal(BEHAVIOR_VERSION, 26);
 });
 
 test("createBrainState initializes neutral with empty buffers", () => {
@@ -330,7 +330,9 @@ test("objective navigation routes through reachable platform steps", () => {
   };
 
   const action = runParamBrain(obs, defaultParams({ lift: 0, networking: 0 }), state);
-  assert.equal(action.up, true, "carrier starts with the reachable lower platform, not an impossible top route");
+  assert.ok(state.navigation, "carrier commits a reachable intermediate landing surface");
+  assert.ok(state.navigation.y > 350, "carrier does not attempt the unreachable top in one leap");
+  assert.ok(!action.down, "approach the launch position without dropping through the start");
   assert.equal(action.right, true, "carrier drives toward the first route step");
 });
 

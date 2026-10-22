@@ -1,4 +1,4 @@
-import type { BrainConfig, Character, MatchResult, Stage } from "./types.js";
+import type { BrainConfig, Character, MatchResult, RulesVersion, Stage } from "./types.js";
 import { type TraceFrame } from "./simulate.js";
 export declare const REPLAY_SCHEMA_ID = "m3t4.replay";
 export declare const REPLAY_SCHEMA_VERSION = 1;
@@ -6,6 +6,13 @@ export declare const REPLAY_ACTION_ENCODING = "decision-action-pairs-v1";
 export declare const REPLAY_FRAME_ENCODING = "trace-frames-v1";
 export declare const REPLAY_RULESET = "m3t4-sim-v1";
 export declare const REPLAY_CONSTANTS_HASH: string;
+/** Select physics from persisted metadata, never from the currently loaded brain.
+ * Unknown archives fail closed instead of silently gaining the latest rules. */
+export declare function replayRulesVersion(sim: {
+    rulesVersion?: number;
+    behaviorVersion?: number;
+    constantsHash?: string;
+}, allowConstantsMismatch?: boolean): RulesVersion;
 export type ReplayMode = "ranked" | "practice" | "generated" | "test";
 export type ReplayPlayerKind = "human" | "brain" | "scripted";
 export type ReplayPlayerTier = "user" | "system" | "local" | "tool";
@@ -43,6 +50,8 @@ export interface ReplayControlsV1 {
     bindings: ReplayControlBindingV1;
 }
 export interface ReplaySimInfoV1 {
+    rulesVersion?: RulesVersion;
+    behaviorVersion?: number;
     packageName: "@m3t4/sim";
     ruleset: typeof REPLAY_RULESET;
     stepHz: number;
@@ -167,6 +176,7 @@ export declare function verifyReplayIntegrityV1(artifact: ReplayArtifactV1): voi
 export declare function replayArtifactWarningsV1(artifact: ReplayArtifactV1): string[];
 export declare function replayArtifactToResultV1(artifact: ReplayArtifactV1, opts?: ReplayDecodeOptionsV1): ReplayDecodeResultV1;
 export interface VerifyActionLogInput {
+    rulesVersion?: RulesVersion;
     seed: number;
     stage: Stage;
     chars: [Character, Character];
@@ -184,6 +194,7 @@ export interface VerifyActionLogOutput {
 }
 export declare function verifyActionLog(input: VerifyActionLogInput): VerifyActionLogOutput;
 export interface FramesFromActionLogInput {
+    rulesVersion?: RulesVersion;
     seed: number;
     stage: Stage;
     chars: [Character, Character];

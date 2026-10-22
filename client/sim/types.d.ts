@@ -104,6 +104,7 @@ export interface Goal {
     label: string;
     timer: number;
 }
+export type RulesVersion = 0 | 1 | 2;
 export interface Gold {
     carrier: 0 | 1;
     x: number;
@@ -111,8 +112,10 @@ export interface Gold {
     vx: number;
     vy: number;
     dwellT: number;
+    dwellTicks?: number;
 }
 export interface World {
+    rulesVersion: RulesVersion;
     tick: number;
     stage: Stage;
     fighters: [Fighter, Fighter];

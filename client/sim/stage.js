@@ -1,3 +1,4 @@
+import { STAGES as ARCHIVED_V23_STAGES } from "./legacy-stage-v23.js";
 // Three launch stages. Platforms follow the SELF lab default, then
 // intentionally divergent alternates to force meta diversity.
 export const STAGE_DATACENTER = {
@@ -69,3 +70,10 @@ export const STAGES = {
     boardroom: STAGE_BOARDROOM,
     demoday: STAGE_DEMODAY,
 };
+// v24 added two solid vertical obstacles to each launch stage. Older match
+// documents store only stageId, so resolving them against today's platform list
+// corrupts their action logs. Full replay artifacts already carry their stage.
+export function stageForRules(stageId, rulesVersion) {
+    const stages = rulesVersion === 0 ? ARCHIVED_V23_STAGES : STAGES;
+    return Object.hasOwn(stages, stageId) ? stages[stageId] : undefined;
+}

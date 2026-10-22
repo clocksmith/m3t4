@@ -42,9 +42,12 @@ export const ROUNDS_TO_WIN_MATCH = 2;
 export const TIMEOUT_TIEBREAK = "round-score-kills-v1";
 export const GOAL_TIMER_START = 10;
 export const ROUND_TIMER_MAX_TICKS = 60 * 120; // safety cap: 60 s per round
-// Carrier must keep their body top within this goal radius long enough to score.
-// Shorter than kill respawn so winning combat near goal can convert.
-export const GOAL_DWELL_S = 0.12;
+// Rules v2 requires a continuous one-second hold by the living gold carrier.
+// Keep v1's floating accumulation intact when replaying archived action logs.
+export const RULES_VERSION = 2;
+export const LEGACY_GOAL_DWELL_S = 0.12;
+export const GOAL_DWELL_TICKS = 120;
+export const GOAL_DWELL_S = GOAL_DWELL_TICKS * STEP;
 export const GOAL_DWELL_RADIUS = 40;
 export const KILL_RESPAWN_S = 0.5;
 export const DOUBLE_KO_RESPAWN_S = 0.6;

@@ -1,11 +1,11 @@
 import {
   ARENA_L, ARENA_R, ARENA_T,
-  CLASH_FREEZE, COYOTE_TIME, DOUBLE_KO_RESPAWN_S, FLOOR_Y, GOAL_DWELL_RADIUS, GOAL_DWELL_S, GOAL_TIMER_START,
+  CLASH_FREEZE, COYOTE_TIME, DOUBLE_KO_RESPAWN_S, FLOOR_Y, GOAL_DWELL_RADIUS, GOAL_DWELL_S, LEGACY_GOAL_DWELL_S, GOAL_TIMER_START, RULES_VERSION,
   GRAVITY, HIT_FREEZE, JUMP_BUFFER_TIME, KILL_RESPAWN_S, POINTS_TO_WIN_ROUND,
   RESPAWN_INVULN_S, ROUNDS_TO_WIN_MATCH, ROUND_TIMER_MAX_TICKS, STATS, STEP, TIMEOUT_TIEBREAK, WALL_SLIDE,
 } from "./constants.js";
 import { BEHAVIOR_VERSION } from "./brain.js";
-import type { BrainConfig, Character, MatchResult, Stage } from "./types.js";
+import type { BrainConfig, Character, MatchResult, RulesVersion, Stage } from "./types.js";
 import { createStepperWorld, settleWorldWinner, stepWorld, unpackAction, worldToFrame, type TraceFrame } from "./simulate.js";
 
 export const REPLAY_SCHEMA_ID = "m3t4.replay";
@@ -14,19 +14,52 @@ export const REPLAY_ACTION_ENCODING = "decision-action-pairs-v1";
 export const REPLAY_FRAME_ENCODING = "trace-frames-v1";
 export const REPLAY_RULESET = "m3t4-sim-v1";
 
-export const REPLAY_CONSTANTS_HASH = (() => {
+function constantsHashFor(behaviorVersion: number, rulesVersion: RulesVersion): string {
   const table = {
     STEP, GRAVITY, WALL_SLIDE, COYOTE_TIME, JUMP_BUFFER_TIME,
     HIT_FREEZE, CLASH_FREEZE,
     STATS,
     POINTS_TO_WIN_ROUND, ROUNDS_TO_WIN_MATCH, TIMEOUT_TIEBREAK, GOAL_TIMER_START,
-    ROUND_TIMER_MAX_TICKS, GOAL_DWELL_S, GOAL_DWELL_RADIUS, KILL_RESPAWN_S,
+    ROUND_TIMER_MAX_TICKS, GOAL_DWELL_S: rulesVersion < 2 ? LEGACY_GOAL_DWELL_S : GOAL_DWELL_S, GOAL_DWELL_RADIUS, KILL_RESPAWN_S,
     DOUBLE_KO_RESPAWN_S, RESPAWN_INVULN_S,
     ARENA_L, ARENA_R, ARENA_T, FLOOR_Y,
-    BEHAVIOR_VERSION,
+    BEHAVIOR_VERSION: behaviorVersion,
+    ...(rulesVersion === 2 ? { RULES_VERSION: rulesVersion } : {}),
   };
   return replayHashJson(table);
-})();
+}
+
+export const REPLAY_CONSTANTS_HASH = constantsHashFor(BEHAVIOR_VERSION, RULES_VERSION);
+const ARCHIVED_RULES = new Map<string, RulesVersion>([
+  [constantsHashFor(23, 0), 0],
+  [constantsHashFor(24, 1), 1],
+  [constantsHashFor(25, 1), 1],
+]);
+
+/** Select physics from persisted metadata, never from the currently loaded brain.
+ * Unknown archives fail closed instead of silently gaining the latest rules. */
+export function replayRulesVersion(sim: {
+  rulesVersion?: number;
+  behaviorVersion?: number;
+  constantsHash?: string;
+}, allowConstantsMismatch = false): RulesVersion {
+  const pinned = sim.constantsHash === REPLAY_CONSTANTS_HASH
+    ? RULES_VERSION : sim.constantsHash ? ARCHIVED_RULES.get(sim.constantsHash) : undefined;
+  if (sim.constantsHash && pinned === undefined && !allowConstantsMismatch) {
+    throw new Error(`unsupported replay constantsHash: ${sim.constantsHash}`);
+  }
+  const explicit = sim.rulesVersion;
+  if (explicit !== undefined) {
+    if (explicit !== 0 && explicit !== 1 && explicit !== 2) throw new Error(`unsupported replay rulesVersion: ${explicit}`);
+    if (pinned !== undefined && explicit !== pinned) throw new Error("replay rulesVersion conflicts with constantsHash");
+    return explicit;
+  }
+  if (pinned !== undefined) return pinned;
+  if (sim.behaviorVersion === 23) return 0;
+  if (sim.behaviorVersion === 24 || sim.behaviorVersion === 25) return 1;
+  if (sim.behaviorVersion === 26) return 2;
+  throw new Error("replay has no supported rules binding");
+}
 
 export type ReplayMode = "ranked" | "practice" | "generated" | "test";
 export type ReplayPlayerKind = "human" | "brain" | "scripted";
@@ -82,6 +115,8 @@ export interface ReplayControlsV1 {
 }
 
 export interface ReplaySimInfoV1 {
+  rulesVersion?: RulesVersion;
+  behaviorVersion?: number;
   packageName: "@m3t4/sim";
   ruleset: typeof REPLAY_RULESET;
   stepHz: number;
@@ -372,6 +407,8 @@ export function createReplayArtifactV1(opts: CreateReplayArtifactV1Options): Rep
     throw new Error("replay action log must contain paired P1/P2 bytes");
   }
   const sim: ReplaySimInfoV1 = {
+    rulesVersion: opts.sim?.constantsHash ? ARCHIVED_RULES.get(opts.sim.constantsHash) ?? RULES_VERSION : RULES_VERSION,
+    behaviorVersion: BEHAVIOR_VERSION,
     ...opts.sim,
     packageName: "@m3t4/sim",
     ruleset: REPLAY_RULESET,
@@ -549,6 +586,10 @@ export function replayArtifactToResultV1(
     stage: artifact.initial.stage,
     seed: artifact.match.seed,
     chars: artifact.initial.chars,
+    rulesVersion: replayRulesVersion({
+      ...artifact.sim,
+      behaviorVersion: artifact.sim.behaviorVersion ?? artifact.trust?.behaviorVersion,
+    }, !!opts.allowConstantsMismatch),
   });
 
   let offset = 0;
@@ -588,6 +629,7 @@ export function replayArtifactToResultV1(
 // posted action log actually produces the claimed outcome under the
 // pinned sim version. Does NOT require a full ReplayArtifactV1.
 export interface VerifyActionLogInput {
+  rulesVersion?: RulesVersion;
   seed: number;
   stage: Stage;
   chars: [Character, Character];
@@ -614,6 +656,7 @@ export function verifyActionLog(input: VerifyActionLogInput): VerifyActionLogOut
     stage: input.stage,
     seed: input.seed,
     chars: input.chars,
+    rulesVersion: input.rulesVersion,
   });
   const maxTicks = input.maxTicks ?? ROUND_TIMER_MAX_TICKS * ROUNDS_TO_WIN_MATCH * 2;
   let offset = 0;
@@ -693,6 +736,7 @@ export function verifyActionLog(input: VerifyActionLogInput): VerifyActionLogOut
 // Mirrors verifyActionLog's stepping loop; collects frames instead of
 // just verifying the result.
 export interface FramesFromActionLogInput {
+  rulesVersion?: RulesVersion;
   seed: number;
   stage: Stage;
   chars: [Character, Character];
@@ -725,6 +769,7 @@ export function framesFromActionLog(input: FramesFromActionLogInput): FramesFrom
     stage: input.stage,
     seed: input.seed,
     chars: input.chars,
+    rulesVersion: input.rulesVersion,
   });
   const maxTicks = input.maxTicks ?? ROUND_TIMER_MAX_TICKS * ROUNDS_TO_WIN_MATCH * 2;
   let offset = 0;
@@ -871,6 +916,7 @@ function assertConstantsHashMatch(mode: ReplayMode, sim: ReplaySimInfoV1, allowC
   if (mode !== "ranked") return;
   if (!sim.constantsHash) return;
   if (sim.constantsHash === REPLAY_CONSTANTS_HASH) return;
+  if (ARCHIVED_RULES.has(sim.constantsHash)) return;
   if (allowConstantsMismatch) return;
   throw new Error(
     `ranked replay constantsHash mismatch: artifact=${sim.constantsHash} current=${REPLAY_CONSTANTS_HASH} (sim/rules diverged; pass allowConstantsMismatch for archival inspection)`

@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-22",
+  "v23SourceCommit": "cfd4d63993ba1cfc96e75ac5e0d2dab743ec6581",
+  "v24WallsCommit": "c6d3326110b1f0c115cd6c7fb23054a93279e1fe",
+  "v24v25ReferenceCommit": "0edd630",
+  "v23StageSourceSha256": "86ac7c4faccd08794999093633c948315f3165831c29a97ce886c063477627e1",
+  "v23SimSourceSha256": "92381a6ee18cfd92a93c7d44d597f9c48462010861862664afc45a31e81f23b7",
+  "archiveParity": {
+    "v23": 200,
+    "v24": 500,
+    "stages": [
+      "datacenter"
+    ],
+    "recordedResultMismatches": 0,
+    "physicalFrameMismatches": 0,
+    "v23ExcludedAdditivePoseFields": [
+      "lastAttackStartTick",
+      "respawnT"
+    ]
+  },
+  "v25Fixture": {
+    "seed": 13579,
+    "stage": "datacenter",
+    "brainA": "blitz",
+    "brainB": "shipper",
+    "horizonTicks": 7200,
+    "constantsHash": "63332fa3"
+  }
+}

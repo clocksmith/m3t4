@@ -138,6 +138,26 @@
         },
         "combatReadability": "pressure fighter built from wellness jargon and impact"
       }
+    },
+    "jensen": {
+      "silicon_sovereign": {
+        "colors": {
+          "primary": "#a3e635",
+          "trim": "#ecfccb",
+          "shadow": "#365314"
+        },
+        "combatReadability": "Shared fighter physics and hitboxes; parody costume is presentation only."
+      }
+    },
+    "elon": {
+      "orbital_showman": {
+        "colors": {
+          "primary": "#22d3ee",
+          "trim": "#cffafe",
+          "shadow": "#155e75"
+        },
+        "combatReadability": "Shared fighter physics and hitboxes; parody costume is presentation only."
+      }
     }
   },
   "characterGraphics": {
@@ -182,6 +202,30 @@
         "spriteSheet": "assets/chars/mark/wellness_berserker/sprite.png",
         "portraits": {
           "sheet": "assets/chars/mark/wellness_berserker/portraits/sheet.png",
+          "neutralCell": 0,
+          "hurtCell": 1,
+          "koCell": 2,
+          "fullBodyCell": 3
+        }
+      }
+    },
+    "jensen": {
+      "silicon_sovereign": {
+        "spriteSheet": "assets/chars/jensen/silicon_sovereign/sprite.png",
+        "portraits": {
+          "sheet": "assets/chars/jensen/silicon_sovereign/portraits/sheet.png",
+          "neutralCell": 0,
+          "hurtCell": 1,
+          "koCell": 2,
+          "fullBodyCell": 3
+        }
+      }
+    },
+    "elon": {
+      "orbital_showman": {
+        "spriteSheet": "assets/chars/elon/orbital_showman/sprite.png",
+        "portraits": {
+          "sheet": "assets/chars/elon/orbital_showman/portraits/sheet.png",
           "neutralCell": 0,
           "hurtCell": 1,
           "koCell": 2,
@@ -388,6 +432,98 @@
           "color": "#38bdf8",
           "width": 5,
           "ttl": 0.2
+        }
+      }
+    },
+    "jensen": {
+      "compute_bat": {
+        "class": "club",
+        "silhouette": "green processor bat",
+        "sprite": "assets/weapons/jensen/sheet.png",
+        "spriteCell": 0,
+        "trail": {
+          "color": "#ecfccb",
+          "width": 3,
+          "ttl": 0.12
+        }
+      },
+      "heatsink_hammer": {
+        "class": "maul",
+        "silhouette": "silver finned hammer head",
+        "sprite": "assets/weapons/jensen/sheet.png",
+        "spriteCell": 1,
+        "trail": {
+          "color": "#ecfccb",
+          "width": 3,
+          "ttl": 0.12
+        }
+      },
+      "silicon_cleaver": {
+        "class": "blade",
+        "silhouette": "translucent green wafer blade",
+        "sprite": "assets/weapons/jensen/sheet.png",
+        "spriteCell": 2,
+        "trail": {
+          "color": "#ecfccb",
+          "width": 3,
+          "ttl": 0.12
+        }
+      },
+      "rack_greatsword": {
+        "class": "sword",
+        "silhouette": "long server-board blade",
+        "sprite": "assets/weapons/jensen/sheet.png",
+        "spriteCell": 3,
+        "trail": {
+          "color": "#ecfccb",
+          "width": 3,
+          "ttl": 0.12
+        }
+      }
+    },
+    "elon": {
+      "coil_bat": {
+        "class": "club",
+        "silhouette": "cyan segmented electric coil bat",
+        "sprite": "assets/weapons/elon/sheet.png",
+        "spriteCell": 0,
+        "trail": {
+          "color": "#cffafe",
+          "width": 3,
+          "ttl": 0.12
+        }
+      },
+      "orbit_lance": {
+        "class": "pike",
+        "silhouette": "slender shaft and miniature silver rocket point",
+        "sprite": "assets/weapons/elon/sheet.png",
+        "spriteCell": 1,
+        "trail": {
+          "color": "#cffafe",
+          "width": 3,
+          "ttl": 0.12
+        }
+      },
+      "satellite_axe": {
+        "class": "axe",
+        "silhouette": "silver and blue satellite-panel axe head",
+        "sprite": "assets/weapons/elon/sheet.png",
+        "spriteCell": 2,
+        "trail": {
+          "color": "#cffafe",
+          "width": 3,
+          "ttl": 0.12
+        }
+      },
+      "angular_greatsword": {
+        "class": "sword",
+        "silhouette": "silver angular slab blade with cyan edge",
+        "sprite": "assets/weapons/elon/sheet.png",
+        "spriteCell": 3,
+        "trail": {
+          "color": "#cffafe",
+          "width": 3,
+          "ttl": 0.12
         }
       }
     }
@@ -878,12 +1014,14 @@
             "pose": "idle-victory loop matching character archetype"
           }
         ],
-        "layoutDirective": "Final runtime sprite sheet grid: EXACTLY 6 columns x 12 rows, each frame centered in its 192x192 generation cell (target 64x64 after 3x nearest-neighbor downscale), no gutters. Prompt generation uses packed 4 columns x 4 rows sheets; local tooling assembles populated packed cells into the final 6x12 runtime sheet. Character facing camera-right in every populated frame. Every populated character must stay fully inside its own cell; no head, hair, arms, legs, cloth, or motion pose may cross a vertical or horizontal cell cut. Blank cells must be pure #FF00FF only. Character silhouette is a TALL HUMAN FIGURE with aspect approximately 1:2 — roughly 28 pixels wide by 56 pixels tall in the 64x64 final cell. Do NOT draw a square silhouette. Center the body horizontally with about 18 pixels of pure magenta #FF00FF padding on each side, and about 4 pixels of magenta padding above the head and below the feet. The figure's in-sim hitbox is 28 wide by 56 tall; the drawn silhouette should read as roughly that shape at a glance so combat reads correctly. Weapons NOT drawn on this sheet (weapons are a separate layer).",
+        "layoutDirective": "Final runtime sprite sheet grid: EXACTLY 6 columns x 12 rows, each frame centered in its 192x192 generation cell (target 64x64 after 3x nearest-neighbor downscale), no gutters. Prompt generation uses packed 4 columns x 4 rows sheets; local tooling assembles populated packed cells into the final 6x12 runtime sheet. Character facing camera-right in every populated frame. Every populated character must stay fully inside its own cell; no head, hair, arms, legs, cloth, or motion pose may cross a vertical or horizontal cell cut. Blank cells must be pure #FF00FF only. Character silhouette is a TALL HUMAN FIGURE with aspect approximately 1:2 \u2014 roughly 28 pixels wide by 56 pixels tall in the 64x64 final cell. Do NOT draw a square silhouette. Center the body horizontally with about 18 pixels of pure magenta #FF00FF padding on each side, and about 4 pixels of magenta padding above the head and below the feet. The figure's in-sim hitbox is 28 wide by 56 tall; the drawn silhouette should read as roughly that shape at a glance so combat reads correctly. Weapons NOT drawn on this sheet (weapons are a separate layer).",
         "taunt": {
           "sama": "index finger raised as if consulting a graph only they can see",
           "darrius": "slow legalistic empty-hand gesture as if closing an invisible folder; do not draw the folder",
           "demis": "drawing a small diagram in the air",
-          "mark": "two-finger salute, chin up"
+          "mark": "two-finger salute, chin up",
+          "jensen": "adjust glasses, point boastfully, shrug, hands on hips",
+          "elon": "hands on hips, boastful point, dismissive shrug, arms folded"
         },
         "generationStrategy": [
           "Strategy A (preferred): generate three packed prompt sheets per character. Each prompt is 768x768 with a 4x4 grid of exact 192x192 cells, no gutters, cells 1-15 populated, and the bottom-right cell 16 pure #FF00FF. The runtime uses 41 animation frames; the final pack's four overflow populated cells are ignored by assembly. Downscale each pack exactly 3x to 256x256 nearest-neighbor, then assemble populated runtime cells into the final 384x768 runtime sheet.",
@@ -909,6 +1047,16 @@
         "seed": 170401,
         "out": "assets/chars/mark/wellness_berserker/sprite.png",
         "base": "Character D the Sunlit Operator, 16-bit character sprite: Character D likeness \u2014 slender athletic martial-arts build, light skin, sharper square-leaning face, broad high forehead, pronounced cheekbones, newly chiseled jawline, straight proportional nose, medium lips set in a controlled expression, clear blue eyes with fixed analytical stare, light stubble. Medium-short wavy light-brown hair with a very subtle warm reddish undertone while still reading light brown, controlled volume and soft curl, textured forward enough to soften the receding hairline. Hair must stay above the ears and above the collar; not long, not shaggy, not shoulder-length, not a bob, no ponytail, no curtain hair, no red or auburn hair. Wearing matte black tactical athleisure layered with an oversized designer tee or jacket, chunky gold or silver chain, white sunscreen war-paint smears on the cheekbones. Aggressive low stance, feral controlled vibe, modern streetwear-meets-MMA. Purple #c084fc primary / #ede9fe trim / #5b21b6 shadow. Silhouette reads as 'influencer combat athlete' at 64px; medium-short wavy light-brown hair, chain, and squared jaw are key anchors. Include all 12 animation rows in the shared sprite-sheet layout."
+      },
+      "jensen": {
+        "seed": 170601,
+        "out": "assets/chars/jensen/silicon_sovereign/sprite.png",
+        "base": "For the m3t4.com non-graphic cartoon fighting game. Recognizable stylized fictional Jensen Huang-inspired parody, mature East Asian man, silver swept-back hair, black rectangular glasses, warm light skin, black leather jacket, plain black shirt, charcoal trousers and dark shoes. No logos, affiliation or endorsement. Same identity, clothing and palette in every frame. Empty hands; weapons and effects are separate. All 41 poses in the shared animation order, facing right, full silhouette inside each exact cell."
+      },
+      "elon": {
+        "seed": 170701,
+        "out": "assets/chars/elon/orbital_showman/sprite.png",
+        "base": "For the m3t4.com non-graphic cartoon fighting game. Recognizable stylized fictional Elon Musk-inspired parody, middle-aged fair-skinned man, broad square-round face, swept-back dark brown hair, clean-shaven, no glasses, black bomber jacket with small cyan cuff accents, plain dark shirt, charcoal trousers and dark boots. No logos, affiliation or endorsement. Same identity, clothing and palette in every frame. Empty hands; weapons and effects are separate. All 41 poses in the shared animation order, facing right, full silhouette inside each exact cell."
       }
     },
     "portraitSheets": {
@@ -950,6 +1098,16 @@
         "seed": 170410,
         "out": "assets/chars/mark/wellness_berserker/portraits/sheet.png",
         "base": "Character D the Sunlit Operator, 2x2 portrait/full-body sheet: Character D likeness \u2014 light skin, sharper square-leaning face, broad high forehead, pronounced cheekbones, chiseled jawline, straight proportional nose, clear blue eyes with fixed analytical stare, light stubble. Medium-short wavy light-brown hair with a very subtle warm reddish undertone while still reading light brown, controlled volume and soft curl, textured forward to soften the receding hairline. Hair must stay above the ears and above the collar; not long, not shaggy, not shoulder-length, not a bob, no ponytail, no curtain hair, no red or auburn hair. Matte black tactical athleisure under an oversized designer tee or jacket, chunky chain, white sunscreen war-paint smears, purple #c084fc accent. Top-left (neutral): intense calm, shark-like unblinking. Top-right (hurt): jaw-forward anger, feral. Bottom-left (ko): dramatic but funny-serious. Bottom-right (full_body): head-to-toe aggressive low combat stance, modern streetwear-meets-MMA, platform-crush bearing, tiny stage shadow only."
+      },
+      "jensen": {
+        "seed": 170610,
+        "out": "assets/chars/jensen/silicon_sovereign/portraits/sheet.png",
+        "base": "For m3t4.com. Recognizable stylized fictional Jensen Huang-inspired parody, mature East Asian man, silver swept-back hair, black rectangular glasses, warm light skin, black leather jacket, plain black shirt, charcoal trousers and dark shoes. No logos, affiliation or endorsement. Exact 2x2 neutral, hurt, KO, full-body cells. Same costume and head proportions; no weapons."
+      },
+      "elon": {
+        "seed": 170710,
+        "out": "assets/chars/elon/orbital_showman/portraits/sheet.png",
+        "base": "For m3t4.com. Recognizable stylized fictional Elon Musk-inspired parody, middle-aged fair-skinned man, broad square-round face, swept-back dark brown hair, clean-shaven, no glasses, black bomber jacket with small cyan cuff accents, plain dark shirt, charcoal trousers and dark boots. No logos, affiliation or endorsement. Exact 2x2 neutral, hurt, KO, full-body cells. Same costume and head proportions; no weapons."
       }
     },
     "objectives": {
@@ -1013,6 +1171,16 @@
         "seed": 170513,
         "out": "assets/weapons/mark/sheet.png",
         "base": "Character D complete weapon sheet, 2x2 grid. Top-left (common, Sunscreen Bottle Club): oversized sunscreen bottle reinforced as a club, thick cap as striking mass, blunt and readable. Top-right (rare, Controller Nunchucks): paired game controllers linked by a taut charging cable, clean paired-weight silhouette, mass at the controllers. Bottom-left (epic, Shareholder Sauce Club): thick crystallized condiment bottle forged into a cudgel, curved bottle silhouette, ridiculous but physically blunt. Bottom-right (legendary, Quest Flail): cracked headset swung from an elite strap like a flail, heavy visor mass at the striking end, clean silhouette."
+      },
+      "jensen": {
+        "seed": 170620,
+        "out": "assets/weapons/jensen/sheet.png",
+        "base": "For the m3t4.com non-graphic cartoon fighting game. Fictional hardware pseudo-weapons only, no people, injuries, logos or endorsement. Exact 2x2 grid in common/rare/epic/legendary order: Compute Bat (green processor bat); Heatsink Hammer (silver finned hammer head); Silicon Cleaver (translucent green wafer blade); Rack Greatsword (long server-board blade). Charcoal and silver with green accents. Horizontal handle-left, tip-right orientation; same calibrated rigid reach for all items."
+      },
+      "elon": {
+        "seed": 170720,
+        "out": "assets/weapons/elon/sheet.png",
+        "base": "For the m3t4.com non-graphic cartoon fighting game. Fictional hardware pseudo-weapons only, no people, injuries, logos or endorsement. Exact 2x2 grid in common/rare/epic/legendary order: Coil Bat (cyan segmented electric coil bat); Orbit Lance (slender shaft and miniature silver rocket point); Satellite Axe (silver and blue satellite-panel axe head); Angular Greatsword (silver angular slab blade with cyan edge). Charcoal and silver with cyan accents. Horizontal handle-left, tip-right orientation; same calibrated rigid reach for all items."
       }
     },
     "lockedSlot": {

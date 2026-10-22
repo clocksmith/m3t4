@@ -1,7 +1,7 @@
 // Shared asset schema. Referenced by characters, weapons, and stages.
-// Aesthetic target: 16-bit SNES-era pixel art at 480x270 internal resolution,
-// integer-scaled to the display. Global palette is 16bpp (65,536 colors);
-// per-sprite color discipline is stylistic, not enforced.
+// Runtime arena: 1280x720 logical pixels, integer-scaled canvas backing.
+// Native 64px pixel-art fighters over faceted code-native 2.5D scenery.
+// Palette discipline is stylistic, not a global bit-depth requirement.
 
 export type Rarity = "common" | "rare" | "epic" | "legendary";
 

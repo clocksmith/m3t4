@@ -26,11 +26,39 @@ export const BODY_FRAME_ORIGINS = {
     wallSlide: [[32,63],[32,63,-1]],
     ko: [[32,63],[32,63],[32,63],[32,62]],
   },
+  jensen: {
+    idle: [[32,62],[32,62],[32,62],[32,62]],
+    run: [[32,62],[32,62],[32,62],[32,62],[32,62],[32,62]],
+    jump: [[32,62],[32,62]],
+    fall: [[32,62],[32,62]],
+    wallSlide: [[32,62],[32,62]],
+    dive: [[32,62],[32,62]],
+    swing: [[32,62],[32,62],[32,62],[32,62],[32,62],[32,62]],
+    hit: [[32,62],[32,62],[32,62]],
+    ko: [[32,62],[32,62],[32,62],[32,62]],
+    carry: [[32,62],[32,62]],
+    taunt: [[32,62],[32,62],[32,62],[32,62]],
+    victory: [[32,62],[32,62],[32,62],[32,62]],
+  },
+  elon: {
+    idle: [[32,62],[32,62],[32,62],[32,62]],
+    run: [[32,62],[32,62],[32,62],[32,62],[32,62],[32,62]],
+    jump: [[32,62],[32,62]],
+    fall: [[32,62],[32,62]],
+    wallSlide: [[32,62],[32,62]],
+    dive: [[32,62],[32,62]],
+    swing: [[32,62],[32,62],[32,62],[32,62],[32,62],[32,62]],
+    hit: [[32,62],[32,62],[32,62]],
+    ko: [[32,62],[32,62],[32,62],[32,62]],
+    carry: [[32,62],[32,62]],
+    taunt: [[32,62],[32,62],[32,62],[32,62]],
+    victory: [[32,62],[32,62],[32,62],[32,62]],
+  },
 };
 
 export function bodyFramePlacement(body, anim, frame, { grounded = false, dead = false } = {}) {
   const entry = BODY_FRAME_ORIGINS[body]?.[anim]?.[frame];
-  const fallbackFoot = body === 'darrius' ? 62 : 63;
+  const fallbackFoot = BODY_FRAME_ORIGINS[body]?.idle?.[0]?.[1] ?? 63;
   return {
     rootX: entry?.[0] ?? 32,
     // Grounded poses plant their feet. Air poses keep a stable body origin.
@@ -48,6 +76,8 @@ export const WEAPON_ART = {
   darrius: [point(5,24,45,24,[2,18,45,13]), point(11,24,38,24,[8,21,33,11]), point(3,24,45,24,[1,19,46,13]), point(5,24,45,24,[1,16,46,16])],
   demis: [point(4,40,45,34,[1,1,46,46],0.45), point(3,23,45,23,[1,11,46,26]), point(4,23,46,23,[1,11,46,25]), point(3,23,46,22,[1,15,46,17])],
   mark: [point(5,41,46,7), point(10,35,46,11,[1,1,46,46],0.9), point(5,41,43,3), point(5,16,46,35,[1,1,46,46],0.8)],
+  jensen: [point(6,24,44,24), point(6,24,44,23), point(6,24,45,22), point(6,25,45,25)],
+  elon: [point(6,23,45,23), point(6,24,45,24), point(6,25,45,28,[1,1,46,46],0.85), point(6,23,45,23)],
 };
 
 // Map calibrated grip->tip onto the authoritative segment. Mirror in local X

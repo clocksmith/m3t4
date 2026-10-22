@@ -16,24 +16,294 @@
   "properties": {
     "meta": {
       "type": "object",
-      "required": ["version", "theme", "boundary"],
+      "required": [
+        "version",
+        "theme",
+        "boundary"
+      ],
       "additionalProperties": true
     },
-    "particlePacks": { "type": "object" },
-    "stageVisualPacks": { "type": "object" },
-    "characterVisualPacks": { "type": "object" },
-    "characterGraphics": { "type": "object" },
-    "weaponVisuals": { "type": "object" },
-    "objectiveVisuals": { "type": "object" },
+    "particlePacks": {
+      "type": "object"
+    },
+    "stageVisualPacks": {
+      "type": "object"
+    },
+    "characterVisualPacks": {
+      "type": "object"
+    },
+    "characterGraphics": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "required": [
+            "spriteSheet",
+            "portraits"
+          ],
+          "properties": {
+            "spriteSheet": {
+              "type": "string",
+              "pattern": "^assets/chars/.+/sprite\\.png$"
+            },
+            "portraits": {
+              "type": "object",
+              "required": [
+                "sheet",
+                "neutralCell",
+                "hurtCell",
+                "koCell",
+                "fullBodyCell"
+              ],
+              "properties": {
+                "sheet": {
+                  "type": "string"
+                },
+                "neutralCell": {
+                  "const": 0
+                },
+                "hurtCell": {
+                  "const": 1
+                },
+                "koCell": {
+                  "const": 2
+                },
+                "fullBodyCell": {
+                  "const": 3
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "weaponVisuals": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "required": [
+            "sprite",
+            "spriteCell"
+          ],
+          "properties": {
+            "sprite": {
+              "type": "string",
+              "pattern": "^assets/weapons/.+/sheet\\.png$"
+            },
+            "spriteCell": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3
+            }
+          },
+          "additionalProperties": true
+        }
+      }
+    },
+    "objectiveVisuals": {
+      "type": "object"
+    },
     "artDirection": {
       "type": "object",
-      "required": ["styleSuffix", "negativePrompt"],
+      "required": [
+        "styleSuffix",
+        "negativePrompt"
+      ],
       "additionalProperties": true
     },
     "prompts": {
       "type": "object",
-      "required": ["stages", "characterSheets", "portraitSheets", "weaponSheets"],
-      "additionalProperties": true
+      "required": [
+        "stages",
+        "characterSheets",
+        "portraitSheets",
+        "weaponSheets"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "characterSheets": {
+          "type": "object",
+          "properties": {
+            "_sharedRules": {
+              "type": "object",
+              "required": [
+                "outW",
+                "outH",
+                "cols",
+                "rows",
+                "cellW",
+                "cellH"
+              ],
+              "properties": {
+                "outW": {
+                  "const": 384
+                },
+                "outH": {
+                  "const": 768
+                },
+                "cols": {
+                  "const": 6
+                },
+                "rows": {
+                  "const": 12
+                },
+                "cellW": {
+                  "const": 64
+                },
+                "cellH": {
+                  "const": 64
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "seed",
+              "out",
+              "base"
+            ],
+            "properties": {
+              "seed": {
+                "type": "integer"
+              },
+              "out": {
+                "type": "string"
+              },
+              "base": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "portraitSheets": {
+          "type": "object",
+          "properties": {
+            "_sharedRules": {
+              "type": "object",
+              "required": [
+                "outW",
+                "outH",
+                "cols",
+                "rows",
+                "cellW",
+                "cellH"
+              ],
+              "properties": {
+                "outW": {
+                  "const": 192
+                },
+                "outH": {
+                  "const": 192
+                },
+                "cols": {
+                  "const": 2
+                },
+                "rows": {
+                  "const": 2
+                },
+                "cellW": {
+                  "const": 96
+                },
+                "cellH": {
+                  "const": 96
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "seed",
+              "out",
+              "base"
+            ],
+            "properties": {
+              "seed": {
+                "type": "integer"
+              },
+              "out": {
+                "type": "string"
+              },
+              "base": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "weaponSheets": {
+          "type": "object",
+          "properties": {
+            "_sharedRules": {
+              "type": "object",
+              "required": [
+                "outW",
+                "outH",
+                "cols",
+                "rows",
+                "cellW",
+                "cellH"
+              ],
+              "properties": {
+                "outW": {
+                  "const": 96
+                },
+                "outH": {
+                  "const": 96
+                },
+                "cols": {
+                  "const": 2
+                },
+                "rows": {
+                  "const": 2
+                },
+                "cellW": {
+                  "const": 48
+                },
+                "cellH": {
+                  "const": 48
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "seed",
+              "out",
+              "base"
+            ],
+            "properties": {
+              "seed": {
+                "type": "integer"
+              },
+              "out": {
+                "type": "string"
+              },
+              "base": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    "$schema": {
+      "type": "string"
     }
   },
   "additionalProperties": false

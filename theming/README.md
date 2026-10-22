@@ -26,10 +26,7 @@ SSOT: `theming/visual-theme.v1.json`. Expand to per-asset prompts
 with `tools/build-prompts.mjs`. Seeds, target dimensions, background-
 key rule, and grid directives are locked per entry.
 
-Every generated source canvas must be an exact `1x`, `2x`, or `3x`
-multiple of the promoted output dimensions. The prompt builder enforces
-this rule before it writes prompts, so fractional downscales and larger
-ratios cannot silently enter the art pipeline.
+Prompt requests must use exact `1x`, `2x`, or `3x` dimensions. The builder validates the request, not the returned image: providers can ignore it. Never assume a generation meets the grid. Unexpected source sizes or shifted cells are drafts until explicitly inspected, normalized through nearest-neighbor export and reviewed per-pose crop/packing, then validated against final frame bounds. Preserve a receipt of source hashes, crop rectangles and any export normalization. Do not silently clip limbs at nominal grid cuts.
 
 Stage prompts also receive a shared runtime scale contract: the arena is
 `1280x720`, fighters render from unscaled `64x64` sprite cells, and the
@@ -41,9 +38,7 @@ and floor decals each know how far they sit from the combat plane.
 
 ### Character Prompt Aliases
 
-Generated prompt text uses neutral aliases so image tools do not receive
-real-world or final in-game character names. Runtime IDs and asset paths
-still use the stable internal keys.
+Legacy prompts use Character A–D aliases. New parody prompts explicitly describe their intended identity and non-graphic m3t4.com game context. Never disguise a request to bypass a tool rejection. Runtime IDs remain stable.
 
 | prompt alias | internal character |
 |---|---|
@@ -51,30 +46,28 @@ still use the stable internal keys.
 | Character B | Darrius |
 | Character C | Demis |
 | Character D | Mark |
+| Jensen parody | Jensen |
+| Elon parody | Elon |
 
 ### Playable scope
 
-The current playable art prompt set ships all four character bodies:
-**Character A (Sama)**, **Character B (Darrius)**, **Character C
-(Demis)**, and **Character D (Mark)**, plus **all three stages**:
-Datacenter, Boardroom, and Demo Day. The default prompt batch includes
-all packed character sheets, combined portrait/full-body sheets, combined
-2x2 weapon sheets, objectives, UI assets, and consolidated stage atlases.
-Use `--flat-stages` when a stage asset needs one prompt per promoted file.
+Six bodies are authored: Sama, Darrius, Demis, Mark, Jensen and Elon. Each has 41 runtime body poses, four portrait cells and a four-item weapon atlas. The three live stages use code-native faceted scenery in `client/render/stage-art.js`. Stage image prompts and source textures remain archived design references; generating them does not update the live scene.
+
+The builder's counts are derived from entries: `--only characters` currently emits 18 packed prompts, and portraits/weapons each emit six. Effects remain code-native; no universal effects-sheet contract is claimed.
 
 ### Batches
 
 | batch | command | count |
 |---|---|---:|
-| Playable, copy/paste (Chars A-D, all 3 stages) | `node tools/build-prompts.mjs` | **30 files** |
-| Characters A-D, packed 4x4 copy/paste | `node tools/build-prompts.mjs --only characters` | 12 files |
+| Playable, copy/paste (six fighters, all 3 stages) | `node tools/build-prompts.mjs` | **40 files** |
+| Six fighters, packed 4x4 copy/paste | `node tools/build-prompts.mjs --only characters` | 18 files |
 | Stage atlases only | `node tools/build-prompts.mjs --only stages` | 7 files |
-| Playable, flat one prompt per stage asset | `node tools/build-prompts.mjs --flat-stages` | **47 files** |
-| Playable, GPT-sized copy/paste | `node tools/build-prompts.mjs --format gpt` | **30 files** |
-| Playable, Midjourney copy/paste | `node tools/build-prompts.mjs --format mj` | **30 files** |
+| Playable, flat one prompt per stage asset | `node tools/build-prompts.mjs --flat-stages` | **57 files** |
+| Playable, GPT-sized copy/paste | `node tools/build-prompts.mjs --format gpt` | **40 files** |
+| Playable, Midjourney copy/paste | `node tools/build-prompts.mjs --format mj` | **40 files** |
 | Missing assets, one paste-ready `.txt` per asset | `node tools/build-prompts.mjs --missing-only` | varies |
-| Playable, Gemini JSONL | `node tools/build-prompts.mjs --format gemini-jsonl` | **30** |
-| Playable, GPT image JSONL | `node tools/build-prompts.mjs --format gpt-jsonl` | **30** |
+| Playable, Gemini JSONL | `node tools/build-prompts.mjs --format gemini-jsonl` | **40** |
+| Playable, GPT image JSONL | `node tools/build-prompts.mjs --format gpt-jsonl` | **40** |
 
 ### Common commands
 
@@ -134,8 +127,8 @@ node tools/build-prompts.mjs --combined-file
 
 ### Importing numbered raw generations
 
-When you paste all 30 prompts into an image generator and download each
-as `001.png`..`030.png` into a single folder, import them in one pass:
+When you paste a complete prompt batch into an image generator and download each
+as sequentially numbered PNGs into a single folder, import them in one pass:
 
 ```bash
 node tools/import-raws.mjs theming/generated-prompts/<ts>-launch-gemini-files ~/Downloads/new
@@ -206,3 +199,13 @@ The prompt SSOT no longer defers Character C/D or advanced weapon art.
 All four bodies and all four weapon lines are generated from the default
 command. The shared `lockedSlot` prompt still exists for UI states that
 need a generic locked icon.
+
+### Current runtime contract
+
+- Body: 384×768, 6×12, 64px cells, 41 unique poses. Right-facing source, empty hands, no baked slash effects.
+- Portrait: 192×192, 2×2, 96px cells: neutral/hurt/KO/full-body.
+- Weapon: 96×96, 2×2, 48px cells: common/rare/epic/legendary. Four static items, not animation rows. Opaque grip/tip pixels are calibrated to the same live collision segment in `fighter-art.js`.
+- Alpha: transparent background or keyed magenta export, normalized transparent matte. Pixel-art weapon export quantizes the generated soft alpha at128 before padding/cell calibration.
+- New source poses may be cropped and packed, never replaced with idle stand-ins. Preserve all intended silhouette pixels at runtime scale; keep blank cell cuts. No per-character physics changes.
+
+See `docs/render-contract.md` for actual runtime ownership and `client/test/new-roster-art.test.mjs` for the new fighters' per-cell acceptance gate.

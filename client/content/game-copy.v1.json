@@ -313,6 +313,32 @@
         },
         "combatFantasy": "pressure fighter built from wellness jargon and impact"
       }
+    },
+    "jensen": {
+      "silicon_sovereign": {
+        "name": "Jensen",
+        "label": "Silicon Sovereign",
+        "archetype": "Fictional hardware-showman parody. No affiliation or endorsement.",
+        "voice": {
+          "victory": "The throughput was inevitable.",
+          "defeat": "A temporary supply constraint.",
+          "taunt": "Your bottleneck is showing."
+        },
+        "combatFantasy": "Cosmetic parody fighter using the shared combat primitives and stat budget."
+      }
+    },
+    "elon": {
+      "orbital_showman": {
+        "name": "Elon",
+        "label": "Orbital Showman",
+        "archetype": "Fictional space-and-electricity showman parody. No affiliation or endorsement.",
+        "voice": {
+          "victory": "The launch window was mine.",
+          "defeat": "Rapid unscheduled respawn.",
+          "taunt": "The roadmap has a sword now."
+        },
+        "combatFantasy": "Cosmetic parody fighter using the shared combat primitives and stat budget."
+      }
     }
   },
   "weapons": {
@@ -402,6 +428,50 @@
         "name": "Quest Flail",
         "class": "flail",
         "silhouette": "headset swung from elite strap"
+      }
+    },
+    "jensen": {
+      "compute_bat": {
+        "name": "Compute Bat",
+        "class": "club",
+        "silhouette": "green processor bat"
+      },
+      "heatsink_hammer": {
+        "name": "Heatsink Hammer",
+        "class": "maul",
+        "silhouette": "silver finned hammer head"
+      },
+      "silicon_cleaver": {
+        "name": "Silicon Cleaver",
+        "class": "blade",
+        "silhouette": "translucent green wafer blade"
+      },
+      "rack_greatsword": {
+        "name": "Rack Greatsword",
+        "class": "sword",
+        "silhouette": "long server-board blade"
+      }
+    },
+    "elon": {
+      "coil_bat": {
+        "name": "Coil Bat",
+        "class": "club",
+        "silhouette": "cyan segmented electric coil bat"
+      },
+      "orbit_lance": {
+        "name": "Orbit Lance",
+        "class": "pike",
+        "silhouette": "slender shaft and miniature silver rocket point"
+      },
+      "satellite_axe": {
+        "name": "Satellite Axe",
+        "class": "axe",
+        "silhouette": "silver and blue satellite-panel axe head"
+      },
+      "angular_greatsword": {
+        "name": "Angular Greatsword",
+        "class": "sword",
+        "silhouette": "silver angular slab blade with cyan edge"
       }
     }
   },

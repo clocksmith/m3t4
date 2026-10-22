@@ -44,7 +44,7 @@ test('calibrated weapon endpoints are real opaque pixels and silhouettes fit the
   }
 });
 
-test('all 16 weapon grips and tips map onto collision for both facings and every attack phase', () => {
+test('all roster weapon grips and tips map onto collision for both facings and every attack phase', () => {
   for (const art of Object.values(WEAPON_ART).flat()) for (const facing of [-1,1]) {
     for (const [swipeT,diveT] of [[0,0],[STATS.swipeTime,0],[.08,0],[.04,0],[.001,0],[0,.2]]) {
       const segment=swordSeg({x:350.4,y:401.1,facing,swipeT,diveT});
@@ -103,6 +103,8 @@ test('renderer maps actual atlas draw calls to collision, including wall facing 
       ctx.draws.length=0;
       const frame=makeFrame(500,patch);
       drawFrame(ctx,STAGES.datacenter,frame,{cosmetics:[{body,weapon:weapon.id},{body,weapon:weapon.id}]});
+      assert.equal(ctx.draws.filter(d=>d.src.includes(`/chars/${body}/`)&&d.src.endsWith('/sprite.png')).length,2,'requested body must not silently fall back');
+      assert.equal(ctx.draws.filter(d=>d.src.includes(`/chars/${body}/`)&&d.src.endsWith('/portraits/sheet.png')).length,2,'HUD must use the selected identity');
       const weaponDraws=ctx.draws.filter(d=>d.src.includes('/weapons/'));
       assert.equal(weaponDraws.length,2);
       for(let side=0;side<2;side++){

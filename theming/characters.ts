@@ -4,6 +4,8 @@
 
 import type { SpriteSheet, TextureRef } from "./assets.js";
 
+export interface PortraitCell extends TextureRef { cell: number; cols: 2; frameW: 96; frameH: 96 }
+
 export interface CharacterKit {
   id: string;
   colors: {
@@ -13,16 +15,16 @@ export interface CharacterKit {
   };
   sprite: SpriteSheet;   // body animations; weapon is rendered as a separate layer
   portraits: {
-    neutral: TextureRef;
-    hurt: TextureRef;
-    ko: TextureRef;
-    victory: TextureRef;
+    neutral: PortraitCell;
+    hurt: PortraitCell;
+    ko: PortraitCell;
+    victory: PortraitCell;
     large: TextureRef;   // character-select full-body art
   };
 }
 
-// Asset stubs. URLs are empty until art lands; shape is the contract.
-const emptySprite = (url = ""): SpriteSheet => ({
+// Native body atlas contract. Runtime integration is in client/render/canvas2d.js.
+const bodySprite = (url = ""): SpriteSheet => ({
   url,
   frameW: 64,
   frameH: 64,
@@ -42,56 +44,48 @@ const emptySprite = (url = ""): SpriteSheet => ({
   },
 });
 
-const emptyPortrait = (w = 96, h = 96): TextureRef => ({ url: "", w, h });
+// All portraits share one 192px 2x2 atlas. Victory reuses neutral; full-body is cell3.
+const portraitPack = (dir: string): CharacterKit["portraits"] => {
+  const cell = (index: number): PortraitCell => ({ url: `${dir}/portraits/sheet.png`, w: 96, h: 96, frameW: 96, frameH: 96, cols: 2, cell: index });
+  return { neutral: cell(0), hurt: cell(1), ko: cell(2), victory: cell(0), large: cell(3) };
+};
 
 export const CHARACTER_KITS: CharacterKit[] = [
   {
     id: "sama",
     colors: { primary: "#6ee7b7", trim: "#d1fae5", shadow: "#047857" },
-    sprite: emptySprite("assets/chars/sama/monastic_infra/sprite.png"),
-    portraits: {
-      neutral: emptyPortrait(),
-      hurt:    emptyPortrait(),
-      ko:      emptyPortrait(),
-      victory: emptyPortrait(),
-      large:   emptyPortrait(512, 768),
-    },
+    sprite: bodySprite("assets/chars/sama/monastic_infra/sprite.png"),
+    portraits: portraitPack("assets/chars/sama/monastic_infra"),
   },
   {
     id: "darrius",
     colors: { primary: "#fb923c", trim: "#fed7aa", shadow: "#9a3412" },
-    sprite: emptySprite("assets/chars/darrius/legal_department_midnight/sprite.png"),
-    portraits: {
-      neutral: emptyPortrait(),
-      hurt:    emptyPortrait(),
-      ko:      emptyPortrait(),
-      victory: emptyPortrait(),
-      large:   emptyPortrait(512, 768),
-    },
+    sprite: bodySprite("assets/chars/darrius/legal_department_midnight/sprite.png"),
+    portraits: portraitPack("assets/chars/darrius/legal_department_midnight"),
   },
   {
     id: "demis",
     colors: { primary: "#60a5fa", trim: "#dbeafe", shadow: "#1e3a8a" },
-    sprite: emptySprite("assets/chars/demis/chalk_and_static/sprite.png"),
-    portraits: {
-      neutral: emptyPortrait(),
-      hurt:    emptyPortrait(),
-      ko:      emptyPortrait(),
-      victory: emptyPortrait(),
-      large:   emptyPortrait(512, 768),
-    },
+    sprite: bodySprite("assets/chars/demis/chalk_and_static/sprite.png"),
+    portraits: portraitPack("assets/chars/demis/chalk_and_static"),
   },
   {
     id: "mark",
     colors: { primary: "#c084fc", trim: "#ede9fe", shadow: "#5b21b6" },
-    sprite: emptySprite("assets/chars/mark/wellness_berserker/sprite.png"),
-    portraits: {
-      neutral: emptyPortrait(),
-      hurt:    emptyPortrait(),
-      ko:      emptyPortrait(),
-      victory: emptyPortrait(),
-      large:   emptyPortrait(512, 768),
-    },
+    sprite: bodySprite("assets/chars/mark/wellness_berserker/sprite.png"),
+    portraits: portraitPack("assets/chars/mark/wellness_berserker"),
+  },
+  {
+    id: "jensen",
+    colors: { primary: "#a3e635", trim: "#ecfccb", shadow: "#365314" },
+    sprite: bodySprite("assets/chars/jensen/silicon_sovereign/sprite.png"),
+    portraits: portraitPack("assets/chars/jensen/silicon_sovereign"),
+  },
+  {
+    id: "elon",
+    colors: { primary: "#22d3ee", trim: "#cffafe", shadow: "#155e75" },
+    sprite: bodySprite("assets/chars/elon/orbital_showman/sprite.png"),
+    portraits: portraitPack("assets/chars/elon/orbital_showman"),
   },
 ];
 

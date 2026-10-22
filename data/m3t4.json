@@ -23,14 +23,19 @@
               "cunning": 0
             }
           },
-          "name": "standby",
+          "name": "sparkly tomorrow cello",
           "submittedAt": 1776701873198,
           "rateLockedUntil": 0,
           "elo": 1000,
           "wins": 0,
           "losses": 0,
           "draws": 0,
-          "lastPlayedAt": 1776701873198
+          "lastPlayedAt": 1776701873198,
+          "fighterNameVersion": 1,
+          "previousNames": [
+            "standby"
+          ],
+          "aiBehaviorVersion": 26
         }
       ],
       "createdAt": 1776701873198,
@@ -59,14 +64,19 @@
               "cunning": 0.03
             }
           },
-          "name": "blitz",
+          "name": "plastic moonbeam accordion",
           "submittedAt": 1776701873198,
           "rateLockedUntil": 0,
           "elo": 1000,
           "wins": 0,
           "losses": 0,
           "draws": 0,
-          "lastPlayedAt": 1776701873198
+          "lastPlayedAt": 1776701873198,
+          "fighterNameVersion": 1,
+          "previousNames": [
+            "blitz"
+          ],
+          "aiBehaviorVersion": 26
         }
       ],
       "createdAt": 1776701873198,
@@ -95,14 +105,19 @@
               "cunning": 0
             }
           },
-          "name": "incumbent",
+          "name": "drowsy raisin blender",
           "submittedAt": 1776701873198,
           "rateLockedUntil": 0,
           "elo": 1000,
           "wins": 0,
           "losses": 0,
           "draws": 0,
-          "lastPlayedAt": 1776701873198
+          "lastPlayedAt": 1776701873198,
+          "fighterNameVersion": 1,
+          "previousNames": [
+            "incumbent"
+          ],
+          "aiBehaviorVersion": 26
         }
       ],
       "createdAt": 1776701873198,
@@ -131,14 +146,19 @@
               "cunning": 0
             }
           },
-          "name": "pivot",
+          "name": "unlikely compass courier",
           "submittedAt": 1776701873198,
           "rateLockedUntil": 0,
           "elo": 1000,
           "wins": 0,
           "losses": 0,
           "draws": 0,
-          "lastPlayedAt": 1776701873198
+          "lastPlayedAt": 1776701873198,
+          "fighterNameVersion": 1,
+          "previousNames": [
+            "pivot"
+          ],
+          "aiBehaviorVersion": 26
         }
       ],
       "createdAt": 1776701873198,
@@ -167,14 +187,19 @@
               "cunning": 0
             }
           },
-          "name": "unicorn",
+          "name": "digital sheriff toad",
           "submittedAt": 1776701873198,
           "rateLockedUntil": 0,
           "elo": 1000,
           "wins": 0,
           "losses": 0,
           "draws": 0,
-          "lastPlayedAt": 1776701873198
+          "lastPlayedAt": 1776701873198,
+          "fighterNameVersion": 1,
+          "previousNames": [
+            "unicorn"
+          ],
+          "aiBehaviorVersion": 26
         }
       ],
       "createdAt": 1776701873198,
@@ -203,14 +228,19 @@
               "cunning": 0.0978
             }
           },
-          "name": "disruptor",
+          "name": "quantum twig gong",
           "submittedAt": 1776701873198,
           "rateLockedUntil": 0,
           "elo": 1000,
           "wins": 0,
           "losses": 0,
           "draws": 0,
-          "lastPlayedAt": 1776701873198
+          "lastPlayedAt": 1776701873198,
+          "fighterNameVersion": 1,
+          "previousNames": [
+            "disruptor"
+          ],
+          "aiBehaviorVersion": 26
         }
       ],
       "createdAt": 1776701873198,
@@ -239,14 +269,19 @@
               "cunning": 0
             }
           },
-          "name": "operator",
+          "name": "wonky avalanche jester",
           "submittedAt": 1776701873198,
           "rateLockedUntil": 0,
           "elo": 1000,
           "wins": 0,
           "losses": 0,
           "draws": 0,
-          "lastPlayedAt": 1776701873198
+          "lastPlayedAt": 1776701873198,
+          "fighterNameVersion": 1,
+          "previousNames": [
+            "operator"
+          ],
+          "aiBehaviorVersion": 26
         }
       ],
       "createdAt": 1776701873198,
@@ -275,14 +310,19 @@
               "cunning": 0
             }
           },
-          "name": "oracle",
+          "name": "wiggly snare patience",
           "submittedAt": 1776701873198,
           "rateLockedUntil": 0,
           "elo": 1000,
           "wins": 0,
           "losses": 0,
           "draws": 0,
-          "lastPlayedAt": 1776701873198
+          "lastPlayedAt": 1776701873198,
+          "fighterNameVersion": 1,
+          "previousNames": [
+            "oracle"
+          ],
+          "aiBehaviorVersion": 26
         }
       ],
       "createdAt": 1776701873198,
@@ -311,14 +351,19 @@
               "cunning": 0
             }
           },
-          "name": "shipper",
+          "name": "juggling swamp porridge",
           "submittedAt": 1776701873198,
           "rateLockedUntil": 0,
           "elo": 1000,
           "wins": 0,
           "losses": 0,
           "draws": 0,
-          "lastPlayedAt": 1776701873198
+          "lastPlayedAt": 1776701873198,
+          "fighterNameVersion": 1,
+          "previousNames": [
+            "shipper"
+          ],
+          "aiBehaviorVersion": 26
         }
       ],
       "createdAt": 1776701873198,
@@ -347,14 +392,19 @@
               "cunning": 0
             }
           },
-          "name": "moonshot",
+          "name": "wiggly pulsar broom",
           "submittedAt": 1776701873198,
           "rateLockedUntil": 0,
           "elo": 1000,
           "wins": 0,
           "losses": 0,
           "draws": 0,
-          "lastPlayedAt": 1776701873198
+          "lastPlayedAt": 1776701873198,
+          "fighterNameVersion": 1,
+          "previousNames": [
+            "moonshot"
+          ],
+          "aiBehaviorVersion": 26
         }
       ],
       "createdAt": 1776701873198,
@@ -383,14 +433,19 @@
               "cunning": 0
             }
           },
-          "name": "regulatory",
+          "name": "wonky garlic dew",
           "submittedAt": 1776701873198,
           "rateLockedUntil": 0,
           "elo": 1000,
           "wins": 0,
           "losses": 0,
           "draws": 0,
-          "lastPlayedAt": 1776701873198
+          "lastPlayedAt": 1776701873198,
+          "fighterNameVersion": 1,
+          "previousNames": [
+            "regulatory"
+          ],
+          "aiBehaviorVersion": 26
         }
       ],
       "createdAt": 1776701873198,
@@ -419,14 +474,19 @@
               "cunning": 0.0978
             }
           },
-          "name": "founder",
+          "name": "stormy stump snare",
           "submittedAt": 1776701873198,
           "rateLockedUntil": 0,
           "elo": 1000,
           "wins": 0,
           "losses": 0,
           "draws": 0,
-          "lastPlayedAt": 1776701873198
+          "lastPlayedAt": 1776701873198,
+          "fighterNameVersion": 1,
+          "previousNames": [
+            "founder"
+          ],
+          "aiBehaviorVersion": 26
         }
       ],
       "createdAt": 1776701873198,
@@ -455,14 +515,19 @@
               "cunning": 0
             }
           },
-          "name": "acolyte",
+          "name": "awkward plumber telescope",
           "submittedAt": 1776701873198,
           "rateLockedUntil": 0,
           "elo": 1000,
           "wins": 0,
           "losses": 0,
           "draws": 0,
-          "lastPlayedAt": 1776701873198
+          "lastPlayedAt": 1776701873198,
+          "fighterNameVersion": 1,
+          "previousNames": [
+            "acolyte"
+          ],
+          "aiBehaviorVersion": 26
         }
       ],
       "createdAt": 1776701873198,
@@ -491,14 +556,19 @@
               "cunning": 0.27
             }
           },
-          "name": "intern",
+          "name": "quantum chimera microscope",
           "submittedAt": 1776701873198,
           "rateLockedUntil": 0,
           "elo": 1000,
           "wins": 0,
           "losses": 0,
           "draws": 0,
-          "lastPlayedAt": 1776701873198
+          "lastPlayedAt": 1776701873198,
+          "fighterNameVersion": 1,
+          "previousNames": [
+            "intern"
+          ],
+          "aiBehaviorVersion": 26
         }
       ],
       "createdAt": 1776701873198,
@@ -527,14 +597,19 @@
               "cunning": 0
             }
           },
-          "name": "troll",
+          "name": "wonky donut tuba",
           "submittedAt": 1776701873198,
           "rateLockedUntil": 0,
           "elo": 1000,
           "wins": 0,
           "losses": 0,
           "draws": 0,
-          "lastPlayedAt": 1776701873198
+          "lastPlayedAt": 1776701873198,
+          "fighterNameVersion": 1,
+          "previousNames": [
+            "troll"
+          ],
+          "aiBehaviorVersion": 26
         }
       ],
       "createdAt": 1776701873198,
@@ -563,14 +638,19 @@
               "cunning": 0.08
             }
           },
-          "name": "acquirer",
+          "name": "yawning monsoon pinwheel",
           "submittedAt": 1776701873198,
           "rateLockedUntil": 0,
           "elo": 1000,
           "wins": 0,
           "losses": 0,
           "draws": 0,
-          "lastPlayedAt": 1776701873198
+          "lastPlayedAt": 1776701873198,
+          "fighterNameVersion": 1,
+          "previousNames": [
+            "acquirer"
+          ],
+          "aiBehaviorVersion": 26
         }
       ],
       "createdAt": 1776701873198,

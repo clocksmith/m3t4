@@ -1,3 +1,4 @@
+import { generateFighterName, migrateStableFighterNames } from "../lib/fighter-names.mjs";
 // Profile mode — signed-in identity, stable roster, stats, and bot
 // submission. Only the owner can see this view; the sign-in gate stays
 // if there's no authenticated user.
@@ -29,12 +30,7 @@ let setStatus = () => {};
 
 const DEFAULT_ROSTER_SIZE = 4;
 const BODY_IDS = rosterCatalog.bodies;
-const DEFAULT_SLOT_NAMES = [
-  "wingus", "dingus", "hambone", "zapper", "bonk", "dialup", "floppy", "shareware",
-  "lanparty", "hotseat", "modem", "megabyte", "joystick", "gamepad", "turbo", "pog",
-  "slammer", "radmax", "dozer", "widget", "sprocket", "kludge", "glitch", "zipdrive",
-  "winamp", "geocities", "tripod", "angelfire", "boombox", "vhs", "jolt", "neon",
-];
+
 let selectedSlot = 0;
 let rosterSize = DEFAULT_ROSTER_SIZE;
 let rosterCache = null; // last loaded stable response, or null
@@ -405,6 +401,7 @@ async function loadStable(user) {
       rosterSize = normalizeRosterSize(status?.maxSlots);
     }
     if (selectedSlot >= rosterSize) selectedSlot = Math.max(0, rosterSize - 1);
+    s = s ? migrateStableFighterNames(s) : s;
     rosterCache = s;
     if (s?.handle && user.handle !== s.handle) {
       auth.setHandle(s.handle);
@@ -694,9 +691,10 @@ function nonGenericNameOrEmpty(value) {
   return clean;
 }
 
-function randomDefaultName(seed = Math.floor(Math.random() * DEFAULT_SLOT_NAMES.length)) {
-  const offset = Math.floor(Math.random() * DEFAULT_SLOT_NAMES.length);
-  return DEFAULT_SLOT_NAMES[(seed + offset) % DEFAULT_SLOT_NAMES.length];
+function randomDefaultName() {
+  const seed = new Uint32Array(2);
+  crypto.getRandomValues(seed);
+  return generateFighterName(`${seed[0]}:${seed[1]}`);
 }
 
 function selectedCosmeticsForSeat(slotIdx) {

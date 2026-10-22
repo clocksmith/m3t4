@@ -1,3 +1,4 @@
+import { migrateStableFighterNames, migrateFighterName, fighterNameSeed } from "./fighter-names.mjs";
 // Client-side submitStable wrapper. Calls the Firebase Functions
 // callable; surfaces structured errors so the UI can show "rate limited"
 // vs "handle taken" vs "bad config" cleanly.
@@ -54,7 +55,7 @@ export async function getMyStableOnce() {
     "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js"
   );
   const snap = await getDoc(doc(fb.firestore, "stables", user.uid));
-  return snap.exists() ? snap.data() : null;
+  return snap.exists() ? migrateStableFighterNames(snap.data()) : null;
 }
 
 export async function getPublicLeaderboard(limitCount = 50) {
@@ -160,7 +161,8 @@ async function fallbackPublicBotEvents(limitCount) {
   }));
 }
 
-function normalizePublicBot(data, fallbackId) {
+function normalizePublicBot(data, fallbackId, migrate = true) {
+  if (migrate && data.slotId && data.userId) data = migrateFighterName(data, fighterNameSeed(data.userId ?? "", data.slotId));
   const submittedAt = numberOr(data.submittedAt, 0);
   const lastPlayedAt = numberOr(data.lastPlayedAt, 0);
   const updatedAt = numberOr(data.updatedAt, Math.max(submittedAt, lastPlayedAt));
@@ -187,7 +189,8 @@ function normalizePublicBot(data, fallbackId) {
 }
 
 function publicStableRow(docSnap) {
-  const data = docSnap.data();
+  const source = docSnap.data();
+  const data = migrateStableFighterNames({ ...source, userId: source.userId ?? docSnap.id });
   return {
     userId: data.userId ?? docSnap.id,
     handle: data.handle ?? docSnap.id,
@@ -201,7 +204,7 @@ function publicStableRow(docSnap) {
 
 function normalizePublicBotEvent(data, fallbackId) {
   return {
-    ...normalizePublicBot(data, data.botId ?? fallbackId),
+    ...normalizePublicBot(data, data.botId ?? fallbackId, false),
     eventId: data.eventId ?? fallbackId,
     eventType: data.eventType ?? "submitted",
     eventAt: numberOr(data.eventAt, numberOr(data.submittedAt, 0)),
@@ -243,7 +246,7 @@ export function subscribeMyStable(handler) {
     const ref = doc(fb.firestore, "stables", user.uid);
     unsubscribeDoc = onSnapshot(
       ref,
-      (snap) => handler(snap.exists() ? snap.data() : null),
+      (snap) => handler(snap.exists() ? migrateStableFighterNames(snap.data()) : null),
       (err) => {
         console.warn("[submit] subscribeMyStable error:", err?.message ?? err);
         handler(null);

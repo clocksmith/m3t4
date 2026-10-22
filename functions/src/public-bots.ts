@@ -1,3 +1,6 @@
+import { BEHAVIOR_VERSION } from "@m3t4/sim";
+import { migrateFighterRoster } from "../../client/lib/fighter-roster.mjs";
+
 import type {
   DocumentData,
   DocumentReference,
@@ -21,6 +24,8 @@ export interface PublicBotDoc {
   slotIdx: number | null;
   slotId: string;
   name: string;
+  fighterNameVersion: number;
+  aiBehaviorVersion: number;
   cosmetics: unknown;
   elo: number;
   peakElo: number;
@@ -50,6 +55,7 @@ export function publicBotId(userId: string, slot: Pick<StableSlotDoc, "slotIdx" 
 
 export function publicBotDoc(stable: StableDoc, slot: StableSlotDoc): PublicBotDoc | null {
   if (!slot?.slotId) return null;
+  slot = migrateFighterRoster({ userId: stable.userId, slots: [slot] }, BEHAVIOR_VERSION).slots[0];
   const submittedAt = numberOr(slot.submittedAt, stable.updatedAt ?? 0);
   const lastPlayedAt = numberOr(slot.lastPlayedAt, 0);
   const lastOnlineAt = Math.max(submittedAt, lastPlayedAt, numberOr(stable.lastActiveAt, 0));
@@ -61,6 +67,8 @@ export function publicBotDoc(stable: StableDoc, slot: StableSlotDoc): PublicBotD
     slotIdx: Number.isInteger(slot.slotIdx) ? Number(slot.slotIdx) : null,
     slotId: slot.slotId,
     name: slot.name || "unnamed",
+    fighterNameVersion: slot.fighterNameVersion ?? 0,
+    aiBehaviorVersion: slot.aiBehaviorVersion ?? BEHAVIOR_VERSION,
     cosmetics: slot.cosmetics ?? null,
     elo: numberOr(slot.elo, 1500),
     peakElo: numberOr(slot.peakElo, numberOr(slot.elo, 1500)),

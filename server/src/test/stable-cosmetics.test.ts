@@ -61,8 +61,8 @@ test("weapon selection unlocks by slot Elo thresholds", () => {
 });
 
 test("generic slot names are replaced with lowercase defaults", () => {
-  assert.match(nextSlotName("slot 1", undefined), /^[a-z0-9]+$/);
-  assert.match(nextSlotName("slot-4", "seat_2"), /^[a-z0-9]+$/);
+  assert.match(nextSlotName("slot 1", undefined), /^[a-z0-9 -]+$/);
+  assert.match(nextSlotName("slot-4", "seat_2"), /^[a-z0-9 -]+$/);
   assert.equal(nextSlotName(" WINGUS ", undefined), "wingus");
   assert.equal(nextSlotName(undefined, "DINGUS"), "dingus");
 });
@@ -73,4 +73,38 @@ test("legacy long edit locks are capped by the current submit cooldown", () => {
     submittedAt,
     rateLockedUntil: submittedAt + 900_000,
   }) <= Date.now(), true);
+});
+
+test("file store migrates every saved fighter once with exact backup and unchanged identity/build/stats", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "m3t4-full-roster-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, "stable.json");
+  const fixture = JSON.parse(fs.readFileSync(new URL("../../../data/m3t4.json", import.meta.url), "utf8"));
+  // A dormant seventh seat must not disappear merely because the UI shows four.
+  const owner = Object.keys(fixture.stables)[0];
+  const original = fixture.stables[owner].slots[0];
+  fixture.stables[owner].slots.push(...Array.from({length:6},(_,i)=>({...structuredClone(original),slotId:`dormant-${i}`,name:`old-${i}`})));
+  delete original.fighterNameVersion;
+  delete original.aiBehaviorVersion;
+  const bytes = JSON.stringify(fixture);
+  fs.writeFileSync(file, bytes);
+  new FileStableStore(file, {readOnly:true});
+  assert.equal(fs.readFileSync(file,"utf8"),bytes);
+  assert.deepEqual(fs.readdirSync(dir),["stable.json"]);
+  const first = new FileStableStore(file);
+  const migrated = (await first.getStable(owner))!;
+  for (let i=0;i<fixture.stables[owner].slots.length;i++) {
+    const before=fixture.stables[owner].slots[i], after=migrated.slots[i];
+    assert.equal(after.slotId,before.slotId);
+    assert.deepEqual(after.config,before.config);
+    for (const key of ["elo","wins","losses","draws","submittedAt","lastPlayedAt"] as const) assert.equal(after[key],before[key]);
+    assert.equal(after.fighterNameVersion,1);
+    assert.ok(after.previousNames?.includes(before.name) || before.fighterNameVersion===1);
+  }
+  const backups=fs.readdirSync(dir).filter(name=>name.includes("before-fighter-migration"));
+  assert.equal(backups.length,1);
+  assert.equal(fs.readFileSync(path.join(dir,backups[0]),"utf8"),bytes);
+  const second = new FileStableStore(file);
+  assert.deepEqual((await second.getStable(owner))?.slots,migrated.slots);
+  assert.equal(fs.readdirSync(dir).filter(name=>name.includes("before-fighter-migration")).length,1);
 });

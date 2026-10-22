@@ -1,3 +1,6 @@
+import { BEHAVIOR_VERSION } from "@m3t4/sim";
+import { migrateFighterRoster } from "../../client/lib/fighter-roster.mjs";
+
 export const MAX_SLOTS = 4;
 export const HANDLE_PATTERN = /^[a-z0-9_]{3,20}$/;
 export const SYSTEM_HANDLE_PREFIXES = ["frontier_"] as const;
@@ -6,6 +9,9 @@ export interface StableSlotDoc {
   slotIdx?: number;
   slotId: string;
   name: string;
+  fighterNameVersion?: number;
+  previousNames?: string[];
+  aiBehaviorVersion?: number;
   config?: unknown;
   cosmetics?: unknown;
   elo: number;
@@ -57,6 +63,7 @@ export function stableSummary(stable: StableDoc): {
 }
 
 export function publicStableDoc(stable: StableDoc): Record<string, unknown> {
+  stable = migrateFighterRoster(stable, BEHAVIOR_VERSION);
   const summary = stableSummary(stable);
   return {
     schema: "m3t4.public-stable.v1",
@@ -74,6 +81,8 @@ export function publicStableDoc(stable: StableDoc): Record<string, unknown> {
         slotIdx: slot.slotIdx ?? null,
         slotId: slot.slotId,
         name: slot.name,
+        fighterNameVersion: slot.fighterNameVersion ?? 0,
+        aiBehaviorVersion: slot.aiBehaviorVersion ?? BEHAVIOR_VERSION,
         cosmetics: slot.cosmetics ?? null,
         elo: numberOr(slot.elo, 1500),
         peakElo: numberOr(slot.peakElo, numberOr(slot.elo, 1500)),
@@ -87,6 +96,7 @@ export function publicStableDoc(stable: StableDoc): Record<string, unknown> {
 }
 
 export function normalizeStableTotals(stable: StableDoc): StableDoc {
+  stable = migrateFighterRoster(stable, BEHAVIOR_VERSION);
   const summary = stableSummary(stable);
   return {
     ...stable,

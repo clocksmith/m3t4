@@ -284,6 +284,7 @@ test("public stable strips configs but owner stable returns private configs", as
       slotId: "slot-a",
       config: cfg,
       name: "private-build",
+        fighterNameVersion: 1,
       cosmetics: { body: "mark", weapon: "quest_flail" },
       submittedAt: 1,
       rateLockedUntil: 0,

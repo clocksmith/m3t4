@@ -6,6 +6,7 @@
 // At a sparse feed's cadence, hold the last complete sample until the next one
 // is due. Buffering still absorbs packet jitter without inventing combat poses.
 
+import { mountArenaShell } from "../ui/arena-shell.js";
 import { WS_ORIGIN, leaderboardPage } from "../lib/api.js";
 import { STAGES } from "../lib/public-sim.js";
 import { createFrameRenderer, W, H } from "../render/index.js";
@@ -106,6 +107,7 @@ let botPageCursor = null;
 let botRows = [];
 let botPageLoading = false;
 let canvas = null;
+let arenaShell = null;
 
 // Four-state cycle for the compute dash PIP. Each state is a single
 // number stored in localStorage so the user's preference sticks.
@@ -184,7 +186,7 @@ function trimPlaybackToLiveWindow() {
 export function watchPageHtml() {
   return `
     <div class="page watch-page">
-      ${pageHeaderHtml({ title: "Watch", subtitle: useFirebaseFeed() ? "Sit back. Live server matches play automatically." : useStaticFeed() ? "Sit back. Recorded fights play automatically from the match archive, not a live ranked feed." : "Sit back. Arena matches play automatically from the server feed." })}
+      ${pageHeaderHtml({ title: "Watch", subtitle: useFirebaseFeed() ? "Live server matches · Automatic playback." : useStaticFeed() ? "Recorded fights · Match archive, not a live ranked feed." : "Server feed · Automatic arena matches." })}
       ${contextCardHtml({
         className: "live-briefing-card",
         body: `
@@ -265,6 +267,7 @@ export function mount(root, { setStatus }) {
   statusCb = setStatus;
   root.innerHTML = watchPageHtml();
   canvas = root.querySelector("#stage-canvas");
+  arenaShell = mountArenaShell(root, { title: "Watch", canvas, frame: root.querySelector("#spectate-stage"), note: "Playback continues while settings are open." });
   leaderboardEl = root.querySelector("#leaderboard");
   leaderboardCountEl = root.querySelector("#leaderboard-count");
   leaderboardMoreBtn = root.querySelector("#leaderboard-more");
@@ -287,6 +290,7 @@ export function mount(root, { setStatus }) {
   const cycleBtn = root.querySelector("#spectate-dash-cycle");
   cycleBtn?.addEventListener("click", () => setDashState(nextDashState(dashState)));
   dashKeyHandler = (ev) => {
+    if (arenaShell?.dialog.open) return;
     if (ev.key !== "v" && ev.key !== "V") return;
     if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
     const target = ev.target;
@@ -391,6 +395,7 @@ function applyDashState(state) {
 }
 
 export function unmount() {
+  arenaShell?.destroy(); arenaShell = null;
   rendererMountId++;
   running = false;
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }

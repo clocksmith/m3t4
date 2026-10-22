@@ -14,3 +14,5 @@
 @import './styles/compositions/intro.css';
 @import './styles/compositions/compute.css';
 @import './styles/compositions/duel.css';
+
+@import './styles/components/arena-shell.css';

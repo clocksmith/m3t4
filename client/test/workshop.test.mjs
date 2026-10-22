@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 import { PRIMARY_KNOBS, renderSliderEditor } from "../lib/slider-editor.js";
 import { neutralBuildState, KNOBS, scaledStateFromValues, stateSpent, HARD_CAP, configFromState } from "../lib/build-config.js";
 import { disclosureHtml, workshopHeaderHtml } from "../ui/shell.js";
@@ -9,7 +8,8 @@ import { imageState, loadImage } from "../render/image-assets.js";
 import { isP2PSupported } from "../lib/p2p-capabilities.js";
 import { getComputeClient } from "../lib/compute.js";
 import { pickCurrentStaticMatch } from "../lib/match-feed.js";
-import { fitCanvasText } from "../render/canvas2d.js";
+import { fitCanvasText, drawFrame } from "../render/canvas2d.js";
+import { STAGES } from "../lib/public-sim.js";
 
 test("long fighter labels fit their HUD lane without shrinking the font", () => {
   const ctx = { measureText: text => ({ width: Array.from(text).length * 12 }) };
@@ -145,12 +145,39 @@ test("image loading is lazy, cached, and falls back once without a retry storm",
   } finally { if (previousImage === undefined) delete globalThis.Image; else globalThis.Image = previousImage; }
 });
 
-test("all declared stage WebP derivatives and PNG fallbacks exist", () => {
-  const renderer = readFileSync(new URL("../render/canvas2d.js", import.meta.url), "utf8");
-  const pairs = [...renderer.matchAll(/imageState\("([^"]+\.webp)", "([^"]+\.png)"\)/g)];
-  assert.equal(pairs.length, 12);
-  for (const [, webp, png] of pairs) {
-    assert.ok(readFileSync(new URL(`../${webp}`, import.meta.url)).length > 0);
-    assert.ok(readFileSync(new URL(`../${png}`, import.meta.url)).length > 0);
+test("the live renderer draws distinct stage scenery without bitmap stage assets", () => {
+  const previousImage = globalThis.Image;
+  const requested = [];
+  globalThis.Image = class {
+    set src(value) { requested.push(value); this.onerror?.(); }
+  };
+  const fighter = { x: 450, y: 612, vx: 0, vy: 0, onGround: true, wall: 0,
+    facing: 1, stun: 0, swipeT: 0, diveT: 0, lastClashTick: -9999, dead: false };
+  const frame = { tick: 500, roundStartTick: 0, p0: fighter,
+    p1: { ...fighter, x: 850, facing: -1 }, token: { exists: false, carrier: -1 },
+    goal: { exists: false }, scoreboard: [0, 0], rounds: [0, 0] };
+  const sceneSignatures = [];
+  try {
+    for (const stage of Object.values(STAGES)) {
+      const paints = [];
+      const ctx = new Proxy({
+        canvas: { width: 1280, height: 720 },
+        fillRect(...args) { paints.push([this.fillStyle, ...args]); },
+        fill() { paints.push([this.fillStyle]); },
+        createLinearGradient() { return { addColorStop() {} }; },
+        createRadialGradient() { return { addColorStop() {} }; },
+        measureText(text) { return { width: String(text).length * 6 }; },
+      }, { get: (target, key) => key in target ? target[key] : () => {} });
+      drawFrame(ctx, stage, frame, { reducedMotion: true });
+      assert.ok(paints.length > 100, `${stage.id}: missing vector scenery`);
+      sceneSignatures.push(JSON.stringify(paints));
+    }
+    assert.equal(new Set(sceneSignatures).size, Object.keys(STAGES).length,
+      "stage identities must not collapse into one fallback scene");
+    assert.ok(requested.every(url => !url.includes("/stages/")),
+      "stage rendering must not depend on the retired wallpaper atlases");
+  } finally {
+    if (previousImage === undefined) delete globalThis.Image;
+    else globalThis.Image = previousImage;
   }
 });

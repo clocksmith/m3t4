@@ -51,3 +51,6 @@ client/vendor/
 
 # Generated public playtest from the Gamma source owner
 client/mandate-2038/
+
+# Private pre-migration roster backups
+*.before-fighter-migration-*.json

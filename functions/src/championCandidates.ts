@@ -1,3 +1,4 @@
+import { FIGHTER_NAME_VERSION } from "../../client/lib/fighter-names.mjs";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions/v2";
 import {
@@ -172,6 +173,7 @@ export function championStableDocs(release: ChampionRelease, now: number): Stabl
     const elo = candidateElo(candidate.score);
     const slot: StableSlotDoc = {
       slotIdx: 0,
+      fighterNameVersion: FIGHTER_NAME_VERSION,
       slotId: `${userId}-0`,
       name: uniqueGeneratedName(
         mix32(hashText(`${release.releaseId}:${candidate.config.id}:${idx}`)),

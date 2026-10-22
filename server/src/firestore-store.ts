@@ -1,7 +1,9 @@
 import { applicationDefault, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore, type DocumentData, type DocumentReference, type Firestore } from "firebase-admin/firestore";
 import crypto from "node:crypto";
-import { compileBrain, STRATEGIES, type BrainConfig, type ReplayArtifactV1 } from "@m3t4/sim";
+import { BEHAVIOR_VERSION, compileBrain, STRATEGIES, type BrainConfig, type ReplayArtifactV1 } from "@m3t4/sim";
+import { FIGHTER_NAME_VERSION } from "../../client/lib/fighter-names.mjs";
+import { migrateFighterRoster } from "../../client/lib/fighter-roster.mjs";
 import { CONFIG } from "./config.js";
 import {
   activeRosterSlots,
@@ -77,7 +79,7 @@ export class FirestoreStableStore implements StableStore {
       try {
         const snap = await this.db.collection(FIRESTORE_COLLECTIONS.stables).get();
         this.listActiveCache = {
-          stables: snap.docs.map((doc) => doc.data() as Stable),
+          stables: snap.docs.map((doc) => migrateFighterRoster(doc.data() as Stable, BEHAVIOR_VERSION)),
           loadedAt: Date.now(),
         };
       } catch {
@@ -97,7 +99,7 @@ export class FirestoreStableStore implements StableStore {
   async getStable(userId: string): Promise<Stable | null> {
     await this.ready;
     const snap = await this.stableRef(userId).get();
-    return snap.exists ? (snap.data() as Stable) : null;
+    return snap.exists ? (migrateFighterRoster(snap.data() as Stable, BEHAVIOR_VERSION)) : null;
   }
 
   async handleTaken(handle: string, excludeUid?: string): Promise<boolean> {
@@ -123,7 +125,7 @@ export class FirestoreStableStore implements StableStore {
 
       let st: Stable;
       if (stableSnap.exists) {
-        st = stableSnap.data() as Stable;
+        st = migrateFighterRoster(stableSnap.data() as Stable, BEHAVIOR_VERSION);
         if (st.handle !== clean) tx.delete(this.handleRef(st.handle));
         st.handle = clean;
         st.updatedAt = Date.now();
@@ -160,7 +162,7 @@ export class FirestoreStableStore implements StableStore {
       const snap = await tx.get(ref);
       if (!snap.exists) throw new Error("no stable — pick a handle first");
 
-      const st = snap.data() as Stable;
+      const st = migrateFighterRoster(snap.data() as Stable, BEHAVIOR_VERSION);
       const now = Date.now();
       const existing = st.slots[slotIdx];
       const lockedUntil = existing ? effectiveRateLockedUntil(existing) : 0;
@@ -179,7 +181,10 @@ export class FirestoreStableStore implements StableStore {
       assertUniqueBodyInStable(st, slotIdx, slotCos);
       const slotId = existing?.slotId ?? randomId();
       const slot: Slot = {
+        ...existing,
         slotId,
+        fighterNameVersion: FIGHTER_NAME_VERSION,
+        aiBehaviorVersion: BEHAVIOR_VERSION,
         config,
         name: nextSlotName(name, existing?.name),
         cosmetics: slotCos,
@@ -213,7 +218,7 @@ export class FirestoreStableStore implements StableStore {
     if (!this.listActiveInflight) {
       this.listActiveInflight = (async () => {
         const snap = await this.db.collection(FIRESTORE_COLLECTIONS.stables).get();
-        const stables = snap.docs.map((doc) => doc.data() as Stable);
+        const stables = snap.docs.map((doc) => migrateFighterRoster(doc.data() as Stable, BEHAVIOR_VERSION));
         this.listActiveCache = { stables, loadedAt: Date.now() };
         return stables;
       })().finally(() => {
@@ -237,7 +242,7 @@ export class FirestoreStableStore implements StableStore {
       for (const [uid, ref] of refs) {
         const snap = await tx.get(ref);
         if (!snap.exists) return;
-        loaded.set(uid, snap.data() as Stable);
+        loaded.set(uid, migrateFighterRoster(snap.data() as Stable, BEHAVIOR_VERSION));
       }
 
       const a = loaded.get(res.aUserId);
@@ -326,7 +331,7 @@ export class FirestoreStableStore implements StableStore {
     const alpha = 1 - CONFIG.eloDecayPerWeek;
 
     for (const doc of snap.docs) {
-      const st = doc.data() as Stable;
+      const st = migrateFighterRoster(doc.data() as Stable, BEHAVIOR_VERSION);
       for (const s of activeRosterSlots(st.slots)) {
         s.elo = Math.round(s.elo * alpha + CONFIG.eloAnchor * CONFIG.eloDecayPerWeek);
         count++;
@@ -355,17 +360,10 @@ export class FirestoreStableStore implements StableStore {
       const snap = await ref.get();
       let st: Stable;
       if (snap.exists) {
-        st = snap.data() as Stable;
-        const slot = st.slots[0];
-        if (slot) {
-          slot.config = cfg;
-          slot.name = name;
-          slot.rateLockedUntil = 0;
-          slot.peakElo = Math.max(slotUnlockElo(slot), slot.elo);
-          slot.cosmetics = normalizeSlotCosmetics(slot.cosmetics, 0, seededCosmetics);
-        }
-        st.handle = `sys_${name}`;
-        st.updatedAt = now;
+        // Existing saves are upgraded by shared brain routing/read projection.
+        // The explicit backfill uses transactions; startup must never overwrite
+        // a concurrent match's counters with an old whole-slot snapshot.
+        continue;
       } else {
         st = {
           userId: uid,
@@ -433,6 +431,7 @@ export class FirestoreStableStore implements StableStore {
   }
 
   private writeStable(writer: { set: (ref: DocumentReference, data: DocumentData) => unknown }, st: Stable): void {
+    st = migrateFighterRoster(st, BEHAVIOR_VERSION);
     normalizeStableSlotCosmetics(st);
     const activeSlots = activeRosterSlots(st.slots);
     writer.set(this.stableRef(st.userId), stripUndefined(st));

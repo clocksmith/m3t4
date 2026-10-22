@@ -4,7 +4,9 @@
 // or played recently are eligible for matchmaking.
 
 import type { Firestore } from "firebase-admin/firestore";
-import { STRATEGIES, STRATEGY_NAMES, type BrainConfig } from "@m3t4/sim";
+import { BEHAVIOR_VERSION, STRATEGIES, STRATEGY_NAMES, type BrainConfig } from "@m3t4/sim";
+import { generateFighterName, fighterNameSeed } from "../../client/lib/fighter-names.mjs";
+import { migrateFighterRoster } from "../../client/lib/fighter-roster.mjs";
 import type { StableSummary } from "@m3t4/match-engine";
 import { COLLECTIONS } from "./firestore.js";
 
@@ -35,7 +37,7 @@ export async function loadActiveStables(
 
   const out: StableSummary[] = [];
   for (const doc of snap.docs) {
-    const data = doc.data() as StableDoc;
+    const data = migrateFighterRoster(doc.data() as StableDoc, BEHAVIOR_VERSION);
     const slots = Array.isArray(data.slots) ? data.slots : [];
     if (slots.length === 0) continue;
     // Pick a random slot per stable for matchmaking (mirrors legacy
@@ -79,7 +81,7 @@ function systemFallbackStables(): StableSummary[] {
     handle: name,
     slotIdx: 0,
     slotId: `system:${name}-0`,
-    slotName: name,
+    slotName: generateFighterName(fighterNameSeed(`system:${name}`, `system:${name}-0`)),
     config: STRATEGIES[name as keyof typeof STRATEGIES],
     elo: 1500,
     isHuman: false,

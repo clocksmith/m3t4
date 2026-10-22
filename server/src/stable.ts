@@ -7,7 +7,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { compileBrain, STRATEGIES, type BrainConfig, type Character, type ReplayArtifactV1 } from "@m3t4/sim";
+import { BEHAVIOR_VERSION, compileBrain, STRATEGIES, type BrainConfig, type Character, type ReplayArtifactV1 } from "@m3t4/sim";
+import { FIGHTER_NAME_VERSION, generateFighterName } from "../../client/lib/fighter-names.mjs";
+import { migrateFighterRoster } from "../../client/lib/fighter-roster.mjs";
 import { CONFIG } from "./config.js";
 import rosterCatalog from "./generated/roster-catalog.js";
 import { publicReplayArtifactFromReplay, type PublicReplayArtifactV1 } from "./public-artifacts.js";
@@ -29,40 +31,7 @@ export const ROSTER_WEAPON_IDS_BY_BODY = Object.fromEntries(
   ]),
 ) as unknown as Record<RosterBodyId, readonly RosterWeaponId[]>;
 
-const ROSTER_DEFAULT_NAMES = [
-  "wingus",
-  "dingus",
-  "hambone",
-  "zapper",
-  "bonk",
-  "dialup",
-  "floppy",
-  "shareware",
-  "lanparty",
-  "hotseat",
-  "modem",
-  "megabyte",
-  "joystick",
-  "gamepad",
-  "turbo",
-  "pog",
-  "slammer",
-  "radmax",
-  "dozer",
-  "widget",
-  "sprocket",
-  "kludge",
-  "glitch",
-  "zipdrive",
-  "winamp",
-  "geocities",
-  "tripod",
-  "angelfire",
-  "boombox",
-  "vhs",
-  "jolt",
-  "neon",
-] as const;
+
 
 export interface SlotCosmetics {
   body: RosterBodyId;
@@ -81,7 +50,10 @@ const ROSTER_BODY_CHARACTERS: Record<RosterBodyId, Omit<Character, "body" | "wea
 export interface Slot {
   slotId: string;
   config: BrainConfig;        // PRIVATE — never served to clients
-  name: string;               // user-given nickname, public
+  name: string;               // editable display name, public
+  fighterNameVersion?: number;
+  previousNames?: string[];
+  aiBehaviorVersion?: number;
   cosmetics?: SlotCosmetics;
   submittedAt: number;
   rateLockedUntil: number;
@@ -112,6 +84,8 @@ export interface StablePublic {
 }
 
 export interface SlotPublic {
+  fighterNameVersion?: number;
+  aiBehaviorVersion?: number;
   slotIdx: number;
   slotId: string;
   name: string;
@@ -216,6 +190,7 @@ export function normalizeStableSlotCosmetics(st: Stable): void {
 }
 
 export function stablePublic(st: Stable): StablePublic {
+  st = migrateFighterRoster(st, BEHAVIOR_VERSION);
   const entries = activeRosterSlotEntries(st.slots);
   const slots = entries.map((entry) => entry.slot);
   const wins = slots.reduce((s, x) => s + x.wins, 0);
@@ -230,6 +205,8 @@ export function stablePublic(st: Stable): StablePublic {
       slotIdx,
       slotId: s.slotId,
       name: s.name,
+      fighterNameVersion: s.fighterNameVersion,
+      aiBehaviorVersion: s.aiBehaviorVersion,
       cosmetics: slotCosmetics(s, slotIdx),
       elo: s.elo,
       wins: s.wins,
@@ -260,7 +237,7 @@ function normalizeSlotNameInput(input: unknown): string | null {
 }
 
 function randomRosterName(): string {
-  return ROSTER_DEFAULT_NAMES[crypto.randomInt(ROSTER_DEFAULT_NAMES.length)];
+  return generateFighterName(crypto.randomBytes(16).toString("hex"));
 }
 
 export function nextSlotName(input: unknown, existing: string | undefined): string {
@@ -362,35 +339,28 @@ export class FileStableStore implements StableStore {
       this.data = { stables: {}, handles: {}, replays: {}, publicReplayArtifacts: {}, version: 1 };
     }
     if (!this.readOnly) {
+      this.migrateExistingFighters();
       this.seedSystemPhantoms();
+      for (const [id, stable] of Object.entries(this.data.stables)) {
+        this.data.stables[id] = migrateFighterRoster(stable, BEHAVIOR_VERSION);
+      }
       this.flush();
     }
   }
 
   // Seed each of the 16 named strategies as its own virtual stable, so
   // each phantom is an independent participant in the matchmaking pool.
-  // Idempotent: preserves ELO/W-L on existing phantoms, refreshes strategy
-  // configs after rebalance patches, and adds any newly-added strategies.
+  // Idempotent: preserves existing configs, names and ELO/W-L. Shared brain
+  // upgrades apply to every config without rewriting a saved fighter.
   private seedSystemPhantoms(): void {
     let cosmeticIdx = 0;
     for (const [name, cfg] of Object.entries(STRATEGIES)) {
       const seededCosmetics = defaultSlotCosmetics(cosmeticIdx++);
       const uid = `system:${name}`;
       const existing = this.data.stables[uid];
-      if (existing) {
-        const slot = existing.slots[0];
-        if (slot) {
-          slot.config = cfg;
-          slot.name = name;
-          slot.rateLockedUntil = 0;
-          slot.peakElo = Math.max(slotUnlockElo(slot), slot.elo);
-          slot.cosmetics = normalizeSlotCosmetics(slot.cosmetics, 0, seededCosmetics);
-        }
-        existing.handle = `sys_${name}`;
-        existing.updatedAt = Date.now();
-        this.data.handles[`sys_${name}`] = uid;
-        continue;
-      }
+      // Existing fighter identity, build, cosmetics, locks and statistics are
+      // save data. A shared engine upgrade does not reset any of them.
+      if (existing) continue;
       const now = Date.now();
       this.data.stables[uid] = {
         userId: uid,
@@ -418,9 +388,30 @@ export class FileStableStore implements StableStore {
     }
   }
 
+  private migrateExistingFighters(): void {
+    let changed = false;
+    const stables = Object.fromEntries(Object.entries(this.data.stables).map(([id, stable]) => {
+      const next = migrateFighterRoster(stable, BEHAVIOR_VERSION);
+      changed ||= next !== stable;
+      return [id, next];
+    }));
+    if (!changed) return;
+    // Keep the entire pre-migration file, including original aliases and replays.
+    const bytes = fs.readFileSync(this.path);
+    const digest = crypto.createHash("sha256").update(bytes).digest("hex").slice(0, 16);
+    const backup = `${this.path}.before-fighter-migration-${digest}.json`;
+    if (!fs.existsSync(backup)) fs.writeFileSync(backup, bytes, { flag: "wx", mode: 0o600 });
+    else if (!fs.readFileSync(backup).equals(bytes)) throw new Error("fighter migration backup mismatch");
+    this.data.stables = stables;
+  }
+
   private flush(): void {
     if (this.readOnly) return;
-    fs.writeFileSync(this.path, JSON.stringify(this.data, null, 2));
+    const pending = `${this.path}.pending-${process.pid}`;
+    fs.writeFileSync(pending, JSON.stringify(this.data, null, 2), {
+      mode: fs.existsSync(this.path) ? fs.statSync(this.path).mode & 0o777 : 0o600,
+    });
+    fs.renameSync(pending, this.path);
   }
 
   async getStable(userId: string): Promise<Stable | null> {
@@ -493,7 +484,10 @@ export class FileStableStore implements StableStore {
     assertUniqueBodyInStable(st, slotIdx, slotCos);
     const slotId = existing?.slotId ?? crypto.randomBytes(8).toString("hex");
     const slot: Slot = {
+      ...existing,
       slotId,
+      fighterNameVersion: FIGHTER_NAME_VERSION,
+      aiBehaviorVersion: BEHAVIOR_VERSION,
       config,
       name: nextSlotName(name, existing?.name),
       cosmetics: slotCos,

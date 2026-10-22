@@ -12,6 +12,7 @@ RUN npm ci --workspaces --include-workspace-root
 
 COPY sim sim
 COPY server server
+COPY client/lib/fighter-names.* client/lib/fighter-roster.* client/lib/
 COPY pareto pareto
 COPY plasma-lab plasma-lab
 

@@ -5,7 +5,9 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
-import { compileBrain, type BrainConfig } from "@m3t4/sim";
+import { BEHAVIOR_VERSION, compileBrain, type BrainConfig } from "@m3t4/sim";
+import { FIGHTER_NAME_VERSION, generateFighterName, fighterNameSeed } from "../../client/lib/fighter-names.mjs";
+import { migrateFighterRoster } from "../../client/lib/fighter-roster.mjs";
 import { db, COLLECTIONS } from "./firestore.js";
 import {
   HANDLE_PATTERN,
@@ -71,7 +73,7 @@ export const submitStable = onCall(
       throw new HttpsError("invalid-argument", "handle reserved for system candidates");
     }
 
-    const slotName = (data.name ?? `slot-${slotIdx}`).slice(0, 32);
+    const requestedName = typeof data.name === "string" ? data.name.trim().slice(0, 32) : "";
     const now = Date.now();
 
     const firestore = db();
@@ -81,7 +83,7 @@ export const submitStable = onCall(
 
     const result = await firestore.runTransaction(async (tx) => {
       const stableSnap = await tx.get(stableRef);
-      const existing = stableSnap.exists ? (stableSnap.data() as StableDoc) : null;
+      const existing = stableSnap.exists ? migrateFighterRoster(stableSnap.data() as StableDoc, BEHAVIOR_VERSION) : null;
 
       // Rate limit: reject submissions faster than SUBMIT_RATE_MS for the
       // same slot index.
@@ -119,9 +121,12 @@ export const submitStable = onCall(
       const prev = slots[slotIdx];
       const eventType = prev?.slotId ? "revised" : "submitted";
       const slot: StableSlotDoc = {
+        ...prev,
+        fighterNameVersion: FIGHTER_NAME_VERSION,
+        aiBehaviorVersion: BEHAVIOR_VERSION,
         slotIdx,
         slotId: prev?.slotId ?? `${auth.uid}-${slotIdx}`,
-        name: slotName,
+        name: requestedName || prev?.name || generateFighterName(fighterNameSeed(auth.uid, `${auth.uid}-${slotIdx}`)),
         config: data.config,
         elo: prev?.elo ?? 1500,
         peakElo: Math.max(prev?.peakElo ?? prev?.elo ?? 1500, prev?.elo ?? 1500),

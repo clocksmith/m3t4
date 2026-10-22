@@ -96,7 +96,7 @@ async function inspectSprites(page) {
     const nativeDraw = ctx.drawImage.bind(ctx);
     let draws = [];
     ctx.drawImage = (img, ...args) => {
-      if (img.src?.endsWith("/sprite.png")) draws.push({ src: img.src, row: args[1] / 64, width: args[2], height: args[3], facing: Math.sign(ctx.getTransform().a), upright: ctx.getTransform().d > 0, smoothing: ctx.imageSmoothingEnabled });
+      if (img.src?.endsWith("/sprite.png")) draws.push({ src: img.src, row: Math.floor(args[1] / 64), sourceX: args[0], sourceY: args[1], width: args[2], height: args[3], drawWidth: args[6], drawHeight: args[7], facing: Math.sign(ctx.getTransform().a), upright: ctx.getTransform().d > 0, smoothing: ctx.imageSmoothingEnabled });
       nativeDraw(img, ...args);
     };
     const fighter = { x: 450, y: 420, vx: 0, vy: 0, onGround: true, wall: 0, facing: 1, stun: 0, swipeT: 0, diveT: 0, lastClashTick: -9999, dead: false };
@@ -217,7 +217,7 @@ try {
       assert.equal(row.draws.length, 2, `${row.body} ${row.pose}: both sprites loaded`);
       assert.deepEqual(row.draws.map(d => d.row), [row.expectedRow, row.expectedRow]);
       assert.deepEqual(row.draws.map(d => d.facing), row.expectedFacing);
-      assert.ok(row.draws.every(d => d.upright && !d.smoothing && d.width === 64 && d.height === 64));
+      assert.ok(row.draws.every(d => d.upright && !d.smoothing && d.width === 62 && d.height === 62 && d.width === d.drawWidth && d.height === d.drawHeight && d.sourceX % 64 === 1 && d.sourceY % 64 === 1));
     }
     assert.deepEqual(errors, [], "browser page errors");
     assert.deepEqual(badAssets, [], "missing local assets");

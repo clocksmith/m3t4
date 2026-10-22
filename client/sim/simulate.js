@@ -8,6 +8,7 @@ import { compileBrain, evaluateParams } from "./dsl.js";
 import { makeRng } from "./rng.js";
 import { PARAM_KEYS } from "./types.js";
 import { emptyFighterTelemetry } from "./types.js";
+import { swordSeg, swordHits } from "./combat-geometry.js";
 // ---------- Characters (visual only; stats identical) ----------
 export const DEFAULT_CHARS = [
     { name: "Sama", label: "OpenAL", col: "#6ee7b7", trim: "#d1fae5", shadow: "#047857" },
@@ -135,12 +136,6 @@ export function applyHallucinationNoise(params, tick, fighterId, noiseSeed) {
     }
     return out;
 }
-function lerp(a, b, t) {
-    return a + (b - a) * t;
-}
-function ease3(t) {
-    return 1 - (1 - t) * (1 - t) * (1 - t);
-}
 function toward(v, t, d) {
     return v < t ? Math.min(v + d, t) : Math.max(v - d, t);
 }
@@ -151,41 +146,6 @@ function segIntersect(ax, ay, bx, by, cx, cy, dx, dy) {
     const d3 = det(cx, cy, dx, dy, ax, ay);
     const d4 = det(cx, cy, dx, dy, bx, by);
     return d1 > 0 !== d2 > 0 && d3 > 0 !== d4 > 0;
-}
-function ptSegDist(px, py, ax, ay, bx, by) {
-    const dx = bx - ax;
-    const dy = by - ay;
-    const len2 = dx * dx + dy * dy || 1;
-    const t = clamp(((px - ax) * dx + (py - ay) * dy) / len2, 0, 1);
-    return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
-}
-function swordSeg(f) {
-    const bx = f.x + f.facing * STATS.bodyW * 0.35;
-    const by = f.y - STATS.bodyH * 0.3;
-    let angle = 0;
-    if (f.diveT > 0)
-        angle = Math.PI * 0.46;
-    else if (f.swipeT > 0) {
-        const t = 1 - f.swipeT / STATS.swipeTime;
-        // Upward anti-air slash (Foiled!-faithful): flick up from the passive
-        // horizontal-forward pose to ~57° above horizontal. 57° sweep is brisk
-        // and defensive, tip reaches ~28px above head to catch divers.
-        angle = lerp(0.0, -1.0, ease3(t));
-    }
-    const dx = Math.cos(angle) * f.facing;
-    const dy = Math.sin(angle);
-    return {
-        bx,
-        by,
-        tx: bx + dx * STATS.sword,
-        ty: by + dy * STATS.sword,
-    };
-}
-function swordHits(s, t) {
-    const cx = t.x;
-    const cy = t.y - STATS.bodyH * 0.28;
-    const r = STATS.bodyW * 0.65;
-    return ptSegDist(cx, cy, s.bx, s.by, s.tx, s.ty) <= r;
 }
 // ---------- Observation ----------
 function makeObs(self, opp, w) {
@@ -1061,6 +1021,8 @@ function fighterToFrame(f) {
         swipeT: f.swipeT,
         diveT: f.diveT,
         lastClashTick: f.lastClashTick,
+        lastAttackStartTick: f.lastAttackStartTick,
+        respawnT: f.respawnT,
         dead: f.dead,
     };
 }

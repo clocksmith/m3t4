@@ -44,6 +44,8 @@ export interface TraceFighterFrame {
     swipeT: number;
     diveT: number;
     lastClashTick: number;
+    lastAttackStartTick?: number;
+    respawnT?: number;
     dead: boolean;
 }
 export interface TraceFrame {

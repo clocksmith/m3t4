@@ -1,5 +1,5 @@
 import { type CompiledBrain } from "./dsl.js";
-import type { Action, BrainConfig, Character, MatchResult, Observation, Params, Stage, World } from "./types.js";
+import type { Action, BrainConfig, Character, MatchResult, Observation, Params, Stage, World, RulesVersion } from "./types.js";
 export declare const DEFAULT_CHARS: [Character, Character];
 export declare function applyMicroAttributeDrift(params: Params, tick: number, fighterId: 0 | 1, noiseSeed: number): Params;
 export declare function applyHallucinationNoise(params: Params, tick: number, fighterId: 0 | 1, noiseSeed: number): Params;
@@ -7,6 +7,7 @@ export declare function settleWorldWinner(w: World): void;
 declare function packAction(a: Action): number;
 declare function unpackAction(byte: number): Action;
 export interface SimulateOptions {
+    rulesVersion?: RulesVersion;
     stage: Stage;
     brainA: BrainConfig;
     brainB: BrainConfig;
@@ -18,6 +19,7 @@ export interface SimulateOptions {
 export declare function simulate(opts: SimulateOptions): MatchResult;
 export { unpackAction, packAction };
 export declare function createStepperWorld(opts: {
+    rulesVersion?: RulesVersion;
     stage: Stage;
     seed: number;
     chars?: [Character, Character];
@@ -66,6 +68,8 @@ export interface TraceFrame {
         y: number;
         label: string;
         timer: number;
+        holdTicks?: number;
+        holdRequiredTicks?: number;
     };
     scoreboard: [number, number];
     rounds: [number, number];

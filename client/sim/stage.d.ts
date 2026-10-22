@@ -1,4 +1,4 @@
-import type { Stage } from "./types.js";
+import type { RulesVersion, Stage } from "./types.js";
 export declare const STAGE_DATACENTER: Stage;
 export declare const STAGE_BOARDROOM: Stage;
 export declare const STAGE_DEMODAY: Stage;
@@ -8,3 +8,4 @@ export declare const STAGES: {
     readonly demoday: Stage;
 };
 export type StageId = keyof typeof STAGES;
+export declare function stageForRules(stageId: string, rulesVersion: RulesVersion): Stage | undefined;

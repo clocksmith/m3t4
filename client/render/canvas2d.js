@@ -1,3 +1,4 @@
+import { drawGoalHoldRing } from "./goal-progress.js";
 import { imageState, loadImage } from "./image-assets.js";
 import { swordSeg, fighterHurtbox } from "../sim/combat-geometry.js";
 import { DOUBLE_KO_RESPAWN_S } from "../sim/constants.js";
@@ -256,7 +257,7 @@ export function drawFrame(ctx, stage, frame, labels) {
   ctx.fillStyle = cssColor("--arena-bg");
   ctx.fillRect(0, 0, W, H);
   drawStage(ctx, stage, frame);
-  drawGoal(ctx, frame.goal);
+  drawGoal(ctx, frame);
   drawToken(ctx, frame.token);
   drawFighter(ctx, frame.p0, p1.body, p1.trim, p1.shadow, 0, frame);
   drawFighter(ctx, frame.p1, p2.body, p2.trim, p2.shadow, 1, frame);
@@ -425,13 +426,14 @@ function goalRingColor(fracRemaining) {
   return [r, g, b];
 }
 
-function drawGoal(ctx, goal) {
+function drawGoal(ctx, frame) {
+  const goal = frame.goal;
   if (!goal.exists) return;
   const timer = Math.max(0, Number(goal.timer ?? GOAL_TIMER_START));
   const frac = Math.min(1, timer / GOAL_TIMER_START);
   const [r, g, b] = goalRingColor(frac);
   const urgent = frac < GOAL_URGENT_FRAC;
-  const pulse = 1 + Math.sin(Date.now() * (urgent ? 0.032 : 0.008)) * (urgent ? 0.34 : 0.06);
+  const pulse = 1 + Math.sin((frame.tick / SIM_HZ * 1000) * (urgent ? 0.032 : 0.008)) * (urgent ? 0.34 : 0.06);
 
   ctx.save();
   ctx.translate(goal.x, goal.y);
@@ -475,6 +477,8 @@ function drawGoal(ctx, goal) {
   ctx.beginPath();
   ctx.arc(0, 0, 16 * pulse, 0, Math.PI * 2);
   ctx.stroke();
+
+  drawGoalHoldRing(ctx, frame);
 
   // Label above, tracking color so urgency reads even without the arc.
   ctx.fillStyle = `rgba(${r},${g},${b},0.92)`;

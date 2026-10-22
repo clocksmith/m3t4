@@ -1,4 +1,5 @@
-import type { Stage } from "./types.js";
+import type { RulesVersion, Stage } from "./types.js";
+import { STAGES as ARCHIVED_V23_STAGES } from "./legacy-stage-v23.js";
 
 // Three launch stages. Platforms follow the SELF lab default, then
 // intentionally divergent alternates to force meta diversity.
@@ -77,3 +78,12 @@ export const STAGES = {
 } as const;
 
 export type StageId = keyof typeof STAGES;
+
+// v24 added two solid vertical obstacles to each launch stage. Older match
+// documents store only stageId, so resolving them against today's platform list
+// corrupts their action logs. Full replay artifacts already carry their stage.
+
+export function stageForRules(stageId: string, rulesVersion: RulesVersion): Stage | undefined {
+  const stages = rulesVersion === 0 ? ARCHIVED_V23_STAGES : STAGES;
+  return Object.hasOwn(stages, stageId) ? stages[stageId as StageId] : undefined;
+}

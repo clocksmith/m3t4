@@ -470,7 +470,9 @@ async function consumeMatchDoc(matchDoc, { replayFailureTitle = "BROADCAST REJEC
   });
   let frames;
   try {
-    frames = (await matchFeed()).framesFromActionLog(matchDoc);
+    const feed = await matchFeed();
+    frames = feed.framesFromActionLog(matchDoc);
+    renderState.stage = feed.stageForMatchDoc(matchDoc);
   } catch (e) {
     setSignalFailure(
       replayFailureTitle,
@@ -575,7 +577,7 @@ async function connectFirebaseFeed() {
   setStat("stat-ws", "live");
   statusCb("firebase live");
   try {
-    const { framesFromActionLog, subscribeLatestMatch } = await matchFeed();
+    const { framesFromActionLog, stageForMatchDoc, subscribeLatestMatch } = await matchFeed();
     firebaseFeedStop = subscribeLatestMatch((matchDoc) => {
       if (!running) return;
       if (!matchDoc || matchDoc.matchId === firebaseFeedSeenMatchId) return;
@@ -597,6 +599,7 @@ async function connectFirebaseFeed() {
       let frames;
       try {
         frames = framesFromActionLog(matchDoc);
+        renderState.stage = stageForMatchDoc(matchDoc);
       } catch (e) {
         setSignalFailure(
           "BROADCAST REJECTED",
@@ -656,7 +659,7 @@ async function connectStaticFeed() {
   setStat("stat-ws", "archive");
   statusCb("static feed");
   try {
-    const { framesFromActionLog, subscribeStaticMatch } = await matchFeed();
+    const { framesFromActionLog, stageForMatchDoc, subscribeStaticMatch } = await matchFeed();
     firebaseFeedStop = subscribeStaticMatch((matchDoc) => {
       if (!running) return;
       if (!matchDoc || matchDoc.matchId === firebaseFeedSeenMatchId) return;
@@ -675,6 +678,7 @@ async function connectStaticFeed() {
       let frames;
       try {
         frames = framesFromActionLog(matchDoc);
+        renderState.stage = stageForMatchDoc(matchDoc);
       } catch (e) {
         setSignalFailure(
           "BROADCAST REJECTED",

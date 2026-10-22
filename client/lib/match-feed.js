@@ -19,6 +19,10 @@
 import {
   framesFromActionLog as simFramesFromActionLog,
   simulateTrace,
+  replayRulesVersion,
+  BEHAVIOR_VERSION,
+  RULES_VERSION,
+  stageForRules,
   STAGES,
   DEFAULT_CHARS,
 } from "../sim/index.js";
@@ -86,29 +90,25 @@ function base64ToBytes(b64) {
   return out;
 }
 
-// Re-derive frames for a match doc by running the sim locally. The match
-// doc carries (stage, seed, chars, configs are NOT included — but we
-// don't need them: simulateTrace can re-run from inputs since the actionLog
-// is deterministic given the same brain configs which the server used to
-// produce the result).
-//
-// For now we re-run simulateTrace using DEFAULT_CHARS and the stable
-// sim-constants hash from the doc; if `simConstantsHash` doesn't match
-// the local sim we render a placeholder rather than re-simulating with
-// stale logic.
+// Optional regeneration from known current-brain configs. Archived matches must
+// use their sealed action logs below, not the current executable brain.
 export function reconstructFrames(matchDoc, brainsByUserId) {
   const stage = STAGES[matchDoc.stageId];
   if (!stage) throw new Error(`unknown stage: ${matchDoc.stageId}`);
   const brainA = brainsByUserId?.[matchDoc.a.userId];
   const brainB = brainsByUserId?.[matchDoc.b.userId];
   if (!brainA || !brainB) {
-    // Without brain configs we can verify-from-actionLog instead. That
-    // path needs a separate helper exported from @m3t4/sim that yields
-    // frames per step. For now, use placeholder frames.
+    // Public match docs intentionally omit configs; use framesFromActionLog.
     return null;
   }
+  // A brain is executable code, not a replay. Never rerun an old brain version
+  // through current decisions; the sealed action-log route below is authoritative.
+  if (matchDoc.sim?.behaviorVersion !== BEHAVIOR_VERSION) return null;
+  const rulesVersion = replayRulesVersion(matchDoc.sim ?? {});
+  if (rulesVersion !== RULES_VERSION) return null;
   const trace = simulateTrace({
     stage,
+    rulesVersion,
     brainA,
     brainB,
     seed: matchDoc.seed,
@@ -122,16 +122,35 @@ export function reconstructFrames(matchDoc, brainsByUserId) {
 // rendering. Use this when brain configs are not available client-side
 // (the standard spectator path — match docs intentionally exclude
 // configs to keep strategy private).
-export function framesFromActionLog(matchDoc) {
-  const stage = STAGES[matchDoc.stageId];
+export function stageForMatchDoc(matchDoc) {
+  const rulesVersion = replayRulesVersion(matchDoc.sim ?? {});
+  const stage = stageForRules(matchDoc.stageId, rulesVersion);
   if (!stage) throw new Error(`unknown stage: ${matchDoc.stageId}`);
+  return stage;
+}
+
+export function framesFromActionLog(matchDoc) {
+  const rulesVersion = replayRulesVersion(matchDoc.sim ?? {});
+  const stage = stageForMatchDoc(matchDoc);
   const bytes = base64ToBytes(matchDoc.actionLog);
   const out = simFramesFromActionLog({
     stage,
+    rulesVersion,
     seed: matchDoc.seed,
     chars: matchDoc.chars ?? DEFAULT_CHARS,
     actionLog: bytes,
+    maxTicks: matchDoc.result?.ticks,
   });
+  if (!out.ok) throw new Error(out.reason ?? "action-log replay failed");
+  if (matchDoc.result) {
+    const expected = matchDoc.result;
+    const actual = out.result;
+    for (const key of ["winner", "ticks", "logHash", "finalScore", "finalRounds"]) {
+      if (JSON.stringify(actual[key]) !== JSON.stringify(expected[key])) {
+        throw new Error(`replay ${key} mismatch`);
+      }
+    }
+  }
   return out.frames;
 }
 

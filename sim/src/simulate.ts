@@ -10,7 +10,9 @@ import {
   COYOTE_TIME,
   FLOOR_Y,
   GOAL_DWELL_RADIUS,
-  GOAL_DWELL_S,
+  GOAL_DWELL_TICKS,
+  LEGACY_GOAL_DWELL_S,
+  RULES_VERSION,
   GOAL_TIMER_START,
   GRAVITY,
   HIT_FREEZE,
@@ -45,6 +47,7 @@ import type {
   Platform,
   Stage,
   World,
+  RulesVersion,
 } from "./types.js";
 import { emptyFighterTelemetry } from "./types.js";
 import { swordSeg, swordHits } from "./combat-geometry.js";
@@ -403,7 +406,8 @@ function tickFighter(f: Fighter, opp: Fighter, input: Action, w: World): void {
   }
 
   for (const plat of w.stage.platforms) {
-    if (!isVerticalWallPlatform(plat)) continue;
+    // v24 introduced collisions against stage-local vertical walls.
+    if (w.rulesVersion === 0 || !isVerticalWallPlatform(plat)) continue;
     const bodyTop = f.y - hh;
     const bodyBot = f.y + hh;
     const overlapsY = bodyBot > plat.y + 2 && bodyTop < plat.y + plat.h - 2;
@@ -652,6 +656,7 @@ function killPlayer(w: World, vid: 0 | 1, kid: 0 | 1): void {
   if (w.gold.carrier === vid) {
     w.gold.carrier = kid;
     w.gold.dwellT = 0; // steal resets the dwell accumulator
+    if (w.rulesVersion === 2) w.gold.dwellTicks = 0;
     if (w.goal) w.goal.timer = Math.min(GOAL_TIMER_START, w.goal.timer + 1.5);
   }
 }
@@ -707,13 +712,22 @@ function updateGold(w: World): void {
     const dy = c.y - STATS.bodyH * 0.5 - w.goal.y;
     const atGoal = Math.hypot(dx, dy) < GOAL_DWELL_RADIUS;
     if (atGoal) {
-      w.gold.dwellT += STEP;
-      if (w.gold.dwellT >= GOAL_DWELL_S) scorePoint(w, w.gold.carrier);
+      if (w.rulesVersion < 2) {
+        // Preserve archived v23/v24/v25 physics, including floating arithmetic.
+        w.gold.dwellT += STEP;
+        if (w.gold.dwellT >= LEGACY_GOAL_DWELL_S) scorePoint(w, w.gold.carrier);
+      } else {
+        w.gold.dwellTicks = (w.gold.dwellTicks ?? 0) + 1;
+        w.gold.dwellT = w.gold.dwellTicks * STEP;
+        if (w.gold.dwellTicks >= GOAL_DWELL_TICKS) scorePoint(w, w.gold.carrier);
+      }
     } else {
       w.gold.dwellT = 0;
+      if (w.rulesVersion === 2) w.gold.dwellTicks = 0;
     }
   } else {
     w.gold.dwellT = 0;
+    if (w.rulesVersion === 2) w.gold.dwellTicks = 0;
   }
 }
 
@@ -801,6 +815,7 @@ function unpackAction(byte: number): Action {
 // ---------- Public: simulate a whole match ----------
 
 export interface SimulateOptions {
+  rulesVersion?: RulesVersion;
   stage: Stage;
   brainA: BrainConfig;
   brainB: BrainConfig;
@@ -882,6 +897,7 @@ export function simulate(opts: SimulateOptions): MatchResult {
     ? [emptyFighterTelemetry(), emptyFighterTelemetry()]
     : undefined;
   const w: World = {
+    rulesVersion: opts.rulesVersion ?? RULES_VERSION,
     tick: 0,
     stage,
     fighters: makeRoundFighters(stage, chars, openingSpawnFlip),
@@ -1011,6 +1027,7 @@ export { unpackAction, packAction };
 //   }
 
 export function createStepperWorld(opts: {
+  rulesVersion?: RulesVersion;
   stage: Stage;
   seed: number;
   chars?: [Character, Character];
@@ -1020,6 +1037,7 @@ export function createStepperWorld(opts: {
   const openingSpawnFlip = rng() < 0.5;
   const tickOrderFlip = tickOrderFlipFromSeed(opts.seed);
   return {
+    rulesVersion: opts.rulesVersion ?? RULES_VERSION,
     tick: 0,
     stage: opts.stage,
     fighters: makeRoundFighters(opts.stage, chars, openingSpawnFlip),
@@ -1104,6 +1122,15 @@ export function stepWorld(w: World, actA: Action, actB: Action): StepResult {
   return { matchWinner: w.matchWinner, tick: w.tick };
 }
 
+function goalProgressFrame(w: World): { holdTicks?: number; holdRequiredTicks?: number } {
+  if (w.rulesVersion < 2) return {};
+  const carrier = w.gold ? w.fighters[w.gold.carrier] : null;
+  return {
+    holdTicks: w.goal && carrier && !carrier.dead ? w.gold?.dwellTicks ?? 0 : 0,
+    holdRequiredTicks: GOAL_DWELL_TICKS,
+  };
+}
+
 /** Pull the current world state into a TraceFrame (for renderers). */
 export function worldToFrame(w: World): TraceFrame {
   return {
@@ -1115,8 +1142,8 @@ export function worldToFrame(w: World): TraceFrame {
       ? { exists: true, x: w.gold.x, y: w.gold.y, carrier: w.gold.carrier, dwellT: w.gold.dwellT }
       : { exists: false, x: 0, y: 0, carrier: -1, dwellT: 0 },
     goal: w.goal
-      ? { exists: true, x: w.goal.x, y: w.goal.y, label: w.goal.label, timer: w.goal.timer }
-      : { exists: false, x: 0, y: 0, label: "", timer: 0 },
+      ? { exists: true, x: w.goal.x, y: w.goal.y, label: w.goal.label, timer: w.goal.timer, ...goalProgressFrame(w) }
+      : { exists: false, x: 0, y: 0, label: "", timer: 0, ...goalProgressFrame(w) },
     scoreboard: [w.fighters[0].score, w.fighters[1].score],
     rounds: [w.fighters[0].rounds, w.fighters[1].rounds],
   };
@@ -1170,7 +1197,7 @@ export interface TraceFrame {
   p0: TraceFighterFrame;
   p1: TraceFighterFrame;
   token: { exists: boolean; x: number; y: number; carrier: 0 | 1 | -1; dwellT: number };
-  goal: { exists: boolean; x: number; y: number; label: string; timer: number };
+  goal: { exists: boolean; x: number; y: number; label: string; timer: number; holdTicks?: number; holdRequiredTicks?: number };
   scoreboard: [number, number];
   rounds: [number, number];
 }
@@ -1190,6 +1217,7 @@ export function simulateTrace(opts: SimulateOptions): TraceResult {
   const noiseSeed = noiseSeedFromMatchSeed(opts.seed);
   const tickOrderFlip = tickOrderFlipFromSeed(opts.seed);
   const w: World = {
+    rulesVersion: opts.rulesVersion ?? RULES_VERSION,
     tick: 0,
     stage,
     fighters: makeRoundFighters(stage, chars, openingSpawnFlip),
@@ -1211,7 +1239,7 @@ export function simulateTrace(opts: SimulateOptions): TraceResult {
     p0: fighterToFrame(w.fighters[0]),
     p1: fighterToFrame(w.fighters[1]),
     token: w.gold ? { exists: true, x: w.gold.x, y: w.gold.y, carrier: w.gold.carrier, dwellT: w.gold.dwellT } : { exists: false, x: 0, y: 0, carrier: -1, dwellT: 0 },
-    goal: w.goal ? { exists: true, x: w.goal.x, y: w.goal.y, label: w.goal.label, timer: w.goal.timer } : { exists: false, x: 0, y: 0, label: "", timer: 0 },
+    goal: w.goal ? { exists: true, x: w.goal.x, y: w.goal.y, label: w.goal.label, timer: w.goal.timer, ...goalProgressFrame(w) } : { exists: false, x: 0, y: 0, label: "", timer: 0, ...goalProgressFrame(w) },
     scoreboard: [w.fighters[0].score, w.fighters[1].score],
     rounds: [w.fighters[0].rounds, w.fighters[1].rounds],
   });

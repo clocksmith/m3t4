@@ -174,6 +174,9 @@ export interface Goal {
   timer: number;
 }
 
+// 0: archived v23, 1: v24/v25 walls + short dwell, 2: one-second hold.
+export type RulesVersion = 0 | 1 | 2;
+
 export interface Gold {
   carrier: 0 | 1;
   x: number;
@@ -181,9 +184,11 @@ export interface Gold {
   vx: number;
   vy: number;
   dwellT: number; // seconds spent at the goal this attempt
+  dwellTicks?: number; // v2 authoritative consecutive active simulation ticks
 }
 
 export interface World {
+  rulesVersion: RulesVersion;
   tick: number;
   stage: Stage;
   fighters: [Fighter, Fighter];

@@ -8,9 +8,11 @@ import {
   BEHAVIOR_VERSION,
   DEFAULT_CHARS,
   REPLAY_CONSTANTS_HASH,
+  RULES_VERSION,
   STAGES,
   type BrainConfig,
   type ReplayResultV1,
+  type RulesVersion,
   simulateTrace,
 } from "@m3t4/sim";
 import { rankedSideSwap, type StableSummary } from "./pair-selection.js";
@@ -56,6 +58,7 @@ export interface MatchDocV1 {
   sim: {
     constantsHash: string;
     behaviorVersion: number;
+    rulesVersion?: RulesVersion;
   };
   // Set once the match is complete and ELO is committed. Writers should
   // set both atomically with the result doc.
@@ -134,6 +137,7 @@ export function runMatch(input: RunMatchInput): RunMatchOutput {
     sim: {
       constantsHash: REPLAY_CONSTANTS_HASH,
       behaviorVersion: BEHAVIOR_VERSION,
+      rulesVersion: RULES_VERSION,
     },
     eloAfter: elo,
     eloDelta: {

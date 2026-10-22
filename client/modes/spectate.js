@@ -181,11 +181,10 @@ function trimPlaybackToLiveWindow() {
   prevAudioFrame = null;
 }
 
-export function mount(root, { setStatus }) {
-  statusCb = setStatus;
-  root.innerHTML = `
-    <div class="page">
-      ${pageHeaderHtml({ title: "Watch", subtitle: useFirebaseFeed() ? "live arena · server-authoritative matches" : useStaticFeed() ? "match archive · recorded fights, not a live ranked feed" : "arena feed · server playback" })}
+export function watchPageHtml() {
+  return `
+    <div class="page watch-page">
+      ${pageHeaderHtml({ title: "Watch", subtitle: useFirebaseFeed() ? "Sit back. Live server matches play automatically." : useStaticFeed() ? "Sit back. Recorded fights play automatically from the match archive, not a live ranked feed." : "Sit back. Arena matches play automatically from the server feed." })}
       ${contextCardHtml({
         className: "live-briefing-card",
         body: `
@@ -196,28 +195,19 @@ export function mount(root, { setStatus }) {
         </div>`,
       })}
       <div class="spectate-grid">
-        <aside class="panel lb spectate-side">
-          <div class="leaderboard-head">
-            <h3>Stable leaderboard</h3>
-            <span id="leaderboard-count" class="leaderboard-count" aria-live="polite"></span>
-          </div>
-          <div id="leaderboard" class="leaderboard-scroll" role="region" aria-label="Stable leaderboard rankings" tabindex="0">loading…</div>
-          <button id="leaderboard-more" type="button" class="live-bots-more leaderboard-more" hidden>more</button>
-          <div class="live-bots-head">
-            <h3>Named bots</h3>
-            <button id="live-bots-more" type="button" class="live-bots-more">more</button>
-          </div>
-          <div id="live-bots-list" class="live-bots-list">loading…</div>
-        </aside>
+
         <div class="spectate-center">
           <div id="spectate-stage" class="spectate-stage" data-dash-state="1">
             <div id="spectate-stage-canvas-wrap" class="spectate-stage-canvas-wrap">
-              <canvas id="stage-canvas" width="${W}" height="${H}" tabindex="0"></canvas>
+              <canvas id="stage-canvas" aria-label="Automatically playing fighter match" width="${W}" height="${H}" tabindex="0"></canvas>
             </div>
             <div id="spectate-stage-dash-wrap" class="spectate-stage-dash-wrap" hidden></div>
           </div>
         </div>
-        <aside class="panel spectate-stats spectate-side">
+        <div class="watch-controls">${toggleSwitchHtml({ id: "spectate-audio", label: "Audio", title: "Play sound effects and stage music", checked: audioEnabledStored() })}</div>
+        <details class="panel spectate-stats spectate-side">
+          <summary>Match details</summary>
+          <div class="ui-disclosure-body">
           <div class="spectate-stats-head">
             <h3>${useStaticFeed() && !useFirebaseFeed() ? "Archive" : "Live"}</h3>
             <button id="spectate-dash-cycle" type="button" class="spectate-dash-cycle" title="Cycle: battle / compute / both">
@@ -235,9 +225,28 @@ export function mount(root, { setStatus }) {
             { label: "last result", id: "stat-result" },
             { label: "receipt", id: "stat-verify" },
           ])}
-          ${toggleSwitchHtml({ id: "spectate-audio", label: "Audio", title: "Play sound effects and stage music", checked: audioEnabledStored() })}
-        </aside>
+
+          </div>
+        </details>
+        <details class="panel lb spectate-side watch-rankings">
+          <summary>Rankings & fighters</summary>
+          <div class="ui-disclosure-body">
+          <div class="leaderboard-head">
+            <h3>Stable leaderboard</h3>
+            <span id="leaderboard-count" class="leaderboard-count" aria-live="polite"></span>
+          </div>
+          <div id="leaderboard" class="leaderboard-scroll" role="region" aria-label="Stable leaderboard rankings" tabindex="0">loading…</div>
+          <button id="leaderboard-more" type="button" class="live-bots-more leaderboard-more" hidden>more</button>
+          <div class="live-bots-head">
+            <h3>Named bots</h3>
+            <button id="live-bots-more" type="button" class="live-bots-more">more</button>
+          </div>
+          <div id="live-bots-list" class="live-bots-list">loading…</div>
+          </div>
+        </details>
       </div>
+      <details class="ui-disclosure watch-activity">
+        <summary>Match activity</summary>
       <div class="spectate-feed-grid">
         <div class="panel">
           <h3>Stream</h3>
@@ -248,7 +257,13 @@ export function mount(root, { setStatus }) {
           <div id="live-bot-events" class="live-bot-events">loading…</div>
         </div>
       </div>
+      </details>
     </div>`;
+}
+
+export function mount(root, { setStatus }) {
+  statusCb = setStatus;
+  root.innerHTML = watchPageHtml();
   canvas = root.querySelector("#stage-canvas");
   leaderboardEl = root.querySelector("#leaderboard");
   leaderboardCountEl = root.querySelector("#leaderboard-count");
@@ -1587,7 +1602,7 @@ function updateWaitStat() {
   if (!el) return;
   const secs = waitSecondsLeft();
   if (secs === null) {
-    el.textContent = "live";
+    el.textContent = "playing";
   } else if (waitState.nextMatch) {
     el.textContent = `${secs}s · ${nextMatchLabel(waitState.nextMatch)}`;
   } else {

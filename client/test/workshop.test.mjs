@@ -50,10 +50,11 @@ test("passive spectators do not load or enable Firebase compute without opt-in",
   }
 });
 
-test("Workshop shares navigation while preserving tune and roster URLs", () => {
+test("Tune shares navigation while preserving editor and saved fighter URLs", () => {
   for (const active of ["tune", "roster"]) {
     const html = workshopHeaderHtml({ active, subtitle: "<test>" });
-    assert.match(html, /Workshop/);
+    assert.ok(html.includes(active === "roster" ? ">Saved fighters</h1>" : ">Tune</h1>"));
+    assert.match(html, /aria-label="Fighter tuning"/);
     assert.ok(html.includes(`href="/${active}" aria-current="page"`));
     assert.equal((html.match(/aria-current=/g) ?? []).length, 1);
     assert.match(html, /&lt;test&gt;/);

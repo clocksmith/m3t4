@@ -450,3 +450,24 @@
 .ui-disclosure.knobs-advanced { grid-column: 1 / -1; border-top: 1px solid var(--ui-border); }
 #bottom { flex-wrap: wrap; gap: 12px; }
 #bottom a { padding-block: 8px; }
+
+/* Three clear intentions, with equal touch targets and a visible active mode. */
+@media (min-width: 641px) {
+  #topnav nav { gap: 8px; }
+  #topnav nav a[data-nav="primary"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 88px;
+    min-height: 44px;
+    padding: 8px 18px;
+    border: 1px solid var(--ui-border);
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  #topnav nav a[data-nav="primary"].active {
+    border-color: var(--ui-accent);
+    background: var(--ui-bg);
+  }
+}

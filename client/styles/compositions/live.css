@@ -576,3 +576,16 @@
   .spectate-grid .lb { grid-row: 3 / 4; }
   .spectate-side { position: static; max-height: none; }
 }
+
+/* Watch is arena-first. Rankings and telemetry stay available, not in the way. */
+.watch-page { max-width: 1280px; margin-inline: auto; }
+.watch-page .spectate-grid { grid-template-columns: minmax(0, 1fr); }
+.watch-page .spectate-center,
+.watch-page .spectate-stats,
+.watch-page .spectate-grid .lb,
+.watch-page .watch-controls { grid-column: 1 / -1; grid-row: auto; }
+.watch-page .spectate-side { position: static; max-height: none; }
+.watch-page .spectate-stage { max-width: min(1280px, max(320px, calc((100svh - 300px) * 16 / 9))); }
+.watch-page .watch-controls { display: flex; justify-content: center; }
+.watch-page details > summary { cursor: pointer; padding: 8px 0; font-weight: 700; }
+.watch-page .watch-activity { margin-top: 14px; }

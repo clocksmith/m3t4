@@ -40,9 +40,9 @@ export function disclosureHtml({ label, body, className = "", open = false }) {
 }
 
 export function workshopHeaderHtml({ active = "tune", subtitle = "", action = "" } = {}) {
-  return pageHeaderHtml({ title: "Workshop", subtitle, action }) + `
-    <nav class="ui-tabs" aria-label="Workshop">
-      ${[["tune", "Tune & test"], ["roster", "Saved fighters"]].map(([route, label]) =>
+  return pageHeaderHtml({ title: active === "roster" ? "Saved fighters" : "Tune", subtitle, action }) + `
+    <nav class="ui-tabs" aria-label="Fighter tuning">
+      ${[["tune", "Edit & test"], ["roster", "Saved fighters"]].map(([route, label]) =>
         `<a href="/${route}"${active === route ? ' aria-current="page"' : ""}>${label}</a>`).join("")}
     </nav>`;
 }

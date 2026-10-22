@@ -182,7 +182,33 @@ export interface BrainState {
     escapeEntriesThisRound: number;
     escapeTicksThisRound: number;
     zoneTicksThisRound: number;
+    tactics: TacticalMemory | null;
     lastTransitionReason: string;
+}
+export type RecoveryTactic = "route" | "flank" | "reset-spacing" | "drop";
+export interface TacticalMemory {
+    context: string;
+    bestDistance: number;
+    progressTick: number;
+    anchorX: number;
+    anchorY: number;
+    movedTick: number;
+    lastAttackTick: number;
+    lastKillTick: number;
+    attempts: number;
+    lastAction: Action;
+    failures: Array<{
+        tactic: RecoveryTactic;
+        tick: number;
+    }>;
+    plan: {
+        tactic: RecoveryTactic;
+        startedAt: number;
+        expiresAt: number;
+        startDistance: number;
+        bestDistance: number;
+        direction: -1 | 1;
+    } | null;
 }
 export type DeliveryTacticKind = "direct" | "kill-first" | "feint";
 export interface DeliveryPlan {

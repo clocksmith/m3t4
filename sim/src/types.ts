@@ -334,8 +334,36 @@ export interface BrainState {
   escapeTicksThisRound: number;
   zoneTicksThisRound: number;
 
+  // Cross-mode, observation-only progress memory. Bounded failed plans survive
+  // ordinary mode switches, not deaths, objective changes or round resets.
+  tactics: TacticalMemory | null;
+
   // Debug hook — reason for last mode transition. Not used in decisions.
   lastTransitionReason: string;
+}
+
+export type RecoveryTactic = "route" | "flank" | "reset-spacing" | "drop";
+
+export interface TacticalMemory {
+  context: string;
+  bestDistance: number;
+  progressTick: number;
+  anchorX: number;
+  anchorY: number;
+  movedTick: number;
+  lastAttackTick: number;
+  lastKillTick: number;
+  attempts: number;
+  lastAction: Action;
+  failures: Array<{ tactic: RecoveryTactic; tick: number }>;
+  plan: {
+    tactic: RecoveryTactic;
+    startedAt: number;
+    expiresAt: number;
+    startDistance: number;
+    bestDistance: number;
+    direction: -1 | 1;
+  } | null;
 }
 
 // One of a small set of hand-authored delivery tactics, chosen by

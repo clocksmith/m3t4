@@ -9,11 +9,11 @@
       "digest": "fdc413c2651549e19a102c96d55ca3e3f13369d57cfe5d13faaa55af1017daaf"
     },
     "doppler": {
-      "revision": "0428c15a1e072b42ec6090374aa6fa1734573bb6",
+      "revision": "d7c0f011c48c56b2e9d55f6c310887b08e881d56",
       "sourceDirty": false,
       "entry": "src/index.js",
-      "files": 1806,
-      "digest": "f7a52a181c59bcc379e62b0ab72f71aa5ebd1779f865865d09a975e044727cce"
+      "files": 1807,
+      "digest": "aefcde2dc13678d064027e15b62584f2c48830db921e4cf7843903e4ede3dfae"
     }
   }
 }

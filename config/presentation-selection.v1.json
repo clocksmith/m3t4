@@ -23,13 +23,17 @@
       "sama": "capacity_mystic",
       "darrius": "policy_undertaker",
       "demis": "quiet_solver",
-      "mark": "sunlit_operator"
+      "mark": "sunlit_operator",
+      "jensen": "silicon_sovereign",
+      "elon": "orbital_showman"
     },
     "characterGraphics": {
       "sama": "monastic_infra",
       "darrius": "legal_department_midnight",
       "demis": "chalk_and_static",
-      "mark": "wellness_berserker"
+      "mark": "wellness_berserker",
+      "jensen": "silicon_sovereign",
+      "elon": "orbital_showman"
     },
     "weaponFamilies": {
       "sama": {
@@ -55,6 +59,18 @@
         "rare": "controller_nunchucks",
         "epic": "shareholder_sauce_club",
         "legendary": "quest_flail"
+      },
+      "jensen": {
+        "common": "compute_bat",
+        "rare": "heatsink_hammer",
+        "epic": "silicon_cleaver",
+        "legendary": "rack_greatsword"
+      },
+      "elon": {
+        "common": "coil_bat",
+        "rare": "orbit_lance",
+        "epic": "satellite_axe",
+        "legendary": "angular_greatsword"
       }
     }
   }

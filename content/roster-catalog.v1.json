@@ -1,6 +1,6 @@
 {
   "unlockElo": [0, 1024, 1152, 1280],
-  "bodies": ["sama", "darrius", "demis", "mark"],
+  "bodies": ["sama", "darrius", "demis", "mark", "jensen", "elon"],
   "weapons": {
     "sama": [
       {
@@ -104,6 +104,122 @@
         "available": true,
         "minElo": 1280,
         "asset": { "url": "assets/weapons/mark/sheet.png", "frameW": 48, "frameH": 48, "cell": 3, "cols": 2, "gripX": 6, "gripY": 24 }
+      }
+    ],
+    "jensen": [
+      {
+        "id": "compute_bat",
+        "available": true,
+        "minElo": 0,
+        "asset": {
+          "url": "assets/weapons/jensen/sheet.png",
+          "frameW": 48,
+          "frameH": 48,
+          "cell": 0,
+          "cols": 2,
+          "gripX": 6,
+          "gripY": 24
+        }
+      },
+      {
+        "id": "heatsink_hammer",
+        "available": true,
+        "minElo": 1024,
+        "asset": {
+          "url": "assets/weapons/jensen/sheet.png",
+          "frameW": 48,
+          "frameH": 48,
+          "cell": 1,
+          "cols": 2,
+          "gripX": 6,
+          "gripY": 24
+        }
+      },
+      {
+        "id": "silicon_cleaver",
+        "available": true,
+        "minElo": 1152,
+        "asset": {
+          "url": "assets/weapons/jensen/sheet.png",
+          "frameW": 48,
+          "frameH": 48,
+          "cell": 2,
+          "cols": 2,
+          "gripX": 6,
+          "gripY": 24
+        }
+      },
+      {
+        "id": "rack_greatsword",
+        "available": true,
+        "minElo": 1280,
+        "asset": {
+          "url": "assets/weapons/jensen/sheet.png",
+          "frameW": 48,
+          "frameH": 48,
+          "cell": 3,
+          "cols": 2,
+          "gripX": 6,
+          "gripY": 25
+        }
+      }
+    ],
+    "elon": [
+      {
+        "id": "coil_bat",
+        "available": true,
+        "minElo": 0,
+        "asset": {
+          "url": "assets/weapons/elon/sheet.png",
+          "frameW": 48,
+          "frameH": 48,
+          "cell": 0,
+          "cols": 2,
+          "gripX": 6,
+          "gripY": 23
+        }
+      },
+      {
+        "id": "orbit_lance",
+        "available": true,
+        "minElo": 1024,
+        "asset": {
+          "url": "assets/weapons/elon/sheet.png",
+          "frameW": 48,
+          "frameH": 48,
+          "cell": 1,
+          "cols": 2,
+          "gripX": 6,
+          "gripY": 24
+        }
+      },
+      {
+        "id": "satellite_axe",
+        "available": true,
+        "minElo": 1152,
+        "asset": {
+          "url": "assets/weapons/elon/sheet.png",
+          "frameW": 48,
+          "frameH": 48,
+          "cell": 2,
+          "cols": 2,
+          "gripX": 6,
+          "gripY": 25
+        }
+      },
+      {
+        "id": "angular_greatsword",
+        "available": true,
+        "minElo": 1280,
+        "asset": {
+          "url": "assets/weapons/elon/sheet.png",
+          "frameW": 48,
+          "frameH": 48,
+          "cell": 3,
+          "cols": 2,
+          "gripX": 6,
+          "gripY": 23
+        }
       }
     ]
   }

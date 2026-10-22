@@ -45,6 +45,8 @@ const ROSTER_BODY_CHARACTERS: Record<RosterBodyId, Omit<Character, "body" | "wea
   darrius: { name: "Darrius", label: "Policy Undertaker", col: "#fb923c", trim: "#fed7aa", shadow: "#9a3412" },
   demis: { name: "Demis", label: "Quiet Solver", col: "#60a5fa", trim: "#dbeafe", shadow: "#1e3a8a" },
   mark: { name: "Mark", label: "Sunlit Operator", col: "#c084fc", trim: "#ede9fe", shadow: "#5b21b6" },
+  jensen: { name: "Jensen", label: "Silicon Sovereign", col: "#a3e635", trim: "#ecfccb", shadow: "#365314" },
+  elon: { name: "Elon", label: "Orbital Showman", col: "#22d3ee", trim: "#cffafe", shadow: "#155e75" },
 };
 
 export interface Slot {

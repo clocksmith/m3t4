@@ -1,0 +1,2302 @@
+{
+  "version": 1,
+  "tool": "builtin imagegen",
+  "purpose": "Non-graphic m3t4.com fictional parody roster sprites",
+  "rawCanvas": [
+    1254,
+    1254
+  ],
+  "requestedCanvas": [
+    768,
+    768
+  ],
+  "normalization": [
+    "Existing postprocess-generation nearest-neighbor export to256px packed sources,192px portrait atlases and96px weapon atlases.",
+    "Explicit reviewed per-pose crop rectangles and transparent packing into64px cells; max60px fit only when needed. No new painted content or missing-pose substitution.",
+    "Weapon soft-alpha export quantized at128 to0/255, then centered with transparent padding; per-cell opaque endpoints calibrated.",
+    "Runtime palette/alpha and frame bounds tested separately from generator prompt compliance."
+  ],
+  "bodies": {
+    "jensen": {
+      "sources": [
+        {
+          "role": "packs",
+          "index": 0,
+          "sourceSha256": "33cde49961ea9d3e529ec7a916963b64bb992b571beeee3b3c09ad9b860072b5"
+        },
+        {
+          "role": "packs",
+          "index": 1,
+          "sourceSha256": "ecd88889fceb026b1eeb56ab9034c24e9be73d8606872ab3db54ab55ca29d024"
+        },
+        {
+          "role": "packs",
+          "index": 2,
+          "sourceSha256": "aca00b237cb0d13fa96c166394c8ad9b145e1ac165ebb65941f195020241f10f"
+        },
+        {
+          "role": "portrait",
+          "index": 0,
+          "sourceSha256": "218ecb5fa7770729ebd8c97320d9174eb4426a7241242dd9338adc72b6983d80"
+        },
+        {
+          "role": "weapon",
+          "index": 0,
+          "sourceSha256": "2874cd5ff3c202d576b7c49a1ba702f5e689543c64886732f72c3056b236152e"
+        }
+      ],
+      "frames": [
+        {
+          "name": "idle",
+          "row": 0,
+          "col": 0,
+          "sourcePack": 0,
+          "sourceCell": 0,
+          "sourceRect": [
+            15,
+            12,
+            31,
+            55
+          ],
+          "destinationRect": [
+            16,
+            7,
+            31,
+            55
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "idle",
+          "row": 0,
+          "col": 1,
+          "sourcePack": 0,
+          "sourceCell": 1,
+          "sourceRect": [
+            79,
+            11,
+            31,
+            56
+          ],
+          "destinationRect": [
+            16,
+            6,
+            31,
+            56
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "idle",
+          "row": 0,
+          "col": 2,
+          "sourcePack": 0,
+          "sourceCell": 2,
+          "sourceRect": [
+            143,
+            11,
+            31,
+            56
+          ],
+          "destinationRect": [
+            16,
+            6,
+            31,
+            56
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "idle",
+          "row": 0,
+          "col": 3,
+          "sourcePack": 0,
+          "sourceCell": 3,
+          "sourceRect": [
+            207,
+            12,
+            31,
+            55
+          ],
+          "destinationRect": [
+            16,
+            7,
+            31,
+            55
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "run",
+          "row": 1,
+          "col": 0,
+          "sourcePack": 0,
+          "sourceCell": 4,
+          "sourceRect": [
+            11,
+            73,
+            45,
+            56
+          ],
+          "destinationRect": [
+            9,
+            6,
+            45,
+            56
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "run",
+          "row": 1,
+          "col": 1,
+          "sourcePack": 0,
+          "sourceCell": 5,
+          "sourceRect": [
+            74,
+            74,
+            45,
+            55
+          ],
+          "destinationRect": [
+            9,
+            7,
+            45,
+            55
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "run",
+          "row": 1,
+          "col": 2,
+          "sourcePack": 0,
+          "sourceCell": 6,
+          "sourceRect": [
+            137,
+            74,
+            47,
+            55
+          ],
+          "destinationRect": [
+            8,
+            7,
+            47,
+            55
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "run",
+          "row": 1,
+          "col": 3,
+          "sourcePack": 0,
+          "sourceCell": 7,
+          "sourceRect": [
+            199,
+            72,
+            48,
+            54
+          ],
+          "destinationRect": [
+            8,
+            8,
+            48,
+            54
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "run",
+          "row": 1,
+          "col": 4,
+          "sourcePack": 0,
+          "sourceCell": 8,
+          "sourceRect": [
+            12,
+            136,
+            40,
+            54
+          ],
+          "destinationRect": [
+            12,
+            8,
+            40,
+            54
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "run",
+          "row": 1,
+          "col": 5,
+          "sourcePack": 0,
+          "sourceCell": 9,
+          "sourceRect": [
+            74,
+            134,
+            44,
+            56
+          ],
+          "destinationRect": [
+            10,
+            6,
+            44,
+            56
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "jump",
+          "row": 2,
+          "col": 0,
+          "sourcePack": 0,
+          "sourceCell": 10,
+          "sourceRect": [
+            140,
+            143,
+            36,
+            47
+          ],
+          "destinationRect": [
+            14,
+            8,
+            36,
+            47
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "jump",
+          "row": 2,
+          "col": 1,
+          "sourcePack": 0,
+          "sourceCell": 11,
+          "sourceRect": [
+            202,
+            130,
+            45,
+            51
+          ],
+          "destinationRect": [
+            9,
+            6,
+            45,
+            51
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "fall",
+          "row": 3,
+          "col": 0,
+          "sourcePack": 0,
+          "sourceCell": 12,
+          "sourceRect": [
+            8,
+            197,
+            49,
+            50
+          ],
+          "destinationRect": [
+            7,
+            7,
+            49,
+            50
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "fall",
+          "row": 3,
+          "col": 1,
+          "sourcePack": 0,
+          "sourceCell": 13,
+          "sourceRect": [
+            69,
+            205,
+            51,
+            43
+          ],
+          "destinationRect": [
+            6,
+            10,
+            51,
+            43
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "wallSlide",
+          "row": 4,
+          "col": 0,
+          "sourcePack": 0,
+          "sourceCell": 14,
+          "sourceRect": [
+            143,
+            195,
+            39,
+            58
+          ],
+          "destinationRect": [
+            12,
+            3,
+            39,
+            58
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "wallSlide",
+          "row": 4,
+          "col": 1,
+          "sourcePack": 1,
+          "sourceCell": 1,
+          "sourceRect": [
+            73,
+            15,
+            47,
+            54
+          ],
+          "destinationRect": [
+            8,
+            5,
+            47,
+            54
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "dive",
+          "row": 5,
+          "col": 0,
+          "sourcePack": 1,
+          "sourceCell": 2,
+          "sourceRect": [
+            131,
+            17,
+            57,
+            46
+          ],
+          "destinationRect": [
+            3,
+            9,
+            57,
+            46
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "dive",
+          "row": 5,
+          "col": 1,
+          "sourcePack": 1,
+          "sourceCell": 3,
+          "sourceRect": [
+            196,
+            17,
+            55,
+            47
+          ],
+          "destinationRect": [
+            4,
+            8,
+            55,
+            47
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "swing",
+          "row": 6,
+          "col": 0,
+          "sourcePack": 1,
+          "sourceCell": 4,
+          "sourceRect": [
+            10,
+            75,
+            46,
+            55
+          ],
+          "destinationRect": [
+            9,
+            7,
+            46,
+            55
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "swing",
+          "row": 6,
+          "col": 1,
+          "sourcePack": 1,
+          "sourceCell": 5,
+          "sourceRect": [
+            72,
+            75,
+            46,
+            56
+          ],
+          "destinationRect": [
+            9,
+            6,
+            46,
+            56
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "swing",
+          "row": 6,
+          "col": 2,
+          "sourcePack": 1,
+          "sourceCell": 6,
+          "sourceRect": [
+            131,
+            78,
+            55,
+            53
+          ],
+          "destinationRect": [
+            4,
+            9,
+            55,
+            53
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "swing",
+          "row": 6,
+          "col": 3,
+          "sourcePack": 1,
+          "sourceCell": 7,
+          "sourceRect": [
+            195,
+            77,
+            56,
+            53
+          ],
+          "destinationRect": [
+            4,
+            9,
+            56,
+            53
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "swing",
+          "row": 6,
+          "col": 4,
+          "sourcePack": 1,
+          "sourceCell": 8,
+          "sourceRect": [
+            10,
+            136,
+            43,
+            56
+          ],
+          "destinationRect": [
+            10,
+            6,
+            43,
+            56
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "swing",
+          "row": 6,
+          "col": 5,
+          "sourcePack": 1,
+          "sourceCell": 9,
+          "sourceRect": [
+            73,
+            135,
+            44,
+            56
+          ],
+          "destinationRect": [
+            10,
+            6,
+            44,
+            56
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "hit",
+          "row": 7,
+          "col": 0,
+          "sourcePack": 1,
+          "sourceCell": 10,
+          "sourceRect": [
+            136,
+            134,
+            48,
+            57
+          ],
+          "destinationRect": [
+            8,
+            5,
+            48,
+            57
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "hit",
+          "row": 7,
+          "col": 1,
+          "sourcePack": 1,
+          "sourceCell": 11,
+          "sourceRect": [
+            195,
+            136,
+            56,
+            55
+          ],
+          "destinationRect": [
+            4,
+            7,
+            56,
+            55
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "hit",
+          "row": 7,
+          "col": 2,
+          "sourcePack": 1,
+          "sourceCell": 12,
+          "sourceRect": [
+            11,
+            200,
+            46,
+            49
+          ],
+          "destinationRect": [
+            9,
+            13,
+            46,
+            49
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "ko",
+          "row": 8,
+          "col": 0,
+          "sourcePack": 1,
+          "sourceCell": 13,
+          "sourceRect": [
+            69,
+            204,
+            52,
+            42
+          ],
+          "destinationRect": [
+            6,
+            20,
+            52,
+            42
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "ko",
+          "row": 8,
+          "col": 1,
+          "sourcePack": 1,
+          "sourceCell": 14,
+          "sourceRect": [
+            131,
+            210,
+            61,
+            39
+          ],
+          "destinationRect": [
+            2,
+            24,
+            60,
+            38
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.9836065573770492
+        },
+        {
+          "name": "ko",
+          "row": 8,
+          "col": 2,
+          "sourcePack": 2,
+          "sourceCell": 0,
+          "sourceRect": [
+            3,
+            29,
+            56,
+            40
+          ],
+          "destinationRect": [
+            4,
+            22,
+            56,
+            40
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "ko",
+          "row": 8,
+          "col": 3,
+          "sourcePack": 2,
+          "sourceCell": 1,
+          "sourceRect": [
+            66,
+            45,
+            66,
+            23
+          ],
+          "destinationRect": [
+            2,
+            41,
+            60,
+            21
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.9090909090909091
+        },
+        {
+          "name": "carry",
+          "row": 9,
+          "col": 0,
+          "sourcePack": 2,
+          "sourceCell": 2,
+          "sourceRect": [
+            144,
+            10,
+            37,
+            58
+          ],
+          "destinationRect": [
+            13,
+            4,
+            37,
+            58
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "carry",
+          "row": 9,
+          "col": 1,
+          "sourcePack": 2,
+          "sourceCell": 3,
+          "sourceRect": [
+            210,
+            9,
+            36,
+            59
+          ],
+          "destinationRect": [
+            14,
+            3,
+            36,
+            59
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "taunt",
+          "row": 10,
+          "col": 0,
+          "sourcePack": 2,
+          "sourceCell": 4,
+          "sourceRect": [
+            17,
+            74,
+            35,
+            59
+          ],
+          "destinationRect": [
+            14,
+            3,
+            35,
+            59
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "taunt",
+          "row": 10,
+          "col": 1,
+          "sourcePack": 2,
+          "sourceCell": 5,
+          "sourceRect": [
+            78,
+            75,
+            38,
+            58
+          ],
+          "destinationRect": [
+            13,
+            4,
+            38,
+            58
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "taunt",
+          "row": 10,
+          "col": 2,
+          "sourcePack": 2,
+          "sourceCell": 6,
+          "sourceRect": [
+            142,
+            75,
+            50,
+            58
+          ],
+          "destinationRect": [
+            7,
+            4,
+            50,
+            58
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "taunt",
+          "row": 10,
+          "col": 3,
+          "sourcePack": 2,
+          "sourceCell": 7,
+          "sourceRect": [
+            201,
+            75,
+            52,
+            58
+          ],
+          "destinationRect": [
+            6,
+            4,
+            52,
+            58
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "victory",
+          "row": 11,
+          "col": 0,
+          "sourcePack": 2,
+          "sourceCell": 8,
+          "sourceRect": [
+            16,
+            136,
+            38,
+            63
+          ],
+          "destinationRect": [
+            14,
+            2,
+            36,
+            60
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.9523809523809523
+        },
+        {
+          "name": "victory",
+          "row": 11,
+          "col": 1,
+          "sourcePack": 2,
+          "sourceCell": 9,
+          "sourceRect": [
+            75,
+            139,
+            44,
+            60
+          ],
+          "destinationRect": [
+            10,
+            2,
+            44,
+            60
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "victory",
+          "row": 11,
+          "col": 2,
+          "sourcePack": 2,
+          "sourceCell": 10,
+          "sourceRect": [
+            146,
+            139,
+            33,
+            60
+          ],
+          "destinationRect": [
+            15,
+            2,
+            33,
+            60
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "victory",
+          "row": 11,
+          "col": 3,
+          "sourcePack": 2,
+          "sourceCell": 11,
+          "sourceRect": [
+            205,
+            138,
+            38,
+            61
+          ],
+          "destinationRect": [
+            13,
+            2,
+            37,
+            60
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.9836065573770492
+        }
+      ],
+      "weapons": [
+        {
+          "grip": [
+            6,
+            24
+          ],
+          "tip": [
+            44,
+            24
+          ],
+          "crop": [
+            1,
+            1,
+            46,
+            46
+          ],
+          "sourceRect": [
+            3,
+            25,
+            43,
+            11
+          ],
+          "destinationRect": [
+            2,
+            18,
+            43,
+            11
+          ]
+        },
+        {
+          "grip": [
+            6,
+            24
+          ],
+          "tip": [
+            44,
+            23
+          ],
+          "crop": [
+            1,
+            1,
+            46,
+            46
+          ],
+          "sourceRect": [
+            2,
+            19,
+            43,
+            22
+          ],
+          "destinationRect": [
+            2,
+            13,
+            43,
+            22
+          ]
+        },
+        {
+          "grip": [
+            6,
+            24
+          ],
+          "tip": [
+            45,
+            22
+          ],
+          "crop": [
+            1,
+            1,
+            46,
+            46
+          ],
+          "sourceRect": [
+            2,
+            18,
+            45,
+            12
+          ],
+          "destinationRect": [
+            2,
+            18,
+            44,
+            12
+          ]
+        },
+        {
+          "grip": [
+            6,
+            25
+          ],
+          "tip": [
+            45,
+            25
+          ],
+          "crop": [
+            1,
+            1,
+            46,
+            46
+          ],
+          "sourceRect": [
+            1,
+            17,
+            46,
+            15
+          ],
+          "destinationRect": [
+            2,
+            17,
+            44,
+            14
+          ]
+        }
+      ]
+    },
+    "elon": {
+      "sources": [
+        {
+          "role": "packs",
+          "index": 0,
+          "sourceSha256": "74ebbbdf6098fa005cd683c7a92f8881831b206f6324610621dac5c15a74db83"
+        },
+        {
+          "role": "packs",
+          "index": 1,
+          "sourceSha256": "02f79550439d7850de9f77fcfaf65cb08e1ce785e407014aeec50ac5599a200e"
+        },
+        {
+          "role": "packs",
+          "index": 2,
+          "sourceSha256": "d2b7fbbeba8fe0361d89f34aaf7e550d7b4585f5c6bad50afef5af3d672d9bee"
+        },
+        {
+          "role": "portrait",
+          "index": 0,
+          "sourceSha256": "4a652d69a6697f5147805b59cdf79eff88eda1c936db6e90f73754195cf0ba26"
+        },
+        {
+          "role": "weapon",
+          "index": 0,
+          "sourceSha256": "4f8a2f3f0a7763ff576f16bf0cb8ac689c4fdb7a52a1c4bd6b23635e0179d3f8"
+        }
+      ],
+      "frames": [
+        {
+          "name": "idle",
+          "row": 0,
+          "col": 0,
+          "sourcePack": 0,
+          "sourceCell": 0,
+          "sourceRect": [
+            15,
+            9,
+            33,
+            59
+          ],
+          "destinationRect": [
+            15,
+            3,
+            33,
+            59
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "idle",
+          "row": 0,
+          "col": 1,
+          "sourcePack": 0,
+          "sourceCell": 1,
+          "sourceRect": [
+            78,
+            9,
+            35,
+            59
+          ],
+          "destinationRect": [
+            14,
+            3,
+            35,
+            59
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "idle",
+          "row": 0,
+          "col": 2,
+          "sourcePack": 0,
+          "sourceCell": 2,
+          "sourceRect": [
+            142,
+            9,
+            34,
+            59
+          ],
+          "destinationRect": [
+            15,
+            3,
+            34,
+            59
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "idle",
+          "row": 0,
+          "col": 3,
+          "sourcePack": 0,
+          "sourceCell": 3,
+          "sourceRect": [
+            206,
+            9,
+            35,
+            59
+          ],
+          "destinationRect": [
+            14,
+            3,
+            35,
+            59
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "run",
+          "row": 1,
+          "col": 0,
+          "sourcePack": 0,
+          "sourceCell": 4,
+          "sourceRect": [
+            10,
+            71,
+            50,
+            59
+          ],
+          "destinationRect": [
+            7,
+            3,
+            50,
+            59
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "run",
+          "row": 1,
+          "col": 1,
+          "sourcePack": 0,
+          "sourceCell": 5,
+          "sourceRect": [
+            74,
+            71,
+            49,
+            59
+          ],
+          "destinationRect": [
+            7,
+            3,
+            49,
+            59
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "run",
+          "row": 1,
+          "col": 2,
+          "sourcePack": 0,
+          "sourceCell": 6,
+          "sourceRect": [
+            136,
+            71,
+            52,
+            59
+          ],
+          "destinationRect": [
+            6,
+            3,
+            52,
+            59
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "run",
+          "row": 1,
+          "col": 3,
+          "sourcePack": 0,
+          "sourceCell": 7,
+          "sourceRect": [
+            199,
+            71,
+            51,
+            59
+          ],
+          "destinationRect": [
+            6,
+            3,
+            51,
+            59
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "run",
+          "row": 1,
+          "col": 4,
+          "sourcePack": 0,
+          "sourceCell": 8,
+          "sourceRect": [
+            8,
+            133,
+            48,
+            59
+          ],
+          "destinationRect": [
+            8,
+            3,
+            48,
+            59
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "run",
+          "row": 1,
+          "col": 5,
+          "sourcePack": 0,
+          "sourceCell": 9,
+          "sourceRect": [
+            73,
+            133,
+            50,
+            58
+          ],
+          "destinationRect": [
+            7,
+            4,
+            50,
+            58
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "jump",
+          "row": 2,
+          "col": 0,
+          "sourcePack": 0,
+          "sourceCell": 10,
+          "sourceRect": [
+            140,
+            130,
+            45,
+            61
+          ],
+          "destinationRect": [
+            10,
+            2,
+            44,
+            60
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.9836065573770492
+        },
+        {
+          "name": "jump",
+          "row": 2,
+          "col": 1,
+          "sourcePack": 0,
+          "sourceCell": 11,
+          "sourceRect": [
+            201,
+            130,
+            46,
+            52
+          ],
+          "destinationRect": [
+            9,
+            6,
+            46,
+            52
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "fall",
+          "row": 3,
+          "col": 0,
+          "sourcePack": 0,
+          "sourceCell": 12,
+          "sourceRect": [
+            9,
+            193,
+            55,
+            56
+          ],
+          "destinationRect": [
+            4,
+            4,
+            55,
+            56
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "fall",
+          "row": 3,
+          "col": 1,
+          "sourcePack": 0,
+          "sourceCell": 13,
+          "sourceRect": [
+            72,
+            197,
+            55,
+            51
+          ],
+          "destinationRect": [
+            4,
+            6,
+            55,
+            51
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "wallSlide",
+          "row": 4,
+          "col": 0,
+          "sourcePack": 0,
+          "sourceCell": 14,
+          "sourceRect": [
+            146,
+            192,
+            41,
+            62
+          ],
+          "destinationRect": [
+            12,
+            2,
+            40,
+            60
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.967741935483871
+        },
+        {
+          "name": "wallSlide",
+          "row": 4,
+          "col": 1,
+          "sourcePack": 1,
+          "sourceCell": 0,
+          "sourceRect": [
+            7,
+            10,
+            54,
+            58
+          ],
+          "destinationRect": [
+            5,
+            3,
+            54,
+            58
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "dive",
+          "row": 5,
+          "col": 0,
+          "sourcePack": 1,
+          "sourceCell": 1,
+          "sourceRect": [
+            71,
+            16,
+            55,
+            41
+          ],
+          "destinationRect": [
+            4,
+            11,
+            55,
+            41
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "dive",
+          "row": 5,
+          "col": 1,
+          "sourcePack": 1,
+          "sourceCell": 2,
+          "sourceRect": [
+            129,
+            22,
+            61,
+            39
+          ],
+          "destinationRect": [
+            2,
+            13,
+            60,
+            38
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.9836065573770492
+        },
+        {
+          "name": "swing",
+          "row": 6,
+          "col": 0,
+          "sourcePack": 1,
+          "sourceCell": 3,
+          "sourceRect": [
+            200,
+            11,
+            54,
+            57
+          ],
+          "destinationRect": [
+            5,
+            5,
+            54,
+            57
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "swing",
+          "row": 6,
+          "col": 1,
+          "sourcePack": 1,
+          "sourceCell": 4,
+          "sourceRect": [
+            7,
+            69,
+            51,
+            63
+          ],
+          "destinationRect": [
+            7,
+            2,
+            49,
+            60
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.9523809523809523
+        },
+        {
+          "name": "swing",
+          "row": 6,
+          "col": 2,
+          "sourcePack": 1,
+          "sourceCell": 5,
+          "sourceRect": [
+            71,
+            71,
+            52,
+            62
+          ],
+          "destinationRect": [
+            7,
+            2,
+            50,
+            60
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.967741935483871
+        },
+        {
+          "name": "swing",
+          "row": 6,
+          "col": 3,
+          "sourcePack": 1,
+          "sourceCell": 6,
+          "sourceRect": [
+            130,
+            72,
+            67,
+            60
+          ],
+          "destinationRect": [
+            2,
+            8,
+            60,
+            54
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.8955223880597015
+        },
+        {
+          "name": "swing",
+          "row": 6,
+          "col": 4,
+          "sourcePack": 1,
+          "sourceCell": 7,
+          "sourceRect": [
+            199,
+            74,
+            53,
+            58
+          ],
+          "destinationRect": [
+            5,
+            4,
+            53,
+            58
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "swing",
+          "row": 6,
+          "col": 5,
+          "sourcePack": 1,
+          "sourceCell": 8,
+          "sourceRect": [
+            8,
+            133,
+            49,
+            59
+          ],
+          "destinationRect": [
+            7,
+            3,
+            49,
+            59
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "hit",
+          "row": 7,
+          "col": 0,
+          "sourcePack": 1,
+          "sourceCell": 9,
+          "sourceRect": [
+            75,
+            133,
+            44,
+            59
+          ],
+          "destinationRect": [
+            10,
+            3,
+            44,
+            59
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "hit",
+          "row": 7,
+          "col": 1,
+          "sourcePack": 1,
+          "sourceCell": 10,
+          "sourceRect": [
+            130,
+            133,
+            59,
+            59
+          ],
+          "destinationRect": [
+            2,
+            3,
+            59,
+            59
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "hit",
+          "row": 7,
+          "col": 2,
+          "sourcePack": 1,
+          "sourceCell": 11,
+          "sourceRect": [
+            199,
+            137,
+            55,
+            55
+          ],
+          "destinationRect": [
+            4,
+            7,
+            55,
+            55
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "ko",
+          "row": 8,
+          "col": 0,
+          "sourcePack": 1,
+          "sourceCell": 12,
+          "sourceRect": [
+            8,
+            195,
+            49,
+            52
+          ],
+          "destinationRect": [
+            7,
+            10,
+            49,
+            52
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "ko",
+          "row": 8,
+          "col": 1,
+          "sourcePack": 1,
+          "sourceCell": 13,
+          "sourceRect": [
+            70,
+            197,
+            57,
+            52
+          ],
+          "destinationRect": [
+            3,
+            10,
+            57,
+            52
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 1
+        },
+        {
+          "name": "ko",
+          "row": 8,
+          "col": 2,
+          "sourcePack": 1,
+          "sourceCell": 14,
+          "sourceRect": [
+            128,
+            217,
+            65,
+            30
+          ],
+          "destinationRect": [
+            2,
+            34,
+            60,
+            28
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.9230769230769231
+        },
+        {
+          "name": "ko",
+          "row": 8,
+          "col": 3,
+          "sourcePack": 2,
+          "sourceCell": 0,
+          "sourceRect": [
+            3,
+            45,
+            67,
+            25
+          ],
+          "destinationRect": [
+            2,
+            40,
+            60,
+            22
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.8955223880597015
+        },
+        {
+          "name": "carry",
+          "row": 9,
+          "col": 0,
+          "sourcePack": 2,
+          "sourceCell": 1,
+          "sourceRect": [
+            81,
+            8,
+            38,
+            62
+          ],
+          "destinationRect": [
+            13,
+            2,
+            37,
+            60
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.967741935483871
+        },
+        {
+          "name": "carry",
+          "row": 9,
+          "col": 1,
+          "sourcePack": 2,
+          "sourceCell": 2,
+          "sourceRect": [
+            144,
+            8,
+            38,
+            62
+          ],
+          "destinationRect": [
+            13,
+            2,
+            37,
+            60
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.967741935483871
+        },
+        {
+          "name": "taunt",
+          "row": 10,
+          "col": 0,
+          "sourcePack": 2,
+          "sourceCell": 3,
+          "sourceRect": [
+            205,
+            8,
+            39,
+            62
+          ],
+          "destinationRect": [
+            13,
+            2,
+            38,
+            60
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.967741935483871
+        },
+        {
+          "name": "taunt",
+          "row": 10,
+          "col": 1,
+          "sourcePack": 2,
+          "sourceCell": 4,
+          "sourceRect": [
+            12,
+            71,
+            55,
+            61
+          ],
+          "destinationRect": [
+            5,
+            2,
+            54,
+            60
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.9836065573770492
+        },
+        {
+          "name": "taunt",
+          "row": 10,
+          "col": 2,
+          "sourcePack": 2,
+          "sourceCell": 5,
+          "sourceRect": [
+            74,
+            71,
+            56,
+            61
+          ],
+          "destinationRect": [
+            4,
+            2,
+            55,
+            60
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.9836065573770492
+        },
+        {
+          "name": "taunt",
+          "row": 10,
+          "col": 3,
+          "sourcePack": 2,
+          "sourceCell": 6,
+          "sourceRect": [
+            146,
+            71,
+            39,
+            61
+          ],
+          "destinationRect": [
+            13,
+            2,
+            38,
+            60
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.9836065573770492
+        },
+        {
+          "name": "victory",
+          "row": 11,
+          "col": 0,
+          "sourcePack": 2,
+          "sourceCell": 7,
+          "sourceRect": [
+            208,
+            71,
+            42,
+            61
+          ],
+          "destinationRect": [
+            11,
+            2,
+            41,
+            60
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.9836065573770492
+        },
+        {
+          "name": "victory",
+          "row": 11,
+          "col": 1,
+          "sourcePack": 2,
+          "sourceCell": 8,
+          "sourceRect": [
+            15,
+            134,
+            49,
+            61
+          ],
+          "destinationRect": [
+            8,
+            2,
+            48,
+            60
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.9836065573770492
+        },
+        {
+          "name": "victory",
+          "row": 11,
+          "col": 2,
+          "sourcePack": 2,
+          "sourceCell": 9,
+          "sourceRect": [
+            84,
+            133,
+            39,
+            62
+          ],
+          "destinationRect": [
+            13,
+            2,
+            38,
+            60
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.967741935483871
+        },
+        {
+          "name": "victory",
+          "row": 11,
+          "col": 3,
+          "sourcePack": 2,
+          "sourceCell": 10,
+          "sourceRect": [
+            144,
+            133,
+            41,
+            62
+          ],
+          "destinationRect": [
+            12,
+            2,
+            40,
+            60
+          ],
+          "root": [
+            32,
+            62
+          ],
+          "scale": 0.967741935483871
+        }
+      ],
+      "weapons": [
+        {
+          "grip": [
+            6,
+            23
+          ],
+          "tip": [
+            45,
+            23
+          ],
+          "crop": [
+            1,
+            1,
+            46,
+            46
+          ],
+          "sourceRect": [
+            2,
+            23,
+            44,
+            8
+          ],
+          "destinationRect": [
+            2,
+            20,
+            44,
+            8
+          ]
+        },
+        {
+          "grip": [
+            6,
+            24
+          ],
+          "tip": [
+            45,
+            24
+          ],
+          "crop": [
+            1,
+            1,
+            46,
+            46
+          ],
+          "sourceRect": [
+            1,
+            22,
+            45,
+            10
+          ],
+          "destinationRect": [
+            2,
+            19,
+            44,
+            10
+          ]
+        },
+        {
+          "grip": [
+            6,
+            25
+          ],
+          "tip": [
+            45,
+            28
+          ],
+          "crop": [
+            1,
+            1,
+            46,
+            46
+          ],
+          "sourceRect": [
+            2,
+            12,
+            45,
+            23
+          ],
+          "destinationRect": [
+            2,
+            13,
+            44,
+            22
+          ],
+          "renderAspect": 0.85
+        },
+        {
+          "grip": [
+            6,
+            23
+          ],
+          "tip": [
+            45,
+            23
+          ],
+          "crop": [
+            1,
+            1,
+            46,
+            46
+          ],
+          "sourceRect": [
+            1,
+            18,
+            45,
+            11
+          ],
+          "destinationRect": [
+            2,
+            18,
+            44,
+            11
+          ]
+        }
+      ]
+    }
+  },
+  "generationIncident": {
+    "firstJensenWeaponAttempt": "denied before execution",
+    "httpStatus": 400,
+    "code": "moderation_blocked",
+    "reason": "safety_violations=[violence]",
+    "requestId": "5811705e-d1f4-4678-9319-72b3086dd4c3",
+    "retry": "One retry after user supplied explicit m3t4.com game context; original request unchanged and prefixed with non-graphic existing cartoon game-prop context. Succeeded.",
+    "exactError": {
+      "error": {
+        "message": "Your request was rejected by the safety system. If you believe this is an error, contact us at help.openai.com and include the request ID 5811705e-d1f4-4678-9319-72b3086dd4c3. safety_violations=[violence].",
+        "type": "image_generation_user_error",
+        "param": null,
+        "code": "moderation_blocked",
+        "moderation_details": {
+          "moderation_stage": "input",
+          "categories": [
+            "violence"
+          ]
+        }
+      }
+    }
+  }
+}

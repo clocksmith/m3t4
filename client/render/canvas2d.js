@@ -1,3 +1,4 @@
+import { BODY_PORTRAIT_SHEETS } from "../content/character-presentation.js";
 import { drawStageScenery } from "./stage-art.js";
 import { drawGoalHoldRing } from "./goal-progress.js";
 import { imageState, loadImage } from "./image-assets.js";
@@ -83,6 +84,8 @@ const CHARACTER_SPRITES = [
     frameH: 64,
     anims: spriteAnims(),
   }],
+  ["jensen", { url: "assets/chars/jensen/silicon_sovereign/sprite.png", frameW: 64, frameH: 64, anims: spriteAnims() }],
+  ["elon", { url: "assets/chars/elon/orbital_showman/sprite.png", frameW: 64, frameH: 64, anims: spriteAnims() }],
 ];
 
 const BODY_KITS = Object.fromEntries(CHARACTER_SPRITES);
@@ -112,12 +115,7 @@ const WEAPON_SHEETS = Object.fromEntries(
   ]),
 );
 
-const PORTRAIT_SHEETS = {
-  sama: { url: "assets/chars/sama/monastic_infra/portraits/sheet.png", cellW: 96, cellH: 96 },
-  darrius: { url: "assets/chars/darrius/legal_department_midnight/portraits/sheet.png", cellW: 96, cellH: 96 },
-  demis: { url: "assets/chars/demis/chalk_and_static/portraits/sheet.png", cellW: 96, cellH: 96 },
-  mark: { url: "assets/chars/mark/wellness_berserker/portraits/sheet.png", cellW: 96, cellH: 96 },
-};
+const PORTRAIT_SHEETS = Object.fromEntries(Object.entries(BODY_PORTRAIT_SHEETS).map(([body,url]) => [body,{url,cellW:96,cellH:96}]));
 const HUD_PORTRAIT_CELL = {
   neutral: 0, // top-left: neutral head/shoulders
   hurt: 1,    // top-right: hurt head/shoulders

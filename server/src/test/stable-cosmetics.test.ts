@@ -108,3 +108,15 @@ test("file store migrates every saved fighter once with exact backup and unchang
   assert.deepEqual((await second.getStable(owner))?.slots,migrated.slots);
   assert.equal(fs.readdirSync(dir).filter(name=>name.includes("before-fighter-migration")).length,1);
 });
+
+// New parody bodies use the existing unlock budget and cosmetic-only path.
+test("Jensen and Elon accept all authored tiers without bypassing Elo gates", () => {
+  for (const [body, weapons] of [
+    ["jensen",["compute_bat","heatsink_hammer","silicon_cleaver","rack_greatsword"]],
+    ["elon",["coil_bat","orbit_lance","satellite_axe","angular_greatsword"]],
+  ] as const) for (const [tier,weapon] of weapons.entries()) {
+    const threshold=[0,1024,1152,1280][tier];
+    assert.deepEqual(normalizeSlotCosmetics({body,weapon},0,undefined,threshold),{body,weapon});
+    if(tier) assert.deepEqual(normalizeSlotCosmetics({body,weapon},0,undefined,threshold-1),{body,weapon:weapons[0]});
+  }
+});

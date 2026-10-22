@@ -23,7 +23,10 @@ import { GOAL_DWELL_RADIUS, GOAL_DWELL_S, KILL_RESPAWN_S, GRAVITY, RESPAWN_INVUL
 // failed route cannot be re-picked immediately after a bait/fight cancel.
 // v24: stage-local vertical walls are treated as wall-jump route blockers
 // instead of normal landing platforms.
-export const BEHAVIOR_VERSION = 24;
+// v25: observe outcomes across mode changes, remember unsuccessful plans, and
+// choose context-appropriate route/spacing/angle changes instead of repeating
+// the same trait-dominant response. No RNG, private opponent state or lookahead.
+export const BEHAVIOR_VERSION = 25;
 // ---------- Opp-model buffer sizing ----------
 //
 // Bounded ring: max 16 entries per stream, hard decay at 240 ticks (2 s).
@@ -112,6 +115,7 @@ export function createBrainState(id) {
         escapeEntriesThisRound: 0,
         escapeTicksThisRound: 0,
         zoneTicksThisRound: 0,
+        tactics: null,
         lastTransitionReason: "init",
     };
 }
@@ -120,6 +124,7 @@ export function createBrainState(id) {
 // survive; resets plan-layer so we don't carry stale intent into a new
 // spacing situation.
 export function resetBrainStateForRound(state, tick) {
+    state.tactics = null;
     state.mode = "neutral";
     state.substate = null;
     state.modeEnterTick = tick;
@@ -1465,10 +1470,154 @@ function runEscapeMode(obs, params, sig) {
         up: useArc,
     };
 }
+// ---------- Outcome-aware tactical recovery ----------
+// Movement alone is not success: jumping in place or orbiting a blocker can
+// advance lastMoveTick forever. Track best distance to the current objective,
+// actual attacks and kills across mode changes. All inputs are public Observation.
+function tacticalTarget(obs) {
+    if (obs.self.hasToken && obs.goal.exists) {
+        return { x: obs.goal.x, y: goalBodyY(obs), context: `deliver:${deliveryGoalKey(obs)}` };
+    }
+    if (obs.token.exists && obs.token.carrier === -1) {
+        return { x: obs.token.x, y: obs.token.y, context: "pickup" };
+    }
+    return { x: obs.opp.x, y: obs.opp.y, context: obs.opp.hasToken ? "intercept" : "combat" };
+}
+function freshTacticalMemory(obs, context, distance) {
+    return {
+        context, bestDistance: distance, progressTick: obs.tick,
+        anchorX: obs.self.x, anchorY: obs.self.y, movedTick: obs.tick,
+        lastAttackTick: obs.self.lastAttackStartTick, lastKillTick: obs.self.lastKillTick,
+        attempts: 0, lastAction: {}, failures: [], plan: null,
+    };
+}
+function chooseRecovery(obs, params, memory, target) {
+    const vertical = Math.abs(target.y - obs.self.y) > 80;
+    const close = obs.absDx < 220 && Math.abs(obs.dy) < 100 && !obs.opp.dead;
+    const choices = [
+        ["route", vertical || obs.absDx > 250 || obs.self.hasToken
+                ? 4 : 2 + unit(params.greed) + unit(params.burnRate)],
+        ["flank", close ? 2.6 + unit(params.lift) + unit(params.cunning) : -10],
+        ["reset-spacing", close ? 2.4 + unit(params.parry) + unit(params.pivotSpeed) : -10],
+        ["drop", onDropThroughPlatform(obs) && target.y > obs.self.y - 40
+                ? 3 + unit(params.cunning) : -10],
+    ];
+    // Penalize failed answers, not styles. A bounded memory expires so a route
+    // becomes eligible again when a moving defender or platform context changes.
+    const eligible = choices.filter(([, score]) => score > -10);
+    for (const choice of eligible) {
+        choice[1] -= memory.failures.filter(f => f.tactic === choice[0]).length * 2.5;
+        // Stable tie break gives mirror fighters different opening escape angles.
+        if ((choice[0] === "flank" && obs.self.id === 0) ||
+            (choice[0] === "reset-spacing" && obs.self.id === 1))
+            choice[1] += 0.3;
+    }
+    eligible.sort((a, b) => b[1] - a[1]);
+    return eligible[0][0];
+}
+function runRecoveryPlan(obs, params, memory, target, sig) {
+    const plan = memory.plan;
+    const age = obs.tick - plan.startedAt;
+    const ready = obs.self.swipeCD <= 0 && obs.self.swipeT <= 0 && obs.self.diveT <= 0;
+    // This geometry estimate is conservative, not a hidden collision oracle.
+    const canHit = !obs.opp.dead && obs.absDx < 76 && Math.abs(obs.dy) < 48 && ready;
+    if (plan.tactic === "reset-spacing" && age < 24) {
+        const direction = sig.cornered ? plan.direction : -plan.direction;
+        return { left: direction < 0, right: direction > 0, up: sig.cornered };
+    }
+    if (plan.tactic === "flank") {
+        const tx = clamp(obs.opp.x + plan.direction * 95, obs.arena.left + 35, obs.arena.right - 35);
+        const direction = Math.sign(tx - obs.self.x);
+        const above = obs.self.y < obs.opp.y - 65;
+        const dive = !obs.self.onGround && above && obs.absDx < 60 && obs.self.diveCD <= 0;
+        return {
+            left: direction < 0, right: direction > 0,
+            up: (obs.self.onGround && age < 30) || (!above && obs.self.vy < -150),
+            down: dive, action: dive || canHit,
+        };
+    }
+    if (plan.tactic === "drop" && onDropThroughPlatform(obs)) {
+        return { down: true, left: target.x < obs.self.x - 15, right: target.x > obs.self.x + 15 };
+    }
+    const action = navigateTo(obs, target.x, target.y, params, true);
+    // Keep legitimate goal dwell and routes ahead of opportunistic combat.
+    if (!obs.self.hasToken && canHit)
+        action.action = true;
+    return action;
+}
+function adaptTactics(obs, params, state, sig, base) {
+    const target = tacticalTarget(obs);
+    const distance = Math.hypot(obs.self.x - target.x, obs.self.y - target.y);
+    let memory = state.tactics;
+    if (!memory || memory.context !== target.context) {
+        state.tactics = memory = freshTacticalMemory(obs, target.context, distance);
+    }
+    memory.failures = memory.failures.filter(f => obs.tick - f.tick < 720).slice(-8);
+    if (obs.self.lastAttackStartTick !== memory.lastAttackTick) {
+        memory.attempts++;
+        memory.lastAttackTick = obs.self.lastAttackStartTick;
+    }
+    const kill = obs.self.lastKillTick !== memory.lastKillTick;
+    memory.lastKillTick = obs.self.lastKillTick;
+    if (distance < memory.bestDistance - 36 || kill) {
+        memory.bestDistance = distance;
+        memory.progressTick = obs.tick;
+        memory.attempts = 0;
+    }
+    if (Math.hypot(obs.self.x - memory.anchorX, obs.self.y - memory.anchorY) > 24) {
+        memory.anchorX = obs.self.x;
+        memory.anchorY = obs.self.y;
+        memory.movedTick = obs.tick;
+    }
+    // Do not interrupt scoring or a stun, which is not a failed decision.
+    // A dead opponent is not a reason to chase its last location.
+    const dwelling = obs.self.hasToken && obs.goal.exists && dwellDistance(obs) < GOAL_DWELL_RADIUS;
+    if (dwelling || obs.self.stun > 0 || (obs.opp.dead && !obs.self.hasToken)) {
+        memory.plan = null;
+        memory.progressTick = obs.tick;
+        memory.lastAction = base;
+        return base;
+    }
+    if (memory.plan) {
+        memory.plan.bestDistance = Math.min(memory.plan.bestDistance, distance);
+        if (obs.tick >= memory.plan.expiresAt || kill) {
+            const succeeded = kill || memory.plan.startDistance - memory.plan.bestDistance > 45;
+            if (!succeeded)
+                memory.failures.push({ tactic: memory.plan.tactic, tick: obs.tick });
+            memory.plan = null;
+            if (succeeded) {
+                memory.progressTick = obs.tick;
+                memory.bestDistance = distance;
+                memory.attempts = 0;
+            }
+        }
+    }
+    const stalled = obs.tick - memory.progressTick > 240;
+    const blocked = obs.tick - memory.movedTick > 100 &&
+        (memory.lastAction.left || memory.lastAction.right || memory.lastAction.up);
+    const repeatedMisses = memory.attempts >= 4 && obs.tick - memory.progressTick > 150;
+    if (!memory.plan && (stalled || blocked || repeatedMisses)) {
+        memory.plan = {
+            tactic: chooseRecovery(obs, params, memory, target),
+            startedAt: obs.tick, expiresAt: obs.tick + 100,
+            startDistance: distance, bestDistance: distance,
+            direction: (Math.sign(target.x - obs.self.x) || (state.id === 0 ? 1 : -1)),
+        };
+    }
+    // An immediate threat outranks a recovery experiment. Keep the plan clock
+    // running, so repeatedly fleeing does not erase an unsuccessful attempt.
+    const danger = sig.oppCommittedAtUs && obs.self.invuln <= 0 &&
+        obs.self.swipeCD > 0 && obs.self.swipeT <= 0 && obs.self.diveT <= 0;
+    const action = memory.plan && !danger ? runRecoveryPlan(obs, params, memory, target, sig) : base;
+    memory.lastAction = action;
+    return action;
+}
 // ---------- Dispatcher ----------
 export function runParamBrain(obs, params, state) {
-    if (obs.self.dead)
+    if (obs.self.dead) {
+        state.tactics = null;
         return {};
+    }
     updateOppModel(state, obs);
     const sig = deriveSignals(obs, params, state);
     decideMode(obs, params, state, sig);
@@ -1480,11 +1629,23 @@ export function runParamBrain(obs, params, state) {
         state.escapeTicksThisRound++;
     else if (state.mode === "zone")
         state.zoneTicksThisRound++;
+    let action;
     switch (state.mode) {
-        case "neutral": return runNeutralMode(obs, params, state, sig);
-        case "offense": return runOffenseMode(obs, params, state, sig);
-        case "zone": return runZoneMode(obs, params, sig);
-        case "objective": return runObjectiveMode(obs, params, state, sig);
-        case "escape": return runEscapeMode(obs, params, sig);
+        case "neutral":
+            action = runNeutralMode(obs, params, state, sig);
+            break;
+        case "offense":
+            action = runOffenseMode(obs, params, state, sig);
+            break;
+        case "zone":
+            action = runZoneMode(obs, params, sig);
+            break;
+        case "objective":
+            action = runObjectiveMode(obs, params, state, sig);
+            break;
+        case "escape":
+            action = runEscapeMode(obs, params, sig);
+            break;
     }
+    return adaptTactics(obs, params, state, sig, action);
 }

@@ -1,0 +1,126 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { createBrainState, resetBrainStateForRound, runParamBrain } from "../brain.js";
+import { DEFAULT_PARAMS } from "../types.js";
+import type { Observation } from "../types.js";
+import { compileBrain } from "../dsl.js";
+import { createStepperWorld, runBrainForWorld, stepWorld, worldObservation } from "../simulate.js";
+import { STAGES } from "../stage.js";
+import { STRATEGIES } from "../strategies.js";
+
+function observe(tick: number): Observation {
+  const world = createStepperWorld({ stage: STAGES.datacenter, seed: 7 });
+  const obs = worldObservation(world, 0);
+  obs.tick = tick;
+  Object.assign(obs.self, { x: 600, y: 612, onGround: true, lastMoveTick: 0 });
+  Object.assign(obs.opp, { x: 680, y: 612, onGround: true });
+  obs.dx = obs.absDx = 80; obs.dy = 0;
+  return obs;
+}
+
+const params = { ...DEFAULT_PARAMS, lift: 0.6, cunning: 0.5, parry: 0.4 };
+
+test("failed actions cause committed, different answers across mode switches", () => {
+  const state = createBrainState(0);
+  const plans = new Set<string>();
+  let switches = 0, last: string | undefined;
+  for (let tick = 0; tick < 800; tick++) {
+    const obs = observe(tick);
+    // Observable failed swipes, with no movement, damage, kills or goal progress.
+    obs.self.lastAttackStartTick = Math.floor(tick / 24) * 24;
+    state.mode = tick % 2 ? "neutral" : "offense";
+    state.modeEnterTick = tick;
+    runParamBrain(obs, params, state);
+    const current = state.tactics?.plan?.tactic;
+    if (current) plans.add(current);
+    if (current !== last) switches++;
+    last = current;
+  }
+  assert.ok(plans.size >= 3, `must try different viable answers, got ${[...plans]}`);
+  assert.ok(switches < 16, "plans must commit, not flip per frame");
+  assert.ok(state.tactics!.failures.length <= 8);
+  assert.ok(state.tactics!.failures.every(f => 799 - f.tick < 720));
+});
+
+test("real progress does not trigger gratuitous tactical randomness", () => {
+  const state = createBrainState(0);
+  for (let tick = 0; tick < 230; tick++) {
+    const obs = observe(tick);
+    obs.self.x = 100 + tick * 2;
+    obs.opp.x = 1100;
+    obs.dx = obs.absDx = obs.opp.x - obs.self.x;
+    runParamBrain(obs, params, state);
+    assert.equal(state.tactics?.plan, null);
+  }
+});
+
+test("legitimate goal dwell is never mistaken for being stuck", () => {
+  const state = createBrainState(0);
+  for (let tick = 0; tick < 600; tick++) {
+    const obs = observe(tick);
+    obs.self.hasToken = true;
+    obs.goal = { exists: true, x: obs.self.x, y: obs.self.y - 28, timer: 5, label: "CUSTOMERS" };
+    obs.token = { exists: true, carrier: 0, x: obs.self.x, y: obs.self.y, dwellT: 0.05 };
+    const action = runParamBrain(obs, params, state);
+    assert.equal(state.tactics?.plan, null);
+    assert.ok(!action.left && !action.right && !action.down);
+  }
+});
+
+test("new objective, death and round reset invalidate old failure memory", () => {
+  const state = createBrainState(0);
+  for (let tick = 0; tick < 400; tick++) runParamBrain(observe(tick), params, state);
+  assert.ok(state.tactics?.failures.length);
+  const obs = observe(401);
+  obs.self.hasToken = true;
+  obs.goal = { exists: true, x: 1070, y: 494, timer: 10, label: "RUNWAY" };
+  runParamBrain(obs, params, state);
+  assert.deepEqual(state.tactics?.failures, []);
+  assert.equal(state.tactics?.plan, null);
+  obs.self.dead = true;
+  assert.deepEqual(runParamBrain(obs, params, state), {});
+  assert.equal(state.tactics, null);
+  runParamBrain(observe(403), params, state);
+  resetBrainStateForRound(state, 404);
+  assert.equal(state.tactics, null);
+});
+
+test("vertical recovery does not select impossible ground combat or platform drop", () => {
+  const state = createBrainState(0);
+  const choices = new Set<string>();
+  for (let tick = 0; tick < 1000; tick++) {
+    const obs = observe(tick);
+    obs.opp.y = 250; obs.dy = obs.opp.y - obs.self.y;
+    runParamBrain(obs, params, state);
+    if (state.tactics?.plan) choices.add(state.tactics.plan.tactic);
+  }
+  assert.deepEqual([...choices], ["route"]);
+});
+
+test("recovery actions depend only on observation, parameters and own memory", () => {
+  const a = createBrainState(0), b = createBrainState(0);
+  for (let tick = 0; tick < 600; tick++) {
+    const obs = observe(tick);
+    const left = runParamBrain(obs, params, a);
+    const right = runParamBrain(structuredClone(obs), { ...params }, b);
+    assert.deepEqual(left, right);
+    assert.deepEqual(a, b);
+  }
+});
+
+test("matched-seed tactical recovery produces deterministic input logs", () => {
+  function run() {
+    const w = createStepperWorld({ stage: STAGES.demoday, seed: 7273 });
+    const brains = [compileBrain(STRATEGIES.regulatory), compileBrain(STRATEGIES.troll)];
+    const actions = [];
+    for (let t = 0; t < 2400; t++) {
+      const active = w.freeze <= 0 && w.roundPause <= 0;
+      const a = active ? runBrainForWorld(w, brains[0], 0) : {};
+      const b = active ? runBrainForWorld(w, brains[1], 1) : {};
+      actions.push([a, b]);
+      stepWorld(w, a, b);
+    }
+    return { actions, fighters: w.fighters, gold: w.gold, tick: w.tick };
+  }
+  assert.deepEqual(run(), run());
+});

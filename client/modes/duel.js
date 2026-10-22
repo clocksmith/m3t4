@@ -16,6 +16,7 @@
 // brain — no private/canonical brain code is exposed by being on this
 // page that wasn't already in the bundle.
 
+import { mountArenaShell } from "../ui/arena-shell.js";
 import { createFrameRenderer, W, H } from "../render/index.js";
 import {
   createStepperWorld,
@@ -278,6 +279,8 @@ function freshState() {
     rendererId: 0,
     rafId: 0,
     running: false,
+    paused: false,
+    arenaShell: null,
     world: null,
     brainP2: null,
     seed: 0,
@@ -308,7 +311,7 @@ function isTypingTarget(el) {
   return t === "INPUT" || t === "TEXTAREA" || t === "SELECT" || el.isContentEditable;
 }
 function onKeyDown(e) {
-  if (!state || isTypingTarget(e.target) || e.target?.closest?.("button, summary, a")) return;
+  if (!state || state.arenaShell?.dialog.open || state.paused || isTypingTarget(e.target) || e.target?.closest?.("button, summary, a")) return;
   if (e.code === "Space" && (!state.world || state.world.matchWinner !== -1)) {
     e.preventDefault();
     startMatch();
@@ -338,6 +341,7 @@ function readKeyboard(slot) {
 }
 
 function readLocalInput() {
+  if (state.arenaShell?.dialog.open || state.paused) return EMPTY_INPUT;
   const keys = readKeyboard(0);
   const touch = state.touchInput ?? EMPTY_INPUT;
   return {
@@ -441,6 +445,7 @@ function startMatch() {
   }
   const stage = SIM_STAGES[state.stageId] ?? SIM_STAGES.datacenter;
   clearRemoteInputs();
+  state.paused = false;
   state.seed = freshSeed();
   state.world = createStepperWorld({ stage, seed: state.seed, chars: selectedCharacters() });
   state.brainP2 = state.subMode === "vs-ai"
@@ -484,6 +489,10 @@ function actionFor(slot) {
 
 function step(nowMs) {
   if (!state.world) return null;
+  if (state.subMode !== "p2p" && (state.paused || state.arenaShell?.dialog.open)) {
+    state.playedAtMs = nowMs;
+    return worldToFrame(state.world);
+  }
   if (state.world.matchWinner !== -1) return worldToFrame(state.world);
   let dt = nowMs - state.playedAtMs;
   state.playedAtMs = nowMs;
@@ -596,6 +605,8 @@ function refreshHud(frame = state.world ? worldToFrame(state.world) : emptyFrame
   setText("duel-stat-seed", state.seed ? String(state.seed) : "—");
   setText("duel-stat-link", linkStatText());
   setText("duel-status", duelStatusText());
+  const pause = document.getElementById("duel-pause");
+  if (pause) { pause.disabled = state.subMode === "p2p" || !state.world || state.world.matchWinner !== -1; pause.textContent = state.paused ? "Resume" : "Pause"; pause.setAttribute("aria-pressed", String(state.paused)); }
 }
 
 function formatMs(ms) {
@@ -633,7 +644,7 @@ function duelStatusText() {
     const w = state.world.matchWinner;
     return `${w === 0 ? labels().p1 : labels().p2} wins · ${startPrompt()} again`;
   }
-  return state.statusMsg || "fight";
+  return state.paused ? "paused" : state.statusMsg || "fight";
 }
 
 function setText(id, value) {
@@ -919,7 +930,7 @@ export function mount(root, ctx = {}) {
           autoHeight: true,
         })}
         <section class="panel canvas-panel">
-          <canvas id="duel-canvas" aria-label="Playable fighter arena. Keyboard controls are listed beside the match." class="u-canvas-fill" width="${W}" height="${H}" tabindex="0"></canvas>
+          <canvas id="duel-canvas" aria-label="Playable fighter arena. Open Settings for keyboard controls." class="u-canvas-fill" width="${W}" height="${H}" tabindex="0"></canvas>
           ${statsListHtml()}
           ${touchControlsHtml()}
         </section>
@@ -928,6 +939,18 @@ export function mount(root, ctx = {}) {
 
   state.page = root.querySelector(".duel-page");
   state.canvas = root.querySelector("#duel-canvas");
+  const pause = document.createElement("button");
+  pause.type = "button"; pause.id = "duel-pause"; pause.textContent = "Pause";
+  pause.addEventListener("click", () => {
+    if (!state || state.subMode === "p2p" || !state.world) return;
+    state.paused = !state.paused; onBlur(); state.playedAtMs = performance.now(); refreshHud();
+  });
+  state.arenaShell = mountArenaShell(root, {
+    title: "Play", canvas: state.canvas, actions: [root.querySelector("#duel-start")], pause, status: root.querySelector("#duel-status"),
+    note: "Local matches pause while settings are open. Closing restores your previous play state. Online matches continue; your controls are released.",
+    onOpen: onBlur, onClose: () => { onBlur(); if (state) state.playedAtMs = performance.now(); },
+  });
+  root.querySelector(".duel-stats .duel-status")?.remove(); // Its live value now belongs to the toolbar.
   document.body.classList.add("duel-mounted");
   void attachRenderer(state.canvas);
   refreshKeysHint();
@@ -966,6 +989,7 @@ export function unmount() {
   removeEventListener("hashchange", onHashChange);
   if (state) {
     state.running = false;
+    state.arenaShell?.destroy();
     if (state.rafId) cancelAnimationFrame(state.rafId);
     state.renderer?.destroy();
     state.renderer = null;
@@ -1737,5 +1761,6 @@ function syncPlayClass() {
 
 function refocusCanvas() {
   state?.keyset.clear();
+  if (state?.arenaShell?.dialog.open) return;
   state?.canvas?.focus();
 }

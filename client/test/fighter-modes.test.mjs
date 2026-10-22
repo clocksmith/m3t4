@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import { watchPageHtml } from '../modes/spectate.js';
+import { mountArenaShell } from '../ui/arena-shell.js';
 
 function documentFor(html) {
   const window = new Window();
@@ -19,13 +20,15 @@ test('primary navigation offers Watch, Tune and Play with existing routes', () =
   assert.equal(doc.querySelector('#account').dataset.state,'anon');
 });
 
-test('Watch shows the arena and audio first while preserving collapsed secondary controls', () => {
+test('Watch gives the arena the shared shell and preserves controls in its closed dialog', () => {
   const doc=documentFor(watchPageHtml());
+  const shell=mountArenaShell(doc.body,{title:'Watch',canvas:doc.querySelector('#stage-canvas'),frame:doc.querySelector('#spectate-stage')});
   assert.equal(doc.querySelector('h1').textContent,'Watch');
   assert.match(doc.querySelector('.page-subtitle').textContent,/recorded fights.*archive/i);
-  assert.equal(doc.querySelector('.spectate-grid').firstElementChild.className,'spectate-center');
+  assert.equal(doc.querySelector('#stage-canvas').closest('dialog'),null);
+  assert.equal(doc.querySelector('dialog').open,false);
   assert.equal(doc.querySelector('#stage-canvas').closest('details'),null);
-  assert.equal(doc.querySelector('#spectate-audio').closest('details'),null);
+  assert.equal(doc.querySelector('#spectate-audio').closest('dialog').id,'arena-dialog');
   for(const id of ['stat-p1','stat-p2','stat-stage','stat-countdown','stat-buf','stat-verify','spectate-dash-cycle','leaderboard','leaderboard-more','live-bots-list','live-bots-more','stream-log','live-bot-events']) {
     const el=doc.getElementById(id);
     assert.ok(el,`${id} remains available`);
@@ -33,6 +36,7 @@ test('Watch shows the arena and audio first while preserving collapsed secondary
   }
   const ids=[...doc.querySelectorAll('[id]')].map(el=>el.id);
   assert.equal(new Set(ids).size,ids.length);
+  shell.destroy(); doc.defaultView.happyDOM.abort();
 });
 
 test('Watch accurately distinguishes a live server feed from the archive', () => {

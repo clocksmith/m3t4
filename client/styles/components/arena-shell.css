@@ -1,0 +1,46 @@
+/* Shared geometry: route-specific controls never participate in arena layout. */
+body.arena-mounted { overflow: hidden; }
+body.arena-mounted #app { padding: 8px; }
+body.arena-mounted #bottom { display: none; }
+.page.arena-page { gap: 0; min-height: 0; max-width: none; margin: 0; }
+.arena-toolbar { height: 60px; flex: 0 0 60px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.arena-heading { min-width: 0; }
+.arena-heading h1 { font-size: 18px; }
+.arena-heading .page-subtitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 58vw; }
+.arena-actions { display: flex; gap: 8px; flex: 0 0 auto; align-items: center; }
+.arena-actions button { min-height: 40px; }
+.arena-viewport { width: 100%; min-width: 0; display: flex; justify-content: center; align-items: flex-start; }
+.arena-page .arena-frame { position: relative; flex: 0 0 auto; max-width: none; aspect-ratio: 16 / 9; border: 0; border-radius: 0; background: var(--arena-bg); overflow: hidden; }
+.arena-frame > canvas, .arena-frame .spectate-stage-canvas-wrap > canvas { display: block; width: 100% !important; height: 100% !important; border: 0; border-radius: 0; }
+.arena-dialog { position: fixed; inset: 0; margin: auto; width: min(960px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 18px; overflow: auto; border: 1px solid var(--ui-border); border-radius: 12px; background: var(--ui-bg); color: var(--ui-text); }
+.arena-dialog::backdrop { background: var(--ui-paint-rgba-0-0-0-0-5); }
+.arena-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.arena-dialog-header h2 { font-size: 18px; }
+.arena-dialog-note { margin-bottom: 12px; color: var(--ui-text-soft); font-size: 13px; }
+.arena-dialog-content { display: grid; gap: 14px; }
+.arena-dialog .duel-workbench { display: block; }
+.arena-dialog .duel-context-card { position: static; max-height: none; }
+.arena-dialog .duel-character-select { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.arena-dialog .grid-3 { display: flex; flex-wrap: wrap; }
+.arena-dialog .grid-3 > .player-panel { flex: 1 1 300px; min-width: 0; }
+.arena-dialog .grid-3 > .canvas-panel { flex: 1 1 100%; order: 2; }
+.arena-dialog .spectate-grid { display: flex; flex-direction: column; }
+.arena-dialog .spectate-side { width: 100%; }
+.arena-dialog .spectate-center:empty { display: none; }
+.arena-dialog .live-briefing-card { margin: 0; }
+.arena-page:fullscreen { background: var(--ui-bg); padding: 8px; }
+.arena-frame .duel-touch-controls { width: auto; position: absolute; z-index: 4; inset: auto 8px 8px; max-width: none; padding: 0; pointer-events: none; }
+.arena-frame .duel-touch-control { pointer-events: auto; opacity: .8; }
+.arena-frame .duel-touch-pad { grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(2, 44px); }
+.arena-frame .duel-touch-control.is-action { width: 72px; height: 72px; }
+.arena-frame canvas:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; }
+@media (max-width: 640px) {
+  .arena-toolbar { gap: 6px; }
+  .arena-heading .page-subtitle { display: none; }
+  .watch-page .arena-heading .page-subtitle { display: block; }
+  .arena-actions { gap: 4px; }
+  .arena-actions button { padding-inline: 8px; font-size: 12px; }
+  .arena-dialog .duel-character-select { grid-template-columns: 1fr; }
+  .arena-frame .duel-touch-control.is-action { width: 60px; height: 60px; }
+  .arena-frame .duel-touch-control { font-size: 10px; }
+}

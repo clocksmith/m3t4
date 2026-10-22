@@ -1,0 +1,74 @@
+<!doctype html>
+<meta charset="utf-8"><title>Shared arena layout regression</title>
+<style>body{font:14px system-ui;margin:12px;background:#12131a;color:#eee}button{padding:10px}iframe{display:block;border:0;margin-top:12px}pre{white-space:pre-wrap;max-height:110px;overflow:auto}#viewport{overflow:auto}</style>
+<h1>Shared arena layout regression</h1>
+<p>Real same-origin route frames, not device emulation. No ranked writes. Checks exact shared geometry, retained canvas nodes, modal focus and local tick pause.</p>
+<button id="run">Run responsive route checks</button><pre id="results">Ready</pre><div id="viewport"></div>
+<script type="module">
+const result=document.querySelector('#results'),host=document.querySelector('#viewport');
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+async function until(fn){const end=performance.now()+12000;while(performance.now()<end){if(fn())return;await wait(30);}throw Error('route did not become ready');}
+const rect=el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};};
+const equal=(a,b)=>['x','y','width','height'].every(k=>Math.abs(a[k]-b[k])<.02);
+function assert(value,message){if(!value)throw Error(message);}
+document.querySelector('#run').onclick=async()=>{
+ const rows=[];result.textContent='Running';document.querySelector('#run').disabled=true;
+ try{
+  const portraitOnly=new URLSearchParams(location.search).get('portrait')==='1';
+  for(const [width,height] of portraitOnly?[[390,844]]:[[1180,757],[390,844],[844,390]]){
+   let reference=null;
+   for(const route of ['live','tune','duel']){
+    const frame=document.createElement('iframe');frame.width=width;frame.height=height;frame.title=route;host.replaceChildren(frame);frame.src='/'+route;
+    await until(()=>frame.contentDocument?.readyState==='complete'&&frame.contentDocument.querySelector('.arena-frame canvas'));
+    const doc=frame.contentDocument;
+    let last=null,stable=0;await until(()=>{const r=rect(doc.querySelector('.arena-frame canvas'));stable=last&&equal(last,r)?stable+1:0;last=r;return stable>=4&&r.width>0;});
+    const canvas=doc.querySelector('.arena-frame canvas'),before=rect(canvas),opener=doc.querySelector('#arena-settings'),dialog=doc.querySelector('#arena-dialog');
+    assert(Math.abs(before.width/before.height-16/9)<.0002,'aspect ratio drift');
+    const canvasStyle=frame.contentWindow.getComputedStyle(canvas);
+    assert(parseFloat(canvasStyle.borderLeftWidth)===0&&parseFloat(canvasStyle.borderTopWidth)===0,'canvas border distorts drawing aspect');
+    assert(before.x>=0&&before.y>=0&&before.x+before.width<=width+.02&&before.y+before.height<=height+.02,'arena overflows viewport');
+    if(reference)assert(equal(reference,before),`route geometry drift: ${route}, expected ${JSON.stringify(reference)}, got ${JSON.stringify(before)}`);else reference=before;
+    const pause=doc.querySelector('#duel-pause,#test-pause');
+    if(route==='duel')doc.querySelector('#duel-start').click();
+    await wait(80);
+    const tick=()=>Number.parseInt(doc.querySelector('#duel-stat-tick,#build-stat-tick')?.textContent||'0',10);
+    const seed=()=>doc.querySelector('#duel-stat-seed,#build-stat-seed')?.textContent;
+    const originalSeed=seed();
+    if(route==='duel'){
+      // Exercise the real controls with the visibility normally supplied by
+      // coarse-pointer media. This is not touch-device emulation.
+      const touch=doc.querySelector('#duel-touch-controls');touch.style.display='flex';
+      for(const button of touch.querySelectorAll('button')){
+        const b=rect(button);assert(b.width>=44&&b.height>=44,'touch target too small');
+        assert(b.x>=before.x&&b.y>=before.y&&b.x+b.width<=before.x+before.width+.02&&b.y+b.height<=before.y+before.height+.02,'touch button outside arena');
+      }
+      const left=touch.querySelector('[data-touch-action="left"]');
+      left.dispatchEvent(new frame.contentWindow.PointerEvent('pointerdown',{bubbles:true,pointerId:7}));
+      assert(left.classList.contains('is-pressed'),'touch input did not latch for release check');
+    }
+    opener.focus();opener.click();await wait(80);const pausedTick=tick();
+    assert(dialog.open,'dialog did not open');
+    if(route==='duel')assert(!doc.querySelector('.duel-touch-control.is-pressed'),'held touch input was not released');assert(dialog.contains(doc.activeElement),'focus escaped dialog');
+    assert(equal(before,rect(canvas)),'opening dialog moves arena');
+    await wait(120);if(route!=='live')assert(tick()===pausedTick,'local preview advanced behind settings');
+    const drect=rect(dialog);assert(drect.width<=width&&drect.height<=height,'dialog does not fit viewport');
+    dialog.querySelector('[data-dialog-close]').click();await wait(80);
+    assert(!dialog.open,'dialog did not close');assert(doc.activeElement===opener,'opener focus not restored');
+    assert(doc.querySelector('.arena-frame canvas')===canvas,'canvas was recreated');assert(equal(before,rect(canvas)),'closing dialog moves arena');
+    if(route!=='live'){
+      assert(seed()===originalSeed,'dialog replaced match seed');
+      await until(()=>tick()>pausedTick);
+      pause.click();await wait(40);const manualTick=tick();
+      opener.click();await wait(40);dialog.dispatchEvent(new frame.contentWindow.Event('cancel',{cancelable:true}));await wait(80);
+      assert(tick()===manualTick,'closing settings resumed a manually paused match');
+      pause.click();
+    }
+    rows.push({viewport:[width,height],route,rect:before,dialogFits:true,canvasPreserved:true,pause:route==='live'?'continues':'preserved',touch:route==='duel'?'44px minimum, in-frame, released on settings':'not applicable'});
+    result.textContent=JSON.stringify({status:'running',rows},null,2);
+   }
+  }
+  result.textContent=JSON.stringify({status:'passed',rows},null,2);
+ }catch(error){result.textContent=JSON.stringify({status:'failed',message:error.message,rows},null,2);}
+ finally{document.querySelector('#run').disabled=false;}
+};
+</script>

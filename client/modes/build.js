@@ -7,6 +7,7 @@
 // previews use the server boundary; manual matches remain local sandboxes.
 // No Workshop result is promoted to ranked authority.
 
+import { mountArenaShell } from "../ui/arena-shell.js";
 import {
   MIN_CLEAN_SPEND,
   MAX_DERIVED_HALLUCINATION,
@@ -90,6 +91,9 @@ let testRenderer = null;
 let testCanvas = null;
 let testRafId = 0;
 let testRunning = false;
+let arenaShell = null;
+let manuallyPaused = false;
+let previewPausedAt = null;
 let rendererMountId = 0;
 let mountMediaHandler = null;
 let previewFrames = [];
@@ -236,7 +240,7 @@ function startPrompt() {
   return "press space to fight";
 }
 function onKeyDown(e) {
-  if (isTypingTarget(e.target) || e.target?.closest?.("button, summary, a")) return;
+  if (previewPausedAt !== null || arenaShell?.dialog.open || isTypingTarget(e.target) || e.target?.closest?.("button, summary, a")) return;
   if (e.code === "Space") {
     e.preventDefault();
     requestPreview({ newSeed: true });
@@ -318,6 +322,15 @@ export function mount(root, { setStatus }) {
 
   const rendererId = ++rendererMountId;
   testCanvas = root.querySelector("#test-canvas");
+  manuallyPaused = false; previewPausedAt = null;
+  const pause = document.createElement("button"); pause.type = "button"; pause.id = "test-pause"; pause.textContent = "Pause";
+  pause.addEventListener("click", () => { manuallyPaused = !manuallyPaused; syncPreviewPause(); });
+  arenaShell = mountArenaShell(root, {
+    title: "Tune", canvas: testCanvas, actions: [root.querySelector("#test-resim")], pause, status: root.querySelector("#build-preview-copy"),
+    note: "The preview pauses while you tune. Close this dialog, then Test changes to replay the same seed with your edits.",
+    onOpen: () => { keyset.clear(); syncPreviewPause(true); },
+    onClose: () => { keyset.clear(); syncPreviewPause(false); },
+  });
   void attachTestRenderer(rendererId, testCanvas);
 
   // Tap the canvas to (re)run a fresh test fight; mirrors the spacebar
@@ -363,6 +376,7 @@ export function mount(root, { setStatus }) {
 }
 
 export function unmount() {
+  arenaShell?.destroy(); arenaShell = null; manuallyPaused = false; previewPausedAt = null;
   rendererMountId++;
   testRunning = false;
   previewRequestId++;
@@ -514,7 +528,7 @@ function refreshFoldBadge(slot) {
 // ==================== WIRING ====================
 
 function wireMatchBar(root) {
-  const refocus = () => { keyset.clear(); testCanvas.focus(); };
+  const refocus = refocusCanvas;
   const setStage = (nextStageId) => {
     if (!STAGE_IDS.includes(nextStageId) || nextStageId === stageId) return;
     stageId = nextStageId;
@@ -633,7 +647,11 @@ function applyModeVisibility(slot) {
   refreshPreviewCopy();
 }
 
-function refocusCanvas() { keyset.clear(); testCanvas?.focus(); }
+function refocusCanvas() {
+  keyset.clear();
+  if (arenaShell?.dialog.open) return;
+  testCanvas?.focus();
+}
 
 function flashMsg(text) {
   const el = document.getElementById("build-msg");
@@ -786,6 +804,7 @@ function actionForSlot(slot) {
 
 function stepLocalSim(nowMs) {
   if (!localWorld) return null;
+  if (previewPausedAt !== null) { localPlayedAtMs = nowMs; return worldToFrame(localWorld); }
   if (localWorld.matchWinner !== -1) return worldToFrame(localWorld);
   let dt = nowMs - localPlayedAtMs;
   localPlayedAtMs = nowMs;
@@ -866,6 +885,20 @@ async function requestPreview({ newSeed = false } = {}) {
   }
 }
 
+function syncPreviewPause(dialogOpen = arenaShell?.dialog.open ?? false) {
+  const paused = manuallyPaused || dialogOpen;
+  const now = performance.now();
+  keyset.clear();
+  if (paused && previewPausedAt === null) previewPausedAt = now;
+  if (!paused && previewPausedAt !== null) {
+    previewStartedAt += Math.max(0, now - Math.max(previewPausedAt, previewStartedAt));
+    localPlayedAtMs = now;
+    previewPausedAt = null;
+  }
+  const button = document.getElementById("test-pause");
+  if (button) { button.textContent = manuallyPaused ? "Resume" : "Pause"; button.setAttribute("aria-pressed", String(manuallyPaused)); }
+}
+
 function startLoop() {
   testRunning = true;
   previewStartedAt = performance.now();
@@ -889,7 +922,7 @@ function loopTest() {
 
 function currentPreviewFrame() {
   if (!previewFrames.length) return null;
-  const elapsedTicks = Math.floor(((performance.now() - previewStartedAt) / 1000) * SIM_HZ);
+  const elapsedTicks = Math.max(0, Math.floor((((previewPausedAt ?? performance.now()) - previewStartedAt) / 1000) * SIM_HZ));
   const idx = Math.min(previewFrames.length - 1, Math.floor(elapsedTicks / Math.max(1, previewStride)));
   return previewFrames[idx];
 }

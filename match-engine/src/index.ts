@@ -4,6 +4,19 @@
 
 export { expected, updatePair } from "./elo.js";
 export {
+  BACKGROUND_SCHEDULER_VERSION,
+  BACKGROUND_HISTORY_LIMIT,
+  BACKGROUND_ROSTER_LIMIT,
+  selectBackgroundPair,
+  evaluationFighterKey,
+  evaluationUncertainty,
+  evaluationSeed,
+  type EvaluationFighter,
+  type EvaluationHistoryEntry,
+  type BackgroundScheduleOptions,
+  type BackgroundSelection,
+} from "./background-scheduler.js";
+export {
   selectPair,
   rankedSideSwap,
   type StableSummary,

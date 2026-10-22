@@ -1,18 +1,15 @@
 // Spectate mode. Connects to /ws, renders server-streamed trace frames.
 // No client-side sim — the whole point is config privacy.
 //
-// Playback: frames arrive in chunks (server STRIDE=3 sim frames per ~25ms).
-// We buffer them in a FIFO and play back against a wall-clock baseline at
-// the canonical sim rate (120Hz), interpolating fighter/token positions
-// between adjacent frames on every RAF. This smooths:
-//   - the 3:2 pulldown jank of 40Hz source on a 60Hz display
-//   - network jitter (via a larger live buffer before playback starts;
-//     bursts past MAX_BUFFER_FRAMES are trimmed back to the live window
-//     so latency can't grow unbounded after a stall or tab background)
+// Playback: wall time schedules complete recorded simulation frames. Never
+// combine an interpolated position with attack/facing state from another tick.
+// At a sparse feed's cadence, hold the last complete sample until the next one
+// is due. Buffering still absorbs packet jitter without inventing combat poses.
 
 import { WS_ORIGIN, leaderboardPage } from "../lib/api.js";
 import { STAGES } from "../lib/public-sim.js";
 import { createFrameRenderer, W, H } from "../render/index.js";
+import { completeTickFrame } from "../render/tick-frame.js";
 import { getComputeClient } from "../lib/compute.js";
 import { getAudio, audioEnabledStored } from "../lib/audio.js";
 import { escapeHtml } from "../ui/html.js";
@@ -59,7 +56,6 @@ const SIM_HZ = 120;                // canonical sim rate
 const JITTER_BUFFER_FRAMES = 24;   // ~8 chunks at STRIDE=3 -> ~200ms
 const LIVE_BUFFER_FRAMES = 36;     // target after trimming -> ~300ms
 const MAX_BUFFER_FRAMES = 90;      // hard cap -> ~750ms
-const TELEPORT_PX = 200;           // position jump above this snaps instead of lerps
 const LEADERBOARD_PAGE_SIZE = 25;
 const COUNTDOWN_PORTRAIT_ACCENTS = [
   { accentVar: "--arena-p1", fallback: "#6ee7b7" },
@@ -1031,8 +1027,7 @@ function appendFrames(frames) {
 }
 
 // Compute the frame to display at this RAF tick.
-// Wall-clock paced against the canonical SIM_HZ; interpolates positions
-// between the two adjacent buffered frames that bracket the target tick.
+// Wall time controls presentation cadence, never fighter geometry or attack phase.
 function currentFrame() {
   if (!playbackStarted) return null;
   if (frameBuf.length === 0) {
@@ -1059,33 +1054,7 @@ function currentFrame() {
     updateBufferStat("refilling");
     return a;
   }
-  if (targetTick >= b.tick) return b;
-
-  const span = (b.tick - a.tick) || 1;
-  const raw = (targetTick - a.tick) / span;
-  const t = raw < 0 ? 0 : raw > 1 ? 1 : raw;
-  return interpolateFrame(a, b, t);
-}
-
-function lerp(a, b, t) { return a + (b - a) * t; }
-
-function interpFighter(a, b, t) {
-  const snap = Math.abs(b.x - a.x) > TELEPORT_PX || Math.abs(b.y - a.y) > TELEPORT_PX;
-  return {
-    ...b,                         // discrete state (facing, dead, swipeT, diveT) from newer frame
-    x: snap ? b.x : lerp(a.x, b.x, t),
-    y: snap ? b.y : lerp(a.y, b.y, t),
-  };
-}
-
-function interpolateFrame(a, b, t) {
-  const out = { ...b };
-  out.p0 = interpFighter(a.p0, b.p0, t);
-  out.p1 = interpFighter(a.p1, b.p1, t);
-  if (b.token?.exists && a.token?.exists) {
-    out.token = { ...b.token, x: lerp(a.token.x, b.token.x, t), y: lerp(a.token.y, b.token.y, t) };
-  }
-  return out;
+  return completeTickFrame(a, b, targetTick);
 }
 
 async function refreshLeaderboard({ append = false, reset = false } = {}) {

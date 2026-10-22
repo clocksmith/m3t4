@@ -1,4 +1,7 @@
 import { imageState, loadImage } from "./image-assets.js";
+import { swordSeg, fighterHurtbox } from "../sim/combat-geometry.js";
+import { DOUBLE_KO_RESPAWN_S } from "../sim/constants.js";
+import { bodyFramePlacement, WEAPON_ART, weaponArtTransform } from "./fighter-art.js";
 // Shared canvas renderer. Takes a TraceFrame (from sim) + stage and draws
 // the scene. Used by both Spectate (server frames) and Practice (local).
 
@@ -52,52 +55,31 @@ function fighterPalette(side) {
   };
 }
 
-// footY = frame-pixel y where the visible feet touch ground in standing
-// poses (measured from each sheet's idle/run frames). The renderer aligns
-// this to f.y + STATS.bodyH/2 so visible feet sit on the floor instead of
-// overhanging it. handBiasX/Y nudges the shared weapon-anchor table to
-// match each character's actual hand pixels (sama runs slightly narrower,
-// mark wider, etc.). All four sheets are 64×64 with feet at y≈62-63.
+// Body atlas identity and animation timing. Per-frame calibration lives in fighter-art.
 const CHARACTER_SPRITES = [
   ["sama", {
     url: "assets/chars/sama/monastic_infra/sprite.png",
     frameW: 64,
     frameH: 64,
-    footY: 62,
-    handBiasX: 0,
-    handBiasY: 0,
     anims: spriteAnims(),
-    weaponAnchors: weaponAnchors(),
   }],
   ["darrius", {
     url: "assets/chars/darrius/legal_department_midnight/sprite.png",
     frameW: 64,
     frameH: 64,
-    footY: 62,
-    handBiasX: 0,
-    handBiasY: 0,
     anims: spriteAnims(),
-    weaponAnchors: weaponAnchors(),
   }],
   ["demis", {
     url: "assets/chars/demis/chalk_and_static/sprite.png",
     frameW: 64,
     frameH: 64,
-    footY: 63,
-    handBiasX: 1,
-    handBiasY: 0,
     anims: spriteAnims(),
-    weaponAnchors: weaponAnchors(),
   }],
   ["mark", {
     url: "assets/chars/mark/wellness_berserker/sprite.png",
     frameW: 64,
     frameH: 64,
-    footY: 63,
-    handBiasX: 2,
-    handBiasY: 0,
     anims: spriteAnims(),
-    weaponAnchors: weaponAnchors(),
   }],
 ];
 
@@ -148,20 +130,17 @@ const characterImages = Object.fromEntries(Object.entries(BODY_KITS).map(([body,
   { ...imageState(kit.url), kit },
 ]));
 
-const spriteState = DEFAULT_BODIES.map((bodyId) => ({
+const createSpriteState = () => DEFAULT_BODIES.map((bodyId) => ({
   bodyId,
   kit: BODY_KITS[bodyId],
-  anim: "idle",
-  startTick: 0,
   pose: null,
-  lastTick: null,
-  lastX: null,
-  lastY: null,
 }));
 
+const renderStateByContext = new WeakMap();
+let spriteState = createSpriteState();
 const weaponState = new Map();
 const portraitState = new Map(Object.entries(PORTRAIT_SHEETS).map(([body, kit]) => [body, { ...imageState(kit.url), kit }]));
-const hudPortraitState = [hudPortraitInitialState(), hudPortraitInitialState()];
+let hudPortraitState = [hudPortraitInitialState(), hudPortraitInitialState()];
 let sideCosmetics = DEFAULT_BODIES.map((body) => ({ body, weapon: DEFAULT_WEAPONS[body] }));
 
 const OBJECTIVE_IMAGES = {
@@ -222,36 +201,12 @@ function spriteAnims() {
   };
 }
 
-// Anchor x is offset from f.x (positive = forward of facing); anchor y is
-// offset from f.y (negative = above center). Tuned against the current
-// 64×64 sheets where the visible character spans ~y4-63, hands sit at
-// hip band (frame y≈42, i.e. anchor y≈+10), and the body bbox is x22-41
-// (so a hand reaching forward sits at frame x≈40-44, anchor x≈8-12).
-// Per-anim deltas mirror the original table's intent: arms raised on
-// jump/swing, dropped on KO, lifted overhead on carry.
-function weaponAnchors() {
-  const a = (x, y, angleBias = 0) => ({ x, y, angleBias });
-  return {
-    idle:      [a(10, 10, -0.03), a(11, 10, -0.02), a(10, 11, -0.03), a( 9, 10, -0.04)],
-    run:       [a(12, 11, -0.04), a(10, 10, -0.02), a( 8,  9,  0.00), a(10, 10, -0.02), a(12, 11, -0.04), a( 9, 10, -0.02)],
-    jump:      [a(11,  4, -0.10), a(13, -2, -0.16)],
-    fall:      [a(11, 10,  0.06), a(10, 13,  0.10)],
-    wallSlide: [a( 8, 12,  0.08), a( 8, 11,  0.08)],
-    dive:      [a(16,  2,  0.18), a(18,  4,  0.20)],
-    swing:     [a( 9,  6,  0.02), a(13,  2, -0.04), a(16, -2, -0.08), a(18, -4, -0.10), a(15,  2, -0.06), a(11,  6,  0.00)],
-    hit:       [a( 5, 10,  0.20), a( 4, 12,  0.24), a( 7, 11,  0.12)],
-    ko:        [a( 3, 18,  0.35), a( 1, 24,  0.55), a( 6, 28,  0.80), a( 6, 28,  0.80)],
-    carry:     [a( 8, -6, -0.45), a( 9, -7, -0.45)],
-    taunt:     [a( 7,  2, -0.25), a( 6,  0, -0.35), a( 7,  2, -0.25), a( 9,  6, -0.08)],
-    victory:   [a( 9,  4, -0.20), a(10,  2, -0.25), a(10,  3, -0.22), a( 8,  6, -0.15)],
-  };
-}
-
 function spriteImage(state) {
   const primary = characterImages[state.bodyId] ?? characterImages[DEFAULT_BODIES[0]];
   const img = loadImage(primary);
   if (img) {
     state.kit = primary.kit;
+    state.artBodyId = state.bodyId;
     return img;
   }
   if (!primary.failed) return null;
@@ -259,7 +214,10 @@ function spriteImage(state) {
   const fallbackBody = DEFAULT_BODIES[state.bodyId === DEFAULT_BODIES[0] ? 1 : 0] ?? DEFAULT_BODIES[0];
   const fallback = characterImages[fallbackBody];
   const fallbackImg = fallback ? loadImage(fallback) : null;
-  if (fallbackImg) state.kit = fallback.kit;
+  if (fallbackImg) {
+    state.kit = fallback.kit;
+    state.artBodyId = fallbackBody;
+  }
   return fallbackImg;
 }
 
@@ -285,6 +243,13 @@ export function setupCanvas(canvas) {
 }
 
 export function drawFrame(ctx, stage, frame, labels) {
+  let state = renderStateByContext.get(ctx);
+  if (!state) {
+    state = { sprites: createSpriteState(), portraits: [hudPortraitInitialState(), hudPortraitInitialState()] };
+    renderStateByContext.set(ctx, state);
+  }
+  spriteState = state.sprites;
+  hudPortraitState = state.portraits;
   sideCosmetics = [cosmeticsForSide(labels, 0), cosmeticsForSide(labels, 1)];
   const p1 = fighterPalette(0);
   const p2 = fighterPalette(1);
@@ -564,13 +529,12 @@ function drawToken(ctx, t) {
 function drawFighter(ctx, f, col, trim, shadow, side, frame) {
   if (f.dead) {
     drawSpriteFighter(ctx, f, side, frame);
-    updateSpriteMotion(side, f, frame);
     return;
   }
   const drewSprite = drawSpriteFighter(ctx, f, side, frame);
   if (!drewSprite) drawPrimitiveBody(ctx, f, col, trim, shadow);
   drawSword(ctx, f, shadow, side, frame);
-  updateSpriteMotion(side, f, frame);
+  drawCombatDebug(ctx, f);
 }
 
 // Character sprites render at native sheet size. Fighter scale belongs in
@@ -584,8 +548,6 @@ function drawSpriteFighter(ctx, f, side, frame) {
   if (state.bodyId !== selectedBody) {
     state.bodyId = selectedBody;
     state.kit = BODY_KITS[selectedBody] ?? BODY_KITS[DEFAULT_BODIES[side] ?? DEFAULT_BODIES[0]];
-    state.anim = "idle";
-    state.startTick = frame.tick ?? 0;
     state.pose = null;
   }
   const img = spriteImage(state);
@@ -595,39 +557,20 @@ function drawSpriteFighter(ctx, f, side, frame) {
   }
 
   const animName = chooseSpriteAnim(f, side, frame);
-  if (state.anim !== animName) {
-    state.anim = animName;
-    state.startTick = frame.tick ?? 0;
-  }
   const anim = state.kit.anims[animName] ?? state.kit.anims.idle;
-  const frameIdx = spriteFrameIndex(animName, anim, f, frame, state);
-  const sx = frameIdx * state.kit.frameW;
-  const sy = anim.row * state.kit.frameH;
-
-  // Align visible feet (frame-y = footY) with the body bbox bottom
-  // (f.y + bodyH/2). Positive shift moves the sprite down; the default
-  // footY = frameH centers the sprite on f.y as before.
-  const renderW = state.kit.frameW;
-  const renderH = state.kit.frameH;
-  const footY = state.kit.footY ?? renderH;
-  const verticalShift = STATS.bodyH / 2 + renderH / 2 - footY;
-
+  const frameIdx = spriteFrameIndex(animName, anim, f, frame);
+  const placement = bodyFramePlacement(state.artBodyId ?? state.bodyId, animName, frameIdx, { grounded: f.onGround, dead: f.dead });
+  const { crop } = placement;
+  const sx = placement.sourceFrame * state.kit.frameW + crop.x;
+  const sy = anim.row * state.kit.frameH + crop.y;
   ctx.save();
   ctx.imageSmoothingEnabled = false;
-  ctx.translate(Math.round(f.x), Math.round(f.y) + verticalShift);
-  // Source sheets face camera-right. Facing left is a horizontal flip.
-  // Wall-slide art should face the contacted wall, not whatever the brain was
-  // aiming at that tick. Do not flip Y; canvas Y grows downward and a Y flip
-  // would invert the body.
+  ctx.translate(Math.round(f.x), Math.round(f.y) + STATS.bodyH / 2);
   const renderFacing = animName === "wallSlide" && f.wall ? f.wall : f.facing;
   state.pose = { animName, frameIdx, renderFacing };
-  if (renderFacing < 0) ctx.scale(-1, 1);
-  ctx.drawImage(
-    img,
-    sx, sy, state.kit.frameW, state.kit.frameH,
-    -renderW / 2, -renderH / 2,
-    renderW, renderH
-  );
+  ctx.scale(renderFacing * placement.sourceFacing < 0 ? -1 : 1, 1);
+  ctx.drawImage(img, sx, sy, crop.w, crop.h,
+    crop.x - placement.rootX, crop.y - placement.footY, crop.w, crop.h);
   ctx.restore();
   return true;
 }
@@ -647,33 +590,38 @@ function chooseSpriteAnim(f, side, frame) {
     return "idle";
   }
 
-  // Backward-compatible fallback for old trace streams that only carried x/y.
-  const state = spriteState[side];
-  const dx = state?.lastX == null ? 0 : f.x - state.lastX;
-  const dy = state?.lastY == null ? 0 : f.y - state.lastY;
-  if (dy < -0.8) return "jump";
-  if (dy > 0.8) return "fall";
-  if (Math.abs(dx) > 0.8) return "run";
+  // Legacy traces without motion fields use a stable idle pose. Inferring
+  // motion from the previously rendered sample makes seeks non-deterministic.
   return "idle";
 }
 
-function spriteFrameIndex(animName, anim, f, frame, state) {
+function spriteFrameIndex(animName, anim, f, frame) {
+  const bounded = index => Number.isFinite(index)
+    ? Math.max(0, Math.min(anim.frames - 1, Math.floor(index))) : anim.frames - 1;
   if (animName === "swing" && STATS.swipeTime > 0) {
     const progress = 1 - Math.max(0, Math.min(1, f.swipeT / STATS.swipeTime));
-    return Math.max(0, Math.min(anim.frames - 1, Math.floor(progress * anim.frames)));
+    return bounded(progress * anim.frames);
   }
-  const ticksPerFrame = Math.max(1, Math.round(120 / anim.fps));
-  const elapsed = Math.max(0, (frame.tick ?? 0) - state.startTick);
-  const idx = Math.floor(elapsed / ticksPerFrame);
-  return anim.loop ? idx % anim.frames : Math.min(anim.frames - 1, idx);
-}
-
-function updateSpriteMotion(side, f, frame) {
-  const state = spriteState[side];
-  if (!state) return;
-  state.lastTick = frame.tick ?? null;
-  state.lastX = f.x;
-  state.lastY = f.y;
+  const tick = Math.floor(frame.tick ?? 0);
+  const ticksPerFrame = Math.max(1, Math.round(SIM_HZ / anim.fps));
+  if (animName === "jump") return f.vy < -STATS.jump * 0.4 ? 0 : anim.frames - 1;
+  if (animName === "fall") return f.vy < STATS.diveSpeed * 0.35 ? 0 : anim.frames - 1;
+  if (animName === "dive") {
+    return Number.isFinite(f.lastAttackStartTick)
+      ? bounded((tick - f.lastAttackStartTick) / ticksPerFrame)
+      : (f.diveT > 0.18 ? 0 : anim.frames - 1);
+  }
+  if (animName === "hit") return bounded((tick - f.lastClashTick) / ticksPerFrame);
+  if (animName === "ko") {
+    return Number.isFinite(f.respawnT)
+      ? bounded((1 - f.respawnT / DOUBLE_KO_RESPAWN_S) * anim.frames)
+      : anim.frames - 1;
+  }
+  // A frame has the same pose after seeking, dropping render frames, loading
+  // images late or drawing into a second canvas. Wall time only schedules paint.
+  const elapsed = Math.max(0, tick - Math.floor(frame.roundStartTick ?? 0));
+  const index = Math.floor(elapsed / ticksPerFrame);
+  return anim.loop ? index % anim.frames : bounded(index);
 }
 
 function drawPrimitiveBody(ctx, f, col, trim, shadow) {
@@ -698,24 +646,12 @@ function drawSword(ctx, f, shadow, side, frame) {
   const clashAge = clashVisualAge(f, frame);
   const clashing = Number.isFinite(clashAge);
   const active = f.swipeT > 0 || f.diveT > 0 || clashing;
-  const base = weaponBasePoint(f, side, active);
-  let angle = base.angleBias ?? 0;
-  if (f.diveT > 0) angle += Math.PI * 0.46;
-  else if (clashing) angle += 0;
-  else if (f.swipeT > 0) {
-    const t = 1 - f.swipeT / STATS.swipeTime;
-    // Upward anti-air slash: horizontal-forward → ~57° up (must match sim/swordSeg).
-    const ease = 1 - (1 - t) ** 3;
-    angle += 0.0 + (-1.0 - 0.0) * ease;
-  }
-  const dx = Math.cos(angle) * base.facing;
-  const dy = Math.sin(angle);
-  const len = STATS.sword;
-  const bx = base.x;
-  const by = base.y;
-  const tx = bx + dx * len;
-  const ty = by + dy * len;
-  if (drawWeaponSprite(ctx, side, bx, by, tx, ty, active)) {
+  const { bx, by, tx, ty } = swordSeg(f);
+  const pose = spriteState[side]?.pose;
+  const base = { animName: pose?.animName ?? "fallback", frameIdx: pose?.frameIdx ?? 0 };
+  drawSwingTrail(ctx, f);
+  if (drawWeaponSprite(ctx, side, bx, by, tx, ty, active, f.facing)) {
+    drawWeaponHand(ctx, f, side, shadow);
     drawWeaponAnchorDebug(ctx, { bx, by, tx, ty, side, active, animName: base.animName, frameIdx: base.frameIdx });
     return;
   }
@@ -735,44 +671,57 @@ function drawSword(ctx, f, shadow, side, frame) {
   ctx.beginPath(); ctx.arc(tx, ty, active ? 4 : 3, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = shadow;
   ctx.beginPath(); ctx.arc(bx, by, 4, 0, Math.PI * 2); ctx.fill();
+  drawWeaponHand(ctx, f, side, shadow);
   drawWeaponAnchorDebug(ctx, { bx, by, tx, ty, side, active, animName: base.animName, frameIdx: base.frameIdx });
 }
 
-function weaponBasePoint(f, side, active) {
-  const state = spriteState[side];
-  const pose = state?.pose;
-  const anchor = pose ? weaponAnchorForPose(state.kit.weaponAnchors, pose.animName, pose.frameIdx) : null;
-  const facing = active ? f.facing : (pose?.renderFacing ?? f.facing);
-  if (!anchor) {
-    return {
-      x: f.x + facing * STATS.bodyW * 0.35,
-      y: f.y - STATS.bodyH * 0.3,
-      facing,
-      angleBias: 0,
-      animName: pose?.animName ?? "fallback",
-      frameIdx: pose?.frameIdx ?? 0,
-    };
-  }
-  // Match the sprite renderer's footY-driven vertical translation so the
-  // weapon follows the body when the sprite is shifted up/down to align
-  // feet with the floor. handBiasX/Y nudge per character.
-  const kit = state.kit;
-  const footY = kit.footY ?? kit.frameH;
-  const verticalShift = STATS.bodyH / 2 + kit.frameH / 2 - footY;
-  return {
-    x: f.x + (anchor.x + (kit.handBiasX ?? 0)) * facing,
-    y: f.y + verticalShift + anchor.y + (kit.handBiasY ?? 0),
-    facing,
-    angleBias: anchor.angleBias ?? 0,
-    animName: pose.animName,
-    frameIdx: pose.frameIdx,
-  };
+function drawWeaponHand(ctx, f, side, shadow) {
+  // A tiny forearm/cuff bridges the source body's shoulder to the shared grip.
+  // Do not drag the weapon to whichever hand happens to be in a sprite cell.
+  const { bx, by, tx, ty } = swordSeg(f);
+  const hx = bx + (tx - bx) * 3 / STATS.sword;
+  const hy = by + (ty - by) * 3 / STATS.sword;
+  const body = sideCosmetics[side]?.body;
+  ctx.save();
+  ctx.lineCap = "round"; ctx.lineWidth = 5; ctx.strokeStyle = shadow;
+  ctx.beginPath(); ctx.moveTo(f.x + f.facing * 6, f.y - 7); ctx.lineTo(hx, hy); ctx.stroke();
+  ctx.fillStyle = ({ sama: "#d7b4aa", darrius: "#bf8d59", demis: "#b99059", mark: "#d9aa96" })[body] ?? "#d7b4aa";
+  ctx.fillRect(Math.round(hx) - 2, Math.round(hy) - 2, 4, 4);
+  ctx.restore();
 }
 
-function weaponAnchorForPose(anchors, animName, frameIdx) {
-  const frames = anchors?.[animName] ?? anchors?.idle;
-  if (!frames?.length) return null;
-  return frames[Math.max(0, Math.min(frames.length - 1, frameIdx))] ?? frames[0];
+function drawSwingTrail(ctx, f) {
+  if (!(f.swipeT > 0) || f.diveT > 0) return;
+  const current = swordSeg(f);
+  const previous = swordSeg({ ...f, swipeT: Math.min(STATS.swipeTime, f.swipeT + 2 / SIM_HZ) });
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  ctx.fillStyle = cssColor("--arena-weapon-active", "white");
+  ctx.beginPath();
+  ctx.moveTo(current.bx, current.by);
+  ctx.lineTo(previous.tx, previous.ty);
+  ctx.lineTo(current.tx, current.ty);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function drawCombatDebug(ctx, f) {
+  if (!combatDebugEnabled()) return;
+  const hurt = fighterHurtbox(f);
+  const sword = swordSeg(f);
+  ctx.save(); ctx.lineWidth = 1;
+  ctx.strokeStyle = "#67e8f9";
+  ctx.strokeRect(f.x - STATS.bodyW / 2, f.y - STATS.bodyH / 2, STATS.bodyW, STATS.bodyH);
+  ctx.strokeStyle = "#fb7185";
+  ctx.beginPath(); ctx.arc(hurt.x, hurt.y, hurt.radius, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = "#fde047";
+  ctx.beginPath(); ctx.moveTo(sword.bx, sword.by); ctx.lineTo(sword.tx, sword.ty); ctx.stroke();
+  ctx.restore();
+}
+
+function combatDebugEnabled() {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location?.search ?? "").get("combatDebug") === "1";
 }
 
 function clashVisualAge(f, frame) {
@@ -879,7 +828,7 @@ export function fitCanvasText(ctx, value, maxWidth) {
   return chars.join("") + "…";
 }
 
-function drawWeaponSprite(ctx, side, bx, by, tx, ty, active) {
+function drawWeaponSprite(ctx, side, bx, by, tx, ty, active, facing) {
   const selected = sideCosmetics[side] ?? cosmeticsForSide(null, side);
   const state = weaponImageState(selected.body, selected.weapon);
   if (!state) return false;
@@ -887,17 +836,15 @@ function drawWeaponSprite(ctx, side, bx, by, tx, ty, active) {
   if (!img) return false;
 
   const kit = state.kit;
-  const angle = Math.atan2(ty - by, tx - bx);
-  const scale = active ? 1.12 : 0.96;
-  const dw = kit.frameW * scale;
-  const dh = kit.frameH * scale;
-  const gripX = kit.gripX ?? 6;
-  const gripY = kit.gripY ?? kit.frameH / 2;
+  const art = WEAPON_ART[selected.body]?.[kit.cell];
+  if (!art) return false;
+  const transform = weaponArtTransform({ bx, by, tx, ty }, art, facing);
 
   if (active) {
     ctx.save();
     ctx.strokeStyle = cssColor("--arena-weapon-glow", "white");
-    ctx.lineWidth = 12;
+    ctx.globalAlpha = 0.18;
+    ctx.lineWidth = 6;
     ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(tx, ty); ctx.stroke();
     ctx.restore();
   }
@@ -905,16 +852,20 @@ function drawWeaponSprite(ctx, side, bx, by, tx, ty, active) {
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   ctx.translate(bx, by);
-  ctx.rotate(angle);
-  ctx.globalAlpha = active ? 1 : 0.78;
+  ctx.rotate(transform.worldAngle);
+  ctx.scale(transform.scale, transform.scale * transform.aspect);
+  ctx.rotate(-transform.sourceAngle);
+  ctx.scale(transform.mirror, 1);
+  ctx.globalAlpha = active ? 1 : 0.9;
   const cols = kit.cols ?? 2;
-  const sx = (kit.cell % cols) * kit.frameW;
-  const sy = Math.floor(kit.cell / cols) * kit.frameH;
+  const [cx, cy, cw, ch] = art.crop;
+  const sx = (kit.cell % cols) * kit.frameW + cx;
+  const sy = Math.floor(kit.cell / cols) * kit.frameH + cy;
   ctx.drawImage(
     img,
-    sx, sy, kit.frameW, kit.frameH,
-    -gripX * scale, -gripY * scale,
-    dw, dh
+    sx, sy, cw, ch,
+    cx - art.gripX, cy - art.gripY,
+    cw, ch
   );
   ctx.restore();
   return true;

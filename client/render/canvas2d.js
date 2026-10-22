@@ -1,3 +1,4 @@
+import { drawStageScenery } from "./stage-art.js";
 import { drawGoalHoldRing } from "./goal-progress.js";
 import { imageState, loadImage } from "./image-assets.js";
 import { swordSeg, fighterHurtbox } from "../sim/combat-geometry.js";
@@ -149,42 +150,6 @@ const OBJECTIVE_IMAGES = {
   target: imageState("assets/objectives/demand_node/target.png"),
 };
 
-const DATACENTER_PACK = {
-  sky: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/sky.webp", "assets/stages/datacenter/cold_aisle_chapel/layers/sky.png"),
-  farParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/far_parallax.webp", "assets/stages/datacenter/cold_aisle_chapel/layers/far_parallax.png"),
-  midParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/mid_parallax.webp", "assets/stages/datacenter/cold_aisle_chapel/layers/mid_parallax.png"),
-  nearParallax: imageState("assets/stages/datacenter/cold_aisle_chapel/layers/near_parallax.webp", "assets/stages/datacenter/cold_aisle_chapel/layers/near_parallax.png"),
-  platform: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/platform.png"),
-  platformEdge: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/platform_edge.png"),
-  wall: imageState("assets/stages/datacenter/cold_aisle_chapel/textures/wall.png"),
-};
-
-const BOARDROOM_PACK = {
-  sky: imageState("assets/stages/boardroom/fiduciary_basement/layers/sky.webp", "assets/stages/boardroom/fiduciary_basement/layers/sky.png"),
-  farParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/far_parallax.webp", "assets/stages/boardroom/fiduciary_basement/layers/far_parallax.png"),
-  midParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/mid_parallax.webp", "assets/stages/boardroom/fiduciary_basement/layers/mid_parallax.png"),
-  nearParallax: imageState("assets/stages/boardroom/fiduciary_basement/layers/near_parallax.webp", "assets/stages/boardroom/fiduciary_basement/layers/near_parallax.png"),
-  platform: imageState("assets/stages/boardroom/fiduciary_basement/textures/platform.png"),
-  platformEdge: imageState("assets/stages/boardroom/fiduciary_basement/textures/platform_edge.png"),
-  wall: imageState("assets/stages/boardroom/fiduciary_basement/textures/wall.png"),
-};
-
-const DEMODAY_PACK = {
-  sky: imageState("assets/stages/demoday/demo_day_afterparty/layers/sky.webp", "assets/stages/demoday/demo_day_afterparty/layers/sky.png"),
-  farParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/far_parallax.webp", "assets/stages/demoday/demo_day_afterparty/layers/far_parallax.png"),
-  midParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/mid_parallax.webp", "assets/stages/demoday/demo_day_afterparty/layers/mid_parallax.png"),
-  nearParallax: imageState("assets/stages/demoday/demo_day_afterparty/layers/near_parallax.webp", "assets/stages/demoday/demo_day_afterparty/layers/near_parallax.png"),
-  platform: imageState("assets/stages/demoday/demo_day_afterparty/textures/platform.png"),
-  platformEdge: imageState("assets/stages/demoday/demo_day_afterparty/textures/platform_edge.png"),
-  wall: imageState("assets/stages/demoday/demo_day_afterparty/textures/wall.png"),
-};
-
-const STAGE_ASSETS = {
-  datacenter: { ...DATACENTER_PACK, tint: null },
-  boardroom: { ...BOARDROOM_PACK, tint: null },
-  demoday: { ...DEMODAY_PACK, tint: null },
-};
-
 function spriteAnims() {
   return {
     idle:      { row: 0, frames: 4, fps: 6,  loop: true  },
@@ -256,7 +221,7 @@ export function drawFrame(ctx, stage, frame, labels) {
   const p2 = fighterPalette(1);
   ctx.fillStyle = cssColor("--arena-bg");
   ctx.fillRect(0, 0, W, H);
-  drawStage(ctx, stage, frame);
+  drawStageScenery(ctx, stage, frame, { reducedMotion: labels?.reducedMotion });
   drawGoal(ctx, frame);
   drawToken(ctx, frame.token);
   drawFighter(ctx, frame.p0, p1.body, p1.trim, p1.shadow, 0, frame);
@@ -283,126 +248,6 @@ export function createCanvas2DRenderer(canvas) {
       surface.teardown?.();
     },
   };
-}
-
-function drawStage(ctx, stage, frame) {
-  const pack = STAGE_ASSETS[stage.id];
-  drawStageGradient(ctx);
-  // Apply the per-stage tint across the whole stage (backdrop + platforms
-  // + walls + floor detail) so the subtle hue shift reads consistently.
-  // Sprites, token, and HUD render after this returns, unfiltered, so
-  // P1/P2 identity colors stay true.
-  if (pack?.tint) ctx.filter = pack.tint;
-  drawStageBackdrop(ctx, pack, frame);
-  for (const p of stage.platforms) drawPlatform(ctx, p, pack);
-  if (pack?.tint) ctx.filter = "none";
-}
-
-function drawStageGradient(ctx) {
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, cssColor("--arena-sky-top"));
-  g.addColorStop(0.5, cssColor("--arena-sky-mid"));
-  g.addColorStop(1, cssColor("--arena-sky-bottom"));
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-}
-
-function drawStageBackdrop(ctx, pack, frame) {
-  if (!pack) return;
-  ctx.imageSmoothingEnabled = false;
-  const sky = loadImage(pack.sky);
-  if (sky) ctx.drawImage(sky, 0, 0, W, H);
-
-  const tick = frame?.tick ?? 0;
-  const far = loadImage(pack.farParallax);
-  if (far) drawHorizontalCoverImage(ctx, far, 0, 0, W, H, parallaxOffset(tick, 0.035));
-  const mid = loadImage(pack.midParallax);
-  if (mid) drawHorizontalCoverImage(ctx, mid, 0, 0, W, H, parallaxOffset(tick, 0.07));
-  const near = loadImage(pack.nearParallax);
-  if (near) drawHorizontalCoverImage(ctx, near, 0, 0, W, H, parallaxOffset(tick, 0.12));
-}
-
-function parallaxOffset(tick, pxPerTick) {
-  // Pixel art backdrops shimmer when canvas draws them at subpixel x
-  // positions. Snap to integer pixels and let depth come from speed.
-  return -Math.floor(tick * pxPerTick);
-}
-
-function drawPlatform(ctx, p, pack) {
-  const platform = pack ? loadImage(pack.platform) : null;
-  const edge = pack ? loadImage(pack.platformEdge) : null;
-  const wall = pack ? loadImage(pack.wall) : null;
-
-  if (p.solid && wall && p.h > 18) {
-    drawTiledImage(ctx, wall, p.x, p.y + 16, p.w, p.h - 16);
-  } else {
-    ctx.fillStyle = p.solid ? cssColor("--arena-platform-solid") : cssColor("--arena-platform-soft");
-    ctx.fillRect(p.x, p.y, p.w, p.h);
-  }
-
-  if (platform) {
-    drawTiledImage(ctx, platform, p.x, p.y, p.w, p.solid ? Math.min(36, p.h) : p.h);
-  }
-
-  if (edge) {
-    drawTiledImage(ctx, edge, p.x, p.y, p.w, Math.min(16, p.h));
-  } else {
-    ctx.fillStyle = cssColor("--arena-platform-highlight", "white");
-    ctx.fillRect(p.x, p.y, p.w, 3);
-  }
-}
-
-function drawTiledImage(ctx, img, x, y, w, h, offsetX = 0, offsetY = 0) {
-  const iw = img.naturalWidth || img.width;
-  const ih = img.naturalHeight || img.height;
-  if (!iw || !ih || w <= 0 || h <= 0) return;
-
-  ctx.save();
-  ctx.imageSmoothingEnabled = false;
-  ctx.beginPath();
-  ctx.rect(x, y, w, h);
-  ctx.clip();
-
-  const stepX = iw;
-  const stepY = ih;
-  let startX = Math.round(x - positiveMod(offsetX, stepX));
-  let startY = Math.round(y - positiveMod(offsetY, stepY));
-  while (startX > x) startX -= stepX;
-  while (startY > y) startY -= stepY;
-
-  for (let yy = startY; yy < y + h; yy += stepY) {
-    for (let xx = startX; xx < x + w; xx += stepX) {
-      ctx.drawImage(img, 0, 0, stepX, stepY, Math.round(xx), Math.round(yy), stepX, stepY);
-    }
-  }
-  ctx.restore();
-}
-
-function drawHorizontalCoverImage(ctx, img, x, y, w, h, offsetX = 0) {
-  const iw = img.naturalWidth || img.width;
-  const ih = img.naturalHeight || img.height;
-  if (!iw || !ih || w <= 0 || h <= 0) return;
-
-  const scale = h / ih;
-  const drawW = iw * scale;
-  if (!Number.isFinite(drawW) || drawW <= 0) return;
-
-  ctx.save();
-  ctx.imageSmoothingEnabled = false;
-  ctx.beginPath();
-  ctx.rect(x, y, w, h);
-  ctx.clip();
-
-  let startX = Math.round(x - positiveMod(offsetX, drawW));
-  while (startX > x) startX -= drawW;
-  for (let xx = startX; xx < x + w; xx += drawW) {
-    ctx.drawImage(img, 0, 0, iw, ih, Math.round(xx), y, drawW, h);
-  }
-  ctx.restore();
-}
-
-function positiveMod(value, mod) {
-  return ((value % mod) + mod) % mod;
 }
 
 // Goal ring = radial countdown. Starts full, sweeps down as the

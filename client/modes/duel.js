@@ -645,8 +645,7 @@ function setText(id, value) {
 function presetOptions(selected) {
   const rows = presetRanking.rows ?? PRESET_NAMES.map((name) => ({ name, wr: 0 }));
   return rows.map((r) => {
-    const pct = (Number(r.wr) * 100).toFixed(0);
-    return `<option value="${escapeHtml(r.name)}" ${r.name === selected ? "selected" : ""}>${escapeHtml(r.name)} · ${pct}%</option>`;
+    return `<option value="${escapeHtml(r.name)}" ${r.name === selected ? "selected" : ""}>${escapeHtml(r.name)}</option>`;
   }).join("");
 }
 
@@ -788,10 +787,11 @@ function controlsCardHtml() {
       </div>
 
       <div class="duel-keys" id="duel-keys"></div>
+      ${disclosureHtml({ label: "How to play", body: `<p>Move with A/D, jump with W, drop with S and strike with F. Press S + F in the air to dive.</p><p>Defeat your rival, collect the Proof Core, then deliver it to the glowing target. Two deliveries win a round; two rounds win the match.</p><p>Local P2 uses K/; to move, O to jump, L to drop and apostrophe to strike. Touch controls appear on touch devices.</p>` })}
 
       <div class="duel-row">
-        ${buttonHtml({ id: "duel-start", variant: "primary", text: "fight", attrs: { title: "Start a fresh match" } })}
-        ${buttonHtml({ id: "duel-reset", text: "reset", attrs: { title: "Reset to a fresh match with a new seed" } })}
+        ${buttonHtml({ id: "duel-start", variant: "primary", text: "Start match", attrs: { title: "Start a fresh match" } })}
+        ${buttonHtml({ id: "duel-reset", text: "Reset match", attrs: { title: "Clear this match and choose a fresh seed when you start again" } })}
       </div>
     </div>`;
 }
@@ -871,14 +871,16 @@ function keysHtml() {
 
 function statsListHtml() {
   return `
-    <div class="duel-stats" aria-live="polite">
-      <span class="stat"><span class="stat-label">tick</span><span class="stat-value" id="duel-stat-tick">0</span></span>
+    <div class="duel-stats">
       <span class="stat"><span class="stat-label">score</span><span class="stat-value" id="duel-stat-score">0-0</span></span>
       <span class="stat"><span class="stat-label">rounds</span><span class="stat-value" id="duel-stat-rounds">0-0</span></span>
+      <span class="stat duel-status"><span class="stat-label">status</span><span class="stat-value" id="duel-status" role="status">${escapeHtml(startPrompt())}</span></span>
+    </div>
+    ${disclosureHtml({ label: "Match details", body: `<div class="duel-stats">
+      <span class="stat"><span class="stat-label">tick</span><span class="stat-value" id="duel-stat-tick">0</span></span>
       <span class="stat"><span class="stat-label">seed</span><span class="stat-value" id="duel-stat-seed">—</span></span>
       <span class="stat"><span class="stat-label">link</span><span class="stat-value" id="duel-stat-link">local</span></span>
-      <span class="stat duel-status"><span class="stat-label">status</span><span class="stat-value" id="duel-status">${escapeHtml(startPrompt())}</span></span>
-    </div>`;
+    </div>` })}`;
 }
 
 function touchControlsHtml() {
@@ -908,7 +910,7 @@ export function mount(root, ctx = {}) {
     <div class="page duel-page">
       ${pageHeaderHtml({
         title: "Play",
-        subtitle: "play a match yourself · sandbox only · not ranked",
+        subtitle: "Play against AI or a friend. Choose an opponent, then start a match. Unranked sandbox.",
       })}
       <div class="duel-workbench">
         ${contextCardHtml({
@@ -917,7 +919,7 @@ export function mount(root, ctx = {}) {
           autoHeight: true,
         })}
         <section class="panel canvas-panel">
-          <canvas id="duel-canvas" class="u-canvas-fill" width="${W}" height="${H}" tabindex="0"></canvas>
+          <canvas id="duel-canvas" aria-label="Playable fighter arena. Keyboard controls are listed beside the match." class="u-canvas-fill" width="${W}" height="${H}" tabindex="0"></canvas>
           ${statsListHtml()}
           ${touchControlsHtml()}
         </section>

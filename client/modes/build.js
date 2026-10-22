@@ -148,14 +148,12 @@ function syncStagePicker(root = document) {
   });
 }
 
-// Preset dropdown: flat list of all 16 presets, sorted by round-robin
-// win rate (strongest top). The easy/medium/hard tier labels were
-// tripping users up — the win-rate % is a cleaner read.
+// Retain the established preset order without presenting stale benchmark
+// percentages as guarantees for the current brain version.
 function presetSelectOptions(selected) {
   const rows = presetRanking.rows ?? DEFAULT_PRESET_NAMES.map((name) => ({ name, wr: 0 }));
   return rows.map((r) => {
-    const pct = (r.wr * 100).toFixed(0);
-    return `<option value="${r.name}" ${r.name === selected ? "selected" : ""}>${r.name} · ${pct}%</option>`;
+    return `<option value="${r.name}" ${r.name === selected ? "selected" : ""}>${r.name}</option>`;
   }).join("");
 }
 
@@ -186,8 +184,8 @@ function glitchControlsHtml(keys) {
 
 const MODE_COPY = {
   user: {
-    title: "TUNER AUTHORING MODE",
-    body: "You are not choosing a hero. You are drafting an alibi the ledger can execute.",
+    title: "MAKE IT YOURS",
+    body: "Adjust traits below, then Test changes to compare on the same seed.",
   },
 };
 
@@ -286,8 +284,8 @@ export function mount(root, { setStatus }) {
             <div class="build-preview-controls">
               ${stagePickerHtml()}
               <div class="build-preview-actions">
-                ${buttonHtml({ id: "test-reset", text: "new matchup", attrs: { title: "Start again with a new random seed" } })}
-                ${buttonHtml({ id: "test-resim", variant: "primary", text: "test fight", attrs: { title: "Test the current fighters using the same seed" } })}
+                ${buttonHtml({ id: "test-reset", text: "New seed", attrs: { title: "Start again with a new random seed" } })}
+                ${buttonHtml({ id: "test-resim", variant: "primary", text: "Test changes", attrs: { title: "Test the current fighters using the same seed" } })}
               </div>
             </div>
             ${buildPreviewBriefingHtml()}
@@ -297,7 +295,7 @@ export function mount(root, { setStatus }) {
       <div class="grid-3">
         ${playerPanelHtml(0)}
         <section class="panel canvas-panel">
-          <canvas id="test-canvas" aria-label="Local fighter test arena. Change traits, then select test fight." class="u-canvas-fill" width="${W}" height="${H}" tabindex="0"></canvas>
+          <canvas id="test-canvas" aria-label="Local fighter test arena. Change traits, then select Test changes." class="u-canvas-fill" width="${W}" height="${H}" tabindex="0"></canvas>
           <div class="build-preview-stats">
             <div class="build-preview-copy tight" id="build-preview-copy">${escapeHtml(previewCopy())}</div>
             ${disclosureHtml({ label: "Match details", body: statListHtml([
@@ -415,7 +413,7 @@ function playerPanelHtml(slot) {
         ${["user","preset","human"].map((v) => `
           <label class="mode-pill ${v === mode ? "is-active" : ""}" data-mode="${v}">
             <input type="radio" name="slot${slot}-mode" value="${v}" ${v === mode ? "checked" : ""}>
-            <span>${v === "user" ? "BUILD" : v === "preset" ? "PRESET" : "HUMAN"}</span>
+            <span>${v === "user" ? "Custom" : v === "preset" ? "Preset" : "Keyboard"}</span>
           </label>`).join("")}
       </div>
 
@@ -504,9 +502,9 @@ function buildPreviewBriefingHtml() {
 // slot's current mode and, for PRESET, the selected preset name.
 function modeBadge(slot) {
   const m = modes[slot];
-  if (m === "user")  return "BUILD";
-  if (m === "human") return "HUMAN";
-  return `PRESET · ${slotPresetNames[slot]}`;
+  if (m === "user")  return "Custom";
+  if (m === "human") return "Keyboard";
+  return `Preset · ${slotPresetNames[slot]}`;
 }
 function refreshFoldBadge(slot) {
   const el = document.querySelector(`.player-fold-badge[data-slot="${slot}"]`);
@@ -731,8 +729,8 @@ function usesLocalPreview() { return hasHuman() || modes.every((mode) => mode ==
 
 function previewSubtitle() {
   return hasHuman()
-    ? "local sandbox · keyboard input · not ranked"
-    : usesLocalPreview() ? "Tune a fighter. Win the proof. Ship it home. · local sandbox" : "server preset preview · not ranked";
+    ? "Take control with the keyboard, or switch back to Custom to adjust traits. Unranked sandbox."
+    : usesLocalPreview() ? "Adjust traits, test your changes, then save a fighter you like. Unranked sandbox." : "Compare a preset with your fighter. Server preview, not a ranked match.";
 }
 function previewCopy() {
   return usesLocalPreview() ? "Kill → collect the Proof Core → deliver. Two deliveries win a round; two rounds win the match." : "server test fight · not ranked";
@@ -1055,8 +1053,8 @@ function updatePreviewControls() {
 
   if (resim) {
     resim.disabled = previewLoading;
-    resim.textContent = previewLoading ? "simulating..." : previewDirty ? "test fight*" : "test fight";
-    resim.title = resim.textContent;
+    resim.textContent = previewLoading ? "Testing…" : previewDirty ? "Test changes · updated" : "Test changes";
+    resim.title = previewDirty ? "Run your edited fighters again with the same seed for a fair comparison" : "Test the current fighters with the same seed";
     resim.classList.toggle("is-simulating", previewLoading);
     resim.classList.toggle("needs-resim", previewDirty && !previewLoading);
     resim.setAttribute("aria-busy", previewLoading ? "true" : "false");

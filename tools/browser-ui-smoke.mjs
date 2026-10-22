@@ -153,7 +153,7 @@ try {
     await page.goto(origin);
     await page.waitForFunction(() => document.querySelector("#build-stat-server")?.textContent === "local");
     await page.waitForFunction(() => parseInt(document.querySelector("#build-stat-tick")?.textContent, 10) > 60);
-    assert.equal(await page.locator("h1").textContent(), "Workshop");
+    assert.equal(await page.locator("h1").textContent(), "Tune");
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `overflow at ${width}`);
     assert.equal(requests.some(url => url.endsWith("/api/build/simulate")), false, "opening match must not require a server");
     assert.equal(requests.some(url => /\/render\/(webgpu|webgl)\.js$|\/modes\/intro\.js$/.test(url)), false, "unused modes and renderers are lazy");
@@ -187,7 +187,7 @@ try {
     await page.locator('label[data-mode="user"]').first().click();
     assert.equal(await trait.inputValue(), "23");
     await page.locator(".slot-submit").first().click();
-    await page.waitForSelector('[aria-label="Workshop"] a[href="/roster"][aria-current="page"]');
+    await page.waitForSelector('[aria-label="Fighter tuning"] a[href="/roster"][aria-current="page"]');
     assert.equal(await page.locator('#topnav [data-route="tune"]').getAttribute("aria-current"), "page");
     assert.equal(await page.evaluate(() => Boolean(sessionStorage.getItem("m3t4:pendingSubmit"))), true, "save handoff preserves config");
 

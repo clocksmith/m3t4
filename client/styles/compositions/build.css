@@ -20,11 +20,13 @@
 }
 .grid-3 > .panel { min-width: 0; }
 @media (max-width: 1200px) {
-  .grid-3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .grid-3 > .canvas-panel { grid-column: 1 / -1; order: -1; }
+  .grid-3 { grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); }
+  .grid-3 > .canvas-panel { grid-column: 2; grid-row: 1 / span 2; }
+  .grid-3 > .player-fold { grid-column: 1; }
 }
-@media (max-width: 640px) {
+@media (max-width: 800px) {
   .grid-3 { grid-template-columns: minmax(0, 1fr); }
+  .grid-3 > .canvas-panel { grid-column: 1; grid-row: auto; order: -1; }
 }
 
 /* --- collapsible JSON export inside each player panel --- */
@@ -188,8 +190,8 @@
 }
 .stage-option-label {
   min-width: 0;
-  overflow-wrap: anywhere;
-  font-size: 11px;
+  overflow-wrap: normal;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   line-height: 1.1;

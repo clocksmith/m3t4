@@ -4,7 +4,7 @@ import { createBrainState, resetBrainStateForRound, runParamBrain } from "../bra
 import { DEFAULT_PARAMS } from "../types.js";
 import type { Observation } from "../types.js";
 import { compileBrain } from "../dsl.js";
-import { createStepperWorld, runBrainForWorld, stepWorld, worldObservation } from "../simulate.js";
+import { createStepperWorld, packAction, runBrainForWorld, stepWorld, unpackAction, worldObservation } from "../simulate.js";
 import { STAGES } from "../stage.js";
 import { STRATEGIES } from "../strategies.js";
 
@@ -111,6 +111,7 @@ test("recovery actions depend only on observation, parameters and own memory", (
 test("matched-seed tactical recovery produces deterministic input logs", () => {
   function run() {
     const w = createStepperWorld({ stage: STAGES.demoday, seed: 7273 });
+    const replay = createStepperWorld({ stage: STAGES.demoday, seed: 7273 });
     const brains = [compileBrain(STRATEGIES.regulatory), compileBrain(STRATEGIES.troll)];
     const actions = [];
     for (let t = 0; t < 2400; t++) {
@@ -119,8 +120,59 @@ test("matched-seed tactical recovery produces deterministic input logs", () => {
       const b = active ? runBrainForWorld(w, brains[1], 1) : {};
       actions.push([a, b]);
       stepWorld(w, a, b);
+      stepWorld(replay, unpackAction(packAction(a)), unpackAction(packAction(b)));
     }
+    assert.deepEqual(replay.fighters, w.fighters);
+    assert.deepEqual(replay.gold, w.gold);
+    assert.equal(replay.tick, w.tick);
     return { actions, fighters: w.fighters, gold: w.gold, tick: w.tick };
   }
   assert.deepEqual(run(), run());
+});
+
+test("brief stuns preserve failed-route evidence instead of counting as progress", () => {
+  const state = createBrainState(0);
+  for (let tick = 0; tick < 150; tick++) runParamBrain(observe(tick), params, state);
+  const plan = structuredClone(state.tactics!.plan);
+  const progress = state.tactics!.progressTick;
+  assert.ok(plan);
+  for (let tick = 150; tick < 160; tick++) {
+    const obs = observe(tick);
+    obs.self.stun = 0.08;
+    runParamBrain(obs, params, state);
+    assert.deepEqual(state.tactics!.plan, plan);
+    assert.equal(state.tactics!.progressTick, progress);
+  }
+  for (let tick = 160; tick < 240; tick++) runParamBrain(observe(tick), params, state);
+  assert.ok(state.tactics!.failures.some(f => f.tactic === plan.tactic));
+});
+
+test("visible successful damage is not mislabeled as repeated ineffective attacks", () => {
+  const state = createBrainState(0);
+  for (let tick = 0; tick < 120; tick++) runParamBrain(observe(tick), params, state);
+  const obs = observe(120);
+  obs.opp.hp -= 10;
+  runParamBrain(obs, params, state);
+  assert.equal(state.tactics!.progressTick, 120);
+  assert.equal(state.tactics!.attempts, 0);
+  assert.equal(state.tactics!.plan, null);
+});
+
+test("repeated passive clash recoil separates an overlapping stunned pair", () => {
+  const w = createStepperWorld({ stage: STAGES.boardroom, seed: 43 });
+  for (const i of [0, 1] as const) {
+    Object.assign(w.fighters[i], { x: i === 0 ? 641 : 639, y: 76, onGround: false,
+      stun: 0.09, lastClashTick: 40, vx: i === 0 ? -260 : 260, vy: -150 });
+    w.brainStates[i].recentSelfClashTicks = [5, 10, 15, 20, 25, 30, 35, 40];
+    w.brainStates[i].lastKnownSelfClashTick = 40;
+  }
+  w.tick = 41;
+  const brains = [compileBrain(STRATEGIES.standby), compileBrain(STRATEGIES.standby)];
+  for (let tick = 0; tick < 240; tick++) {
+    const active = w.freeze <= 0 && w.roundPause <= 0;
+    stepWorld(w, active ? runBrainForWorld(w, brains[0], 0) : {},
+      active ? runBrainForWorld(w, brains[1], 1) : {});
+    if (w.fighters.some(f => f.dead) || Math.abs(w.fighters[0].x-w.fighters[1].x)>80) return;
+  }
+  assert.fail("clash bind must separate or resolve without a mechanics change");
 });

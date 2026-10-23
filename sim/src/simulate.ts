@@ -50,9 +50,10 @@ import type {
   RulesVersion,
 } from "./types.js";
 import { emptyFighterTelemetry } from "./types.js";
-import { swordSeg, swordHits } from "./combat-geometry.js";
+import { swordSeg, swordHits, weaponHitSegments } from "./combat-geometry.js";
+import { attackDuration } from "./weapon-kinematics.js";
 
-// ---------- Characters (visual only; stats identical) ----------
+// ---------- Characters (body is visual; versioned weapon motion is explicit) ----------
 
 export const DEFAULT_CHARS: [Character, Character] = [
   { name: "Sama", label: "OpenAL", col: "#6ee7b7", trim: "#d1fae5", shadow: "#047857" },
@@ -281,8 +282,8 @@ function startAttack(f: Fighter, type: "swipe" | "dive", tick: number): void {
     f.vy = Math.max(f.vy, STATS.diveSpeed);
     f.vx *= STATS.diveDrift;
   } else {
-    f.swipeT = STATS.swipeTime;
-    f.swipeCD = STATS.swipeTime * 1.6;
+    f.swipeT = attackDuration(f);
+    f.swipeCD = attackDuration(f) * 1.6;
     f.diveT = 0;
     if (!f.onGround) f.vy -= 60;
   }
@@ -484,16 +485,15 @@ function resolveCombat(w: World): void {
   const b = w.fighters[1];
   if (a.dead || b.dead || a.invuln > 0 || b.invuln > 0) return;
 
-  // Foiled-faithful combat: the foil is ALWAYS extended (at angle=0 when
-  // idle, swiping arc during swipe, angled-down during dive). Weapons-on-
-  // weapon clash (deflect); weapon-on-body kill. No "active" gating —
-  // positioning is the attack.
-  const sa = swordSeg(a);
-  const sb = swordSeg(b);
+  // Archived unversioned characters retain always-extended Foiled geometry.
+  // Versioned weapons expose only their active strike/head segments here;
+  // the renderer uses those same grip, joint and tip coordinates.
+  const segmentsA = weaponHitSegments(a);
+  const segmentsB = weaponHitSegments(b);
 
-  const clash =
+  const clash = segmentsA.some(sa => segmentsB.some(sb =>
     segIntersect(sa.bx, sa.by, sa.tx, sa.ty, sb.bx, sb.by, sb.tx, sb.ty) ||
-    Math.hypot(sa.tx - sb.tx, sa.ty - sb.ty) < 10;
+    Math.hypot(sa.tx - sb.tx, sa.ty - sb.ty) < 10 + (sa.radius ?? 0) + (sb.radius ?? 0)));
   if (clash) {
     a.vx = -a.facing * 260 / STATS.resistance;
     b.vx = -b.facing * 260 / STATS.resistance;
@@ -515,8 +515,8 @@ function resolveCombat(w: World): void {
     return;
   }
 
-  const hitA = swordHits(sa, b);
-  const hitB = swordHits(sb, a);
+  const hitA = segmentsA.some(segment => swordHits(segment, b));
+  const hitB = segmentsB.some(segment => swordHits(segment, a));
 
   if (hitA && hitB) {
     // Both passive foils hit bodies at the same tick — classic Foiled
@@ -1151,6 +1151,7 @@ export function worldToFrame(w: World): TraceFrame {
 
 function fighterToFrame(f: Fighter): TraceFighterFrame {
   return {
+    ...(f.ch.weaponMotionVersion === 1 ? {body:f.ch.body,weapon:f.ch.weapon,weaponMotionVersion:1 as const} : {}),
     x: f.x,
     y: f.y,
     vx: f.vx,
@@ -1173,6 +1174,9 @@ export { STATS } from "./constants.js";
 // ---------- simulateTrace: same as simulate but returns per-tick snapshots ----------
 
 export interface TraceFighterFrame {
+  body?: string;
+  weapon?: string;
+  weaponMotionVersion?: 1;
   x: number;
   y: number;
   vx: number;

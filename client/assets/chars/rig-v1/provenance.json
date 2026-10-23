@@ -1,0 +1,82 @@
+{
+  "generator": "built-in imagegen",
+  "raster_processing": "none; byte-for-byte copies of generated images",
+  "layout": "measured part rectangles in client/render/fighter-rig.js",
+  "prompt_template": "Use Sama original sprite as explicit pixel-art style reference. Transparent paper-doll part plate: upper-left adult head and torso with no arms or legs; upper-right straight arm shoulder to closed fist; lower-left straight leg hip to right-facing shoe; lower-right closed fist. Large transparent gaps. Narrow adult anatomy, small head, hard dark outline, three flat shades per material; no smoothing, effects, weapons, grid or text. Adapt identity from each actual viewed original sprite; keep Sama prototype layout and part scale.",
+  "plates": [
+    {
+      "fighter": "sama",
+      "file": "sama.png",
+      "sha256": "da5455756cf7ceeb238729b4303bf8fe102e5206099f36962284676ab61bdaa1",
+      "source_dimensions": [
+        1254,
+        1254
+      ],
+      "identity_reference": "assets/chars/sama/monastic_infra/sprite.png",
+      "style_reference": "assets/chars/sama/monastic_infra/sprite.png"
+    },
+    {
+      "fighter": "darrius",
+      "file": "darrius.png",
+      "sha256": "96144ae7287ae7b4316bc3ce6a9963111358fb0e7c83a858736375f841b7a64e",
+      "source_dimensions": [
+        1254,
+        1254
+      ],
+      "identity_reference": "assets/chars/darrius/legal_department_midnight/sprite.png",
+      "style_reference": "assets/chars/rig-v1/sama.png"
+    },
+    {
+      "fighter": "demis",
+      "file": "demis.png",
+      "sha256": "e50684d42c948aa05a30ec8a0e77c39f75398c9fe537a62f129ccb214bb07378",
+      "source_dimensions": [
+        1254,
+        1254
+      ],
+      "identity_reference": "assets/chars/demis/chalk_and_static/sprite.png",
+      "style_reference": "assets/chars/rig-v1/sama.png"
+    },
+    {
+      "fighter": "mark",
+      "file": "mark.png",
+      "sha256": "f5873b3bd3956dcf2876314d26d551995f111b5b26bd6eed2ed0efeaca723e15",
+      "source_dimensions": [
+        1254,
+        1254
+      ],
+      "identity_reference": "assets/chars/mark/wellness_berserker/sprite.png",
+      "style_reference": "assets/chars/rig-v1/sama.png"
+    },
+    {
+      "fighter": "jensen",
+      "file": "jensen.png",
+      "sha256": "50ed2ca734249449437f55e9ab53f4d1ca1d3622ca253e1da6c75110f155f8ba",
+      "source_dimensions": [
+        1254,
+        1254
+      ],
+      "identity_reference": "assets/chars/jensen/silicon_sovereign/sprite.png",
+      "style_reference": "assets/chars/rig-v1/sama.png"
+    },
+    {
+      "fighter": "elon",
+      "file": "elon.png",
+      "sha256": "e8b1cc8a79b9e60e4e9d5f3a4d8188daba265d7c2311c708fe6e197cc3f5ea5c",
+      "source_dimensions": [
+        1254,
+        1254
+      ],
+      "identity_reference": "assets/chars/elon/orbital_showman/sprite.png",
+      "style_reference": "assets/chars/rig-v1/sama.png"
+    }
+  ],
+  "portrait_edits": {
+    "fighters": [
+      "jensen",
+      "elon"
+    ],
+    "style_reference": "assets/chars/sama/monastic_infra/portraits/sheet.png",
+    "prompt": "Edit each viewed original portrait sheet to Sama pixel style, using corresponding new rig for identity. Preserve 2x2 neutral, hurt, KO busts and full-body cells, hard square pixels, three-tone ramps, adult proportions, transparent background. No smooth shading, weapons, text, borders or effects."
+  }
+}

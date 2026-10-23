@@ -93,7 +93,7 @@ const makeFrame=(tick,patch={})=>({tick,roundStartTick:0,p0:{...pose,...patch},p
 
 test('renderer maps actual atlas draw calls to collision, including wall facing and load failure', async () => {
   const OriginalImage=globalThis.Image;
-  globalThis.Image=class {set src(value){this._src=value;this.width=96;this.height=96;this.onload?.();}get src(){return this._src;}};
+  globalThis.Image=class {set src(value){this._src=value;this.width=96;this.height=96;value.includes('/rig-v1/')?this.onerror?.():this.onload?.();}get src(){return this._src;}};
   try {
     const { drawFrame }=await import('../render/canvas2d.js?renderer-test');
     const { STAGES }=await import('../lib/public-sim.js');
@@ -130,7 +130,7 @@ test('renderer maps actual atlas draw calls to collision, including wall facing 
 
 test('animation is identical after rewind, skipped frames and independent canvas draws', async () => {
   const OriginalImage=globalThis.Image;
-  globalThis.Image=class {set src(value){this._src=value;this.width=384;this.height=768;this.onload?.();}get src(){return this._src;}};
+  globalThis.Image=class {set src(value){this._src=value;this.width=384;this.height=768;value.includes('/rig-v1/')?this.onerror?.():this.onload?.();}get src(){return this._src;}};
   try {
     const {drawFrame}=await import('../render/canvas2d.js?timelines');
     const {STAGES}=await import('../lib/public-sim.js');
@@ -144,7 +144,7 @@ test('animation is identical after rewind, skipped frames and independent canvas
 
 test('fallback body uses its own sprite calibration, not the requested missing body', async () => {
   const OriginalImage=globalThis.Image;
-  globalThis.Image=class {set src(value){this._src=value;this.width=384;this.height=768;value.includes('/chars/demis/')?this.onerror?.():this.onload?.();}get src(){return this._src;}};
+  globalThis.Image=class {set src(value){this._src=value;this.width=384;this.height=768;value.includes('/chars/demis/')?this.onerror?.():value.includes('/rig-v1/')?this.onerror?.():this.onload?.();}get src(){return this._src;}};
   try{
     const {drawFrame}=await import('../render/canvas2d.js?body-fallback');
     const {STAGES}=await import('../lib/public-sim.js');
@@ -160,7 +160,7 @@ test('fallback body uses its own sprite calibration, not the requested missing b
 
 test('body anchors and weapon matrices are pure simulation-frame projections for every pose', async () => {
   const OriginalImage=globalThis.Image;
-  globalThis.Image=class {set src(value){this._src=value;this.width=384;this.height=768;this.onload?.();}get src(){return this._src;}};
+  globalThis.Image=class {set src(value){this._src=value;this.width=384;this.height=768;value.includes('/rig-v1/')?this.onerror?.():this.onload?.();}get src(){return this._src;}};
   try {
     const {drawFrame}=await import('../render/canvas2d.js?tick-purity');
     const {STAGES}=await import('../lib/public-sim.js');
@@ -180,4 +180,17 @@ test('body anchors and weapon matrices are pure simulation-frame projections for
       assert.deepEqual(target,snapshot,'rendering must not mutate the simulation snapshot');
     }
   } finally { globalThis.Image=OriginalImage; }
+});
+
+test('KO poses do not retain a floating weapon at the standing combat origin', async () => {
+  const OriginalImage=globalThis.Image;
+  globalThis.Image=class {set src(value){this._src=value;value.includes('/rig-v1/')?this.onerror?.():this.onload?.();}get src(){return this._src;}};
+  try {
+    const {drawFrame}=await import('../render/canvas2d.js?ko-weapon');
+    const {STAGES}=await import('../lib/public-sim.js');
+    const ctx=recordingContext();
+    drawFrame(ctx,STAGES.datacenter,makeFrame(100,{dead:true}),{});
+    assert.equal(ctx.draws.filter(d=>d.src.includes('/weapons/')).length,0);
+    assert.equal(ctx.draws.filter(d=>d.src.endsWith('/sprite.png')).length,2);
+  } finally {globalThis.Image=OriginalImage;}
 });

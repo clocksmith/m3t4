@@ -7,5 +7,6 @@ export { compileBrain, evaluateParams, compileAttribute, type CompiledBrain } fr
 export { BEHAVIOR_VERSION, runParamBrain, createBrainState, resetBrainStateForRound } from "./brain.js";
 export { simulate, simulateTrace, DEFAULT_CHARS, packAction, unpackAction, applyHallucinationNoise, applyMicroAttributeDrift, createStepperWorld, runBrainForWorld, settleWorldWinner, stepWorld, worldObservation, worldToFrame, type SimulateOptions, type TraceFighterFrame, type TraceFrame, type TraceResult, type StepResult, } from "./simulate.js";
 export { makeRng, type Rng } from "./rng.js";
+export { rosterCombatIdentity } from './weapon-kinematics.js';
 export { STRATEGIES, STRATEGY_NAMES, SAMPLE_TRAJECTORIES, type StrategyName } from "./strategies.js";
 export { evaluateReciprocalSideBias, type ReciprocalSideBiasOptions, type ReciprocalSideBiasResult } from "./side-bias.js";

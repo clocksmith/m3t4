@@ -8,8 +8,9 @@ import { compileBrain, evaluateParams } from "./dsl.js";
 import { makeRng } from "./rng.js";
 import { PARAM_KEYS } from "./types.js";
 import { emptyFighterTelemetry } from "./types.js";
-import { swordSeg, swordHits } from "./combat-geometry.js";
-// ---------- Characters (visual only; stats identical) ----------
+import { swordHits, weaponHitSegments } from "./combat-geometry.js";
+import { attackDuration } from "./weapon-kinematics.js";
+// ---------- Characters (body is visual; versioned weapon motion is explicit) ----------
 export const DEFAULT_CHARS = [
     { name: "Sama", label: "OpenAL", col: "#6ee7b7", trim: "#d1fae5", shadow: "#047857" },
     { name: "Darrius", label: "Anthropos", col: "#fb923c", trim: "#fed7aa", shadow: "#9a3412" },
@@ -199,8 +200,8 @@ function startAttack(f, type, tick) {
         f.vx *= STATS.diveDrift;
     }
     else {
-        f.swipeT = STATS.swipeTime;
-        f.swipeCD = STATS.swipeTime * 1.6;
+        f.swipeT = attackDuration(f);
+        f.swipeCD = attackDuration(f) * 1.6;
         f.diveT = 0;
         if (!f.onGround)
             f.vy -= 60;
@@ -399,14 +400,13 @@ function resolveCombat(w) {
     const b = w.fighters[1];
     if (a.dead || b.dead || a.invuln > 0 || b.invuln > 0)
         return;
-    // Foiled-faithful combat: the foil is ALWAYS extended (at angle=0 when
-    // idle, swiping arc during swipe, angled-down during dive). Weapons-on-
-    // weapon clash (deflect); weapon-on-body kill. No "active" gating —
-    // positioning is the attack.
-    const sa = swordSeg(a);
-    const sb = swordSeg(b);
-    const clash = segIntersect(sa.bx, sa.by, sa.tx, sa.ty, sb.bx, sb.by, sb.tx, sb.ty) ||
-        Math.hypot(sa.tx - sb.tx, sa.ty - sb.ty) < 10;
+    // Archived unversioned characters retain always-extended Foiled geometry.
+    // Versioned weapons expose only their active strike/head segments here;
+    // the renderer uses those same grip, joint and tip coordinates.
+    const segmentsA = weaponHitSegments(a);
+    const segmentsB = weaponHitSegments(b);
+    const clash = segmentsA.some(sa => segmentsB.some(sb => segIntersect(sa.bx, sa.by, sa.tx, sa.ty, sb.bx, sb.by, sb.tx, sb.ty) ||
+        Math.hypot(sa.tx - sb.tx, sa.ty - sb.ty) < 10 + (sa.radius ?? 0) + (sb.radius ?? 0)));
     if (clash) {
         a.vx = -a.facing * 260 / STATS.resistance;
         b.vx = -b.facing * 260 / STATS.resistance;
@@ -427,8 +427,8 @@ function resolveCombat(w) {
         w.freeze = Math.max(w.freeze, CLASH_FREEZE);
         return;
     }
-    const hitA = swordHits(sa, b);
-    const hitB = swordHits(sb, a);
+    const hitA = segmentsA.some(segment => swordHits(segment, b));
+    const hitB = segmentsB.some(segment => swordHits(segment, a));
     if (hitA && hitB) {
         // Both passive foils hit bodies at the same tick — classic Foiled
         // head-on walk-in. The clash check missed it because parallel
@@ -1037,6 +1037,7 @@ export function worldToFrame(w) {
 }
 function fighterToFrame(f) {
     return {
+        ...(f.ch.weaponMotionVersion === 1 ? { body: f.ch.body, weapon: f.ch.weapon, weaponMotionVersion: 1 } : {}),
         x: f.x,
         y: f.y,
         vx: f.vx,

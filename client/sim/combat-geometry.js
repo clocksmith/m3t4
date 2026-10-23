@@ -1,7 +1,11 @@
-// Public, deterministic geometry shared by combat and its visual projection.
-// Cosmetic poses never move these shapes or change weapon reach.
+// Public deterministic geometry shared by combat and its visual projection.
+// Explicit weapon-motion versions select physics; visual labels cannot move it.
 import { STATS } from './constants.js';
+import { articulatedWeaponPose } from './weapon-kinematics.js';
 export function swordSeg(f) {
+    const articulated = articulatedWeaponPose(f);
+    if (articulated)
+        return articulated.segment;
     const bx = f.x + f.facing * STATS.bodyW * 0.35;
     const by = f.y - STATS.bodyH * 0.3;
     let angle = 0;
@@ -16,6 +20,9 @@ export function swordSeg(f) {
     const dy = Math.sin(angle);
     return { bx, by, tx: bx + dx * STATS.sword, ty: by + dy * STATS.sword };
 }
+export function weaponHitSegments(f) {
+    return articulatedWeaponPose(f)?.hitSegments ?? [swordSeg(f)];
+}
 export function fighterHurtbox(f) {
     return { x: f.x, y: f.y - STATS.bodyH * 0.28, radius: STATS.bodyW * 0.65 };
 }
@@ -25,5 +32,5 @@ export function swordHits(s, target) {
     const dy = s.ty - s.by;
     const len2 = dx * dx + dy * dy || 1;
     const t = Math.max(0, Math.min(1, ((x - s.bx) * dx + (y - s.by) * dy) / len2));
-    return Math.hypot(x - (s.bx + dx * t), y - (s.by + dy * t)) <= radius;
+    return Math.hypot(x - (s.bx + dx * t), y - (s.by + dy * t)) <= radius + (s.radius ?? 0);
 }

@@ -12,7 +12,7 @@ try{
     page.on('pageerror',e=>errors.push(e.message));
     await page.route('**/*',r=>r.request().url().startsWith(origin)?r.continue():r.abort());
     await page.goto(origin+'/duel');await page.waitForSelector('#duel-start');
-    for(const [body,weapon] of [['elon','orbit_lance'],['mark','controller_nunchucks'],['sama','worldcoin_orb_flail']]){
+    for(const [body,weapon] of [['elon','orbit_lance'],['jensen','compute_bat'],['mark','controller_nunchucks'],['sama','worldcoin_orb_flail']]){
       // Real controls select the body and weapon; the local stepper owns motion.
       const bodyButton=page.locator(`.duel-body-option[data-side="0"][data-body="${body}"]`);
       await page.locator('#arena-settings').click();

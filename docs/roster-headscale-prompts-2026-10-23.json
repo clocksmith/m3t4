@@ -1,0 +1,27 @@
+{
+  "revision": "appearance-20261023c",
+  "generator": "built-in imagegen",
+  "raster_processing": "none; generated PNG bytes copied unchanged",
+  "prompts": [
+    {
+      "id": "elon_sparse_portrait",
+      "prompt": "Use case: precise-object-edit. Edit this actual pixel-art game asset. In all four cells, make Elon visibly PALE: cool ivory/light pink skin, remove orange/tan warmth, including neck and hands. Make hair visibly THINNER and SPARSER, with a receding front/temples, exposed scalp between sparse dark strands and much less volume on top. Do not merely lighten the existing thick hair. Retain older mid-50s face, soft jaw, fuller cheeks, under-eye bags and age lines. No idealized youthful face. Keep the original 1254x1254 canvas, transparent alpha, exact part/cell layout, source positions, pixel cluster scale, hard dark outlines and flat limited shading. Do not enlarge the head within the source: renderer crop calibration will set the approved apparent size. Do not change clothing, head pose, expressions or other character identity. No extra parts, text, frames, effects or weapons. For portrait sheets retain neutral/hurt/KO busts and full-body cell; for rig plates retain head+torso upper-left, arm upper-right, leg lower-left and fist lower-right.",
+      "asset": "client/assets/chars/elon/orbital_showman/portraits/sheet.png"
+    },
+    {
+      "id": "elon_sparse_rig",
+      "prompt": "Use case: precise-object-edit. Edit this actual pixel-art game asset. Make Elon's face and neck PALE cool ivory/light pink, remove tan/orange warmth; apply same pale skin to the separate arm hand and fist. Change the upper-left head to noticeably THINNER/SPARSER hair: receding front/temples, exposed scalp between a few dark strands, greatly reduced hair volume. Retain older face, softer jaw, bags and age lines. Preserve all piece positions and body anatomy. Keep the original 1254x1254 canvas, transparent alpha, exact part/cell layout, source positions, pixel cluster scale, hard dark outlines and flat limited shading. Do not enlarge the head within the source: renderer crop calibration will set the approved apparent size. Do not change clothing, head pose, expressions or other character identity. No extra parts, text, frames, effects or weapons. For portrait sheets retain neutral/hurt/KO busts and full-body cell; for rig plates retain head+torso upper-left, arm upper-right, leg lower-left and fist lower-right.",
+      "asset": "client/assets/chars/rig-v1/elon.png"
+    },
+    {
+      "id": "jensen_gray_portrait",
+      "prompt": "Use case: precise-object-edit. Edit this actual pixel-art game asset. In all four cells, make Jensen's hair predominantly medium/light NEUTRAL GRAY, visibly grayer than current dark hair with silver streaks. Keep only restrained charcoal shadows, no large black hair mass. Preserve swept hair silhouette, glasses, mature face and black leather jacket. Keep the original 1254x1254 canvas, transparent alpha, exact part/cell layout, source positions, pixel cluster scale, hard dark outlines and flat limited shading. Do not enlarge the head within the source: renderer crop calibration will set the approved apparent size. Do not change clothing, head pose, expressions or other character identity. No extra parts, text, frames, effects or weapons. For portrait sheets retain neutral/hurt/KO busts and full-body cell; for rig plates retain head+torso upper-left, arm upper-right, leg lower-left and fist lower-right.",
+      "asset": "client/assets/chars/jensen/silicon_sovereign/portraits/sheet.png"
+    },
+    {
+      "id": "jensen_gray_rig",
+      "prompt": "Use case: precise-object-edit. Edit this actual pixel-art game asset. Change only Jensen's hair in the upper-left head: predominantly medium/light NEUTRAL GRAY, visibly grayer rather than dark with silver streaks. Keep only restrained charcoal shadows. Preserve swept hair outline, glasses, all skin/clothing colors and every part position. Keep the original 1254x1254 canvas, transparent alpha, exact part/cell layout, source positions, pixel cluster scale, hard dark outlines and flat limited shading. Do not enlarge the head within the source: renderer crop calibration will set the approved apparent size. Do not change clothing, head pose, expressions or other character identity. No extra parts, text, frames, effects or weapons. For portrait sheets retain neutral/hurt/KO busts and full-body cell; for rig plates retain head+torso upper-left, arm upper-right, leg lower-left and fist lower-right.",
+      "asset": "client/assets/chars/rig-v1/jensen.png"
+    }
+  ]
+}

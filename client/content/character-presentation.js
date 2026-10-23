@@ -12,16 +12,19 @@ export const BODY_PORTRAIT_SHEETS = {
   darrius: "assets/chars/darrius/legal_department_midnight/portraits/sheet.png?v=appearance-20261023b",
   demis: "assets/chars/demis/chalk_and_static/portraits/sheet.png",
   mark: "assets/chars/mark/wellness_berserker/portraits/sheet.png",
-  jensen: "assets/chars/jensen/silicon_sovereign/portraits/sheet.png?v=appearance-20261023b",
-  elon: "assets/chars/elon/orbital_showman/portraits/sheet.png?v=appearance-20261023b",
+  jensen: "assets/chars/jensen/silicon_sovereign/portraits/sheet.png?v=appearance-20261023c",
+  elon: "assets/chars/elon/orbital_showman/portraits/sheet.png?v=appearance-20261023c",
 };
 
 // These generated busts have more top padding than the original 96px art.
 // A measured source crop aligns crown, chin and shoulders; body cell 3 stays
 // untouched. The same crop is consumed by Canvas and CSS portrait users.
-const INSET_BUST = [0.045, 0.08, 0.91, 0.91];
+const BUST_CROPS = {
+  jensen: [0.10, 0.10, 0.80, 0.80],
+  elon: [0.15, 0.14, 0.70, 0.70],
+};
 export function portraitCellCrop(body, cell=0) {
-  return cell<3 && (body==='jensen'||body==='elon') ? INSET_BUST : [0,0,1,1];
+  return cell<3 && BUST_CROPS[body] ? BUST_CROPS[body] : [0,0,1,1];
 }
 export function portraitSourceRect(body, cell, width, height) {
   const [x,y,w,h]=portraitCellCrop(body,cell),cw=width/2,ch=height/2;

@@ -100,6 +100,7 @@ export interface Character {
   shadow: string;
   body?: string;
   weapon?: string;
+  weaponMotionVersion?: 1;
 }
 
 export interface Fighter {

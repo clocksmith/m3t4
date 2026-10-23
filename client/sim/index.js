@@ -8,5 +8,6 @@ export { compileBrain, evaluateParams, compileAttribute } from "./dsl.js";
 export { BEHAVIOR_VERSION, runParamBrain, createBrainState, resetBrainStateForRound } from "./brain.js";
 export { simulate, simulateTrace, DEFAULT_CHARS, packAction, unpackAction, applyHallucinationNoise, applyMicroAttributeDrift, createStepperWorld, runBrainForWorld, settleWorldWinner, stepWorld, worldObservation, worldToFrame, } from "./simulate.js";
 export { makeRng } from "./rng.js";
+export { rosterCombatIdentity } from './weapon-kinematics.js';
 export { STRATEGIES, STRATEGY_NAMES, SAMPLE_TRAJECTORIES } from "./strategies.js";
 export { evaluateReciprocalSideBias } from "./side-bias.js";

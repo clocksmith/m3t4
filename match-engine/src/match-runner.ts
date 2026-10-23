@@ -14,6 +14,7 @@ import {
   type ReplayResultV1,
   type RulesVersion,
   simulateTrace,
+  rosterCombatIdentity,
 } from "@m3t4/sim";
 import { rankedSideSwap, type StableSummary } from "./pair-selection.js";
 import { updatePair } from "./elo.js";
@@ -95,10 +96,13 @@ export function runMatch(input: RunMatchInput): RunMatchOutput {
 
   const brainA: BrainConfig = sideAStable.config;
   const brainB: BrainConfig = sideBStable.config;
-  // Use default character stats. Cosmetic-derived per-character stats
-  // (legacy roster bodies/weapons) are a follow-up enhancement; the match
-  // engine doesn't need them to produce a deterministic, replayable match.
-  const chars = DEFAULT_CHARS;
+  // Persist weapon motion identity with every NEW match. Spectators replay
+  // these exact characters; historical documents remain untouched.
+  const chars: typeof DEFAULT_CHARS = [
+    {...DEFAULT_CHARS[0],...rosterCombatIdentity(sideAStable.cosmetics,0)},
+    {...DEFAULT_CHARS[1],...rosterCombatIdentity(sideBStable.cosmetics,1)},
+  ];
+  for(const ch of chars)if(ch.body)ch.name=ch.body[0].toUpperCase()+ch.body.slice(1);
 
   const trace = simulateTrace({ stage, brainA, brainB, seed, chars });
 

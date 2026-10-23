@@ -32,6 +32,7 @@ import {
   compileBrain,
   STAGES as SIM_STAGES,
   STRATEGIES,
+  DEFAULT_CHARS,
 } from "../sim/index.js";
 import { renderSliderEditor } from "../lib/slider-editor.js";
 import { escapeHtml } from "../ui/html.js";
@@ -1009,7 +1010,7 @@ function startLocalWorld({ newSeed = false } = {}) {
   const stage = SIM_STAGES[stageId] ?? SIM_STAGES.datacenter;
   localBrains[0] = slotIsHuman(0) ? null : compileBrain(brainConfigForSlot(0));
   localBrains[1] = slotIsHuman(1) ? null : compileBrain(brainConfigForSlot(1));
-  localWorld = createStepperWorld({ stage, seed });
+  localWorld = createStepperWorld({ stage, seed, chars:slotCosmetics.map((cosmetic,side)=>({...DEFAULT_CHARS[side],...cosmetic,weaponMotionVersion:1})) });
   localPlayedAtMs = performance.now();
   localTickAccumMs = 0;
   previewStage = stage;

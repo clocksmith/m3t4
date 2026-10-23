@@ -181,3 +181,16 @@ test('body anchors and weapon matrices are pure simulation-frame projections for
     }
   } finally { globalThis.Image=OriginalImage; }
 });
+
+test('KO poses do not retain a floating weapon at the standing combat origin', async () => {
+  const OriginalImage=globalThis.Image;
+  globalThis.Image=class {set src(value){this._src=value;this.onload?.();}get src(){return this._src;}};
+  try {
+    const {drawFrame}=await import('../render/canvas2d.js?ko-weapon');
+    const {STAGES}=await import('../lib/public-sim.js');
+    const ctx=recordingContext();
+    drawFrame(ctx,STAGES.datacenter,makeFrame(100,{dead:true}),{});
+    assert.equal(ctx.draws.filter(d=>d.src.includes('/weapons/')).length,0);
+    assert.equal(ctx.draws.filter(d=>d.src.endsWith('/sprite.png')).length,2);
+  } finally {globalThis.Image=OriginalImage;}
+});

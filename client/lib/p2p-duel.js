@@ -22,6 +22,7 @@
 import { isP2PSupported } from "./p2p-capabilities.js";
 export { isP2PSupported } from "./p2p-capabilities.js";
 import { ensureIceServers, iceServers } from "./ice-config.js";
+import {createWeaponMotionWire,readWeaponMatch} from './weapon-motion-wire.js';
 import {
   ensureAnonAuth,
   callSignal,
@@ -395,6 +396,7 @@ async function runSpectator(fb, sessionId, { onStatus, onLink, onMatch, onFrame,
           stageId: init.stageId,
           cosmetics: init.cosmetics,
           aliases: Array.isArray(init.aliases) ? init.aliases : undefined,
+          weaponMotionVersion: init.weaponMotionVersion===1?1:0,
         });
       }
     }
@@ -454,11 +456,16 @@ function makeHandle(sessionId, channel, teardown, options = {}) {
   const onLatency = options.onLatency ?? (() => {});
   const pendingPings = new Map();
   let pingTimer = 0;
+  const motionWire=createWeaponMotionWire();
   const handle = {
     sessionId,
     linked: false,
     role: "peer",
     spectator: false,
+    // Updated peers advertise support in their existing cosmetic setup message.
+    // Until then (or with an old peer), pin the next match to legacy physics.
+    get weaponMotionVersion(){return motionWire.peerVersion;},
+    _motionWire: motionWire,
     latencyMs: null,
     lastLatencyAt: 0,
     _channel: channel,
@@ -498,7 +505,8 @@ function makeHandle(sessionId, channel, teardown, options = {}) {
       buf[4] = packInput(input);
       try { channel.send(buf); } catch {}
     },
-    broadcastMatch({ seed, stageId, cosmetics, aliases }) {
+    broadcastMatch({ seed, stageId, cosmetics, aliases, weaponMotionVersion=handle.weaponMotionVersion }) {
+      const pinnedMotion=motionWire.match({},weaponMotionVersion).weaponMotionVersion;
       const aliasPair = Array.isArray(aliases)
         ? [String(aliases[0] ?? ""), String(aliases[1] ?? "")]
         : undefined;
@@ -508,6 +516,7 @@ function makeHandle(sessionId, channel, teardown, options = {}) {
         stageId: String(stageId ?? ""),
         cosmetics: Array.isArray(cosmetics) ? cosmetics : undefined,
         aliases: aliasPair,
+        weaponMotionVersion: pinnedMotion,
       };
       if (handle.linked && channel?.readyState === "open") sendJson(channel, msg);
       // Mirror to Firestore so spectators that join after pairing get
@@ -521,6 +530,7 @@ function makeHandle(sessionId, channel, teardown, options = {}) {
             stageId: String(stageId ?? ""),
             cosmetics: Array.isArray(cosmetics) ? cosmetics : undefined,
             aliases: aliasPair,
+            weaponMotionVersion: pinnedMotion,
           },
         }).catch(() => {});
       }
@@ -540,12 +550,12 @@ function makeHandle(sessionId, channel, teardown, options = {}) {
     },
     broadcastCosmetic(side, cosmetic) {
       const slot = side === 1 ? 1 : 0;
-      const msg = {
+      const msg = motionWire.cosmetic({
         type: "cosmetic",
         side: slot,
         body: typeof cosmetic?.body === "string" ? cosmetic.body : "",
         weapon: typeof cosmetic?.weapon === "string" ? cosmetic.weapon : "",
-      };
+      });
       if (handle.linked && channel?.readyState === "open") sendJson(channel, msg);
     },
     broadcastAlias(side, alias) {
@@ -604,17 +614,21 @@ function handleRemoteMessage(raw, { handle, onMatch, onFrame, onCosmetic, onAlia
     try { msg = JSON.parse(raw); } catch { return; }
     if (!msg || typeof msg !== "object") return;
     if (msg.type === "match" && Number.isFinite(msg.seed)) {
+      const pinned=readWeaponMatch(msg);
+      if(!pinned)return;
       onMatch?.({
         seed: msg.seed >>> 0,
         stageId: msg.stageId,
         cosmetics: msg.cosmetics,
         aliases: Array.isArray(msg.aliases) ? msg.aliases : undefined,
+        weaponMotionVersion: pinned.weaponMotionVersion,
       });
     }
     if (msg.type === "frame" && msg.frame) {
       onFrame?.(msg.frame);
     }
     if (msg.type === "cosmetic" && (msg.side === 0 || msg.side === 1)) {
+      handle?._motionWire?.receiveCosmetic(msg);
       onCosmetic?.(msg.side, { body: msg.body, weapon: msg.weapon });
     }
     if (msg.type === "alias" && (msg.side === 0 || msg.side === 1)) {

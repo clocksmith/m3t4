@@ -46,6 +46,121 @@ import {
   trackBuildStageChange, trackBuildAction,
 } from "../lib/analytics.js";
 import presetRanking from "../data/preset-ranking.v1.json" with { type: "json" };
+import rosterCatalog from "../content/roster-catalog.v1.json" with { type: "json" };
+import gameCopy from "../content/game-copy.v1.json" with { type: "json" };
+import { BODY_PORTRAIT_SHEETS, BODY_VARIANTS } from "../content/character-presentation.js";
+
+const BODY_IDS = rosterCatalog.bodies ?? [];
+
+function weaponEntriesForBody(body) {
+  return (rosterCatalog.weapons?.[body] ?? []).filter((weapon) => weapon.available);
+}
+
+function availableWeaponIds(body) {
+  const ids = weaponEntriesForBody(body).map((weapon) => weapon.id).filter(Boolean);
+  return ids.length ? ids : [""];
+}
+
+function defaultCosmetics(side) {
+  const body = BODY_IDS[((side % BODY_IDS.length) + BODY_IDS.length) % BODY_IDS.length] ?? (side === 0 ? "sama" : "darrius");
+  return { body, weapon: availableWeaponIds(body)[0] };
+}
+
+function normalizeCosmetics(value, side) {
+  const fallback = defaultCosmetics(side);
+  const body = BODY_IDS.includes(value?.body) ? value.body : fallback.body;
+  const weapons = availableWeaponIds(body);
+  const weapon = weapons.includes(value?.weapon) ? value.weapon : weapons[0];
+  return { body, weapon };
+}
+
+const slotCosmetics = [defaultCosmetics(0), defaultCosmetics(1)];
+
+function bodyCopy(body) {
+  const variant = BODY_VARIANTS[body];
+  return gameCopy.characters?.[body]?.[variant] ?? {};
+}
+
+function bodyLabel(body) {
+  return bodyCopy(body).name ?? body;
+}
+
+function bodyMeta(body) {
+  return bodyCopy(body).label ?? bodyCopy(body).combatFantasy ?? body;
+}
+
+function weaponLabel(body, weapon) {
+  return gameCopy.weapons?.[body]?.[weapon]?.name ?? weapon;
+}
+
+function weaponMeta(body, weapon) {
+  return gameCopy.weapons?.[body]?.[weapon]?.class ?? "weapon";
+}
+
+function bodyPortraitHtml(body) {
+  const url = BODY_PORTRAIT_SHEETS[body];
+  const style = url ? ` style="background-image:url('${escapeHtml(url)}')"` : "";
+  return `<span class="duel-body-portrait"${style} aria-hidden="true"></span>`;
+}
+
+function weaponOptionVisualHtml(body, weapon) {
+  const spriteStyle = weaponSpriteStyle(body, weapon.asset);
+  return `
+    <span class="duel-weapon-visual" aria-hidden="true">
+      <span class="duel-weapon-sprite${spriteStyle ? "" : " is-missing"}"${spriteStyle ? ` style="${spriteStyle}"` : ""}></span>
+    </span>`;
+}
+
+function weaponSpriteStyle(body, asset) {
+  if (!asset?.url) return "";
+  const cols = Math.max(1, Number(asset.cols ?? 1) || 1);
+  const cell = Math.max(0, Number(asset.cell ?? 0) || 0);
+  const rows = weaponSheetRows(body, asset, cols);
+  const col = cell % cols;
+  const row = Math.floor(cell / cols);
+  const x = cols > 1 ? (col / (cols - 1)) * 100 : 0;
+  const y = rows > 1 ? (row / (rows - 1)) * 100 : 0;
+  return [
+    `background-image:url('${escapeHtml(asset.url)}')`,
+    `background-size:${cols * 100}% ${rows * 100}%`,
+    `background-position:${x}% ${y}%`,
+  ].join(";");
+}
+
+function weaponSheetRows(body, asset, cols) {
+  const maxCell = weaponEntriesForBody(body)
+    .filter((weapon) => weapon.asset?.url === asset.url)
+    .reduce((max, weapon) => Math.max(max, Number(weapon.asset?.cell ?? 0) || 0), Number(asset.cell ?? 0) || 0);
+  return Math.max(1, Math.floor(maxCell / cols) + 1);
+}
+
+function slotCosmeticsHtml(slot) {
+  const current = slotCosmetics[slot];
+  return `
+    <div class="duel-body-grid" aria-label="P${slot + 1} character select">
+      ${BODY_IDS.map((body) => {
+        const selected = body === current.body;
+        return `
+          <button type="button" class="duel-body-option${selected ? " is-selected" : ""}" data-slot="${slot}" data-body="${escapeHtml(body)}" title="${escapeHtml(bodyMeta(body))}">
+            ${bodyPortraitHtml(body)}
+            <span>${escapeHtml(bodyLabel(body))}</span>
+          </button>`;
+      }).join("")}
+    </div>
+    <div class="duel-weapon-grid" aria-label="P${slot + 1} weapon select">
+      ${weaponEntriesForBody(current.body).map((weapon) => {
+        const selected = weapon.id === current.weapon;
+        return `
+          <button type="button" class="duel-weapon-option${selected ? " is-selected" : ""}" data-slot="${slot}" data-weapon="${escapeHtml(weapon.id)}">
+            ${weaponOptionVisualHtml(current.body, weapon)}
+            <span class="duel-weapon-copy">
+              <span class="duel-weapon-name">${escapeHtml(weaponLabel(current.body, weapon.id))}</span>
+              <span class="duel-weapon-meta">${escapeHtml(weaponMeta(current.body, weapon.id))}</span>
+            </span>
+          </button>`;
+      }).join("")}
+    </div>`;
+}
 
 const DEFAULT_PRESET_NAMES = [
   "standby", "blitz", "intern", "pivot",
@@ -98,7 +213,7 @@ let rendererMountId = 0;
 let mountMediaHandler = null;
 let previewFrames = [];
 let previewStage = STAGES.datacenter;
-let previewLabels = { p1: "BUILD P1", p2: "BUILD P2" };
+let previewLabels = { p1: "BUILD P1", p2: "BUILD P2", cosmetics: [slotCosmetics[0], slotCosmetics[1]] };
 let previewResult = null;
 let previewStride = 2;
 let previewStartedAt = 0;
@@ -272,11 +387,8 @@ function remainingCeilingFor(slot, id) {
   return remainingCeilingForState(slotStates[slot], id);
 }
 
-// ==================== MOUNT ====================
-
-export function mount(root, { setStatus }) {
-  setStatus("tune");
-  root.innerHTML = `
+export function buildPageHtml() {
+  return `
     <div class="page build-page">
       ${workshopHeaderHtml({
         subtitle: previewSubtitle(),
@@ -319,6 +431,13 @@ export function mount(root, { setStatus }) {
 
       <div id="build-msg" class="tight"></div>
     </div>`;
+}
+
+// ==================== MOUNT ====================
+
+export function mount(root, { setStatus }) {
+  setStatus("tune");
+  root.innerHTML = buildPageHtml();
 
   const rendererId = ++rendererMountId;
   testCanvas = root.querySelector("#test-canvas");
@@ -414,6 +533,7 @@ function playerPanelHtml(slot) {
   const sideClass = slot === 0 ? "is-p1" : "is-p2";
   const label = slot === 0 ? "P1" : "P2";
   const mode = modes[slot];
+  const current = slotCosmetics[slot];
   return `
     <section class="panel player-panel ${sideClass}" data-slot="${slot}">
       <details class="player-fold" open data-slot="${slot}">
@@ -422,6 +542,16 @@ function playerPanelHtml(slot) {
           <span class="player-fold-badge" data-slot="${slot}">${modeBadge(slot)}</span>
           <span class="player-fold-chevron" aria-hidden="true">▸</span>
         </summary>
+
+      <details class="player-cosmetics-fold" open data-slot="${slot}">
+        <summary class="player-cosmetics-summary tight" title="Choose fighter & weapon for ${label}">
+          <span>fighter & weapon</span>
+          <strong class="slot-cosmetics-current" data-slot="${slot}">${escapeHtml(bodyLabel(current.body))} · ${escapeHtml(weaponLabel(current.body, current.weapon))}</strong>
+        </summary>
+        <div class="player-cosmetics-body" data-slot="${slot}">
+          ${slotCosmeticsHtml(slot)}
+        </div>
+      </details>
 
       <div class="player-mode-row" role="radiogroup" aria-label="${label} mode">
         ${["user","preset","human"].map((v) => `
@@ -499,7 +629,7 @@ function buildPreviewBriefingHtml() {
     <div class="build-preview-briefing">
       <div class="build-preview-side is-p1" id="build-brief-side-0">
         <span class="build-preview-side-label">P1</span>
-        <strong class="build-preview-side-name" id="build-brief-p1">${escapeHtml(labelForSlot(0))}</strong>
+        <strong class="build-preview-side-name" id="build-brief-p1">${escapeHtml(labelForSlot(0))} · ${escapeHtml(bodyLabel(slotCosmetics[0].body))}</strong>
       </div>
       <div class="build-preview-center">
         <div class="build-preview-result" id="build-brief-result">starting match</div>
@@ -507,7 +637,7 @@ function buildPreviewBriefingHtml() {
       </div>
       <div class="build-preview-side is-p2" id="build-brief-side-1">
         <span class="build-preview-side-label">P2</span>
-        <strong class="build-preview-side-name" id="build-brief-p2">${escapeHtml(labelForSlot(1))}</strong>
+        <strong class="build-preview-side-name" id="build-brief-p2">${escapeHtml(labelForSlot(1))} · ${escapeHtml(bodyLabel(slotCosmetics[1].body))}</strong>
       </div>
     </div>`;
 }
@@ -582,6 +712,42 @@ function wireSlot(root, slot) {
     trackBuildPresetChange(slot, slotPresetNames[slot]);
   });
 
+  // Cosmetics selector
+  const cosmeticsBody = panel.querySelector(`.player-cosmetics-body[data-slot="${slot}"]`);
+  cosmeticsBody?.addEventListener("click", (event) => {
+    const bodyButton = event.target instanceof Element ? event.target.closest(".duel-body-option") : null;
+    const weaponButton = event.target instanceof Element ? event.target.closest(".duel-weapon-option") : null;
+    const button = bodyButton ?? weaponButton;
+    if (!button) return;
+    const slotIdx = Number(button.dataset.slot);
+    if (slotIdx !== slot) return;
+
+    if (bodyButton) {
+      const body = BODY_IDS.includes(bodyButton.dataset.body) ? bodyButton.dataset.body : defaultCosmetics(slot).body;
+      slotCosmetics[slot] = normalizeCosmetics({ body, weapon: availableWeaponIds(body)[0] }, slot);
+    } else if (weaponButton) {
+      const current = slotCosmetics[slot];
+      const weapons = availableWeaponIds(current.body);
+      const weapon = weapons.includes(weaponButton.dataset.weapon) ? weaponButton.dataset.weapon : current.weapon;
+      slotCosmetics[slot] = normalizeCosmetics({ ...current, weapon }, slot);
+    }
+
+    cosmeticsBody.innerHTML = slotCosmeticsHtml(slot);
+    const summaryCurrent = panel.querySelector(`.slot-cosmetics-current[data-slot="${slot}"]`);
+    if (summaryCurrent) {
+      summaryCurrent.textContent = `${bodyLabel(slotCosmetics[slot].body)} · ${weaponLabel(slotCosmetics[slot].body, slotCosmetics[slot].weapon)}`;
+    }
+
+    previewLabels = {
+      ...previewLabels,
+      p1: labelForSlot(0),
+      p2: labelForSlot(1),
+      cosmetics: [slotCosmetics[0], slotCosmetics[1]],
+    };
+    updatePreviewBriefing();
+    markPreviewDirty();
+  });
+
   // Button bar
   panel.querySelector(".slot-reset").addEventListener("click", () => {
     slotStates[slot] = initialSlotState();
@@ -609,6 +775,7 @@ function wireSlot(root, slot) {
   panel.querySelector(".slot-submit").addEventListener("click", () => {
     const cfg = slotConfig(slot);
     sessionStorage.setItem("m3t4:pendingSubmit", JSON.stringify(cfg));
+    sessionStorage.setItem("m3t4:pendingCosmetics", JSON.stringify(slotCosmetics[slot]));
     trackBuildAction("submit");
     navigateTo("roster");
   });
@@ -788,7 +955,7 @@ function startLocalWorld({ newSeed = false } = {}) {
   localPlayedAtMs = performance.now();
   localTickAccumMs = 0;
   previewStage = stage;
-  previewLabels = { p1: labelForSlot(0), p2: labelForSlot(1) };
+  previewLabels = { p1: labelForSlot(0), p2: labelForSlot(1), cosmetics: [slotCosmetics[0], slotCosmetics[1]] };
   previewResult = { seed, ticks: 0, winner: -1, finalScore: [0, 0] };
   previewFrames = [];
   previewStride = 1;
@@ -869,7 +1036,7 @@ async function requestPreview({ newSeed = false } = {}) {
     if (requestId !== previewRequestId) return;
     previewFrames = Array.isArray(response.frames) ? response.frames : [];
     previewStage = response.stage ?? STAGES[stageId] ?? STAGES.datacenter;
-    previewLabels = response.labels ?? { p1: labelForSlot(0), p2: labelForSlot(1) };
+    previewLabels = { ...(response.labels ?? { p1: labelForSlot(0), p2: labelForSlot(1) }), cosmetics: [slotCosmetics[0], slotCosmetics[1]] };
     previewResult = response.result ? { ...response.result, seed: response.seed } : { seed: response.seed };
     previewStride = response.frameStride || 2;
     previewStartedAt = performance.now();
@@ -947,8 +1114,8 @@ function updatePreviewHud(frame = currentPreviewFrame()) {
 }
 
 function updatePreviewBriefing(frame = currentPreviewFrame()) {
-  setBuildStat("build-brief-p1", labelForSlot(0));
-  setBuildStat("build-brief-p2", labelForSlot(1));
+  setBuildStat("build-brief-p1", `${labelForSlot(0)} (${bodyLabel(slotCosmetics[0].body)})`);
+  setBuildStat("build-brief-p2", `${labelForSlot(1)} (${bodyLabel(slotCosmetics[1].body)})`);
   setBriefWinnerState(-1);
 
   if (localWorld) {

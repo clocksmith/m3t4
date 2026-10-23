@@ -1011,14 +1011,44 @@ function spriteSheetStyle({ url, cols = 1, rows = 1, cell = 0 }) {
   ].join(";");
 }
 
-function fallbackCosmeticsForSide(side) {
-  return side === 0
-    ? { body: "sama", weapon: "worldcoin_orb_flail" }
-    : { body: "darrius", weapon: "rolled_constitution_bat" };
+const SYSTEM_BOT_BODIES = {
+  standby: "sama",
+  founder: "sama",
+  regulatory: "darrius",
+  acolyte: "darrius",
+  oracle: "demis",
+  intern: "demis",
+  operator: "mark",
+  shipper: "mark",
+  incumbent: "jensen",
+  blitz: "jensen",
+  unicorn: "elon",
+  disruptor: "elon",
+  troll: "elon",
+  pivot: "mark",
+  moonshot: "demis",
+  acquirer: "jensen",
+};
+
+export function fallbackCosmeticsForCompetitor(data, side) {
+  const bodies = rosterCatalog.bodies ?? ["sama", "darrius", "demis", "mark", "jensen", "elon"];
+  const cleanHandle = String(data?.handle || data?.slotName || data?.name || "").replace(/^sys_/, "").toLowerCase();
+  let assignedBody = SYSTEM_BOT_BODIES[cleanHandle];
+  if (!assignedBody) {
+    const key = cleanHandle || String(side);
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) hash = ((hash << 5) - hash + key.charCodeAt(i)) | 0;
+    assignedBody = bodies[Math.abs(hash + side * 3) % bodies.length];
+  }
+  const body = assignedBody ?? (side === 0 ? "sama" : "darrius");
+  const weapons = (rosterCatalog.weapons?.[body] ?? []).filter((w) => w.available);
+  const weaponIndex = side === 1 && weapons.length > 1 ? 1 : 0;
+  const weapon = weapons[weaponIndex]?.id ?? (side === 0 ? "worldcoin_orb_flail" : "rolled_constitution_bat");
+  return { body, weapon };
 }
 
 function presentationCosmeticsForCompetitor(data, side) {
-  const fallback = fallbackCosmeticsForSide(side);
+  const fallback = fallbackCosmeticsForCompetitor(data, side);
   const body = BODY_VARIANTS[data?.cosmetics?.body] ? data.cosmetics.body : fallback.body;
   return {
     body,

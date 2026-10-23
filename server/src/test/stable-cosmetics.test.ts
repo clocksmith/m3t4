@@ -4,7 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { STRATEGIES } from "@m3t4/sim";
-import { effectiveRateLockedUntil, FileStableStore, nextSlotName, normalizeSlotCosmetics, slotCosmetics } from "../stable.js";
+import { characterForCosmetics, effectiveRateLockedUntil, FileStableStore, nextSlotName, normalizeSlotCosmetics, slotCosmetics } from "../stable.js";
+
+test('new server characters pin selected weapon motion for deterministic replay',()=>{
+  const ch=characterForCosmetics({body:'elon',weapon:'orbit_lance'});
+  assert.equal(ch.weapon,'orbit_lance');assert.equal(ch.body,'elon');assert.equal(ch.weaponMotionVersion,1);
+});
 
 test("file stable stores roster cosmetics and rejects clone bodies", async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "m3t4-stable-cosmetics-"));

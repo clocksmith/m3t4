@@ -135,6 +135,7 @@ function selectedCharacters() {
     ...PLAYER_PALETTES[side],
     body: cosmetic.body,
     weapon: cosmetic.weapon,
+    weaponMotionVersion: 1,
   }));
 }
 

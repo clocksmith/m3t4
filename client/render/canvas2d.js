@@ -2,10 +2,12 @@ import { BODY_PORTRAIT_SHEETS } from "../content/character-presentation.js";
 import { drawStageScenery } from "./stage-art.js";
 import { drawGoalHoldRing } from "./goal-progress.js";
 import { imageState, loadImage } from "./image-assets.js";
-import { swordSeg, fighterHurtbox } from "../sim/combat-geometry.js";
+import { swordSeg, fighterHurtbox, weaponHitSegments } from "../sim/combat-geometry.js";
 import { DOUBLE_KO_RESPAWN_S } from "../sim/constants.js";
 import { bodyFramePlacement, WEAPON_ART, weaponArtTransform } from "./fighter-art.js";
-import { weaponBodyFrame, weaponHandPoints, FIGHTER_ARM_PALETTE } from "./weapon-motion.js";
+import { weaponBodyFrame, weaponHandPoints, FIGHTER_ARM_PALETTE, WEAPON_MOTION } from "./weapon-motion.js";
+import {articulatedWeaponPose,attackDuration} from "../sim/weapon-kinematics.js";
+import {drawRigFighter,drawRigGrips} from './fighter-rig.js';
 // Shared canvas renderer. Takes a TraceFrame (from sim) + stage and draws
 // the scene. Used by both Spectate (server frames) and Practice (local).
 
@@ -216,6 +218,9 @@ export function drawFrame(ctx, stage, frame, labels) {
   spriteState = state.sprites;
   hudPortraitState = state.portraits;
   sideCosmetics = [cosmeticsForSide(labels, 0), cosmeticsForSide(labels, 1)];
+  for(const [side,f] of [frame.p0,frame.p1].entries()) if(f.weaponMotionVersion===1) {
+    sideCosmetics[side]=cosmeticsForSide({cosmetics:{[side]:{body:f.body??sideCosmetics[side].body,weapon:f.weapon??sideCosmetics[side].weapon}}},side);
+  }
   const p1 = fighterPalette(0);
   const p2 = fighterPalette(1);
   ctx.fillStyle = cssColor("--arena-bg");
@@ -393,6 +398,10 @@ function drawSpriteFighter(ctx, f, side, frame) {
   const state = spriteState[side];
   if (!state) return false;
   const selectedBody = sideCosmetics[side]?.body ?? DEFAULT_BODIES[side] ?? DEFAULT_BODIES[0];
+  if(drawRigFighter(ctx,{...f,weapon:f.weapon??sideCosmetics[side]?.weapon},selectedBody,frame)) {
+    state.pose={animName:chooseSpriteAnim(f,side,frame),frameIdx:0,renderFacing:f.facing,rig:true};
+    return true;
+  }
   if (state.bodyId !== selectedBody) {
     state.bodyId = selectedBody;
     state.kit = BODY_KITS[selectedBody] ?? BODY_KITS[DEFAULT_BODIES[side] ?? DEFAULT_BODIES[0]];
@@ -407,7 +416,7 @@ function drawSpriteFighter(ctx, f, side, frame) {
   const animName = chooseSpriteAnim(f, side, frame);
   const anim = state.kit.anims[animName] ?? state.kit.anims.idle;
   const frameIdx = animName === "swing"
-    ? weaponBodyFrame(sideCosmetics[side]?.weapon, 1 - Math.max(0, Math.min(1, f.swipeT / STATS.swipeTime)))
+    ? weaponBodyFrame(sideCosmetics[side]?.weapon, 1 - Math.max(0, Math.min(1, f.swipeT / attackDuration(f))))
     : spriteFrameIndex(animName, anim, f, frame);
   const placement = bodyFramePlacement(state.artBodyId ?? state.bodyId, animName, frameIdx, { grounded: f.onGround, dead: f.dead });
   const { crop } = placement;
@@ -498,13 +507,29 @@ function drawSword(ctx, f, shadow, side, frame) {
   if (f.dead) return;
   const clashAge = clashVisualAge(f, frame);
   const clashing = Number.isFinite(clashAge);
-  const active = f.swipeT > 0 || f.diveT > 0 || clashing;
+  const kinematics=articulatedWeaponPose(f);
+  const active = kinematics ? kinematics.active || clashing : f.swipeT > 0 || f.diveT > 0 || clashing;
   const { bx, by, tx, ty } = swordSeg(f);
   const pose = spriteState[side]?.pose;
+  const rigPose={...f,weapon:f.weapon??sideCosmetics[side]?.weapon};
   const base = { animName: pose?.animName ?? "fallback", frameIdx: pose?.frameIdx ?? 0 };
+  const support=kinematics?.spec.support ?? WEAPON_MOTION[sideCosmetics[side]?.weapon]?.support;
+  if(support!=null){
+    const d=support,g=kinematics?.grip??{x:bx,y:by};
+    const angle=kinematics?.angle??Math.atan2(ty-by,(tx-bx)*f.facing);
+    ctx.save();ctx.lineWidth=4;ctx.strokeStyle='#10151c';ctx.beginPath();ctx.moveTo(g.x,g.y);
+    ctx.lineTo(g.x+f.facing*Math.cos(angle)*d,g.y+Math.sin(angle)*d);ctx.stroke();
+    ctx.lineWidth=2;ctx.strokeStyle='#74716b';ctx.stroke();ctx.restore();
+  }
   drawSwingTrail(ctx, f);
+  if(kinematics?.flexible&&drawFlexibleWeapon(ctx,side,kinematics,f.facing)){
+    if(pose?.rig)drawRigGrips(ctx,rigPose,sideCosmetics[side].body);
+    else drawWeaponHand(ctx,f,side,shadow);
+    return;
+  }
   if (drawWeaponSprite(ctx, side, bx, by, tx, ty, active, f.facing)) {
-    drawWeaponHand(ctx, f, side, shadow);
+    if(pose?.rig)drawRigGrips(ctx,rigPose,sideCosmetics[side].body);
+    else drawWeaponHand(ctx, f, side, shadow);
     drawWeaponAnchorDebug(ctx, { bx, by, tx, ty, side, active, animName: base.animName, frameIdx: base.frameIdx });
     return;
   }
@@ -557,8 +582,15 @@ function drawWeaponHand(ctx, f, side, shadow) {
 
 function drawSwingTrail(ctx, f) {
   if (!(f.swipeT > 0) || f.diveT > 0) return;
+  if(articulatedWeaponPose(f)?.active===false)return;
+  const flexible=articulatedWeaponPose(f);
+  if(flexible?.flexible){
+    const previous=articulatedWeaponPose({...f,swipeT:Math.min(attackDuration(f),f.swipeT+2/SIM_HZ)});
+    ctx.save();ctx.strokeStyle='#e8dc9b';ctx.globalAlpha=.3;ctx.lineWidth=3;
+    ctx.beginPath();ctx.moveTo(previous.tip.x,previous.tip.y);ctx.lineTo(flexible.tip.x,flexible.tip.y);ctx.stroke();ctx.restore();return;
+  }
   const current = swordSeg(f);
-  const previous = swordSeg({ ...f, swipeT: Math.min(STATS.swipeTime, f.swipeT + 2 / SIM_HZ) });
+  const previous = swordSeg({ ...f, swipeT: Math.min(attackDuration(f), f.swipeT + 2 / SIM_HZ) });
   ctx.save();
   ctx.globalAlpha = 0.18;
   ctx.fillStyle = cssColor("--arena-weapon-active", "white");
@@ -573,14 +605,18 @@ function drawSwingTrail(ctx, f) {
 function drawCombatDebug(ctx, f) {
   if (!combatDebugEnabled()) return;
   const hurt = fighterHurtbox(f);
-  const sword = swordSeg(f);
   ctx.save(); ctx.lineWidth = 1;
   ctx.strokeStyle = "#67e8f9";
   ctx.strokeRect(f.x - STATS.bodyW / 2, f.y - STATS.bodyH / 2, STATS.bodyW, STATS.bodyH);
   ctx.strokeStyle = "#fb7185";
   ctx.beginPath(); ctx.arc(hurt.x, hurt.y, hurt.radius, 0, Math.PI * 2); ctx.stroke();
   ctx.strokeStyle = "#fde047";
-  ctx.beginPath(); ctx.moveTo(sword.bx, sword.by); ctx.lineTo(sword.tx, sword.ty); ctx.stroke();
+  for(const segment of weaponHitSegments(f)){
+    ctx.beginPath();
+    if(segment.bx===segment.tx&&segment.by===segment.ty)ctx.arc(segment.tx,segment.ty,segment.radius??1,0,Math.PI*2);
+    else {ctx.moveTo(segment.bx,segment.by);ctx.lineTo(segment.tx,segment.ty);}
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -691,6 +727,32 @@ export function fitCanvasText(ctx, value, maxWidth) {
   const chars = Array.from(text);
   while (chars.length && ctx.measureText(chars.join("") + "…").width > maxWidth) chars.pop();
   return chars.join("") + "…";
+}
+
+const FLEXIBLE_PARTS={
+  worldcoin_orb_flail:{head:[1,32,15,15],headSize:12,handle:'#63747d'},
+  nobel_medal_flail:{head:[28,27,17,16],headSize:13,handle:'#a86c28'},
+  controller_nunchucks:{head:[25,24,21,21],headSize:14,handle:'#606d91'},
+  quest_flail:{head:[25,21,22,25],headSize:18,handle:'#476274'},
+};
+function drawFlexibleWeapon(ctx,side,pose,facing){
+  const selected=sideCosmetics[side],parts=FLEXIBLE_PARTS[selected.weapon];
+  const state=weaponImageState(selected.body,selected.weapon),img=state&&loadImage(state);
+  if(!parts||!img)return false;
+  const {grip,joint,tip,link}=pose,chainEnd=pose.spec.kind==='nunchucks'?link:tip;
+  ctx.save();ctx.imageSmoothingEnabled=false;ctx.lineCap='square';
+  ctx.strokeStyle='#10151d';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(grip.x,grip.y);ctx.lineTo(joint.x,joint.y);ctx.stroke();
+  ctx.strokeStyle=parts.handle;ctx.lineWidth=3;ctx.stroke();
+  const length=Math.hypot(chainEnd.x-joint.x,chainEnd.y-joint.y),count=Math.ceil(length/4);
+  for(let i=0;i<count;i++){
+    const t=(i+.5)/count,x=joint.x+(chainEnd.x-joint.x)*t,y=joint.y+(chainEnd.y-joint.y)*t;
+    ctx.fillStyle=i%2?'#d4d1b9':'#777d81';ctx.fillRect(Math.round(x)-1,Math.round(y)-1,i%2?3:2,i%2?2:3);
+  }
+  const [sx,sy,sw,sh]=parts.head,cell=state.kit.cell,cols=state.kit.cols??2;
+  const center=pose.spec.kind==='nunchucks'?{x:(link.x+tip.x)/2,y:(link.y+tip.y)/2}:tip;
+  ctx.translate(center.x,center.y);ctx.rotate(facing*((pose.spec.kind==='nunchucks'?pose.distalAngle:pose.chainAngle)+.35));ctx.scale(facing,1);
+  ctx.drawImage(img,cell%cols*48+sx,Math.floor(cell/cols)*48+sy,sw,sh,-parts.headSize/2,-parts.headSize/2,parts.headSize,parts.headSize);
+  ctx.restore();return true;
 }
 
 function drawWeaponSprite(ctx, side, bx, by, tx, ty, active, facing) {
@@ -888,10 +950,13 @@ function drawHudPortrait(ctx, side, fighter, frame, x, y, accent) {
 
   if (img && state) {
     const idx = portraitIndex(side, fighter, frame);
-    const sx = (idx % 2) * state.kit.cellW;
-    const sy = Math.floor(idx / 2) * state.kit.cellH;
+    // Generated sheets keep four equal cells at their original resolution.
+    const cellW=img.naturalWidth ? img.naturalWidth/2 : state.kit.cellW;
+    const cellH=img.naturalHeight ? img.naturalHeight/2 : state.kit.cellH;
+    const sx = (idx % 2) * cellW;
+    const sy = Math.floor(idx / 2) * cellH;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, sx, sy, state.kit.cellW, state.kit.cellH, x, y, size, size);
+    ctx.drawImage(img, sx, sy, cellW, cellH, x, y, size, size);
   } else {
     ctx.fillStyle = accent;
     ctx.globalAlpha = 0.18;

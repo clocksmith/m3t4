@@ -35,6 +35,9 @@ export declare function stepWorld(w: World, actA: Action, actB: Action): StepRes
 export declare function worldToFrame(w: World): TraceFrame;
 export { STATS } from "./constants.js";
 export interface TraceFighterFrame {
+    body?: string;
+    weapon?: string;
+    weaponMotionVersion?: 1;
     x: number;
     y: number;
     vx: number;

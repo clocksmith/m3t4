@@ -226,18 +226,40 @@
 
 .profile-submit-row {
   display: grid;
-  grid-template-columns: minmax(150px, 220px) minmax(130px, 160px) minmax(300px, 1fr) minmax(130px, 180px) max-content;
+  grid-template-columns: minmax(140px, 190px) minmax(260px, 340px) minmax(240px, 1fr) minmax(120px, 160px) max-content;
   gap: 10px;
   align-items: end;
 }
 
 .profile-submit-row label,
-.weapon-field {
+.weapon-field,
+.roster-body-field {
   display: grid;
   gap: 4px;
   color: var(--ui-text-soft);
   font-size: 11px;
   text-transform: uppercase;
+}
+
+.roster-body-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.roster-body-grid .duel-body-option {
+  padding: 4px 2px;
+  min-height: 48px;
+}
+
+.roster-body-grid .duel-body-portrait {
+  width: 32px;
+  height: 32px;
+}
+
+.roster-body-grid .duel-body-option.is-disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
 }
 
 .field-label {

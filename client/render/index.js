@@ -4,6 +4,7 @@ export {
   setupCanvas,
   drawFrame,
   createCanvas2DRenderer,
+  hudAvatarSideAt,
 } from "./canvas2d.js";
 export {
   normalizeRendererPreference,

@@ -23,7 +23,7 @@ import {
   neutralBuildState,
   stateSpent,
 } from "../lib/build-config.js";
-import { createFrameRenderer, W, H } from "../render/index.js";
+import { createFrameRenderer, W, H, hudAvatarSideAt } from "../render/index.js";
 import {
   createStepperWorld,
   stepWorld,
@@ -160,6 +160,38 @@ function slotCosmeticsHtml(slot) {
           </button>`;
       }).join("")}
     </div>`;
+}
+
+function syncSlotCosmeticsUi(slot) {
+  const panel = document.querySelector(`.player-panel[data-slot="${slot}"]`);
+  if (!panel) return;
+  const cosmeticsBody = panel.querySelector(`.player-cosmetics-body[data-slot="${slot}"]`);
+  if (cosmeticsBody) cosmeticsBody.innerHTML = slotCosmeticsHtml(slot);
+  const summaryCurrent = panel.querySelector(`.slot-cosmetics-current[data-slot="${slot}"]`);
+  if (summaryCurrent) {
+    summaryCurrent.textContent = `${bodyLabel(slotCosmetics[slot].body)} · ${weaponLabel(slotCosmetics[slot].body, slotCosmetics[slot].weapon)}`;
+  }
+}
+
+function cycleFighterForSlot(slot) {
+  const current = slotCosmetics[slot] ?? defaultCosmetics(slot);
+  const currentIndex = BODY_IDS.indexOf(current.body);
+  const nextBody = BODY_IDS[((currentIndex + 1) % BODY_IDS.length + BODY_IDS.length) % BODY_IDS.length];
+  const weapons = availableWeaponIds(nextBody);
+  const weapon = weapons[0];
+  slotCosmetics[slot] = normalizeCosmetics({ body: nextBody, weapon }, slot);
+  if (slot === 0) {
+    try { sessionStorage.setItem("m3t4:pendingCosmetics", JSON.stringify(slotCosmetics[0])); } catch {}
+  }
+  syncSlotCosmeticsUi(slot);
+  previewLabels = {
+    ...previewLabels,
+    p1: labelForSlot(0),
+    p2: labelForSlot(1),
+    cosmetics: [slotCosmetics[0], slotCosmetics[1]],
+  };
+  updatePreviewBriefing();
+  requestPreview({ newSeed: false });
 }
 
 const DEFAULT_PRESET_NAMES = [
@@ -453,10 +485,23 @@ export function mount(root, { setStatus }) {
   void attachTestRenderer(rendererId, testCanvas);
 
   // Tap the canvas to (re)run a fresh test fight; mirrors the spacebar
-  // shortcut for touch users.
-  testCanvas.addEventListener("click", () => {
+  // shortcut for touch users. Tapping either HUD avatar cycles that fighter.
+  testCanvas.addEventListener("click", (event) => {
+    const side = hudAvatarSideAt(testCanvas, event.clientX, event.clientY);
+    if (side !== -1) {
+      event.stopPropagation();
+      event.preventDefault();
+      cycleFighterForSlot(side);
+      refocusCanvas();
+      return;
+    }
     requestPreview({ newSeed: true });
     refocusCanvas();
+  });
+
+  testCanvas.addEventListener("mousemove", (event) => {
+    const side = hudAvatarSideAt(testCanvas, event.clientX, event.clientY);
+    testCanvas.style.cursor = side !== -1 ? "pointer" : "";
   });
 
   wireSlot(root, 0);
@@ -627,18 +672,24 @@ function playerPanelHtml(slot) {
 function buildPreviewBriefingHtml() {
   return `
     <div class="build-preview-briefing">
-      <div class="build-preview-side is-p1" id="build-brief-side-0">
-        <span class="build-preview-side-label">P1</span>
-        <strong class="build-preview-side-name" id="build-brief-p1">${escapeHtml(labelForSlot(0))} · ${escapeHtml(bodyLabel(slotCosmetics[0].body))}</strong>
-      </div>
+      <button type="button" class="build-preview-side is-p1 build-avatar-btn" id="build-brief-side-0" data-slot="0" title="Click to cycle P1 fighter">
+        <span class="build-brief-avatar-wrap" aria-hidden="true">${bodyPortraitHtml(slotCosmetics[0].body)}</span>
+        <span class="build-brief-text">
+          <span class="build-preview-side-label">P1</span>
+          <strong class="build-preview-side-name" id="build-brief-p1">${escapeHtml(labelForSlot(0))} (${bodyLabel(slotCosmetics[0].body)})</strong>
+        </span>
+      </button>
       <div class="build-preview-center">
         <div class="build-preview-result" id="build-brief-result">starting match</div>
         <div class="build-preview-meta" id="build-brief-meta">${escapeHtml(stageLabel(stageId))} · seed —</div>
       </div>
-      <div class="build-preview-side is-p2" id="build-brief-side-1">
-        <span class="build-preview-side-label">P2</span>
-        <strong class="build-preview-side-name" id="build-brief-p2">${escapeHtml(labelForSlot(1))} · ${escapeHtml(bodyLabel(slotCosmetics[1].body))}</strong>
-      </div>
+      <button type="button" class="build-preview-side is-p2 build-avatar-btn" id="build-brief-side-1" data-slot="1" title="Click to cycle P2 fighter">
+        <span class="build-brief-text">
+          <span class="build-preview-side-label">P2</span>
+          <strong class="build-preview-side-name" id="build-brief-p2">${escapeHtml(labelForSlot(1))} (${bodyLabel(slotCosmetics[1].body)})</strong>
+        </span>
+        <span class="build-brief-avatar-wrap" aria-hidden="true">${bodyPortraitHtml(slotCosmetics[1].body)}</span>
+      </button>
     </div>`;
 }
 
@@ -676,6 +727,15 @@ function wireMatchBar(root) {
   root.querySelector("#test-resim").addEventListener("click", () => {
     requestPreview({ newSeed: false }); refocus();
     trackBuildAction("resim");
+  });
+  root.querySelectorAll(".build-avatar-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const slot = Number(btn.dataset.slot);
+      if (Number.isInteger(slot) && (slot === 0 || slot === 1)) {
+        cycleFighterForSlot(slot);
+        refocus();
+      }
+    });
   });
 }
 
@@ -732,12 +792,10 @@ function wireSlot(root, slot) {
       slotCosmetics[slot] = normalizeCosmetics({ ...current, weapon }, slot);
     }
 
-    cosmeticsBody.innerHTML = slotCosmeticsHtml(slot);
-    const summaryCurrent = panel.querySelector(`.slot-cosmetics-current[data-slot="${slot}"]`);
-    if (summaryCurrent) {
-      summaryCurrent.textContent = `${bodyLabel(slotCosmetics[slot].body)} · ${weaponLabel(slotCosmetics[slot].body, slotCosmetics[slot].weapon)}`;
+    if (slot === 0) {
+      try { sessionStorage.setItem("m3t4:pendingCosmetics", JSON.stringify(slotCosmetics[0])); } catch {}
     }
-
+    syncSlotCosmeticsUi(slot);
     previewLabels = {
       ...previewLabels,
       p1: labelForSlot(0),
@@ -745,7 +803,7 @@ function wireSlot(root, slot) {
       cosmetics: [slotCosmetics[0], slotCosmetics[1]],
     };
     updatePreviewBriefing();
-    markPreviewDirty();
+    requestPreview({ newSeed: false });
   });
 
   // Button bar
@@ -1116,6 +1174,10 @@ function updatePreviewHud(frame = currentPreviewFrame()) {
 function updatePreviewBriefing(frame = currentPreviewFrame()) {
   setBuildStat("build-brief-p1", `${labelForSlot(0)} (${bodyLabel(slotCosmetics[0].body)})`);
   setBuildStat("build-brief-p2", `${labelForSlot(1)} (${bodyLabel(slotCosmetics[1].body)})`);
+  const p0Avatar = document.querySelector("#build-brief-side-0 .build-brief-avatar-wrap");
+  if (p0Avatar) p0Avatar.innerHTML = bodyPortraitHtml(slotCosmetics[0].body);
+  const p1Avatar = document.querySelector("#build-brief-side-1 .build-brief-avatar-wrap");
+  if (p1Avatar) p1Avatar.innerHTML = bodyPortraitHtml(slotCosmetics[1].body);
   setBriefWinnerState(-1);
 
   if (localWorld) {

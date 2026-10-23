@@ -924,3 +924,49 @@ body.alpha-locked > #bottom {
   font-size: 11px;
   font-weight: 600;
 }
+
+/* --- build briefing avatar interactive button --- */
+.build-avatar-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm, 6px);
+  padding: 2px 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.build-avatar-btn:hover,
+.build-avatar-btn:focus-visible {
+  outline: none;
+  border-color: var(--ui-paint-rgba-148-163-184-0-28);
+  background: var(--ui-paint-rgba-100-116-139-0-08);
+}
+
+.build-avatar-btn:hover .build-preview-side-name {
+  color: var(--ui-accent);
+}
+
+.build-brief-avatar-wrap {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.build-brief-avatar-wrap .duel-body-portrait {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  border: 1px solid var(--ui-paint-rgba-148-163-184-0-28);
+}
+
+.build-brief-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+

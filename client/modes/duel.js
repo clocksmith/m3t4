@@ -17,7 +17,7 @@
 // page that wasn't already in the bundle.
 
 import { mountArenaShell } from "../ui/arena-shell.js";
-import { createFrameRenderer, W, H } from "../render/index.js";
+import { createFrameRenderer, W, H, hudAvatarSideAt } from "../render/index.js";
 import {
   createStepperWorld,
   stepWorld,
@@ -138,6 +138,27 @@ function selectedCharacters() {
   }));
 }
 
+function cycleFighterForSide(side) {
+  if (!state || !localOwnsSide(side)) return;
+  const current = normalizeCosmetics(state.cosmetics[side], side);
+  const currentIndex = BODY_IDS.indexOf(current.body);
+  const nextBody = BODY_IDS[((currentIndex + 1) % BODY_IDS.length + BODY_IDS.length) % BODY_IDS.length];
+  const weapons = availableWeaponIds(nextBody);
+  const weapon = side === 1 && weapons.length > 1 ? weapons[1] : weapons[0];
+  state.cosmetics[side] = normalizeCosmetics({ body: nextBody, weapon }, side);
+  state.world = null;
+  state.spectating = false;
+  state.spectatorFrame = null;
+  state.statusMsg = "";
+  clearRemoteInputs();
+  syncPlayClass();
+  renderCharacterSelect();
+  refreshHud();
+  if (state.subMode === "p2p" && state.p2p?.linked && typeof state.p2p.broadcastCosmetic === "function") {
+    state.p2p.broadcastCosmetic(side, state.cosmetics[side]);
+  }
+}
+
 function sanitizeAlias(value) {
   return String(value ?? "")
     .replace(/[\u0000-\u001f]+/g, " ")
@@ -249,16 +270,20 @@ async function tryEnterFullscreen(target) {
 function localOwnsSide(side) {
   if (!state) return false;
   if (state.spectating || state.p2p?.spectator) return false;
-  if (state.world && state.world.matchWinner === -1) return false;
-  if (state.subMode === "p2p") return side === state.hostSide;
+  if (state.subMode === "p2p") {
+    if (state.world && state.world.matchWinner === -1) return false;
+    return side === state.hostSide;
+  }
   return true;
 }
 
 function localOwnsStage() {
   if (!state) return false;
   if (state.spectating || state.p2p?.spectator) return false;
-  if (state.world && state.world.matchWinner === -1) return false;
-  if (state.subMode === "p2p") return state.hostSide === 0;
+  if (state.subMode === "p2p") {
+    if (state.world && state.world.matchWinner === -1) return false;
+    return state.hostSide === 0;
+  }
   return true;
 }
 
@@ -779,7 +804,13 @@ function controlsCardHtml() {
   return `
     <div class="duel-controls">
       ${subModeRowHtml()}
-      ${disclosureHtml({ label: "Choose fighters & weapons", className: "duel-cosmetics-fold", body: `<div class="duel-character-select" id="duel-character-select">${characterSelectHtml()}</div>` })}
+      <details class="duel-cosmetics-fold" open>
+        <summary class="duel-cosmetics-summary tight" title="Choose fighters & weapons">
+          <span>Choose fighters & weapons</span>
+          <strong class="duel-cosmetics-current" id="duel-cosmetics-summary-label">${escapeHtml(bodyLabel(state.cosmetics[0].body))} vs ${escapeHtml(bodyLabel(state.cosmetics[1].body))}</strong>
+        </summary>
+        <div class="duel-character-select" id="duel-character-select">${characterSelectHtml()}</div>
+      </details>
 
       <div class="duel-row">
         <label class="tight">stage
@@ -910,14 +941,9 @@ function touchControlsHtml() {
     <button type="button" class="duel-touch-setup" id="duel-touch-setup">setup</button>`;
 }
 
-// --- mode lifecycle ---
-
-export function mount(root, ctx = {}) {
-  ctx.setStatus?.("duel");
-  state = freshState();
-  placeStoredAliasOnOwnedSide();
-
-  root.innerHTML = `
+export function duelPageHtml() {
+  if (!state) state = freshState();
+  return `
     <div class="page duel-page">
       ${pageHeaderHtml({
         title: "Play",
@@ -936,6 +962,16 @@ export function mount(root, ctx = {}) {
         </section>
       </div>
     </div>`;
+}
+
+// --- mode lifecycle ---
+
+export function mount(root, ctx = {}) {
+  ctx.setStatus?.("duel");
+  state = freshState();
+  placeStoredAliasOnOwnedSide();
+
+  root.innerHTML = duelPageHtml();
 
   state.page = root.querySelector(".duel-page");
   state.canvas = root.querySelector("#duel-canvas");
@@ -958,10 +994,17 @@ export function mount(root, ctx = {}) {
   applyJoinLinkFromLocation();
 
   // Tap the canvas to start a fresh match when nothing is running.
-  // Mirrors the spacebar shortcut for touch users. We also opportunistic-
-  // ally enter fullscreen here because the click counts as the user
-  // gesture browsers require for requestFullscreen().
-  state.canvas.addEventListener("click", () => {
+  // Mirrors the spacebar shortcut for touch users. Tapping either HUD avatar
+  // cycles that fighter. We also opportunistically enter fullscreen here.
+  state.canvas.addEventListener("click", (event) => {
+    const side = hudAvatarSideAt(state.canvas, event.clientX, event.clientY);
+    if (side !== -1 && localOwnsSide(side)) {
+      event.stopPropagation();
+      event.preventDefault();
+      cycleFighterForSide(side);
+      refocusCanvas();
+      return;
+    }
     if (!state.world || state.world.matchWinner !== -1) {
       startMatch();
     }
@@ -969,6 +1012,11 @@ export function mount(root, ctx = {}) {
       void tryEnterFullscreen(state.page);
     }
     refocusCanvas();
+  });
+
+  state.canvas.addEventListener("mousemove", (event) => {
+    const side = hudAvatarSideAt(state.canvas, event.clientX, event.clientY);
+    state.canvas.style.cursor = (side !== -1 && localOwnsSide(side)) ? "pointer" : "";
   });
 
   addEventListener("keydown", onKeyDown);
@@ -1210,6 +1258,10 @@ function bindCharacterSelect() {
 function renderCharacterSelect() {
   const el = document.getElementById("duel-character-select");
   if (el) el.innerHTML = characterSelectHtml();
+  const summaryEl = document.getElementById("duel-cosmetics-summary-label");
+  if (summaryEl && state?.cosmetics) {
+    summaryEl.textContent = `${bodyLabel(state.cosmetics[0].body)} vs ${bodyLabel(state.cosmetics[1].body)}`;
+  }
   syncStageOwnership();
 }
 

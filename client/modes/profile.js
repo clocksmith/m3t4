@@ -40,8 +40,33 @@ let nameBySeat = new Map();
 let pendingBuildConfig = null;
 let pendingAutoApplied = false;
 
+function readPendingSubmit() {
+  try {
+    return typeof sessionStorage !== "undefined" ? sessionStorage.getItem("m3t4:pendingSubmit") : null;
+  } catch {
+    return null;
+  }
+}
+
+function readPendingCosmetics() {
+  try {
+    return typeof sessionStorage !== "undefined" ? sessionStorage.getItem("m3t4:pendingCosmetics") : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearPendingSubmit() {
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.removeItem("m3t4:pendingSubmit");
+      sessionStorage.removeItem("m3t4:pendingCosmetics");
+    }
+  } catch {}
+}
+
 function rosterIntroPanelHtml({ needsHandle = false } = {}) {
-  const pending = sessionStorage.getItem("m3t4:pendingSubmit");
+  const pending = readPendingSubmit();
   const claimForm = needsHandle ? `
       <div class="roster-intro-claim">
         <div class="tight mb-xs">Claim a public handle first. 3-20 chars, lowercase + digits + underscore.</div>
@@ -164,17 +189,11 @@ function renderFirebaseSignIn(authError) {
   root.querySelector("#signin-github").addEventListener("click", () => doSignIn("github"));
 }
 
-async function renderDashboard(user) {
-  setStatus(`roster · ${user.uid}`);
-  editorStateBySeat = new Map();
-  cosmeticsBySeat = new Map();
-  nameBySeat = new Map();
-  pendingBuildConfig = readPendingBuildConfig();
-  pendingAutoApplied = false;
-  root.innerHTML = `
+export function profileDashboardHtml({ user = {} } = {}) {
+  return `
     <div class="page">
       ${rosterPageHeaderHtml({
-        subtitle: `@${user.handle ?? "unclaimed"} · ${user.uid}`,
+        subtitle: `@${user.handle ?? "unclaimed"} · ${user.uid ?? "anon"}`,
         action: buttonHtml({ id: "signout", text: "sign out", attrs: { title: "End your current session" } }),
       })}
       ${rosterIntroPanelHtml({ needsHandle: !user.handle })}
@@ -191,7 +210,11 @@ async function renderDashboard(user) {
           </div>
           <div class="profile-submit-row">
             <label>name <input type="text" id="slot-name" placeholder="e.g. bruiser-v2"></label>
-            <label>body <select id="slot-body"></select></label>
+            <div class="roster-body-field">
+              <div class="field-label">fighter</div>
+              <div class="duel-body-grid roster-body-grid" id="slot-body-grid" aria-label="Fighter select"></div>
+              <select id="slot-body" class="u-sr-only" aria-hidden="true" tabindex="-1"></select>
+            </div>
             <div class="weapon-field">
               <div class="field-label">weapon</div>
               <div class="weapon-list" id="slot-weapon-list" role="listbox" aria-label="weapon"></div>
@@ -210,6 +233,16 @@ async function renderDashboard(user) {
         </div>
       </div>
     </div>`;
+}
+
+async function renderDashboard(user) {
+  setStatus(`roster · ${user.uid}`);
+  editorStateBySeat = new Map();
+  cosmeticsBySeat = new Map();
+  nameBySeat = new Map();
+  pendingBuildConfig = readPendingBuildConfig();
+  pendingAutoApplied = false;
+  root.innerHTML = profileDashboardHtml({ user });
 
   root.querySelector("#signout").addEventListener("click", () => auth.signOut());
   if (!user.handle) wireClaimHandle();
@@ -272,8 +305,7 @@ function wireSubmit(user) {
         );
       msg.className = "ok";
       msg.textContent = `seat ${seatNumber(selectedSlot)} ${wasFilled ? "revised" : "installed"} · slotId=${r.slotId}`;
-      sessionStorage.removeItem("m3t4:pendingSubmit");
-      sessionStorage.removeItem("m3t4:pendingCosmetics");
+      clearPendingSubmit();
       pendingBuildConfig = null;
       editorStateBySeat.delete(selectedSlot);
       cosmeticsBySeat.delete(selectedSlot);
@@ -316,7 +348,7 @@ function wirePendingBuildConfig() {
 }
 
 function readPendingBuildConfig() {
-  const raw = sessionStorage.getItem("m3t4:pendingSubmit");
+  const raw = readPendingSubmit();
   if (!raw) return null;
   try {
     return parseBuildConfigJson(raw);
@@ -357,7 +389,7 @@ function setDraftForSeat(slotIdx, state, source = "user") {
 
 function applyPendingBuildToSeat(slotIdx) {
   if (!pendingBuildConfig) return null;
-  const rawCosmetics = sessionStorage.getItem("m3t4:pendingCosmetics");
+  const rawCosmetics = readPendingCosmetics();
   if (rawCosmetics) {
     try {
       const parsed = JSON.parse(rawCosmetics);
@@ -535,16 +567,51 @@ function updateEditor() {
   renderEditorPanels(draft);
 }
 
+function characterOptionPortraitHtml(body) {
+  const url = BODY_PORTRAIT_SHEETS[body];
+  const style = url ? ` style="background-image:url('${escapeHtml(url)}')"` : "";
+  return `<span class="duel-body-portrait"${style} aria-hidden="true"></span>`;
+}
+
+function bodyMeta(body) {
+  const variant = BODY_VARIANTS[body];
+  return gameCopy.characters?.[body]?.[variant]?.label ?? body;
+}
+
 function renderCosmeticsControls(cosmetics) {
   const bodySelect = root.querySelector("#slot-body");
+  const bodyGrid = root.querySelector("#slot-body-grid");
   const weaponList = root.querySelector("#slot-weapon-list");
-  if (!bodySelect || !weaponList) return;
+  if (!weaponList) return;
   const used = usedBodiesByOtherSeats(selectedSlot);
-  bodySelect.innerHTML = BODY_IDS.map((body) => {
-    const disabled = used.has(body) ? " disabled" : "";
-    const selected = body === cosmetics.body ? " selected" : "";
-    return `<option value="${body}"${selected}${disabled}>${escapeHtml(bodyLabel(body))}</option>`;
-  }).join("");
+
+  if (bodySelect) {
+    bodySelect.innerHTML = BODY_IDS.map((body) => {
+      const disabled = used.has(body) ? " disabled" : "";
+      const selected = body === cosmetics.body ? " selected" : "";
+      return `<option value="${body}"${selected}${disabled}>${escapeHtml(bodyLabel(body))}</option>`;
+    }).join("");
+  }
+
+  if (bodyGrid) {
+    bodyGrid.innerHTML = BODY_IDS.map((body) => {
+      const disabled = used.has(body);
+      const selected = body === cosmetics.body;
+      const title = disabled ? `${bodyLabel(body)} (used in another seat)` : bodyMeta(body);
+      return `
+        <button
+          type="button"
+          class="duel-body-option${selected ? " is-selected" : ""}${disabled ? " is-disabled" : ""}"
+          data-body="${escapeHtml(body)}"
+          title="${escapeHtml(title)}"
+          ${disabled ? "disabled aria-disabled=\"true\"" : ""}
+        >
+          ${characterOptionPortraitHtml(body)}
+          <span>${escapeHtml(bodyLabel(body))}</span>
+        </button>`;
+    }).join("");
+  }
+
   const weaponOptions = weaponOptionsForSeat(cosmetics.body, selectedSlot);
   weaponList.innerHTML = weaponOptions.map((option) => {
     const selected = option.id === cosmetics.weapon;
@@ -568,14 +635,31 @@ function renderCosmeticsControls(cosmetics) {
         </span>
       </button>`;
   }).join("");
+
   const hint = root.querySelector("#weapon-unlock-hint");
   if (hint) hint.textContent = weaponUnlockHint(cosmetics.body, selectedSlot);
-  bodySelect.onchange = () => {
-    const body = BODY_IDS.includes(bodySelect.value) ? bodySelect.value : defaultCosmetics(selectedSlot).body;
-    const weapon = availableWeaponIdsForSeat(body, selectedSlot)[0];
-    cosmeticsBySeat.set(selectedSlot, { body, weapon });
-    updateEditor();
-  };
+
+  if (bodySelect) {
+    bodySelect.onchange = () => {
+      const body = BODY_IDS.includes(bodySelect.value) ? bodySelect.value : defaultCosmetics(selectedSlot).body;
+      const weapon = availableWeaponIdsForSeat(body, selectedSlot)[0];
+      cosmeticsBySeat.set(selectedSlot, { body, weapon });
+      updateEditor();
+    };
+  }
+
+  if (bodyGrid) {
+    bodyGrid.onclick = (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const button = target?.closest(".duel-body-option");
+      if (!button || button.disabled) return;
+      const body = BODY_IDS.includes(button.dataset.body) ? button.dataset.body : defaultCosmetics(selectedSlot).body;
+      const weapon = availableWeaponIdsForSeat(body, selectedSlot)[0];
+      cosmeticsBySeat.set(selectedSlot, { body, weapon });
+      updateEditor();
+    };
+  }
+
   weaponList.onclick = (event) => {
     const target = event.target instanceof Element ? event.target : null;
     const button = target?.closest(".weapon-option");

@@ -4,6 +4,9 @@ import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import { watchPageHtml, fallbackCosmeticsForCompetitor } from '../modes/spectate.js';
 import { buildPageHtml } from '../modes/build.js';
+import { duelPageHtml } from '../modes/duel.js';
+import { profileDashboardHtml } from '../modes/profile.js';
+import { hudAvatarSideAt } from '../render/index.js';
 import { mountArenaShell } from '../ui/arena-shell.js';
 
 function documentFor(html) {
@@ -73,4 +76,38 @@ test('Watch fallback cosmetics rotate across parody roster bodies for bots', () 
   ];
   const assigned = bots.map((b, i) => fallbackCosmeticsForCompetitor(b, i % 2).body);
   assert.deepEqual(assigned, ['sama', 'darrius', 'demis', 'mark', 'jensen', 'elon']);
+});
+
+test('hudAvatarSideAt detects P1 and P2 HUD avatar hitboxes and rejects center clicks', () => {
+  const canvas = {
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 960, height: 540 }),
+  };
+  assert.equal(hudAvatarSideAt(canvas, 60, 40), 0, 'P1 HUD portrait maps to side 0');
+  assert.equal(hudAvatarSideAt(canvas, 890, 40), 1, 'P2 HUD portrait maps to side 1');
+  assert.equal(hudAvatarSideAt(canvas, 480, 270), -1, 'Stage center does not trigger avatar click');
+});
+
+test('Tune briefing bar includes clickable avatar portrait buttons for both sides', () => {
+  const doc = documentFor(buildPageHtml());
+  const avatarButtons = doc.querySelectorAll('.build-avatar-btn');
+  assert.equal(avatarButtons.length, 2, 'both P1 and P2 have briefing avatar buttons');
+  assert.ok(avatarButtons[0].querySelector('.duel-body-portrait'), 'P1 button has portrait');
+  assert.ok(avatarButtons[1].querySelector('.duel-body-portrait'), 'P2 button has portrait');
+});
+
+test('Duel renders open cosmetics fold with character select grid for both players', () => {
+  const doc = documentFor(duelPageHtml());
+  const fold = doc.querySelector('.duel-cosmetics-fold');
+  assert.ok(fold, 'duel page has cosmetics fold');
+  assert.equal(fold.open, true, 'cosmetics fold is open by default');
+  for (const side of [0, 1]) {
+    const sideBodyButtons = doc.querySelectorAll(`.duel-body-option[data-side="${side}"]`);
+    assert.equal(sideBodyButtons.length, 6, `side ${side} offers all 6 roster bodies`);
+  }
+});
+
+test('Roster seat editor renders visual fighter select grid', () => {
+  const doc = documentFor(profileDashboardHtml());
+  const bodyGrid = doc.querySelector('#slot-body-grid');
+  assert.ok(bodyGrid, 'roster seat editor has slot-body-grid');
 });

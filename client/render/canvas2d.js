@@ -922,3 +922,20 @@ export function portraitCellForHudState(fighter, frame = {}, side = 0) {
 function portraitIndex(side, fighter, frame) {
   return portraitCellForHudState(fighter, frame, side);
 }
+
+export function hudAvatarSideAt(canvas, clientX, clientY) {
+  if (!canvas) return -1;
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width || !rect.height) return -1;
+  const scaleX = W / rect.width;
+  const scaleY = H / rect.height;
+  const vx = (clientX - rect.left) * scaleX;
+  const vy = (clientY - rect.top) * scaleY;
+
+  if (vy >= 10 && vy <= 105) {
+    if (vx >= 12 && vx <= 260) return 0;
+    if (vx >= W - 260 && vx <= W - 12) return 1;
+  }
+  return -1;
+}
+

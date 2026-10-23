@@ -104,7 +104,7 @@ test('renderer maps actual atlas draw calls to collision, including wall facing 
       const frame=makeFrame(500,patch);
       drawFrame(ctx,STAGES.datacenter,frame,{cosmetics:[{body,weapon:weapon.id},{body,weapon:weapon.id}]});
       assert.equal(ctx.draws.filter(d=>d.src.includes(`/chars/${body}/`)&&d.src.endsWith('/sprite.png')).length,2,'requested body must not silently fall back');
-      assert.equal(ctx.draws.filter(d=>d.src.includes(`/chars/${body}/`)&&d.src.endsWith('/portraits/sheet.png')).length,2,'HUD must use the selected identity');
+      assert.equal(ctx.draws.filter(d=>d.src.includes(`/chars/${body}/`)&&d.src.split('?')[0].endsWith('/portraits/sheet.png')).length,2,'HUD must use the selected identity');
       const weaponDraws=ctx.draws.filter(d=>d.src.includes('/weapons/'));
       assert.equal(weaponDraws.length,2);
       for(let side=0;side<2;side++){

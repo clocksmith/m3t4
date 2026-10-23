@@ -1,4 +1,4 @@
-import { BODY_PORTRAIT_SHEETS } from "../content/character-presentation.js";
+import { BODY_PORTRAIT_SHEETS, portraitSourceRect } from "../content/character-presentation.js";
 import { drawStageScenery } from "./stage-art.js";
 import { drawGoalHoldRing } from "./goal-progress.js";
 import { imageState, loadImage } from "./image-assets.js";
@@ -953,10 +953,9 @@ function drawHudPortrait(ctx, side, fighter, frame, x, y, accent) {
     // Generated sheets keep four equal cells at their original resolution.
     const cellW=img.naturalWidth ? img.naturalWidth/2 : state.kit.cellW;
     const cellH=img.naturalHeight ? img.naturalHeight/2 : state.kit.cellH;
-    const sx = (idx % 2) * cellW;
-    const sy = Math.floor(idx / 2) * cellH;
+    const [sx,sy,sw,sh]=portraitSourceRect(body,idx,cellW*2,cellH*2);
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, sx, sy, cellW, cellH, x, y, size, size);
+    ctx.drawImage(img, sx, sy, sw, sh, x, y, size, size);
   } else {
     ctx.fillStyle = accent;
     ctx.globalAlpha = 0.18;

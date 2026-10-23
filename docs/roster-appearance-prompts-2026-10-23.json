@@ -1,0 +1,37 @@
+{
+  "generator": "built-in imagegen",
+  "revision": "appearance-20261023b",
+  "user_screenshot_library_file_id": "libfile_a87da953c95c81918b452aeebea4ea29",
+  "prompts": [
+    {
+      "id": "elon_rig_age",
+      "prompt": "Use case: precise-object-edit. EDIT the existing game sprite part plate. Change ONLY Elon's head appearance in the upper-left piece: visibly middle-aged, around mid-50s, less idealized; softer less sculpted jaw, fuller cheeks, modest under-eye bags, subtle forehead/eye lines and a slightly higher mature hairline. Keep his dark swept-back hair and recognizable identity. Restrained natural aging, no grotesque exaggeration or new caricature. Keep EXACT SAME head size, bounding position, neck alignment, body silhouette, clothing, palette style and dark pixel outlines. Retain exact original canvas dimensions and the four disconnected part layout. Do not change the torso, separate arm, leg or fist. Head remains contained within original head rectangle x270 y107 width180 height212 on 1254x1254 source. Preserve real alpha transparency, crisp square pixel clusters and flat limited shading. No resizing, new parts, text, effects or weapons.",
+      "role": "accepted edit"
+    },
+    {
+      "id": "elon_portrait_age",
+      "prompt": "Use case: precise-object-edit. EDIT existing Elon 2x2 pixel-art portrait sheet. In ALL four cells, make Elon clearly older-looking and less idealized: mature mid-50s face, fuller cheeks, softer jaw rather than youthful sculpted cheekbones/chin, restrained under-eye bags and forehead/eye creases, subtly higher mature hairline with dark swept-back hair. Preserve recognizable identity and restrained game parody, no grotesque exaggeration. Keep EXACT head scale and cell positions, neutral front bust top-left, hurt/angry front bust top-right, KO eyes-closed bust lower-left, full-body right-facing figure lower-right. Keep clothing/body silhouette, transparent alpha, 2x2 equal-cell geometry, same source canvas dimensions, hard dark outline and flat square pixel shading. No changes to character scale, layout or style; no new text, borders, effects or weapons.",
+      "role": "intermediate reference"
+    },
+    {
+      "id": "darrius_rig_tone",
+      "prompt": "Use case: precise-object-edit. EDIT existing Darrius pixel-art game part plate. Make hair very dark brown, almost black, retaining exact curls and hair silhouette. Make complexion visibly lighter and less tanned: natural light neutral-peach skin rather than golden/orange tan. Apply the SAME lighter skin palette to face, neck, attached hand on separate arm, and separate fist. Preserve glasses, expression, mature adult head proportions and all clothing colors. Change ONLY hair and skin colors; preserve EXACT pixel shapes, part positions, head size and source dimensions, transparent background, dark outlines and sparse three-tone shading. Keep four disconnected parts and empty gaps unchanged. Do not beautify, exaggerate, redraw anatomy, add parts or alter overall style. No text, effects, weapons, grid or resampling.",
+      "role": "accepted edit"
+    },
+    {
+      "id": "darrius_portrait_tone",
+      "prompt": "Use case: precise-object-edit. EDIT existing Darrius 2x2 pixel-art portrait sheet. Change hair in every cell to very dark brown, almost black, retaining curl shapes. Lighten the complexion to natural light neutral-peach with substantially less golden tan/orange warmth, consistently on faces, necks and full-body hands. Preserve glasses and the exact facial expressions and head scale. Keep neutral bust top-left, hurt/angry bust top-right, KO eyes-closed bust lower-left, full-body figure lower-right, each in its same equal quadrant. Preserve overall silhouette, clothing colors, sparse flat pixel shading, dark one-native-pixel outlines and transparent alpha. Keep the same layout and source framing; do not beautify or exaggerate identity. No text, borders, glow, effects or weapons.",
+      "role": "accepted edit"
+    },
+    {
+      "id": "jensen_portrait_uniform",
+      "prompt": "Use case: style-transfer. EDIT TARGET image1. Image2 Sama is the strict STYLE AND FRAMING REFERENCE. Correct the portrait scale and pixel rendering to match image2, while preserving Jensen: silver swept-back hair, thin dark glasses, mature face and black leather jacket. Keep a 2x2 equal-quadrant transparent sheet: neutral bust top-left; angry/hurt bust top-right; KO eyes-closed bust lower-left; full-body right-facing figure lower-right. In EACH of the three bust cells, MATCH SAMA'S HEAD SCALE: crown at about 5% of the cell height, chin at about 73%, shoulders fill the bottom edge, and face centered. Do not leave the small-head/large-padding framing of image1. Maintain natural adult skull proportions. Redraw using the SAME dense, crisp native pixel grid, single dark pixel outline and limited flat shadow ramps as image2, not smooth gradients or large cartoon vector contours. Finished portrait should read like a native 96px cell when rendered at that size. Full-body cell: adult seven-head-tall anatomy, feet near bottom; no chibi proportions. Preserve silver hair/glasses vs dark hair identity and original clothing. Match the four-cell arrangement and existing source canvas dimensions. No labels, frames, grid, extra characters, weapons or effects. Preserve real alpha transparency.",
+      "role": "accepted edit"
+    },
+    {
+      "id": "elon_portrait_uniform",
+      "prompt": "Use case: style-transfer. EDIT TARGET image1. Image2 Sama is the strict STYLE AND FRAMING REFERENCE. Correct the portrait scale and pixel rendering to match image2, while preserving Elon: retain the older mid-50s face of image1, fuller cheeks, softened jaw, subtle bags and age lines, dark swept-back hair, charcoal jacket. Do not return to a youthful handsome or sculpted face. Keep a 2x2 equal-quadrant transparent sheet: neutral bust top-left; angry/hurt bust top-right; KO eyes-closed bust lower-left; full-body right-facing figure lower-right. In EACH of the three bust cells, MATCH SAMA'S HEAD SCALE: crown at about 5% of the cell height, chin at about 73%, shoulders fill the bottom edge, and face centered. Do not leave the small-head/large-padding framing of image1. Maintain natural adult skull proportions. Redraw using the SAME dense, crisp native pixel grid, single dark pixel outline and limited flat shadow ramps as image2, not smooth gradients or large cartoon vector contours. Finished portrait should read like a native 96px cell when rendered at that size. Full-body cell: adult seven-head-tall anatomy, feet near bottom; no chibi proportions. Preserve silver hair/glasses vs dark hair identity and original clothing. Match the four-cell arrangement and existing source canvas dimensions. No labels, frames, grid, extra characters, weapons or effects. Preserve real alpha transparency.",
+      "role": "accepted edit"
+    }
+  ]
+}

@@ -199,14 +199,17 @@ h1 span { font-weight: 400; }
 .roster-avatar-darrius { background-image: url('/assets/chars/darrius/legal_department_midnight/portraits/sheet.png?v=appearance-20261023b'); }
 .roster-avatar-demis { background-image: url('/assets/chars/demis/chalk_and_static/portraits/sheet.png'); }
 .roster-avatar-mark { background-image: url('/assets/chars/mark/wellness_berserker/portraits/sheet.png'); }
-.roster-avatar-jensen { background-image: url('/assets/chars/jensen/silicon_sovereign/portraits/sheet.png?v=appearance-20261023b'); }
-.roster-avatar-elon { background-image: url('/assets/chars/elon/orbital_showman/portraits/sheet.png?v=appearance-20261023b'); }
+.roster-avatar-jensen { background-image: url('/assets/chars/jensen/silicon_sovereign/portraits/sheet.png?v=appearance-20261023c'); }
+.roster-avatar-elon { background-image: url('/assets/chars/elon/orbital_showman/portraits/sheet.png?v=appearance-20261023c'); }
 
 /* Same measured neutral-bust crop as portraitCellCrop in character-presentation. */
-.roster-avatar-jensen,
+.roster-avatar-jensen {
+  background-size: 250% 250%;
+  background-position: 8.333333333333334% 8.333333333333334%;
+}
 .roster-avatar-elon {
-  background-size: 219.7802197802198% 219.7802197802198%;
-  background-position: 4.128440366972477% 7.339449541284404%;
+  background-size: 285.7142857142857% 285.7142857142857%;
+  background-position: 11.538461538461538% 10.76923076923077%;
 }
 
 .roster-name {

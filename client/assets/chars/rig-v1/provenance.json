@@ -53,26 +53,28 @@
     {
       "fighter": "jensen",
       "file": "jensen.png",
-      "sha256": "50ed2ca734249449437f55e9ab53f4d1ca1d3622ca253e1da6c75110f155f8ba",
+      "sha256": "0e8275217cbe820d294c7a1452498ab047721cd53626f5e6e0f5a6c9b78e837a",
       "source_dimensions": [
         1254,
         1254
       ],
       "identity_reference": "assets/chars/jensen/silicon_sovereign/sprite.png",
-      "style_reference": "assets/chars/rig-v1/sama.png"
+      "style_reference": "assets/chars/rig-v1/sama.png",
+      "prior_sha256": "50ed2ca734249449437f55e9ab53f4d1ca1d3622ca253e1da6c75110f155f8ba",
+      "appearance_revision": "appearance-20261023c"
     },
     {
       "fighter": "elon",
       "file": "elon.png",
-      "sha256": "bbd89de40da9bc16f28ddcf6828d566755d5edb57433fbe507596bcb3c1e87a6",
+      "sha256": "6b026b095e09f47c7ac045deecfa2db6956c848425a9e8f34c470ccba53af3e7",
       "source_dimensions": [
         1254,
         1254
       ],
       "identity_reference": "assets/chars/elon/orbital_showman/sprite.png",
       "style_reference": "assets/chars/rig-v1/sama.png",
-      "prior_sha256": "e8b1cc8a79b9e60e4e9d5f3a4d8188daba265d7c2311c708fe6e197cc3f5ea5c",
-      "appearance_revision": "appearance-20261023b"
+      "prior_sha256": "bbd89de40da9bc16f28ddcf6828d566755d5edb57433fbe507596bcb3c1e87a6",
+      "appearance_revision": "appearance-20261023c"
     }
   ],
   "portrait_edits": {
@@ -84,12 +86,12 @@
     "prompt": "Edit each viewed original portrait sheet to Sama pixel style, using corresponding new rig for identity. Preserve 2x2 neutral, hurt, KO busts and full-body cells, hard square pixels, three-tone ramps, adult proportions, transparent background. No smooth shading, weapons, text, borders or effects."
   },
   "appearance_revision": {
-    "id": "appearance-20261023b",
-    "prompt_file": "docs/roster-appearance-prompts-2026-10-23.json",
+    "id": "appearance-20261023c",
+    "prompt_file": "docs/roster-headscale-prompts-2026-10-23.json",
     "changes": [
-      "Older less idealized Elon face",
-      "Dark hair and lighter skin for Darrius",
-      "Jensen and Elon portrait framing and pixel-style calibration"
+      "Jensen gray hair",
+      "Elon pale complexion, sparse receding hair; retain older features",
+      "Jensen/Elon visible portrait head width calibrated to Mark/Demis"
     ],
     "raster_processing": "none; original imagegen outputs copied byte-for-byte"
   }

@@ -3,6 +3,26 @@ import assert from 'node:assert/strict';
 import {BODY_PORTRAIT_SHEETS,portraitCellCrop,portraitSourceRect,portraitBackgroundStyle} from '../content/character-presentation.js';
 import {readRgbaPng} from './png-rgba.mjs';
 
+// Visible head spans through the forehead/eyes/cheeks, measured from opaque
+// pixels at equal rendered size; transparent atlas dimensions cannot prove scale.
+function headWidth(body){
+  const png=readRgbaPng(new URL('../'+BODY_PORTRAIT_SHEETS[body],import.meta.url));
+  const [sx,sy,sw,sh]=portraitSourceRect(body,0,png.width,png.height),spans=[];
+  for(let row=0;row<=12;row++){
+    const y=Math.floor(sy+sh*(.25+row*.025)),xs=[];
+    for(let x=0;x<sw;x++)if(png.alpha(Math.floor(sx+x),y)>200)xs.push(x);
+    spans.push(xs.length?(xs.at(-1)-xs[0]+1)/sw*96:0);
+  }
+  return spans.sort((a,b)=>a-b)[6];
+}
+test('Jensen and Elon visible heads match the Mark/Demis reference range in shared home/HUD framing',()=>{
+  const reference=(headWidth('mark')+headWidth('demis'))/2;
+  for(const body of ['jensen','elon']){
+    const width=headWidth(body);
+    assert.ok(width>=reference*.95&&width<=reference*1.12,`${body}: ${width}px versus reference ${reference}px`);
+  }
+});
+
 test('actual neutral portrait pixels have a common crown baseline instead of undersized inset heads',()=>{
   for(const [body,url] of Object.entries(BODY_PORTRAIT_SHEETS)){
     const png=readRgbaPng(new URL('../'+url,import.meta.url));

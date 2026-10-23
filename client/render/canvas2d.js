@@ -5,6 +5,7 @@ import { imageState, loadImage } from "./image-assets.js";
 import { swordSeg, fighterHurtbox } from "../sim/combat-geometry.js";
 import { DOUBLE_KO_RESPAWN_S } from "../sim/constants.js";
 import { bodyFramePlacement, WEAPON_ART, weaponArtTransform } from "./fighter-art.js";
+import { weaponBodyFrame, weaponHandPoints, FIGHTER_ARM_PALETTE } from "./weapon-motion.js";
 // Shared canvas renderer. Takes a TraceFrame (from sim) + stage and draws
 // the scene. Used by both Spectate (server frames) and Practice (local).
 
@@ -405,7 +406,9 @@ function drawSpriteFighter(ctx, f, side, frame) {
 
   const animName = chooseSpriteAnim(f, side, frame);
   const anim = state.kit.anims[animName] ?? state.kit.anims.idle;
-  const frameIdx = spriteFrameIndex(animName, anim, f, frame);
+  const frameIdx = animName === "swing"
+    ? weaponBodyFrame(sideCosmetics[side]?.weapon, 1 - Math.max(0, Math.min(1, f.swipeT / STATS.swipeTime)))
+    : spriteFrameIndex(animName, anim, f, frame);
   const placement = bodyFramePlacement(state.artBodyId ?? state.bodyId, animName, frameIdx, { grounded: f.onGround, dead: f.dead });
   const { crop } = placement;
   const sx = placement.sourceFrame * state.kit.frameW + crop.x;
@@ -490,6 +493,9 @@ function drawPrimitiveBody(ctx, f, col, trim, shadow) {
 }
 
 function drawSword(ctx, f, shadow, side, frame) {
+  // KO cells contain their own hands; an attached live weapon would float
+  // above the fallen character at the standing collision origin.
+  if (f.dead) return;
   const clashAge = clashVisualAge(f, frame);
   const clashing = Number.isFinite(clashAge);
   const active = f.swipeT > 0 || f.diveT > 0 || clashing;
@@ -525,15 +531,27 @@ function drawSword(ctx, f, shadow, side, frame) {
 function drawWeaponHand(ctx, f, side, shadow) {
   // A tiny forearm/cuff bridges the source body's shoulder to the shared grip.
   // Do not drag the weapon to whichever hand happens to be in a sprite cell.
-  const { bx, by, tx, ty } = swordSeg(f);
-  const hx = bx + (tx - bx) * 3 / STATS.sword;
-  const hy = by + (ty - by) * 3 / STATS.sword;
-  const body = sideCosmetics[side]?.body;
+  if (f.dead) return;
+  const selected = sideCosmetics[side];
+  const palette = FIGHTER_ARM_PALETTE[selected?.body] ?? FIGHTER_ARM_PALETTE.sama;
+  const hands = weaponHandPoints(selected?.weapon, swordSeg(f));
   ctx.save();
-  ctx.lineCap = "round"; ctx.lineWidth = 5; ctx.strokeStyle = shadow;
-  ctx.beginPath(); ctx.moveTo(f.x + f.facing * 6, f.y - 7); ctx.lineTo(hx, hy); ctx.stroke();
-  ctx.fillStyle = ({ sama: "#d7b4aa", darrius: "#bf8d59", demis: "#b99059", mark: "#d9aa96" })[body] ?? "#d7b4aa";
-  ctx.fillRect(Math.round(hx) - 2, Math.round(hy) - 2, 4, 4);
+  ctx.lineCap = "square";
+  if (hands.length > 1) {
+    ctx.strokeStyle=shadow;ctx.lineWidth=4;
+    ctx.beginPath();ctx.moveTo(hands[1].x,hands[1].y);ctx.lineTo(hands[0].x,hands[0].y);ctx.stroke();
+    ctx.strokeStyle='#77716c';ctx.lineWidth=2;ctx.stroke();
+  }
+  for (const hand of hands.slice().reverse()) {
+    const hx=Math.round(hand.x), hy=Math.round(hand.y);
+    const sx=Math.round(f.x+f.facing*(hand.primary?6:-3)), sy=Math.round(f.y-7);
+    ctx.lineWidth=5; ctx.strokeStyle=shadow;
+    ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(hx,hy);ctx.stroke();
+    ctx.lineWidth=3;ctx.strokeStyle=palette.sleeve;
+    ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(hx,hy);ctx.stroke();
+    ctx.fillStyle=shadow;ctx.fillRect(hx-2,hy-2,5,5);
+    ctx.fillStyle=palette.skin;ctx.fillRect(hx-1,hy-1,3,3);
+  }
   ctx.restore();
 }
 

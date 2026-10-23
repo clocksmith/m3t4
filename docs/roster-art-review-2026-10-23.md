@@ -76,6 +76,12 @@ frames carry `body`, `weapon`, and `weaponMotionVersion: 1`, so replay labels
 cannot silently substitute another collision weapon. New Play/Tune matches and
 both server match factories persist this identity. Existing replay characters
 without the marker keep their exact historical always-extended foil behavior.
+P2P peers advertise support in setup and pin the negotiated motion version in
+each match message. Old or unadvertised peers retain legacy physics for that
+match, and later capability arrival cannot switch a running world. Unsupported
+future versions fail closed. This boundary has pure protocol tests; no live
+WebRTC qualification was run.
+
 No stored records were rewritten. Version 1 intentionally changes outcomes of
 new matches; this is functional weapon motion, not a cosmetic relabeling.
 
@@ -85,7 +91,7 @@ new matches; this is functional weapon motion, not a cosmetic relabeling.
 - 31 focused simulation/geometry/replay tests pass, including all 24 profiles
   through both facings, continuous phase boundaries, thrusts, lagging flexible
   joints, damage gating and deterministic trace identity.
-- All 98 client tests pass. They include actual rig draw matrices, exactly two
+- All 100 client tests pass. They include actual rig draw matrices, exactly two
   arms, exact IK bone lengths, mirrored grip sockets, all source rectangles
   containing real pixels, and grounded feet throughout a full run cycle.
 - 9 server/match-boundary tests pass, including replaying a newly generated

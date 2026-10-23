@@ -135,7 +135,7 @@ function selectedCharacters() {
     ...PLAYER_PALETTES[side],
     body: cosmetic.body,
     weapon: cosmetic.weapon,
-    weaponMotionVersion: 1,
+    ...(state?.subMode !== 'p2p' || state.matchWeaponMotionVersion === 1 ? {weaponMotionVersion:1} : {}),
   }));
 }
 
@@ -448,6 +448,7 @@ function startMatch() {
   clearRemoteInputs();
   state.paused = false;
   state.seed = freshSeed();
+  state.matchWeaponMotionVersion=state.subMode==='p2p' ? (state.p2p?.weaponMotionVersion===1?1:0) : 1;
   state.world = createStepperWorld({ stage, seed: state.seed, chars: selectedCharacters() });
   state.brainP2 = state.subMode === "vs-ai"
     ? compileBrain(STRATEGIES[state.presetName] ?? STRATEGIES[DEFAULT_PRESET])
@@ -466,6 +467,7 @@ function startMatch() {
       stageId: state.stageId,
       cosmetics: selectedCosmetics(),
       aliases: [...state.aliases],
+      weaponMotionVersion: state.matchWeaponMotionVersion,
     });
     state.p2p.postSpectatorFrame?.(worldToFrame(state.world));
   }
@@ -1481,11 +1483,12 @@ async function beginP2P(role, opts) {
         syncLocalP2PSetupToPeer({ includeStage: role === "host" });
         refreshHud();
       },
-      onMatch: ({ seed, stageId, cosmetics, aliases }) => {
+      onMatch: ({ seed, stageId, cosmetics, aliases, weaponMotionVersion }) => {
         if (role === "host") return;
         // Guest mirrors host's match parameters so both worlds start
         // from the same seed *and* the same stage.
         clearRemoteInputs();
+        state.matchWeaponMotionVersion=weaponMotionVersion===1?1:0;
         if (stageId && STAGE_IDS.includes(stageId)) {
           state.stageId = stageId;
           const stageSel = document.getElementById("duel-stage");

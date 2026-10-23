@@ -18,13 +18,15 @@
     {
       "fighter": "darrius",
       "file": "darrius.png",
-      "sha256": "96144ae7287ae7b4316bc3ce6a9963111358fb0e7c83a858736375f841b7a64e",
+      "sha256": "3963389da64625d5f11c5790d0562e27016e6bfd5b5903e8ac20077fdcde91fa",
       "source_dimensions": [
         1254,
         1254
       ],
       "identity_reference": "assets/chars/darrius/legal_department_midnight/sprite.png",
-      "style_reference": "assets/chars/rig-v1/sama.png"
+      "style_reference": "assets/chars/rig-v1/sama.png",
+      "prior_sha256": "96144ae7287ae7b4316bc3ce6a9963111358fb0e7c83a858736375f841b7a64e",
+      "appearance_revision": "appearance-20261023b"
     },
     {
       "fighter": "demis",
@@ -62,13 +64,15 @@
     {
       "fighter": "elon",
       "file": "elon.png",
-      "sha256": "e8b1cc8a79b9e60e4e9d5f3a4d8188daba265d7c2311c708fe6e197cc3f5ea5c",
+      "sha256": "bbd89de40da9bc16f28ddcf6828d566755d5edb57433fbe507596bcb3c1e87a6",
       "source_dimensions": [
         1254,
         1254
       ],
       "identity_reference": "assets/chars/elon/orbital_showman/sprite.png",
-      "style_reference": "assets/chars/rig-v1/sama.png"
+      "style_reference": "assets/chars/rig-v1/sama.png",
+      "prior_sha256": "e8b1cc8a79b9e60e4e9d5f3a4d8188daba265d7c2311c708fe6e197cc3f5ea5c",
+      "appearance_revision": "appearance-20261023b"
     }
   ],
   "portrait_edits": {
@@ -78,5 +82,15 @@
     ],
     "style_reference": "assets/chars/sama/monastic_infra/portraits/sheet.png",
     "prompt": "Edit each viewed original portrait sheet to Sama pixel style, using corresponding new rig for identity. Preserve 2x2 neutral, hurt, KO busts and full-body cells, hard square pixels, three-tone ramps, adult proportions, transparent background. No smooth shading, weapons, text, borders or effects."
+  },
+  "appearance_revision": {
+    "id": "appearance-20261023b",
+    "prompt_file": "docs/roster-appearance-prompts-2026-10-23.json",
+    "changes": [
+      "Older less idealized Elon face",
+      "Dark hair and lighter skin for Darrius",
+      "Jensen and Elon portrait framing and pixel-style calibration"
+    ],
+    "raster_processing": "none; original imagegen outputs copied byte-for-byte"
   }
 }

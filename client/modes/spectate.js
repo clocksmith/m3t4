@@ -1493,8 +1493,8 @@ function drawCountdownPortrait(side, x, y, w, h, meta) {
   if (img) {
     ctx.imageSmoothingEnabled = false;
     const cell = kit.cell ?? 0;
-    const cellW = kit.cellW ?? img.width;
-    const cellH = kit.cellH ?? img.height;
+    const cellW = kit.cols ? img.width / kit.cols : kit.cellW ?? img.width;
+    const cellH = kit.rows ? img.height / kit.rows : kit.cellH ?? img.height;
     const cols = Math.max(1, Math.floor(img.width / cellW));
     const sx = (cell % cols) * cellW;
     const sy = Math.floor(cell / cols) * cellH;
@@ -1527,8 +1527,8 @@ function countdownPortraitKit(meta, side) {
   return {
     url: BODY_PORTRAIT_SHEETS[body] ?? BODY_PORTRAIT_SHEETS[fallbackCosmeticsForSide(side).body],
     cell: 3,
-    cellW: 96,
-    cellH: 96,
+    cols: 2,
+    rows: 2,
     accentVar: accent.accentVar,
     fallback: accent.fallback,
   };

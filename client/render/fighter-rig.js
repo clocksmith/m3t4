@@ -8,6 +8,8 @@ export const FIGHTER_RIGS = {
   sama:{url:'assets/chars/rig-v1/sama.png', head:[270,107,180,212],torso:[247,310,203,267],upperArm:[893,284,100,164],forearm:[907,448,81,106],fist:[916,955,75,77],thigh:[303,734,100,215],shin:[315,949,143,217]},
 };
 for(const body of ['darrius','demis','mark','jensen','elon']) FIGHTER_RIGS[body]={...FIGHTER_RIGS.sama,url:`assets/chars/rig-v1/${body}.png`};
+// Hosting caches PNGs for an hour; revised art must not reuse the old URL.
+for(const body of ['darrius','elon'])FIGHTER_RIGS[body].url+='?v=appearance-20261023b';
 const images=new Map();
 const stateFor=(body)=>{const spec=FIGHTER_RIGS[body];if(!spec)return null;let state=images.get(body);if(!state){state=imageState(spec.url);images.set(body,state);}return {spec,img:loadImage(state)};};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));

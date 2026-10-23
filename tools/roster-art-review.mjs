@@ -38,7 +38,7 @@ try {
           for(const [n,progress] of [0,.18,.5,.82,1].entries()){
             const off=document.createElement('canvas');off.width=1280;off.height=720;const oc=off.getContext('2d');
             const nativeDraw=oc.drawImage.bind(oc);let rigDraws=0,weaponDraws=0;
-            oc.drawImage=(image,...args)=>{if(image.src?.endsWith(`/rig-v1/${body}.png`))rigDraws++;if(image.src?.includes('/weapons/'))weaponDraws++;nativeDraw(image,...args);};
+            oc.drawImage=(image,...args)=>{if(image.src?.split('?')[0].endsWith(`/rig-v1/${body}.png`))rigDraws++;if(image.src?.includes('/weapons/'))weaponDraws++;nativeDraw(image,...args);};
             const f={body,weapon:weapon.id,weaponMotionVersion:legacy?undefined:1,x:450,y:420,vx:0,vy:0,onGround:true,wall:0,facing:1,stun:0,swipeT:progress===0?0:kinematics.attackDuration({weapon:weapon.id,weaponMotionVersion:1})*(1-progress)+.00001,diveT:0,lastClashTick:-9999,dead:false};
             const frame={tick:500,roundStartTick:0,p0:f,p1:{...f,x:850,facing:-1},token:{exists:false,carrier:-1},goal:{exists:false},scoreboard:[0,0],rounds:[0,0]};
             const labels={cosmetics:[{body,weapon:weapon.id},{body,weapon:weapon.id}]};

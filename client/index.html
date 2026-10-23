@@ -4,28 +4,132 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#040404">
-  <meta name="description" content="Play Meta Muzil, Meta Duel, or Mandate 2038.">
+  <meta name="description" content="Play Meta Duel, Meta Muzil, or Mandate 2038.">
   <title>m3t4.ai</title>
   <link rel="icon" href="/home-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/home.css">
 </head>
 <body>
   <main>
-    <h1>m3t4<span>.ai</span></h1>
-    <nav aria-label="Choose a game">
-      <div class="game-option">
-        <a href="/muzil/" aria-describedby="muzil-description">Meta Muzil <span aria-hidden="true">↗</span></a>
-        <p id="muzil-description">Complete one task while your phone interrupts.</p>
+    <header class="home-header">
+      <h1>m3t4<span>.ai</span></h1>
+      <p class="home-tagline">Autonomous simulation, cognitive stress &amp; transition strategy.</p>
+    </header>
+
+    <section class="duel-featured-card" aria-label="Featured Game: Meta Duel">
+      <div class="duel-badge-row">
+        <span class="duel-badge"><span class="badge-dot" aria-hidden="true">●</span> FEATURED · TACTICAL AI ARENA</span>
+        <span class="duel-badge-sub">Real-Time Simulation</span>
       </div>
-      <div class="game-option">
-        <a href="/history" aria-describedby="duel-description">Meta Duel <span aria-hidden="true">↗</span></a>
-        <p id="duel-description">Tune your fighters and watch strategies evolve.</p>
+
+      <div class="duel-content">
+        <div class="duel-heading">
+          <h2>Meta Duel</h2>
+          <p class="duel-tagline">
+            Autonomous 2D AI combat arena. Author strategic combat policies, tune neural brain traits and weapon loadouts, and command parody tech titans battling for proof-of-delivery.
+          </p>
+        </div>
+
+        <div class="roster-showcase">
+          <div class="roster-label">ROSTER OF TITANS</div>
+          <div class="roster-grid" role="list" aria-label="Titan Roster">
+            <a href="/roster" class="roster-card" role="listitem" title="Sama — Capacity Mystic">
+              <div class="roster-avatar roster-avatar-sama" aria-hidden="true"></div>
+              <span class="roster-name">Sama</span>
+              <span class="roster-role">Capacity Mystic</span>
+            </a>
+            <a href="/roster" class="roster-card" role="listitem" title="Darrius — Policy Undertaker">
+              <div class="roster-avatar roster-avatar-darrius" aria-hidden="true"></div>
+              <span class="roster-name">Darrius</span>
+              <span class="roster-role">Policy Undertaker</span>
+            </a>
+            <a href="/roster" class="roster-card" role="listitem" title="Demis — Quiet Solver">
+              <div class="roster-avatar roster-avatar-demis" aria-hidden="true"></div>
+              <span class="roster-name">Demis</span>
+              <span class="roster-role">Quiet Solver</span>
+            </a>
+            <a href="/roster" class="roster-card" role="listitem" title="Mark — Sunlit Operator">
+              <div class="roster-avatar roster-avatar-mark" aria-hidden="true"></div>
+              <span class="roster-name">Mark</span>
+              <span class="roster-role">Sunlit Operator</span>
+            </a>
+            <a href="/roster" class="roster-card" role="listitem" title="Jensen — Silicon Sovereign">
+              <div class="roster-avatar roster-avatar-jensen" aria-hidden="true"></div>
+              <span class="roster-name">Jensen</span>
+              <span class="roster-role">Silicon Sovereign</span>
+            </a>
+            <a href="/roster" class="roster-card" role="listitem" title="Elon — Orbital Showman">
+              <div class="roster-avatar roster-avatar-elon" aria-hidden="true"></div>
+              <span class="roster-name">Elon</span>
+              <span class="roster-role">Orbital Showman</span>
+            </a>
+          </div>
+        </div>
+
+        <div class="duel-pillars" aria-label="Key mechanics">
+          <span class="pillar-tag"><span class="pillar-bullet" aria-hidden="true">●</span> Autonomous Policy Sim</span>
+          <span class="pillar-tag"><span class="pillar-bullet" aria-hidden="true">●</span> 14 Brain Trait Knobs</span>
+          <span class="pillar-tag"><span class="pillar-bullet" aria-hidden="true">●</span> Melee Weapon Arsenals</span>
+          <span class="pillar-tag"><span class="pillar-bullet" aria-hidden="true">●</span> Zero-Install Browser Sim</span>
+        </div>
+
+        <div class="duel-actions">
+          <a href="/duel" class="btn-primary-duel">
+            <span class="btn-text">Play Duel</span>
+            <span class="btn-arrow" aria-hidden="true">▸</span>
+          </a>
+          <nav class="duel-nav-links" aria-label="Meta Duel shortcuts">
+            <a href="/tune" class="duel-nav-btn">
+              <span>Tune Fighters</span>
+              <span class="link-arrow" aria-hidden="true">↗</span>
+            </a>
+            <a href="/live" class="duel-nav-btn">
+              <span>Watch Live</span>
+              <span class="link-arrow" aria-hidden="true">↗</span>
+            </a>
+            <a href="/roster" class="duel-nav-btn">
+              <span>Full Roster</span>
+              <span class="link-arrow" aria-hidden="true">↗</span>
+            </a>
+          </nav>
+        </div>
       </div>
-      <div class="game-option">
-        <a href="/mandate-2038/" aria-describedby="mandate-description">Mandate 2038 <span aria-hidden="true">↗</span></a>
-        <p id="mandate-description">Guide your faction through the AI transition.</p>
+    </section>
+
+    <section class="secondary-section" aria-label="Other Simulations">
+      <div class="secondary-title-row">
+        <h3>Other Simulations</h3>
       </div>
-    </nav>
+      <nav class="secondary-grid" aria-label="Choose another simulation">
+        <div class="secondary-card">
+          <div class="secondary-card-body">
+            <div class="secondary-card-head">
+              <h4>Meta Muzil</h4>
+              <span class="secondary-tag">Cognitive Stress</span>
+            </div>
+            <p id="muzil-description">Complete one high-focus task while your notification-soaked phone interrupts.</p>
+          </div>
+          <a href="/muzil/" class="secondary-card-link" aria-describedby="muzil-description">
+            <span>Play Muzil</span>
+            <span class="link-arrow" aria-hidden="true">↗</span>
+          </a>
+        </div>
+
+        <div class="secondary-card">
+          <div class="secondary-card-body">
+            <div class="secondary-card-head">
+              <h4>Mandate 2038</h4>
+              <span class="secondary-tag">Transition Sim</span>
+            </div>
+            <p id="mandate-description">Guide your executive faction through the post-human AI economic transition.</p>
+          </div>
+          <a href="/mandate-2038/" class="secondary-card-link" aria-describedby="mandate-description">
+            <span>Enter Mandate</span>
+            <span class="link-arrow" aria-hidden="true">↗</span>
+          </a>
+        </div>
+      </nav>
+    </section>
   </main>
 </body>
 </html>

@@ -273,6 +273,7 @@ function wireSubmit(user) {
       msg.className = "ok";
       msg.textContent = `seat ${seatNumber(selectedSlot)} ${wasFilled ? "revised" : "installed"} · slotId=${r.slotId}`;
       sessionStorage.removeItem("m3t4:pendingSubmit");
+      sessionStorage.removeItem("m3t4:pendingCosmetics");
       pendingBuildConfig = null;
       editorStateBySeat.delete(selectedSlot);
       cosmeticsBySeat.delete(selectedSlot);
@@ -356,6 +357,13 @@ function setDraftForSeat(slotIdx, state, source = "user") {
 
 function applyPendingBuildToSeat(slotIdx) {
   if (!pendingBuildConfig) return null;
+  const rawCosmetics = sessionStorage.getItem("m3t4:pendingCosmetics");
+  if (rawCosmetics) {
+    try {
+      const parsed = JSON.parse(rawCosmetics);
+      if (parsed?.body) cosmeticsBySeat.set(slotIdx, normalizeCosmetics(parsed, slotIdx));
+    } catch {}
+  }
   return setDraftForSeat(slotIdx, stateFromConfig(pendingBuildConfig), "pending");
 }
 

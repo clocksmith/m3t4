@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
-import { watchPageHtml } from '../modes/spectate.js';
+import { watchPageHtml, fallbackCosmeticsForCompetitor } from '../modes/spectate.js';
+import { buildPageHtml } from '../modes/build.js';
 import { mountArenaShell } from '../ui/arena-shell.js';
 
 function documentFor(html) {
@@ -47,4 +48,29 @@ test('Watch accurately distinguishes a live server feed from the archive', () =>
     assert.match(doc.querySelector('.page-subtitle').textContent,/Live server matches/);
     assert.doesNotMatch(doc.querySelector('.page-subtitle').textContent,/archive/);
   } finally { if(original===undefined)delete globalThis.window;else globalThis.window=original; }
+});
+
+test('Tune renders character and weapon picker for both player slots', () => {
+  const doc = documentFor(buildPageHtml());
+  const folds = doc.querySelectorAll('.player-cosmetics-fold');
+  assert.equal(folds.length, 2, 'both player slots have cosmetics fold');
+  for (const slot of [0, 1]) {
+    const slotBodyButtons = doc.querySelectorAll(`.duel-body-option[data-slot="${slot}"]`);
+    assert.equal(slotBodyButtons.length, 6, `slot ${slot} offers all 6 roster bodies`);
+    const slotWeaponButtons = doc.querySelectorAll(`.duel-weapon-option[data-slot="${slot}"]`);
+    assert.ok(slotWeaponButtons.length > 0, `slot ${slot} offers weapons for initial body`);
+  }
+});
+
+test('Watch fallback cosmetics rotate across parody roster bodies for bots', () => {
+  const bots = [
+    { handle: 'sys_founder' },
+    { handle: 'sys_regulatory' },
+    { handle: 'sys_oracle' },
+    { handle: 'sys_operator' },
+    { handle: 'sys_incumbent' },
+    { handle: 'sys_unicorn' },
+  ];
+  const assigned = bots.map((b, i) => fallbackCosmeticsForCompetitor(b, i % 2).body);
+  assert.deepEqual(assigned, ['sama', 'darrius', 'demis', 'mark', 'jensen', 'elon']);
 });

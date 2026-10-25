@@ -8,7 +8,7 @@ import { characterForCosmetics, effectiveRateLockedUntil, FileStableStore, nextS
 
 test('new server characters pin selected weapon motion for deterministic replay',()=>{
   const ch=characterForCosmetics({body:'elon',weapon:'orbit_lance'});
-  assert.equal(ch.weapon,'orbit_lance');assert.equal(ch.body,'elon');assert.equal(ch.weaponMotionVersion,1);
+  assert.equal(ch.weapon,'orbit_lance');assert.equal(ch.body,'elon');assert.equal(ch.weaponMotionVersion,2);
 });
 
 test("file stable stores roster cosmetics and rejects clone bodies", async (t) => {

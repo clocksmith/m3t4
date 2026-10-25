@@ -25,6 +25,9 @@ export const WEAPON_PROFILES_V1 = Object.freeze({
     satellite_axe: profile('axe', .42, 47, .34, .69, -5),
     angular_greatsword: profile('blade', .42, 54, .33, .7, -7),
 });
+// Version 2 halves only swing duration. Version 1 stays immutable for archives.
+export const WEAPON_PROFILES_V2 = Object.freeze(Object.fromEntries(Object.entries(WEAPON_PROFILES_V1).map(([weapon, spec]) => [weapon, Object.freeze({ ...spec, duration: spec.duration / 2 })])));
+export const CURRENT_WEAPON_MOTION_VERSION = 2;
 const BODY_WEAPONS_V1 = Object.freeze({
     sama: ['worldcoin_orb_flail', 'backpack_maul', 'gpu_server_blade', 'heat_sink_greatsword'],
     darrius: ['rolled_constitution_bat', 'alignment_baton', 'red_team_pike', 'guardrail_greatsword'],
@@ -39,18 +42,24 @@ export function rosterCombatIdentity(cosmetics, side = 0) {
     const body = typeof raw.body === 'string' && Object.hasOwn(BODY_WEAPONS_V1, raw.body) ? raw.body : side === 1 ? 'darrius' : 'sama';
     const weapons = BODY_WEAPONS_V1[body];
     const weapon = typeof raw.weapon === 'string' && weapons.includes(raw.weapon) ? raw.weapon : weapons[0];
-    return { body, weapon, weaponMotionVersion: 1 };
+    return { body, weapon, weaponMotionVersion: CURRENT_WEAPON_MOTION_VERSION };
 }
 const clamp = (n) => Math.max(0, Math.min(1, n));
 const smooth = (n) => { const t = clamp(n); return t * t * (3 - 2 * t); };
 const lerp = (a, b, t) => a + (b - a) * t;
 export function weaponProfile(f) {
-    if ((f.weaponMotionVersion ?? f.ch?.weaponMotionVersion) !== 1)
-        return undefined;
-    return WEAPON_PROFILES_V1[f.weapon ?? f.ch?.weapon ?? ''];
+    const version = f.weaponMotionVersion ?? f.ch?.weaponMotionVersion;
+    const profiles = version === 2 ? WEAPON_PROFILES_V2 : version === 1 ? WEAPON_PROFILES_V1 : undefined;
+    return profiles?.[f.weapon ?? f.ch?.weapon ?? ''];
 }
 export function attackDuration(f) {
     return weaponProfile(f)?.duration ?? .12;
+}
+// Recovery cooldown is independent of the faster swing: retain V1 cadence.
+export function attackCooldown(f) {
+    const old = WEAPON_PROFILES_V1[f.weapon ?? f.ch?.weapon ?? ''];
+    return ((f.weaponMotionVersion ?? f.ch?.weaponMotionVersion) === 2 && old
+        ? old.duration : attackDuration(f)) * 1.6;
 }
 export function attackProgress(f) { return clamp(1 - f.swipeT / attackDuration(f)); }
 export function articulatedWeaponPose(f) {
@@ -103,8 +112,12 @@ export function articulatedWeaponPose(f) {
     const segment = { bx: grip.x, by: grip.y, tx: tip.x, ty: tip.y };
     const active = diving || (attacking && p >= spec.windup && p <= spec.strikeEnd);
     // Flexible weapons damage with the head, never the empty handle-to-head chord.
-    const hitSegments = !active ? [] : spec.kind === 'nunchucks' ?
-        [{ bx: link.x, by: link.y, tx: tip.x, ty: tip.y, radius: 3 }] : flexible ?
-        [{ bx: tip.x, by: tip.y, tx: tip.x, ty: tip.y, radius: 6 }] : [segment];
+    const hitSegments = weaponDamageSegments(spec.kind, active, segment, link, tip);
     return { spec, phase, progress: p, grip, joint, link, tip, angle, chainAngle, distalAngle, flexible, active, segment, hitSegments };
+}
+// One owner for damage shapes, also used at sweep interval boundaries.
+export function weaponDamageSegments(kind, active, segment, link, tip) {
+    return !active ? [] : kind === 'nunchucks' ?
+        [{ bx: link.x, by: link.y, tx: tip.x, ty: tip.y, radius: 3 }] : kind === 'flail' ?
+        [{ bx: tip.x, by: tip.y, tx: tip.x, ty: tip.y, radius: 6 }] : [segment];
 }

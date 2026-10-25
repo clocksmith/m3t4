@@ -7,6 +7,7 @@ import { DOUBLE_KO_RESPAWN_S } from "../sim/constants.js";
 import { bodyFramePlacement, WEAPON_ART, weaponArtTransform } from "./fighter-art.js";
 import { weaponBodyFrame, weaponHandPoints, FIGHTER_ARM_PALETTE, WEAPON_MOTION } from "./weapon-motion.js";
 import {articulatedWeaponPose,attackDuration} from "../sim/weapon-kinematics.js";
+import { arenaCamera } from "./camera.js";
 import {drawRigFighter,drawRigGrips} from './fighter-rig.js';
 // Shared canvas renderer. Takes a TraceFrame (from sim) + stage and draws
 // the scene. Used by both Spectate (server frames) and Practice (local).
@@ -218,13 +219,17 @@ export function drawFrame(ctx, stage, frame, labels) {
   spriteState = state.sprites;
   hudPortraitState = state.portraits;
   sideCosmetics = [cosmeticsForSide(labels, 0), cosmeticsForSide(labels, 1)];
-  for(const [side,f] of [frame.p0,frame.p1].entries()) if(f.weaponMotionVersion===1) {
+  for(const [side,f] of [frame.p0,frame.p1].entries()) if(f.weaponMotionVersion===1 || f.weaponMotionVersion===2) {
     sideCosmetics[side]=cosmeticsForSide({cosmetics:{[side]:{body:f.body??sideCosmetics[side].body,weapon:f.weapon??sideCosmetics[side].weapon}}},side);
   }
   const p1 = fighterPalette(0);
   const p2 = fighterPalette(1);
   ctx.fillStyle = cssColor("--arena-bg");
   ctx.fillRect(0, 0, W, H);
+  const camera = arenaCamera(frame);
+  ctx.save();
+  ctx.translate(camera.x, camera.y);
+  ctx.scale(camera.scale, camera.scale);
   drawStageScenery(ctx, stage, frame, { reducedMotion: labels?.reducedMotion });
   drawGoal(ctx, frame);
   drawToken(ctx, frame.token);
@@ -232,6 +237,7 @@ export function drawFrame(ctx, stage, frame, labels) {
   drawFighter(ctx, frame.p1, p2.body, p2.trim, p2.shadow, 1, frame);
   drawClashFx(ctx, frame);
   drawFighterNameplates(ctx, frame, labels);
+  ctx.restore();
   drawHUD(ctx, frame, labels, p1.body, p2.body);
 }
 
@@ -390,8 +396,8 @@ function drawFighter(ctx, f, col, trim, shadow, side, frame) {
   drawCombatDebug(ctx, f);
 }
 
-// Character sprites render at native sheet size. Fighter scale belongs in
-// the sim hitbox and art prompt contract, not a hidden renderer multiplier.
+// Bodies, weapons and combat overlays share the scene camera above; local
+// attachment coordinates and world-space collision dimensions stay unchanged.
 const CLASH_VISUAL_TICKS = 10;
 
 function drawSpriteFighter(ctx, f, side, frame) {

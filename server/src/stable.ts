@@ -161,7 +161,7 @@ export function characterForCosmetics(cosmetics: SlotCosmetics): Character {
     ...ROSTER_BODY_CHARACTERS[cosmetics.body],
     body: cosmetics.body,
     weapon: cosmetics.weapon,
-    weaponMotionVersion: 1,
+    weaponMotionVersion: 2,
   };
 }
 

@@ -36,7 +36,7 @@ export interface Character {
     shadow: string;
     body?: string;
     weapon?: string;
-    weaponMotionVersion?: 1;
+    weaponMotionVersion?: 1 | 2;
 }
 export interface Fighter {
     id: 0 | 1;

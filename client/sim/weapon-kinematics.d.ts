@@ -8,11 +8,13 @@ export interface WeaponProfile {
     support: number | null;
 }
 export declare const WEAPON_PROFILES_V1: Readonly<Record<string, WeaponProfile>>;
+export declare const WEAPON_PROFILES_V2: Readonly<Record<string, WeaponProfile>>;
+export declare const CURRENT_WEAPON_MOTION_VERSION: 2;
 /** New-match boundary only. Never run this over archived replay characters. */
 export declare function rosterCombatIdentity(cosmetics: unknown, side?: number): {
     body: string;
     weapon: string;
-    weaponMotionVersion: 1;
+    weaponMotionVersion: 2;
 };
 export interface KinematicPose {
     x: number;
@@ -40,6 +42,7 @@ export interface WeaponSegment {
 }
 export declare function weaponProfile(f: Pick<KinematicPose, 'weapon' | 'weaponMotionVersion' | 'ch'>): WeaponProfile | undefined;
 export declare function attackDuration(f: Pick<KinematicPose, 'weapon' | 'weaponMotionVersion' | 'ch'>): number;
+export declare function attackCooldown(f: Pick<KinematicPose, 'weapon' | 'weaponMotionVersion' | 'ch'>): number;
 export declare function attackProgress(f: KinematicPose): number;
 export declare function articulatedWeaponPose(f: KinematicPose): {
     spec: WeaponProfile;
@@ -57,3 +60,4 @@ export declare function articulatedWeaponPose(f: KinematicPose): {
     segment: WeaponSegment;
     hitSegments: WeaponSegment[];
 } | null;
+export declare function weaponDamageSegments(kind: WeaponKind, active: boolean, segment: WeaponSegment, link: WeaponPoint, tip: WeaponPoint): WeaponSegment[];

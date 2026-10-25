@@ -8,8 +8,9 @@ import { compileBrain, evaluateParams } from "./dsl.js";
 import { makeRng } from "./rng.js";
 import { PARAM_KEYS } from "./types.js";
 import { emptyFighterTelemetry } from "./types.js";
-import { swordHits, weaponHitSegments } from "./combat-geometry.js";
-import { attackDuration } from "./weapon-kinematics.js";
+import { swordHits, weaponHitSegments, weaponSegmentsClash } from "./combat-geometry.js";
+import { sweptCombatContact } from "./combat-sweep.js";
+import { attackDuration, attackCooldown } from "./weapon-kinematics.js";
 // ---------- Characters (body is visual; versioned weapon motion is explicit) ----------
 export const DEFAULT_CHARS = [
     { name: "Sama", label: "OpenAL", col: "#6ee7b7", trim: "#d1fae5", shadow: "#047857" },
@@ -81,7 +82,9 @@ function noiseSeedFromMatchSeed(seed) {
 function tickOrderFlipFromSeed(seed) {
     return (mix32((seed >>> 0) ^ 0x71c0ffee) & 1) === 1;
 }
+const previousCombatPoses = new WeakMap();
 function tickFighters(w, actA, actB) {
+    previousCombatPoses.set(w, w.fighters.map(f => ({ ...f })));
     if (w.tickOrderFlip) {
         tickFighter(w.fighters[1], w.fighters[0], actB, w);
         tickFighter(w.fighters[0], w.fighters[1], actA, w);
@@ -140,14 +143,6 @@ export function applyHallucinationNoise(params, tick, fighterId, noiseSeed) {
 function toward(v, t, d) {
     return v < t ? Math.min(v + d, t) : Math.max(v - d, t);
 }
-function segIntersect(ax, ay, bx, by, cx, cy, dx, dy) {
-    const det = (p1x, p1y, p2x, p2y, p3x, p3y) => (p2x - p1x) * (p3y - p1y) - (p2y - p1y) * (p3x - p1x);
-    const d1 = det(ax, ay, bx, by, cx, cy);
-    const d2 = det(ax, ay, bx, by, dx, dy);
-    const d3 = det(cx, cy, dx, dy, ax, ay);
-    const d4 = det(cx, cy, dx, dy, bx, by);
-    return d1 > 0 !== d2 > 0 && d3 > 0 !== d4 > 0;
-}
 // ---------- Observation ----------
 function makeObs(self, opp, w) {
     return {
@@ -201,7 +196,7 @@ function startAttack(f, type, tick) {
     }
     else {
         f.swipeT = attackDuration(f);
-        f.swipeCD = attackDuration(f) * 1.6;
+        f.swipeCD = attackCooldown(f);
         f.diveT = 0;
         if (!f.onGround)
             f.vy -= 60;
@@ -405,8 +400,9 @@ function resolveCombat(w) {
     // the renderer uses those same grip, joint and tip coordinates.
     const segmentsA = weaponHitSegments(a);
     const segmentsB = weaponHitSegments(b);
-    const clash = segmentsA.some(sa => segmentsB.some(sb => segIntersect(sa.bx, sa.by, sa.tx, sa.ty, sb.bx, sb.by, sb.tx, sb.ty) ||
-        Math.hypot(sa.tx - sb.tx, sa.ty - sb.ty) < 10 + (sa.radius ?? 0) + (sb.radius ?? 0)));
+    const swept = a.ch.weaponMotionVersion === 2 || b.ch.weaponMotionVersion === 2
+        ? sweptCombatContact(previousCombatPoses.get(w) ?? [a, b], [a, b], STEP) : null;
+    const clash = swept?.clash ?? segmentsA.some(sa => segmentsB.some(sb => weaponSegmentsClash(sa, sb)));
     if (clash) {
         a.vx = -a.facing * 260 / STATS.resistance;
         b.vx = -b.facing * 260 / STATS.resistance;
@@ -427,8 +423,8 @@ function resolveCombat(w) {
         w.freeze = Math.max(w.freeze, CLASH_FREEZE);
         return;
     }
-    const hitA = segmentsA.some(segment => swordHits(segment, b));
-    const hitB = segmentsB.some(segment => swordHits(segment, a));
+    const hitA = swept?.hitA ?? segmentsA.some(segment => swordHits(segment, b));
+    const hitB = swept?.hitB ?? segmentsB.some(segment => swordHits(segment, a));
     if (hitA && hitB) {
         // Both passive foils hit bodies at the same tick — classic Foiled
         // head-on walk-in. The clash check missed it because parallel
@@ -1037,7 +1033,7 @@ export function worldToFrame(w) {
 }
 function fighterToFrame(f) {
     return {
-        ...(f.ch.weaponMotionVersion === 1 ? { body: f.ch.body, weapon: f.ch.weapon, weaponMotionVersion: 1 } : {}),
+        ...(f.ch.weaponMotionVersion ? { body: f.ch.body, weapon: f.ch.weapon, weaponMotionVersion: f.ch.weaponMotionVersion } : {}),
         x: f.x,
         y: f.y,
         vx: f.vx,

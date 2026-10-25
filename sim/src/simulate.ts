@@ -50,8 +50,9 @@ import type {
   RulesVersion,
 } from "./types.js";
 import { emptyFighterTelemetry } from "./types.js";
-import { swordSeg, swordHits, weaponHitSegments } from "./combat-geometry.js";
-import { attackDuration } from "./weapon-kinematics.js";
+import { swordHits, weaponHitSegments, weaponSegmentsClash } from "./combat-geometry.js";
+import { sweptCombatContact } from "./combat-sweep.js";
+import { attackDuration, attackCooldown } from "./weapon-kinematics.js";
 
 // ---------- Characters (body is visual; versioned weapon motion is explicit) ----------
 
@@ -139,7 +140,10 @@ function tickOrderFlipFromSeed(seed: number): boolean {
   return (mix32((seed >>> 0) ^ 0x71c0ffee) & 1) === 1;
 }
 
+const previousCombatPoses = new WeakMap<World, [Fighter, Fighter]>();
+
 function tickFighters(w: World, actA: Action, actB: Action): void {
+  previousCombatPoses.set(w, w.fighters.map(f => ({...f})) as [Fighter, Fighter]);
   if (w.tickOrderFlip) {
     tickFighter(w.fighters[1], w.fighters[0], actB, w);
     tickFighter(w.fighters[0], w.fighters[1], actA, w);
@@ -215,18 +219,6 @@ function toward(v: number, t: number, d: number): number {
   return v < t ? Math.min(v + d, t) : Math.max(v - d, t);
 }
 
-function segIntersect(
-  ax: number, ay: number, bx: number, by: number,
-  cx: number, cy: number, dx: number, dy: number
-): boolean {
-  const det = (p1x: number, p1y: number, p2x: number, p2y: number, p3x: number, p3y: number) =>
-    (p2x - p1x) * (p3y - p1y) - (p2y - p1y) * (p3x - p1x);
-  const d1 = det(ax, ay, bx, by, cx, cy);
-  const d2 = det(ax, ay, bx, by, dx, dy);
-  const d3 = det(cx, cy, dx, dy, ax, ay);
-  const d4 = det(cx, cy, dx, dy, bx, by);
-  return d1 > 0 !== d2 > 0 && d3 > 0 !== d4 > 0;
-}
 
 // ---------- Observation ----------
 
@@ -283,7 +275,7 @@ function startAttack(f: Fighter, type: "swipe" | "dive", tick: number): void {
     f.vx *= STATS.diveDrift;
   } else {
     f.swipeT = attackDuration(f);
-    f.swipeCD = attackDuration(f) * 1.6;
+    f.swipeCD = attackCooldown(f);
     f.diveT = 0;
     if (!f.onGround) f.vy -= 60;
   }
@@ -491,9 +483,9 @@ function resolveCombat(w: World): void {
   const segmentsA = weaponHitSegments(a);
   const segmentsB = weaponHitSegments(b);
 
-  const clash = segmentsA.some(sa => segmentsB.some(sb =>
-    segIntersect(sa.bx, sa.by, sa.tx, sa.ty, sb.bx, sb.by, sb.tx, sb.ty) ||
-    Math.hypot(sa.tx - sb.tx, sa.ty - sb.ty) < 10 + (sa.radius ?? 0) + (sb.radius ?? 0)));
+  const swept = a.ch.weaponMotionVersion===2 || b.ch.weaponMotionVersion===2
+    ? sweptCombatContact(previousCombatPoses.get(w) ?? [a,b], [a,b], STEP) : null;
+  const clash = swept?.clash ?? segmentsA.some(sa => segmentsB.some(sb => weaponSegmentsClash(sa,sb)));
   if (clash) {
     a.vx = -a.facing * 260 / STATS.resistance;
     b.vx = -b.facing * 260 / STATS.resistance;
@@ -515,8 +507,8 @@ function resolveCombat(w: World): void {
     return;
   }
 
-  const hitA = segmentsA.some(segment => swordHits(segment, b));
-  const hitB = segmentsB.some(segment => swordHits(segment, a));
+  const hitA = swept?.hitA ?? segmentsA.some(segment => swordHits(segment, b));
+  const hitB = swept?.hitB ?? segmentsB.some(segment => swordHits(segment, a));
 
   if (hitA && hitB) {
     // Both passive foils hit bodies at the same tick — classic Foiled
@@ -1151,7 +1143,7 @@ export function worldToFrame(w: World): TraceFrame {
 
 function fighterToFrame(f: Fighter): TraceFighterFrame {
   return {
-    ...(f.ch.weaponMotionVersion === 1 ? {body:f.ch.body,weapon:f.ch.weapon,weaponMotionVersion:1 as const} : {}),
+    ...(f.ch.weaponMotionVersion ? {body:f.ch.body,weapon:f.ch.weapon,weaponMotionVersion:f.ch.weaponMotionVersion} : {}),
     x: f.x,
     y: f.y,
     vx: f.vx,
@@ -1176,7 +1168,7 @@ export { STATS } from "./constants.js";
 export interface TraceFighterFrame {
   body?: string;
   weapon?: string;
-  weaponMotionVersion?: 1;
+  weaponMotionVersion?: 1 | 2;
   x: number;
   y: number;
   vx: number;

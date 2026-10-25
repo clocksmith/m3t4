@@ -20,9 +20,9 @@ test('all 24 weapons mirror grip, handle joint, flexible joint and tip at every 
   }
 });
 test('new-match identity rejects cross-character weapons and has stable side defaults',()=>{
-  assert.deepEqual(rosterCombatIdentity({body:'elon',weapon:'orbit_lance'}),{body:'elon',weapon:'orbit_lance',weaponMotionVersion:1});
-  assert.deepEqual(rosterCombatIdentity({body:'elon',weapon:'nobel_medal_flail'}),{body:'elon',weapon:'coil_bat',weaponMotionVersion:1});
-  assert.deepEqual(rosterCombatIdentity(null,1),{body:'darrius',weapon:'rolled_constitution_bat',weaponMotionVersion:1});
+  assert.deepEqual(rosterCombatIdentity({body:'elon',weapon:'orbit_lance'}),{body:'elon',weapon:'orbit_lance',weaponMotionVersion:2});
+  assert.deepEqual(rosterCombatIdentity({body:'elon',weapon:'nobel_medal_flail'}),{body:'elon',weapon:'coil_bat',weaponMotionVersion:2});
+  assert.deepEqual(rosterCombatIdentity(null,1),{body:'darrius',weapon:'rolled_constitution_bat',weaponMotionVersion:2});
 });
 test('lances retract, thrust level and recover; flail heads lag rather than being rigid chords',()=>{
   const sample=(weapon:string,p:number)=>articulatedWeaponPose({...base,weapon,swipeT:WEAPON_PROFILES_V1[weapon].duration*(1-p)})!;

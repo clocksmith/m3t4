@@ -37,7 +37,7 @@ export { STATS } from "./constants.js";
 export interface TraceFighterFrame {
     body?: string;
     weapon?: string;
-    weaponMotionVersion?: 1;
+    weaponMotionVersion?: 1 | 2;
     x: number;
     y: number;
     vx: number;

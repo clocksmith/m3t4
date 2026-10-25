@@ -45,3 +45,14 @@ export function swordHits(s: SwordSeg, target: Pick<CombatPose, 'x' | 'y'>): boo
   const t = Math.max(0, Math.min(1, ((x - s.bx) * dx + (y - s.by) * dy) / len2));
   return Math.hypot(x - (s.bx + dx * t), y - (s.by + dy * t)) <= radius + (s.radius ?? 0);
 }
+
+export const WEAPON_CLASH_TIP_DISTANCE = 10;
+export function weaponSegmentsIntersect(a:SwordSeg,b:SwordSeg):boolean {
+  const det=(ax:number,ay:number,bx:number,by:number,cx:number,cy:number)=>(bx-ax)*(cy-ay)-(by-ay)*(cx-ax);
+  const d1=det(a.bx,a.by,a.tx,a.ty,b.bx,b.by),d2=det(a.bx,a.by,a.tx,a.ty,b.tx,b.ty);
+  const d3=det(b.bx,b.by,b.tx,b.ty,a.bx,a.by),d4=det(b.bx,b.by,b.tx,b.ty,a.tx,a.ty);
+  return d1>0!==d2>0 && d3>0!==d4>0;
+}
+export function weaponSegmentsClash(a:SwordSeg,b:SwordSeg):boolean {
+  return weaponSegmentsIntersect(a,b)||Math.hypot(a.tx-b.tx,a.ty-b.ty)<WEAPON_CLASH_TIP_DISTANCE+(a.radius??0)+(b.radius??0);
+}

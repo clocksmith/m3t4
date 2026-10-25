@@ -135,7 +135,8 @@ function selectedCharacters() {
     ...PLAYER_PALETTES[side],
     body: cosmetic.body,
     weapon: cosmetic.weapon,
-    ...(state?.subMode !== 'p2p' || state.matchWeaponMotionVersion === 1 ? {weaponMotionVersion:1} : {}),
+    ...(state?.subMode !== 'p2p' ? {weaponMotionVersion:2}
+      : state.matchWeaponMotionVersion ? {weaponMotionVersion:state.matchWeaponMotionVersion} : {}),
   }));
 }
 
@@ -473,7 +474,7 @@ function startMatch() {
   clearRemoteInputs();
   state.paused = false;
   state.seed = freshSeed();
-  state.matchWeaponMotionVersion=state.subMode==='p2p' ? (state.p2p?.weaponMotionVersion===1?1:0) : 1;
+  state.matchWeaponMotionVersion=state.subMode==='p2p' ? (state.p2p?.weaponMotionVersion ?? 0) : 2;
   state.world = createStepperWorld({ stage, seed: state.seed, chars: selectedCharacters() });
   state.brainP2 = state.subMode === "vs-ai"
     ? compileBrain(STRATEGIES[state.presetName] ?? STRATEGIES[DEFAULT_PRESET])
@@ -1540,7 +1541,7 @@ async function beginP2P(role, opts) {
         // Guest mirrors host's match parameters so both worlds start
         // from the same seed *and* the same stage.
         clearRemoteInputs();
-        state.matchWeaponMotionVersion=weaponMotionVersion===1?1:0;
+        state.matchWeaponMotionVersion=weaponMotionVersion===2?2:weaponMotionVersion===1?1:0;
         if (stageId && STAGE_IDS.includes(stageId)) {
           state.stageId = stageId;
           const stageSel = document.getElementById("duel-stage");

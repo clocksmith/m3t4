@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { bodyFramePlacement, WEAPON_ART, weaponArtTransform } from '../render/fighter-art.js';
+import { arenaCamera, arenaScreenPoint } from '../render/camera.js';
 import { swordSeg } from '../sim/combat-geometry.js';
 import { STATS } from '../lib/public-sim.js';
 import { readRgbaPng } from './png-rgba.mjs';
@@ -112,7 +113,9 @@ test('renderer maps actual atlas draw calls to collision, including wall facing 
         const [a,b,c,d,e,f]=draw.m;
         const point=(x,y)=>[a*x+c*y+e,b*x+d*y+f];
         const [gx,gy]=point(0,0),[tx,ty]=point(art.tipX-art.gripX,art.tipY-art.gripY);
-        close(gx,segment.bx);close(gy,segment.by);close(tx,segment.tx);close(ty,segment.ty);
+        const camera=arenaCamera(frame);
+        const grip=arenaScreenPoint(camera,{x:segment.bx,y:segment.by}),tip=arenaScreenPoint(camera,{x:segment.tx,y:segment.ty});
+        close(gx,grip.x);close(gy,grip.y);close(tx,tip.x);close(ty,tip.y);
       }
     }
     // A new module lifetime with unavailable images must still use the same
@@ -154,7 +157,7 @@ test('fallback body uses its own sprite calibration, not the requested missing b
     const body=ctx.draws.find(d=>d.src.endsWith('/sprite.png'));
     assert.ok(body.src.includes('/sama/'));
     assert.equal(body.args[0],4*64+1);
-    assert.equal(body.m[0],-1,'Sama backward-authored run cell must still face forward');
+    assert.equal(Math.sign(body.m[0]),-1,'Sama backward-authored run cell must still face forward');
   }finally{globalThis.Image=OriginalImage;}
 });
 

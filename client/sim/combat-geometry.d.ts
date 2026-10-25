@@ -21,3 +21,6 @@ export declare function fighterHurtbox(f: Pick<CombatPose, 'x' | 'y'>): {
     radius: number;
 };
 export declare function swordHits(s: SwordSeg, target: Pick<CombatPose, 'x' | 'y'>): boolean;
+export declare const WEAPON_CLASH_TIP_DISTANCE = 10;
+export declare function weaponSegmentsIntersect(a: SwordSeg, b: SwordSeg): boolean;
+export declare function weaponSegmentsClash(a: SwordSeg, b: SwordSeg): boolean;

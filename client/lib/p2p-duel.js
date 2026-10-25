@@ -396,7 +396,7 @@ async function runSpectator(fb, sessionId, { onStatus, onLink, onMatch, onFrame,
           stageId: init.stageId,
           cosmetics: init.cosmetics,
           aliases: Array.isArray(init.aliases) ? init.aliases : undefined,
-          weaponMotionVersion: init.weaponMotionVersion===1?1:0,
+          weaponMotionVersion: readWeaponMatch(init)?.weaponMotionVersion ?? 0,
         });
       }
     }

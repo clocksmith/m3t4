@@ -8,6 +8,7 @@ export const FIGHTER_RIGS = {
   sama:{url:'assets/chars/rig-v1/sama.png', head:[270,107,180,212],torso:[247,310,203,267],upperArm:[893,284,100,164],forearm:[907,448,81,106],fist:[916,955,75,77],thigh:[303,734,100,215],shin:[315,949,143,217]},
 };
 for(const body of ['darrius','demis','mark','jensen','elon']) FIGHTER_RIGS[body]={...FIGHTER_RIGS.sama,url:`assets/chars/rig-v1/${body}.png`};
+FIGHTER_RIGS.darrius.headScale=1.1;
 // Hosting caches PNGs for an hour; revised art must not reuse the old URL.
 FIGHTER_RIGS.darrius.url+='?v=appearance-20261023b';
 for(const body of ['jensen','elon'])FIGHTER_RIGS[body].url+='?v=appearance-20261023c';
@@ -61,7 +62,10 @@ export function drawRigFighter(ctx,f,body,frame){
     bone(ctx,img,spec.thigh,hip,kn,6);bone(ctx,img,spec.shin,kn,ankle,9,0);
   }
   ctx.save();ctx.translate(0,p.hipY);ctx.rotate(p.lean);
-  piece(ctx,img,spec.torso,-6,-18,12,19);piece(ctx,img,spec.head,-5,-29,10,12);ctx.restore();
+  piece(ctx,img,spec.torso,-6,-18,12,19);
+  const headScale=spec.headScale??1;
+  // Keep the neck socket fixed while growing the head upward and sideways.
+  piece(ctx,img,spec.head,-5*headScale,-17-12*headScale,10*headScale,12*headScale);ctx.restore();
   const sockets=f.dead?[]:rigGripSockets(f);
   const shoulders=[4,-4].map(x=>({x:x*Math.cos(p.lean)+14*Math.sin(p.lean),y:p.hipY+x*Math.sin(p.lean)-14*Math.cos(p.lean)}));
   const arms=sockets.length?[...sockets,...(sockets.length===1?[{x:f.x-facing*6,y:f.y+4,primary:false}]:[])]:[{x:f.x+facing*9,y:f.y+4,primary:true},{x:f.x-facing*8,y:f.y+4,primary:false}];

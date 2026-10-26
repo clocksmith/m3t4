@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
-import { watchPageHtml, fallbackCosmeticsForCompetitor } from '../modes/spectate.js';
+import { watchPageHtml, fallbackCosmeticsForCompetitor, matchCosmetics, availableWeaponIds } from '../modes/spectate.js';
 import { buildPageHtml } from '../modes/build.js';
 import { duelPageHtml } from '../modes/duel.js';
 import { profileDashboardHtml } from '../modes/profile.js';
@@ -76,6 +76,32 @@ test('Watch fallback cosmetics rotate across parody roster bodies for bots', () 
   ];
   const assigned = bots.map((b, i) => fallbackCosmeticsForCompetitor(b, i % 2).body);
   assert.deepEqual(assigned, ['sama', 'darrius', 'demis', 'mark', 'jensen', 'elon']);
+});
+
+test('Watch match cosmetics randomize weapons for all 6 roster bodies across match seeds', () => {
+  const bodies = ['sama', 'darrius', 'demis', 'mark', 'jensen', 'elon'];
+  for (let i = 0; i < bodies.length; i += 2) {
+    const bodyA = bodies[i];
+    const bodyB = bodies[i + 1];
+    const match = {
+      seed: 42,
+      a: { cosmetics: { body: bodyA } },
+      b: { cosmetics: { body: bodyB } },
+    };
+    const weaponsA = new Set();
+    const weaponsB = new Set();
+    for (let seed = 0; seed < 100; seed++) {
+      const [cosA, cosB] = matchCosmetics({ ...match, seed });
+      assert.equal(cosA.body, bodyA);
+      assert.equal(cosB.body, bodyB);
+      assert.ok(availableWeaponIds(bodyA).includes(cosA.weapon));
+      assert.ok(availableWeaponIds(bodyB).includes(cosB.weapon));
+      weaponsA.add(cosA.weapon);
+      weaponsB.add(cosB.weapon);
+    }
+    assert.deepEqual(weaponsA, new Set(availableWeaponIds(bodyA)));
+    assert.deepEqual(weaponsB, new Set(availableWeaponIds(bodyB)));
+  }
 });
 
 test('hudAvatarSideAt detects P1 and P2 HUD avatar hitboxes and rejects center clicks', () => {

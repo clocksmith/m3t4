@@ -642,7 +642,8 @@ function renderCosmeticsControls(cosmetics) {
   if (bodySelect) {
     bodySelect.onchange = () => {
       const body = BODY_IDS.includes(bodySelect.value) ? bodySelect.value : defaultCosmetics(selectedSlot).body;
-      const weapon = availableWeaponIdsForSeat(body, selectedSlot)[0];
+      const weapons = availableWeaponIdsForSeat(body, selectedSlot);
+      const weapon = weapons[Math.floor(Math.random() * weapons.length)];
       cosmeticsBySeat.set(selectedSlot, { body, weapon });
       updateEditor();
     };
@@ -654,7 +655,8 @@ function renderCosmeticsControls(cosmetics) {
       const button = target?.closest(".duel-body-option");
       if (!button || button.disabled) return;
       const body = BODY_IDS.includes(button.dataset.body) ? button.dataset.body : defaultCosmetics(selectedSlot).body;
-      const weapon = availableWeaponIdsForSeat(body, selectedSlot)[0];
+      const weapons = availableWeaponIdsForSeat(body, selectedSlot);
+      const weapon = weapons[Math.floor(Math.random() * weapons.length)];
       cosmeticsBySeat.set(selectedSlot, { body, weapon });
       updateEditor();
     };
@@ -812,7 +814,8 @@ function normalizeCosmetics(value, slotIdx) {
 
 function defaultCosmetics(slotIdx) {
   const body = BODY_IDS[((slotIdx % BODY_IDS.length) + BODY_IDS.length) % BODY_IDS.length];
-  return { body, weapon: availableWeaponIdsForSeat(body, slotIdx)[0] };
+  const weapons = availableWeaponIdsForSeat(body, slotIdx);
+  return { body, weapon: weapons[Math.floor(Math.random() * weapons.length)] };
 }
 
 function usedBodiesByOtherSeats(slotIdx) {

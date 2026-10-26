@@ -6,6 +6,8 @@ const WEAPON_CLASS = {
   rolled_constitution_bat: "bat", alignment_baton: "club", red_team_pike: "pike", guardrail_greatsword: "greatsword",
   nobel_medal_flail: "flail", folded_chess_axe: "axe", go_board_maul: "maul", alphafold_blade: "blade",
   sunscreen_bottle_club: "club", controller_nunchucks: "nunchucks", shareholder_sauce_club: "club", quest_flail: "flail",
+  compute_bat: "bat", heatsink_hammer: "maul", silicon_cleaver: "blade", rack_greatsword: "greatsword",
+  coil_bat: "bat", orbit_lance: "pike", satellite_axe: "axe", angular_greatsword: "greatsword",
 };
 
 function playHitSound(audio, char, weapon) {

@@ -14,6 +14,7 @@ import { completeTickFrame } from "../render/tick-frame.js";
 import { getComputeClient } from "../lib/compute.js";
 import { getAudio, audioEnabledStored } from "../lib/audio.js";
 import { createArenaAudioTracker } from "../lib/arena-audio.js";
+import { randomizeWeapons } from "../lib/random-weapons.js";
 import { escapeHtml } from "../ui/html.js";
 import { contextCardHtml, pageHeaderHtml, disclosureHtml } from "../ui/shell.js";
 import { statListHtml } from "../ui/stats.js";
@@ -823,8 +824,7 @@ function onEvent(m) {
     renderState.handles = { a: handleA, b: handleB };
     renderState.elos = { a: eloA, b: eloB };
     renderState.matchLabel = `@${handleA} (${eloA}) vs @${handleB} (${eloB})`;
-    const cosA = presentationCosmeticsForCompetitor(mt.a, 0);
-    const cosB = presentationCosmeticsForCompetitor(mt.b, 1);
+    const [cosA, cosB] = matchCosmetics(mt);
     audioCharKeys = [cosA?.body ?? null, cosB?.body ?? null];
     audioWeaponKeys = [cosA?.weapon ?? null, cosB?.weapon ?? null];
     renderState.labels = {
@@ -844,7 +844,7 @@ function onEvent(m) {
     setStat("stat-stage", mt.stageId ?? "datacenter");
     setStat("stat-result", "in progress");
     setStat("stat-verify", "pending");
-    updateLiveBriefing(mt);
+    updateLiveBriefing(mt, [cosA, cosB]);
     resetPlayback();
   } else if (m.type === "frames") {
     if (!Array.isArray(m.frames)) return;
@@ -947,22 +947,23 @@ function liveBriefingSideHtml(side) {
     </article>`;
 }
 
-function updateLiveBriefing(match) {
-  updateBriefingSide(0, match?.a);
-  updateBriefingSide(1, match?.b);
+function updateLiveBriefing(match, explicitCosmetics = null) {
+  const cosmetics = explicitCosmetics ?? (match ? matchCosmetics(match) : null);
+  updateBriefingSide(0, match?.a, cosmetics?.[0]);
+  updateBriefingSide(1, match?.b, cosmetics?.[1]);
 }
 
-function updateBriefingSide(side, data) {
+function updateBriefingSide(side, data, explicitCosmetics = null) {
   const handle = data?.handle ?? (side === 0 ? "p1" : "p2");
   const name = botNameForMatchSide(data);
   const elo = data?.elo ?? "?";
-  const binding = bindingForCompetitor(data, side);
+  const binding = bindingForCompetitor(data, side, explicitCosmetics);
   const bindingEl = document.getElementById(`brief-p${side + 1}-binding`);
   if (bindingEl) bindingEl.innerHTML = liveBindingHtml(binding, side, `P${side + 1} · @${handle} · ${name} · ${elo}`);
 }
 
-function bindingForCompetitor(data, side) {
-  const cosmetics = presentationCosmeticsForCompetitor(data, side);
+function bindingForCompetitor(data, side, explicitCosmetics = null) {
+  const cosmetics = explicitCosmetics ?? presentationCosmeticsForCompetitor(data, side);
   return bindingInfo(cosmetics.body, BODY_VARIANTS[cosmetics.body] ?? cosmetics.body, cosmetics.weapon);
 }
 
@@ -1032,6 +1033,28 @@ const SYSTEM_BOT_BODIES = {
   acquirer: "jensen",
 };
 
+export function availableWeaponIds(body) {
+  return (rosterCatalog.weapons?.[body] ?? []).filter((w) => w.available).map((w) => w.id);
+}
+
+export function matchSeedValue(match) {
+  if (typeof match?.seed === "number") return match.seed;
+  const str = String(match?.matchId ?? match?.id ?? "");
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+export function matchCosmetics(match) {
+  if (!match) return [presentationCosmeticsForCompetitor(null, 0), presentationCosmeticsForCompetitor(null, 1)];
+  const seed = matchSeedValue(match);
+  const base = [
+    presentationCosmeticsForCompetitor(match.a, 0),
+    presentationCosmeticsForCompetitor(match.b, 1),
+  ];
+  return randomizeWeapons(base, availableWeaponIds, seed);
+}
+
 export function fallbackCosmeticsForCompetitor(data, side) {
   const bodies = rosterCatalog.bodies ?? ["sama", "darrius", "demis", "mark", "jensen", "elon"];
   const cleanHandle = String(data?.handle || data?.slotName || data?.name || "").replace(/^sys_/, "").toLowerCase();
@@ -1044,33 +1067,24 @@ export function fallbackCosmeticsForCompetitor(data, side) {
   }
   const body = assignedBody ?? (side === 0 ? "sama" : "darrius");
   const weapons = (rosterCatalog.weapons?.[body] ?? []).filter((w) => w.available);
-  const weaponIndex = side === 1 && weapons.length > 1 ? 1 : 0;
+  const key = cleanHandle || String(side);
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = ((hash << 5) - hash + key.charCodeAt(i)) | 0;
+  const weaponIndex = weapons.length ? Math.abs(hash + side * 7) % weapons.length : 0;
   const weapon = weapons[weaponIndex]?.id ?? (side === 0 ? "worldcoin_orb_flail" : "rolled_constitution_bat");
   return { body, weapon };
 }
 
-function presentationCosmeticsForCompetitor(data, side) {
+export function presentationCosmeticsForCompetitor(data, side) {
   const fallback = fallbackCosmeticsForCompetitor(data, side);
   const body = BODY_VARIANTS[data?.cosmetics?.body] ? data.cosmetics.body : fallback.body;
+  const weapons = availableWeaponIds(body);
+  const preferred = data?.cosmetics?.weapon;
+  const weapon = weapons.includes(preferred) ? preferred : fallback.weapon;
   return {
     body,
-    weapon: highestUnlockedWeapon(body, data?.elo, data?.cosmetics?.weapon ?? fallback.weapon),
+    weapon,
   };
-}
-
-function highestUnlockedWeapon(body, elo, preferredWeapon) {
-  const unlockElo = Math.max(1000, Number(elo) || 1000);
-  const options = (rosterCatalog.weapons?.[body] ?? []).filter((weapon) => weapon.available);
-  const unlocked = options.filter((weapon) => Number(weapon.minElo ?? 0) <= unlockElo);
-  if (!unlocked.length) return preferredWeapon;
-  const maxMinElo = Math.max(...unlocked.map((weapon) => Number(weapon.minElo ?? 0)));
-  if (preferredWeapon && unlocked.some((weapon) => weapon.id === preferredWeapon && Number(weapon.minElo ?? 0) === maxMinElo)) {
-    return preferredWeapon;
-  }
-  for (let i = unlocked.length - 1; i >= 0; i -= 1) {
-    if (Number(unlocked[i].minElo ?? 0) === maxMinElo) return unlocked[i].id;
-  }
-  return unlocked[unlocked.length - 1]?.id ?? preferredWeapon;
 }
 
 function appendFrames(frames) {

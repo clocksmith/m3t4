@@ -905,7 +905,7 @@ function controlCardHtml({ role, owner, keyboard, touch = false, remote = false 
       <b>${escapeHtml(role)}</b>
       <span>${escapeHtml(owner)}</span>
       <span>${escapeHtml(keyboard)}</span>
-      ${touch ? `<span class="duel-touch-hint">touch D-pad + strike</span>` : ""}
+      ${touch ? `<span class="duel-touch-hint">drag joystick + strike</span>` : ""}
     </span>`;
 }
 

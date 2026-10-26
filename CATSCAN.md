@@ -4,7 +4,7 @@ Parent: none
 
 ## Target
 
-Three-game entry point, Gamma-owned Mandate public hosting,
+Game entry point with an external writing link, Gamma-owned Mandate public hosting,
 Meta Muzil simulated-phone game, teachable model controllers, and preserved
 historical deterministic arena.
 

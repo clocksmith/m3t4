@@ -8,8 +8,9 @@ Doppler executes model decisions; Reploid makes authorized peer execution and
 agent portability meaningful capabilities. Removing those integrations removes
 agent-controlled play and assistance, while human play remains usable.
 
-The root offers three game links. Meta Muzil lives at `/muzil/`; Mandate 2038
-lives at `/mandate-2038/`, with game source and rules owned by Gamma.
+The root links Meta Duel at `/watch`, Mandate 2038 at `/mandate-2038/`, and
+writing at `https://256.one`. Meta Muzil remains at `/muzil/`. Gamma owns
+Mandate game source and rules.
 
 ## Desired outcomes
 

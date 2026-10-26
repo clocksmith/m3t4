@@ -532,12 +532,19 @@
   user-select: none;
 }
 
-.duel-touch-pad {
-  display: grid;
-  grid-template-columns: repeat(3, 58px);
-  grid-template-rows: repeat(3, 48px);
-  gap: 6px;
+.duel-joystick {
+  position: relative; width: 112px; height: 112px; flex: 0 0 112px;
+  display: grid; place-items: center; border-radius: 50%;
+  border: 1px solid var(--ui-paint-rgba-148-163-184-0-42);
+  background: var(--ui-paint-rgba-15-23-42-0-72); touch-action: none;
+  pointer-events: auto; opacity: .75;
 }
+.duel-joystick-thumb {
+  width: 46px; height: 46px; border-radius: 50%; pointer-events: none;
+  background: var(--ui-text-soft); opacity: .7; will-change: transform;
+}
+.duel-joystick.is-active { opacity: 1; border-color: var(--ui-accent); }
+.duel-joystick.is-active .duel-joystick-thumb { background: var(--ui-accent); }
 
 .duel-touch-actions {
   display: flex;
@@ -563,26 +570,6 @@
   background: var(--ui-paint-rgba-239-68-68-0-42);
   border-color: var(--ui-red);
   color: var(--ui-paint-hex-fff);
-}
-
-.duel-touch-control.is-up {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.duel-touch-control.is-left {
-  grid-column: 1;
-  grid-row: 2;
-}
-
-.duel-touch-control.is-down {
-  grid-column: 2;
-  grid-row: 2;
-}
-
-.duel-touch-control.is-right {
-  grid-column: 3;
-  grid-row: 2;
 }
 
 .duel-touch-control.is-action {

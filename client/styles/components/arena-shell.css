@@ -31,17 +31,20 @@ body.arena-mounted #bottom { display: none; }
 .arena-page:fullscreen { background: var(--ui-bg); padding: 8px; }
 .arena-frame .duel-touch-controls { width: auto; position: absolute; z-index: 4; inset: auto 8px 8px; max-width: none; padding: 0; pointer-events: none; }
 .arena-frame .duel-touch-control { pointer-events: auto; opacity: .8; }
-.arena-frame .duel-touch-pad { grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(2, 44px); }
 .arena-frame .duel-touch-control.is-action { width: 72px; height: 72px; }
 .arena-frame canvas:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; }
 
 /* Sound and settings remain available without covering the center of play. */
 .arena-audio-prompt {
   flex: 0 0 auto; margin-left: auto; z-index: 8; pointer-events: auto;
-  min-height: 40px; padding: 6px 12px;
+  min-height: 44px; padding: 6px 12px; display: inline-flex; align-items: center; gap: 8px;
   color: var(--ui-text); background: var(--ui-bg); border: 1px solid var(--ui-border);
   border-radius: 999px; opacity: .85; cursor: pointer;
 }
+.arena-sound-track { display: block; width: 36px; height: 22px; border-radius: 12px; padding: 3px; background: var(--ui-text-soft); }
+.arena-sound-track > span { display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--ui-bg); transition: transform .12s ease; }
+.arena-audio-prompt[aria-checked="true"] .arena-sound-track { background: var(--ui-accent); }
+.arena-audio-prompt[aria-checked="true"] .arena-sound-track > span { transform: translateX(14px); }
 .arena-audio-prompt:focus-visible, .arena-audio-prompt:hover { opacity: 1; }
 .arena-navigation { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 16px; }
 .arena-navigation [aria-current] { color: var(--ui-accent); }
@@ -57,38 +60,39 @@ body.arena-mounted #bottom { display: none; }
   .arena-frame .duel-touch-control { font-size: 10px; }
 }
 
-@media (max-width: 768px) and (orientation: portrait), (max-height: 500px) and (orientation: landscape) {
-  body.arena-mounted { position: fixed; inset: 0; overflow: hidden; background: var(--arena-bg); }
-  body.arena-mounted #topnav { display: none; }
-  body.arena-mounted #app { padding: 0; margin: 0; width: 100vw; height: 100dvh; overflow: hidden; }
-  body.arena-mounted .arena-page { position: fixed; inset: 0; width: 100vw; height: 100dvh; overflow: hidden; }
-  body.arena-mounted .arena-viewport { width: 100%; height: 100%; align-items: center; }
-  body.arena-mounted .arena-toolbar {
-    position: absolute; top: max(8px, env(safe-area-inset-top));
-    right: max(8px, env(safe-area-inset-right)); left: max(8px, env(safe-area-inset-left));
-    height: auto; z-index: 6; pointer-events: none;
-  }
-  body.arena-mounted .arena-heading { display: none; }
-  body.arena-mounted .arena-actions { margin-left: auto; pointer-events: auto; }
-  body.arena-mounted .arena-actions button { background: var(--ui-bg); opacity: .85; }
-  body.arena-mounted .arena-audio-prompt { margin-left: 0; }
-  body.arena-mounted .arena-frame .duel-touch-controls {
-    left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom));
-  }
+
+body.arena-immersive { position: fixed; inset: 0; overflow: hidden; background: var(--arena-bg); }
+body.arena-immersive #topnav { display: none; }
+body.arena-immersive #app { padding: 0; margin: 0; width: 100vw; height: 100dvh; overflow: hidden; }
+body.arena-immersive .arena-page { position: fixed; inset: 0; width: 100vw; height: 100dvh; overflow: hidden; }
+body.arena-immersive .arena-viewport { width: 100%; height: 100%; align-items: center; }
+body.arena-immersive .arena-toolbar {
+  position: absolute; top: max(8px, env(safe-area-inset-top));
+  right: max(8px, env(safe-area-inset-right)); left: max(8px, env(safe-area-inset-left));
+  height: auto; z-index: 6; pointer-events: none;
+}
+body.arena-immersive .arena-heading { display: none; }
+body.arena-immersive .arena-actions { margin-left: auto; pointer-events: auto; }
+body.arena-immersive .arena-actions button { background: var(--ui-bg); opacity: .85; }
+body.arena-immersive .arena-audio-prompt { margin-left: 0; }
+body.arena-immersive .arena-frame .duel-touch-controls {
+  left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom));
 }
 
 /* Rotate the canvas and its controls as one surface, preserving 16:9 geometry. */
-@media (max-width: 768px) and (orientation: portrait) {
-  body.arena-mounted .arena-page {
-    inset: auto; top: 50%; left: 50%; width: 100dvh; height: 100vw;
-    transform: translate(-50%, -50%) rotate(90deg); transform-origin: center;
-  }
-  .arena-dialog {
-    width: min(960px, calc(100dvh - 24px)); max-width: calc(100dvh - 24px);
-    max-height: calc(100vw - 24px); inset: auto; top: 50%; left: 50%; margin: 0;
-    transform: translate(-50%, -50%) rotate(90deg); transform-origin: center;
-  }
+
+body.arena-immersive .arena-page[data-arena-rotation="90"] {
+  inset: auto; top: 50%; left: 50%; width: 100dvh; height: 100vw;
+  transform: translate(-50%, -50%) rotate(90deg); transform-origin: center;
+}
+body.arena-immersive[data-arena-rotation="90"] .arena-dialog {
+  width: min(960px, calc(100dvh - 24px)); max-width: calc(100dvh - 24px);
+  max-height: calc(100vw - 24px); inset: auto; top: 50%; left: 50%; margin: 0;
+  transform: translate(-50%, -50%) rotate(90deg); transform-origin: center;
 }
 
 /* Keep Tune focused on editable values; explanations remain on slider tooltips. */
 .build-page .player-mode-copy, .build-page .build-install-note, .build-page .build-preview-briefing { display: none; }
+
+body.arena-immersive .arena-page:fullscreen { padding: 0; }
+body.arena-immersive .duel-touch-controls { display: flex; }

@@ -1,6 +1,10 @@
 // One presentation shell for Watch, Tune and Play. Reparent existing controls,
 // never recreate a canvas, renderer, editor or match when settings are toggled.
 import { getAudio } from '../lib/audio.js';
+export function arenaPresentation(width, height, touch) {
+  const immersive = !!touch && Math.min(width, height) <= 1024;
+  return { immersive, rotated: immersive && height > width };
+}
 export function fitArenaRect(width, height) {
   const w = Math.max(0, Math.min(Number(width) || 0, (Number(height) || 0) * 16 / 9));
   return { width: w, height: w * 9 / 16 };
@@ -76,11 +80,14 @@ export function mountArenaShell(root, { title, canvas, frame = null, actions = [
   audioPrompt.type = 'button';
   audioPrompt.id = 'arena-audio-prompt';
   audioPrompt.className = 'arena-audio-prompt';
+  audioPrompt.setAttribute('role', 'switch');
+  audioPrompt.setAttribute('aria-label', 'Sound');
+  audioPrompt.innerHTML = '<span>Sound</span><span class="arena-sound-track" aria-hidden="true"><span></span></span>';
   const toggleAudio = () => {
     const audio = getAudio();
-    // A suspended browser context needs an unlock gesture before it can play.
-    audio.setEnabled(!audio.isEnabled() || !audio.isUnlocked);
+    audio.setEnabled(!audio.isEnabled());
     updateAudioButton();
+    enterFullscreen();
   };
   audioPrompt.addEventListener('click', toggleAudio);
   toolbar.insertBefore(audioPrompt, buttons);
@@ -117,14 +124,10 @@ export function mountArenaShell(root, { title, canvas, frame = null, actions = [
   const updateAudioButton = () => {
     try {
       const audio = getAudio();
-      const playing = audio.isUnlocked;
-      audioPrompt.textContent = playing ? 'Sound on' : 'Sound off';
-      audioPrompt.setAttribute('aria-pressed', String(playing));
-      audioPrompt.setAttribute('aria-label', playing ? 'Mute sound' : 'Turn on sound');
+      audioPrompt.setAttribute('aria-checked', String(audio.isEnabled()));
       for (const toggle of dialog.querySelectorAll('input[id$="-audio"]')) toggle.checked = audio.isEnabled();
     } catch {
-      audioPrompt.textContent = 'Sound off';
-      audioPrompt.setAttribute('aria-label', 'Turn on sound');
+      audioPrompt.setAttribute('aria-checked', 'false');
     }
   };
   let audioTimer = 0;
@@ -140,11 +143,12 @@ export function mountArenaShell(root, { title, canvas, frame = null, actions = [
     raf = 0;
     // Use the layout viewport shared by all routes, not the transient visual
     // viewport height while initial canvas overflow or a modal keyboard settles.
-    const isMobilePortrait = Boolean(win?.matchMedia?.('(max-width: 768px) and (orientation: portrait)').matches);
-    const isMobileLandscape = Boolean(win?.matchMedia?.('(max-height: 500px) and (orientation: landscape)').matches);
-    page.dataset.arenaRotation = isMobilePortrait ? '90' : '0';
+    const { immersive, rotated } = arenaPresentation(win.innerWidth, win.innerHeight,
+      win.matchMedia?.('(any-pointer: coarse)').matches);
+    doc.body.classList.toggle('arena-immersive', immersive);
+    doc.body.dataset.arenaRotation = page.dataset.arenaRotation = rotated ? '90' : '0';
     let availW, availH;
-    if (isMobilePortrait || isMobileLandscape) {
+    if (immersive) {
       // Layout dimensions remain unrotated; CSS rotates the whole game and HUD.
       availW = viewport.clientWidth;
       availH = viewport.clientHeight;
@@ -158,12 +162,24 @@ export function mountArenaShell(root, { title, canvas, frame = null, actions = [
     const size = fitArenaRect(availW, availH);
     frame.style.width = `${size.width}px`; frame.style.height = `${size.height}px`;
   };
+  let fullscreenPending = false;
+  const enterFullscreen = () => {
+    if (!doc.body.classList.contains('arena-immersive') || doc.fullscreenElement || fullscreenPending) return;
+    const target = doc.documentElement;
+    const request = target.requestFullscreen || target.webkitRequestFullscreen;
+    if (!request) return;
+    fullscreenPending = true;
+    try { Promise.resolve(request.call(target, { navigationUI: 'hide' })).catch(() => {}).finally(() => { fullscreenPending = false; }); }
+    catch { fullscreenPending = false; }
+  };
+  viewport.addEventListener('pointerdown', enterFullscreen, { passive: true });
   const schedule = () => { if (!raf) raf = win.requestAnimationFrame(resize); };
   const observer = typeof win.ResizeObserver === 'function' ? new win.ResizeObserver(schedule) : null;
   observer?.observe(viewport); if (doc.querySelector('#topnav')) observer?.observe(doc.querySelector('#topnav'));
   win.addEventListener('resize', schedule); win.visualViewport?.addEventListener('resize', schedule);
   doc.addEventListener('fullscreenchange', schedule); resize();
   return { open: modal.open, close: modal.close, get isOpen() { return modal.isOpen; }, dialog, resize, destroy() {
+    viewport.removeEventListener('pointerdown', enterFullscreen);
     modal.destroy(); observer?.disconnect(); if (raf) win.cancelAnimationFrame(raf);
     win.removeEventListener('resize', schedule); win.visualViewport?.removeEventListener('resize', schedule);
     win.removeEventListener('pointerdown', audioGesture, true);
@@ -171,6 +187,6 @@ export function mountArenaShell(root, { title, canvas, frame = null, actions = [
     win.removeEventListener('m3t4:audiochange', updateAudioButton);
     win.clearTimeout(audioTimer);
     audioPrompt.removeEventListener('click', toggleAudio);
-    doc.removeEventListener('fullscreenchange', schedule); doc.body.classList.remove('arena-mounted');
+    doc.removeEventListener('fullscreenchange', schedule); doc.body.classList.remove('arena-mounted', 'arena-immersive'); delete doc.body.dataset.arenaRotation;
   } };
 }

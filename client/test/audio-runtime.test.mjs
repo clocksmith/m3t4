@@ -10,8 +10,8 @@ async function audioHarness(t, { storedOn = true, holdStage = null } = {}) {
   let context;
   let release;
   const held = new Promise(resolve => { release = resolve; });
-  class AudioContext {
-    constructor() { context = this; this.currentTime = 0; this.state = 'suspended'; this.destination = {}; }
+  class AudioContext extends window.EventTarget {
+    constructor() { super(); context = this; this.currentTime = 0; this.state = 'suspended'; this.destination = {}; }
     async resume() { this.state = 'running'; }
     async decodeAudioData(bytes) { return { url: new TextDecoder().decode(bytes) }; }
     createGain() {
@@ -49,10 +49,12 @@ async function audioHarness(t, { storedOn = true, holdStage = null } = {}) {
 test('remembered audio loads effects and resumes on the first interaction after reload', async t => {
   const h = await audioHarness(t);
   await h.audio.setStage('datacenter');
-  assert.equal(h.audio.ready, true);
-  assert.equal(h.context.state, 'suspended');
+  assert.equal(h.audio.ready, false);
+  assert.equal(h.context, undefined);
   h.window.dispatchEvent(new h.window.Event('pointerdown'));
   assert.equal(h.context.state, 'running');
+  await h.audio.setStage('datacenter');
+  assert.equal(h.audio.ready, true);
   const source = h.audio.play('swipe_blade');
   assert.ok(source);
   assert.equal(h.starts.at(-1).source.buffer.url, '/assets/audio/sfx/sprite.webm');
@@ -61,6 +63,7 @@ test('remembered audio loads effects and resumes on the first interaction after 
 
 test('a slow previous stage cannot replace the latest selected music', async t => {
   const h = await audioHarness(t, { holdStage: 'datacenter' });
+  h.audio.setEnabled(true);
   const old = h.audio.setStage('datacenter');
   await h.audio.setStage('boardroom');
   h.release();
@@ -72,6 +75,7 @@ test('a slow previous stage cannot replace the latest selected music', async t =
 
 test('leaving the page cancels music that is still downloading', async t => {
   const h = await audioHarness(t, { holdStage: 'datacenter' });
+  h.audio.setEnabled(true);
   const pending = h.audio.setStage('datacenter');
   h.audio.stopMusic();
   h.release();
@@ -79,4 +83,12 @@ test('leaving the page cancels music that is still downloading', async t => {
   assert.equal(h.starts.filter(({ source }) => source.loop).length, 0);
   h.audio.setEnabled(false);
   assert.equal(h.audio.play('swipe_blade'), null);
+});
+
+test('a subsequent click resumes an interrupted mobile context', async t => {
+  const h = await audioHarness(t);
+  h.audio.setEnabled(true); await h.audio.setStage('datacenter');
+  h.context.state = 'interrupted';
+  h.window.dispatchEvent(new h.window.Event('click'));
+  assert.equal(h.context.state, 'running');
 });

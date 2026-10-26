@@ -16,6 +16,7 @@
 // brain — no private/canonical brain code is exposed by being on this
 // page that wasn't already in the bundle.
 
+import { bindTouchJoystick } from "../ui/touch-joystick.js";
 import { mountArenaShell } from "../ui/arena-shell.js";
 import { createFrameRenderer, W, H, hudAvatarSideAt } from "../render/index.js";
 import {
@@ -241,36 +242,6 @@ function placeStoredAliasOnOwnedSide() {
   if (state.aliases[other] && state.aliases[other] === stored) state.aliases[other] = "";
 }
 
-// True when the device is a touch-first device held in landscape.
-// Used to gate auto-fullscreen and the matching CSS rules.
-function isLandscapeCoarse() {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
-  return window.matchMedia("(pointer: coarse) and (orientation: landscape)").matches;
-}
-
-// Opportunistically enter fullscreen on the duel page and lock the
-// orientation to landscape so the bottom-bar UI hides on phones. Both
-// requestFullscreen and screen.orientation.lock require a user gesture
-// — call this from a click/touch handler. Best-effort; quietly ignores
-// browsers that don't support either API (Safari iOS in particular).
-async function tryEnterFullscreen(target) {
-  if (typeof document === "undefined") return;
-  if (document.fullscreenElement) return;
-  const el = target ?? document.documentElement;
-  try {
-    if (typeof el.requestFullscreen === "function") {
-      await el.requestFullscreen({ navigationUI: "hide" });
-    } else if (typeof el.webkitRequestFullscreen === "function") {
-      el.webkitRequestFullscreen();
-    }
-  } catch {}
-  try {
-    if (typeof screen !== "undefined" && screen.orientation && typeof screen.orientation.lock === "function") {
-      await screen.orientation.lock("landscape");
-    }
-  } catch {}
-}
-
 // Ownership: in vs-AI / hot-seat the local user picks both sides; in
 // p2p only the side this client controls is editable. Spectators can't
 // edit either side. Drives both the rendered UI (read-only vs editable)
@@ -314,6 +285,8 @@ function freshState() {
     keyset: new Set(),
     touchPointers: new Map(),
     touchInput: { ...EMPTY_INPUT },
+    touchStick: { ...EMPTY_INPUT },
+    touchJoystick: null,
     page: null,
     canvas: null,
     renderer: null,
@@ -398,10 +371,10 @@ function updateTouchInput() {
   if (!state) return;
   const active = new Set(state.touchPointers.values());
   state.touchInput = {
-    left: active.has("left"),
-    right: active.has("right"),
-    up: active.has("up"),
-    down: active.has("down"),
+    left: active.has("left") || state.touchStick.left,
+    right: active.has("right") || state.touchStick.right,
+    up: active.has("up") || state.touchStick.up,
+    down: active.has("down") || state.touchStick.down,
     action: active.has("action"),
   };
   document.querySelectorAll(".duel-touch-control").forEach((button) => {
@@ -412,6 +385,8 @@ function updateTouchInput() {
 function clearTouchInput() {
   if (!state) return;
   state.touchPointers.clear();
+  state.touchJoystick?.reset();
+  state.touchStick = { ...EMPTY_INPUT };
   updateTouchInput();
 }
 
@@ -978,11 +953,8 @@ function statsListHtml() {
 function touchControlsHtml() {
   return `
     <div class="duel-touch-controls" id="duel-touch-controls" aria-label="touch controls">
-      <div class="duel-touch-pad" aria-label="move">
-        <button type="button" class="duel-touch-control is-up" data-touch-action="up" aria-label="jump">UP</button>
-        <button type="button" class="duel-touch-control is-left" data-touch-action="left" aria-label="move left">LEFT</button>
-        <button type="button" class="duel-touch-control is-down" data-touch-action="down" aria-label="drop">DOWN</button>
-        <button type="button" class="duel-touch-control is-right" data-touch-action="right" aria-label="move right">RIGHT</button>
+      <div class="duel-joystick" id="duel-joystick" aria-label="Movement joystick: drag to move, up to jump, down to drop">
+        <span class="duel-joystick-thumb" aria-hidden="true"></span>
       </div>
       <div class="duel-touch-actions" aria-label="actions">
         <button type="button" class="duel-touch-control is-action" data-touch-action="action" aria-label="strike">STRIKE</button>
@@ -1058,9 +1030,6 @@ export function mount(root, ctx = {}) {
     if (!state.world || state.world.matchWinner !== -1) {
       startMatch();
     }
-    if (isLandscapeCoarse()) {
-      void tryEnterFullscreen(state.page);
-    }
     refocusCanvas();
   });
 
@@ -1088,6 +1057,8 @@ export function unmount() {
   removeEventListener("hashchange", onHashChange);
   if (state) {
     state.running = false;
+    state.touchJoystick?.destroy();
+    state.touchJoystick = null;
     state.arenaShell?.destroy();
     if (state.rafId) cancelAnimationFrame(state.rafId);
     state.renderer?.destroy();
@@ -1268,6 +1239,11 @@ function bindAliasInputs() {
 function bindTouchControls() {
   const el = document.getElementById("duel-touch-controls");
   if (!el) return;
+  const owner = state;
+  owner.touchJoystick = bindTouchJoystick(el.querySelector('#duel-joystick'), input => {
+    if (state !== owner) return;
+    owner.touchStick = input; updateTouchInput();
+  });
 
   const releasePointer = (event) => {
     if (!state) return;

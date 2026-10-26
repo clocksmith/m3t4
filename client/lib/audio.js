@@ -65,13 +65,15 @@ function create() {
   // reload. Resume the same context and load the sprite on that interaction.
   function resumeOnGesture() {
     if (!enabled || !ensureContext()) return;
-    const resume = ctx.state === "suspended" ? ctx.resume() : Promise.resolve();
+    const resume = ctx.state !== "running" ? ctx.resume() : Promise.resolve();
     boot();
     resume.then(() => { if (enabled && currentStage) setStage(currentStage); }).catch(() => {});
   }
   window.addEventListener("pointerdown", resumeOnGesture, { capture: true, passive: true });
   window.addEventListener("keydown", resumeOnGesture, { capture: true });
   window.addEventListener("touchstart", resumeOnGesture, { capture: true, passive: true });
+  window.addEventListener("touchend", resumeOnGesture, { capture: true, passive: true });
+  window.addEventListener("click", resumeOnGesture, { capture: true, passive: true });
 
   function ensureContext() {
     if (ctx) return ctx;

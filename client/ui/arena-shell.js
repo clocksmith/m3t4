@@ -83,7 +83,7 @@ export function mountArenaShell(root, { title, canvas, frame = null, actions = [
     updateAudioButton();
   };
   audioPrompt.addEventListener('click', toggleAudio);
-  frame.append(audioPrompt);
+  toolbar.insertBefore(audioPrompt, buttons);
   viewport.append(frame);
   const dialog = doc.createElement('dialog');
   dialog.id = 'arena-dialog'; dialog.className = 'arena-dialog'; dialog.setAttribute('aria-labelledby', 'arena-dialog-title');

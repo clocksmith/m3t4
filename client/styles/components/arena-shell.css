@@ -10,8 +10,8 @@ body.arena-mounted #bottom { display: none; }
 .arena-actions { display: flex; gap: 8px; flex: 0 0 auto; align-items: center; }
 .arena-actions button { min-height: 40px; }
 .arena-viewport { width: 100%; min-width: 0; display: flex; justify-content: center; align-items: flex-start; }
-.arena-page .arena-frame { position: relative; flex: 0 0 auto; max-width: none; aspect-ratio: 16 / 9; border: 0; border-radius: 0; background: var(--arena-bg); overflow: hidden; }
-.arena-frame > canvas, .arena-frame .spectate-stage-canvas-wrap > canvas { display: block; width: 100% !important; height: 100% !important; border: 0; border-radius: 0; }
+.arena-page .arena-frame, .watch-page .arena-frame { position: relative; flex: 0 0 auto; max-width: none !important; max-height: none !important; aspect-ratio: 16 / 9; border: 0; border-radius: 0; background: var(--arena-bg); overflow: hidden; }
+.arena-frame > canvas, .arena-frame .spectate-stage-canvas-wrap > canvas { display: block; width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important; border: 0; border-radius: 0; }
 .arena-dialog { position: fixed; inset: 0; margin: auto; width: min(960px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 18px; overflow: auto; border: 1px solid var(--ui-border); border-radius: 12px; background: var(--ui-bg); color: var(--ui-text); }
 .arena-dialog::backdrop { background: var(--ui-paint-rgba-0-0-0-0-5); }
 .arena-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
@@ -44,3 +44,6 @@ body.arena-mounted #bottom { display: none; }
   .arena-frame .duel-touch-control.is-action { width: 60px; height: 60px; }
   .arena-frame .duel-touch-control { font-size: 10px; }
 }
+
+/* Keep Tune focused on editable values; explanations remain on slider tooltips. */
+.build-page .player-mode-copy, .build-page .build-install-note, .build-page .build-preview-briefing { display: none; }

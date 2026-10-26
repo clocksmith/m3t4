@@ -54,7 +54,8 @@ export async function initAnalytics() {
         _disabled = true; _queue.length = 0; return null;
       }
       const app = appSdk.getApps().length ? appSdk.getApps()[0] : appSdk.initializeApp(cfg);
-      _analytics = analyticsSdk.getAnalytics(app);
+      // Route changes emit page_view below; suppress the SDK's initial duplicate.
+      _analytics = analyticsSdk.initializeAnalytics(app, { config: { send_page_view: false } });
       _sdk = analyticsSdk;
       // Flush anything that queued up before init finished.
       const pending = _queue.splice(0);

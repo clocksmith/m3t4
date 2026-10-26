@@ -65,9 +65,9 @@ function create() {
   // reload. Resume the same context and load the sprite on that interaction.
   function resumeOnGesture() {
     if (!enabled || !ensureContext()) return;
-    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    const resume = ctx.state === "suspended" ? ctx.resume() : Promise.resolve();
     boot();
-    if (currentStage) setStage(currentStage);
+    resume.then(() => { if (enabled && currentStage) setStage(currentStage); }).catch(() => {});
   }
   window.addEventListener("pointerdown", resumeOnGesture, { capture: true, passive: true });
   window.addEventListener("keydown", resumeOnGesture, { capture: true });
@@ -78,6 +78,7 @@ function create() {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
     ctx = new AC();
+    ctx.addEventListener("statechange", () => window.dispatchEvent(new Event("m3t4:audiochange")));
     master = ctx.createGain();
     master.gain.value = enabled ? 1 : 0;
     master.connect(ctx.destination);
@@ -122,10 +123,8 @@ function create() {
       return;
     }
     if (!ensureContext()) return;
-    if (ctx.state === "suspended") ctx.resume().catch(() => {});
     master.gain.setTargetAtTime(1, ctx.currentTime, 0.05);
-    boot();
-    if (currentStage) setStage(currentStage);
+    resumeOnGesture();
   }
 
   function isEnabled() { return enabled; }
@@ -133,7 +132,7 @@ function create() {
   async function setStage(stage) {
     currentStage = stage;
     const request = ++stageRequest;
-    if (!enabled || !ensureContext()) return;
+    if (!enabled || !ctx) return;
     const variant = STAGE_VARIANT[stage];
     if (!variant) return;
     const key = `${stage}/${variant}`;
@@ -143,7 +142,7 @@ function create() {
       boot(),
     ]);
     // Slow downloads must not replace a newer stage or restart a stopped page.
-    if (request !== stageRequest || !enabled) return;
+    if (request !== stageRequest || !enabled || ctx.state !== "running") return;
     if (irBuf) {
       convolver.buffer = irBuf;
       const wetDb = STAGE_WET_DB[stage] ?? -10;
@@ -186,7 +185,7 @@ function create() {
   }
 
   function play(cueId, { when = 0, impact = false, playbackRate = 1, volume = 1 } = {}) {
-    if (!enabled || !sprite || !manifest) return null;
+    if (!enabled || !sprite || !manifest || ctx.state !== "running") return null;
     const span = manifest[cueId];
     if (!span) return null;
     const [startMs, endMs] = span;
@@ -207,7 +206,7 @@ function create() {
   }
 
   function startLoop(cueId, key = cueId, gainDb = -20) {
-    if (!enabled || !sprite || !manifest) return;
+    if (!enabled || !sprite || !manifest || ctx.state !== "running") return;
     if (loopSources.has(key)) return;
     const span = manifest[cueId];
     if (!span) return;

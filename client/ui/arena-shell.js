@@ -1,5 +1,6 @@
 // One presentation shell for Watch, Tune and Play. Reparent existing controls,
 // never recreate a canvas, renderer, editor or match when settings are toggled.
+import { getAudio } from '../lib/audio.js';
 export function fitArenaRect(width, height) {
   const w = Math.max(0, Math.min(Number(width) || 0, (Number(height) || 0) * 16 / 9));
   return { width: w, height: w * 9 / 16 };
@@ -71,6 +72,18 @@ export function mountArenaShell(root, { title, canvas, frame = null, actions = [
   const touch = page.querySelector('#duel-touch-controls');
   if (touch) frame.append(touch);
   page.querySelector('#duel-touch-setup')?.remove();
+  const audioPrompt = doc.createElement('button');
+  audioPrompt.type = 'button';
+  audioPrompt.id = 'arena-audio-prompt';
+  audioPrompt.className = 'arena-audio-prompt';
+  audioPrompt.setAttribute('aria-label', 'Turn on sound');
+  audioPrompt.innerHTML = '<span class="arena-audio-prompt-dot" aria-hidden="true">&#9679;</span><span>Turn on sound</span>';
+  audioPrompt.addEventListener('click', (e) => {
+    e.stopPropagation();
+    try { getAudio().setEnabled(true); } catch {}
+    audioPrompt.classList.add('is-hidden');
+  });
+  frame.append(audioPrompt);
   viewport.append(frame);
   const dialog = doc.createElement('dialog');
   dialog.id = 'arena-dialog'; dialog.className = 'arena-dialog'; dialog.setAttribute('aria-labelledby', 'arena-dialog-title');
@@ -92,14 +105,35 @@ export function mountArenaShell(root, { title, canvas, frame = null, actions = [
   const modal = bindArenaDialog(dialog, opener, { onOpen, onClose });
   let raf = 0;
   const win = doc.defaultView;
+  const updateAudioPrompt = () => {
+    try {
+      const audio = getAudio();
+      if (audio.isUnlocked || (audio.isEnabled?.() && audio.ready)) {
+        audioPrompt.classList.add('is-hidden');
+      }
+    } catch {}
+  };
+  win.addEventListener('pointerdown', () => setTimeout(updateAudioPrompt, 150), { capture: true, passive: true });
+  win.addEventListener('keydown', () => setTimeout(updateAudioPrompt, 150), { capture: true, passive: true });
+  updateAudioPrompt();
   const resize = () => {
     raf = 0;
     // Use the layout viewport shared by all routes, not the transient visual
     // viewport height while initial canvas overflow or a modal keyboard settles.
-    const top = viewport.getBoundingClientRect().top;
-    const nav = doc.querySelector('#topnav nav');
-    const navHeight = nav && win.getComputedStyle(nav).position === 'fixed' ? nav.getBoundingClientRect().height : 0;
-    const size = fitArenaRect(viewport.clientWidth, Math.max(0, win.innerHeight - top - navHeight - 8));
+    const isMobilePortrait = Boolean(win?.matchMedia?.('(max-width: 768px) and (orientation: portrait)').matches);
+    let availW, availH;
+    if (isMobilePortrait) {
+      availW = win.innerHeight;
+      availH = win.innerWidth;
+    } else {
+      const isMobileLandscape = Boolean(win?.matchMedia?.('(max-height: 500px) and (orientation: landscape)').matches);
+      const top = isMobileLandscape ? 0 : viewport.getBoundingClientRect().top;
+      const nav = doc.querySelector('#topnav nav');
+      const navHeight = !isMobileLandscape && nav && win.getComputedStyle(nav).position === 'fixed' ? nav.getBoundingClientRect().height : 0;
+      availW = viewport.clientWidth;
+      availH = Math.max(0, win.innerHeight - top - navHeight - (isMobileLandscape ? 0 : 8));
+    }
+    const size = fitArenaRect(availW, availH);
     frame.style.width = `${size.width}px`; frame.style.height = `${size.height}px`;
   };
   const schedule = () => { if (!raf) raf = win.requestAnimationFrame(resize); };

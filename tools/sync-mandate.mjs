@@ -1,6 +1,6 @@
 // Gamma owns game sources and the public deployment allowlist; m3t4 owns hosting.
 import { execFileSync } from 'node:child_process';
-import { cpSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 const source = fileURLToPath(new URL('../../gamma/games/2038/', import.meta.url));
@@ -13,3 +13,8 @@ if (manifest.deploymentProfile !== 'public-playtest' || manifest.deployable !== 
 }
 rmSync(destination, { recursive: true, force: true });
 cpSync(published, destination, { recursive: true });
+
+// Hosting owns the shared analytics wrapper; Gamma's game bundle stays unchanged.
+const entry = join(destination, 'index.html');
+const html = readFileSync(entry, 'utf8');
+writeFileSync(entry, html.replace('</body>', '<script src="/config.js"></script>\n<script type="module" src="/lib/site-analytics.js"></script>\n</body>'));

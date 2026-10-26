@@ -7,7 +7,7 @@
 //   crossfade on stage change.
 // - Per-stage impact ConvolverNode on a wet send; only hit_* cues route
 //   through it. All other cues go to the dry master.
-// - Master GainNode gated by localStorage['m3t4:audio:on'] (default off).
+// - Master GainNode gated by localStorage['m3t4:audio:on'] (default on after a user gesture).
 //   AudioContext is lazy-initialized on first toggle-on (browsers require
 //   a user gesture).
 // - Defensive: asset fetch failures degrade silently. If sprite.webm is
@@ -111,6 +111,10 @@ function create() {
 
   function setEnabled(on) {
     enabled = !!on;
+    try {
+      const EventConstructor = (typeof window !== "undefined" && window.Event) || Event;
+      window.dispatchEvent(new EventConstructor("m3t4:audiochange"));
+    } catch {}
     try { localStorage.setItem(ENABLED_KEY, enabled ? "on" : "off"); } catch {}
     if (!enabled) {
       stageRequest++;

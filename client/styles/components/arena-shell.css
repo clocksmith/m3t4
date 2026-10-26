@@ -35,44 +35,16 @@ body.arena-mounted #bottom { display: none; }
 .arena-frame .duel-touch-control.is-action { width: 72px; height: 72px; }
 .arena-frame canvas:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; }
 
-/* Floating audio prompt that disappears into settings once enabled */
+/* Sound and settings remain available without covering the center of play. */
 .arena-audio-prompt {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  z-index: 8;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  font: 700 12px ui-monospace, Menlo, monospace;
-  color: var(--ui-text);
-  background: var(--ui-paint-rgba-15-23-42-0-9);
-  border: 1px solid var(--ui-accent);
-  border-radius: 9999px;
-  box-shadow: 0 4px 16px var(--ui-paint-rgba-0-0-0-0-5);
-  cursor: pointer;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  position: absolute; top: 8px; left: 8px; z-index: 8;
+  min-height: 40px; padding: 6px 12px;
+  color: var(--ui-text); background: var(--ui-bg); border: 1px solid var(--ui-border);
+  border-radius: 999px; opacity: .85; cursor: pointer;
 }
-.arena-audio-prompt:hover {
-  background: var(--ui-accent);
-  color: var(--ui-bg);
-}
-.arena-audio-prompt-dot {
-  color: var(--ui-accent);
-  font-size: 10px;
-}
-.arena-audio-prompt:hover .arena-audio-prompt-dot {
-  color: var(--ui-bg);
-}
-.arena-audio-prompt.is-hidden {
-  opacity: 0;
-  pointer-events: none;
-  transform: scale(0.9);
-  display: none;
-}
+.arena-audio-prompt:focus-visible, .arena-audio-prompt:hover { opacity: 1; }
+.arena-navigation { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 16px; }
+.arena-navigation [aria-current] { color: var(--ui-accent); }
 
 @media (max-width: 640px) {
   .arena-toolbar { gap: 6px; }
@@ -83,100 +55,38 @@ body.arena-mounted #bottom { display: none; }
   .arena-dialog .duel-character-select { grid-template-columns: 1fr; }
   .arena-frame .duel-touch-control.is-action { width: 60px; height: 60px; }
   .arena-frame .duel-touch-control { font-size: 10px; }
-  .arena-audio-prompt { top: 8px; right: 8px; padding: 6px 10px; font-size: 11px; }
 }
 
-/* Mobile fill screen: portrait rotates 90deg to landscape so holding phone sideways fills display */
-@media (max-width: 768px) and (orientation: portrait) {
-  body.arena-mounted {
-    position: fixed;
-    inset: 0;
-    width: 100vw;
-    height: 100dvh;
-    overflow: hidden;
-  }
-  body.arena-mounted #topnav {
-    display: none;
-  }
-  body.arena-mounted #app {
-    padding: 0;
-    margin: 0;
-    width: 100vw;
-    height: 100dvh;
-    overflow: hidden;
-  }
-  body.arena-mounted .arena-page {
-    position: fixed;
-    inset: 0;
-    width: 100vw;
-    height: 100dvh;
-    overflow: hidden;
-  }
+@media (max-width: 768px) and (orientation: portrait), (max-height: 500px) and (orientation: landscape) {
+  body.arena-mounted { position: fixed; inset: 0; overflow: hidden; background: var(--arena-bg); }
+  body.arena-mounted #topnav { display: none; }
+  body.arena-mounted #app { padding: 0; margin: 0; width: 100vw; height: 100dvh; overflow: hidden; }
+  body.arena-mounted .arena-page { position: fixed; inset: 0; width: 100vw; height: 100dvh; overflow: hidden; }
+  body.arena-mounted .arena-viewport { width: 100%; height: 100%; align-items: center; }
   body.arena-mounted .arena-toolbar {
-    position: absolute;
-    top: 8px;
-    left: 8px;
-    right: 8px;
-    height: 38px;
-    z-index: 6;
-    pointer-events: none;
+    position: absolute; top: max(8px, env(safe-area-inset-top));
+    right: max(8px, env(safe-area-inset-right)); left: 70px;
+    height: auto; z-index: 6; pointer-events: none;
   }
-  body.arena-mounted .arena-heading {
-    display: none;
+  body.arena-mounted .arena-heading { display: none; }
+  body.arena-mounted .arena-actions { margin-left: auto; pointer-events: auto; }
+  body.arena-mounted .arena-actions button { background: var(--ui-bg); opacity: .85; }
+  body.arena-mounted .arena-audio-prompt { top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); }
+  body.arena-mounted .arena-frame .duel-touch-controls {
+    left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom));
   }
-  body.arena-mounted .arena-actions {
-    margin-left: auto;
-    pointer-events: auto;
-  }
-  body.arena-mounted .arena-viewport {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 100dvh;
-    height: 100vw;
-    transform: translate(-50%, -50%) rotate(90deg);
-    transform-origin: center center;
-    align-items: center;
-    justify-content: center;
+}
+
+/* Rotate the canvas and its controls as one surface, preserving 16:9 geometry. */
+@media (max-width: 768px) and (orientation: portrait) {
+  body.arena-mounted .arena-page {
+    inset: auto; top: 50%; left: 50%; width: 100dvh; height: 100vw;
+    transform: translate(-50%, -50%) rotate(90deg); transform-origin: center;
   }
   .arena-dialog {
-    width: min(90dvh, 640px);
-    max-height: min(85vw, 360px);
-    transform: rotate(90deg);
-    transform-origin: center center;
-  }
-}
-
-/* Mobile landscape fill screen */
-@media (max-height: 500px) and (orientation: landscape) {
-  body.arena-mounted #topnav {
-    display: none;
-  }
-  body.arena-mounted #app {
-    padding: 0;
-    margin: 0;
-    width: 100vw;
-    height: 100dvh;
-  }
-  body.arena-mounted .arena-toolbar {
-    position: absolute;
-    top: 6px;
-    left: 6px;
-    right: 6px;
-    height: 34px;
-    z-index: 6;
-    pointer-events: none;
-  }
-  body.arena-mounted .arena-heading {
-    display: none;
-  }
-  body.arena-mounted .arena-actions {
-    margin-left: auto;
-    pointer-events: auto;
-  }
-  body.arena-mounted .arena-viewport {
-    height: 100dvh;
-    align-items: center;
+    width: min(960px, calc(100dvh - 24px)); max-width: calc(100dvh - 24px);
+    max-height: calc(100vw - 24px); inset: auto; top: 50%; left: 50%; margin: 0;
+    transform: translate(-50%, -50%) rotate(90deg); transform-origin: center;
   }
 }
 

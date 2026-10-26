@@ -137,3 +137,11 @@ test('Roster seat editor renders visual fighter select grid', () => {
   const bodyGrid = doc.querySelector('#slot-body-grid');
   assert.ok(bodyGrid, 'roster seat editor has slot-body-grid');
 });
+
+// Screen-space taps must invert the clockwise mobile game rotation.
+test('rotated HUD avatars retain their logical player sides', () => {
+  const canvas = { closest: () => ({}), getBoundingClientRect: () => ({ left: 0, top: 0, right: 360, width: 360, height: 640 }) };
+  assert.equal(hudAvatarSideAt(canvas, 340, 30), 0);
+  assert.equal(hudAvatarSideAt(canvas, 340, 610), 1);
+  assert.equal(hudAvatarSideAt(canvas, 180, 320), -1);
+});

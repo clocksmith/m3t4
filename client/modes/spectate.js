@@ -149,6 +149,8 @@ let prevAudioFrame = null;
 let audioCharKeys = [null, null];
 let audioWeaponKeys = [null, null];
 let lastGruntMs = [0, 0];
+let lastFootstepMs = [0, 0];
+let footstepStep = [0, 0];
 const GRUNT_THROTTLE_MS = 400;
 
 function resetPlayback() {
@@ -157,6 +159,8 @@ function resetPlayback() {
   baselineTick = 0;
   playbackStarted = false;
   prevAudioFrame = null;
+  lastFootstepMs = [0, 0];
+  footstepStep = [0, 0];
   updateBufferStat("idle");
 }
 
@@ -1338,39 +1342,109 @@ const WEAPON_CLASS = {
   sunscreen_bottle_club: "club", controller_nunchucks: "nunchucks", shareholder_sauce_club: "club", quest_flail: "flail",
 };
 
+function playHitSound(audio, char, weapon) {
+  const cue = `hit_${char}_${weapon}`;
+  if (audio.play(cue, { impact: true })) return;
+  const cls = WEAPON_CLASS[weapon] ?? "blade";
+  if (cls === "flail") audio.play("hit_sama_worldcoin_orb_flail", { impact: true });
+  else if (cls === "maul") audio.play("hit_sama_backpack_maul", { impact: true });
+  else if (cls === "greatsword") audio.play("hit_sama_heat_sink_greatsword", { impact: true });
+  else if (cls === "bat" || cls === "club") audio.play("hit_darrius_alignment_baton", { impact: true });
+  else if (cls === "pike") audio.play("hit_darrius_red_team_pike", { impact: true });
+  else if (cls === "axe") audio.play("hit_demis_folded_chess_axe", { impact: true });
+  else if (cls === "nunchucks") audio.play("hit_mark_controller_nunchucks", { impact: true });
+  else audio.play("hit_sama_gpu_server_blade", { impact: true });
+}
+
+function fireGrunt(audio, side, kind) {
+  const char = audioCharKeys[side] ?? (side === 0 ? "sama" : "darrius");
+  if (!char) return;
+  const now = performance.now();
+  if (kind !== "ko" && now - lastGruntMs[side] < GRUNT_THROTTLE_MS) return;
+  lastGruntMs[side] = now;
+  const cue = `grunt_${char}_${kind}`;
+  if (!audio.play(cue)) {
+    audio.play(side === 0 ? `grunt_sama_${kind}` : `grunt_darrius_${kind}`);
+  }
+}
+
 function detectAudioEdges(frame) {
   const audio = getAudio();
   if (!audio.isEnabled() || !audio.ready) { prevAudioFrame = frame; return; }
   if (!prevAudioFrame) { prevAudioFrame = frame; return; }
+
+  const now = performance.now();
+  const chars = [frame.p0?.body ?? audioCharKeys[0] ?? "sama", frame.p1?.body ?? audioCharKeys[1] ?? "darrius"];
+  const weapons = [frame.p0?.weapon ?? audioWeaponKeys[0] ?? "gpu_server_blade", frame.p1?.weapon ?? audioWeaponKeys[1] ?? "alignment_baton"];
+
   for (let i = 0; i < 2; i++) {
     const key = i === 0 ? "p0" : "p1";
     const prev = prevAudioFrame[key];
     const curr = frame[key];
     if (!prev || !curr) continue;
-    if ((prev.swipeT ?? 0) <= 0 && (curr.swipeT ?? 0) > 0) {
-      const weapon = audioWeaponKeys[i];
+
+    // 1. Swipes: initial swing or mid-swing cancellation / restart
+    const startedSwipe = ((prev.swipeT ?? 0) <= 0 && (curr.swipeT ?? 0) > 0) ||
+      ((curr.swipeT ?? 0) > (prev.swipeT ?? 0) + 0.04);
+    if (startedSwipe) {
+      const weapon = weapons[i];
       const cls = WEAPON_CLASS[weapon] ?? "blade";
       audio.play(`swipe_${cls}`);
       fireGrunt(audio, i, "effort");
     }
+
+    // 2. Dive lunge
     if ((prev.diveT ?? 0) <= 0 && (curr.diveT ?? 0) > 0) {
       audio.play("dive_lunge");
     }
-    if (prev.onGround && !curr.onGround && (curr.vy ?? 0) < -100 && (curr.diveT ?? 0) <= 0) {
+
+    // 3. Jumps and Wall jumps
+    const jumped = prev.onGround && !curr.onGround && (curr.vy ?? 0) < -100 && (curr.diveT ?? 0) <= 0;
+    const wallJumped = (prev.wall ?? 0) !== 0 && (curr.wall ?? 0) === 0 && (curr.vy ?? 0) < -100 && !curr.onGround;
+    if (jumped) {
       audio.play("jump_boing");
+    } else if (wallJumped) {
+      audio.play("jump_boing", { playbackRate: 1.25 });
     }
-    if ((prev.hp ?? curr.hp ?? 0) > (curr.hp ?? 0)) {
+
+    // 4. Platform / Ground landing
+    if (!prev.onGround && curr.onGround && (prev.vy ?? 0) > 150) {
+      audio.play("footstep_a", { impact: true, playbackRate: 0.85, volume: 0.7 });
+    }
+
+    // 5. Footsteps while running on ground
+    const isRunning = curr.onGround && Math.abs(curr.vx ?? 0) > 60 && (curr.swipeT ?? 0) <= 0 && (curr.diveT ?? 0) <= 0 && !curr.dead;
+    if (isRunning && now - lastFootstepMs[i] > 180) {
+      lastFootstepMs[i] = now;
+      const stepCue = (footstepStep[i]++ % 2 === 0) ? "footstep_a" : "footstep_b";
+      audio.play(stepCue, { volume: 0.5 });
+    }
+
+    // 6. Stun / Non-lethal weapon hit
+    if ((prev.stun ?? 0) <= 0 && (curr.stun ?? 0) > 0 && !curr.dead) {
       const attacker = 1 - i;
-      const weapon = audioWeaponKeys[attacker];
-      const char = audioCharKeys[attacker];
-      if (char && weapon) audio.play(`hit_${char}_${weapon}`, { impact: true });
+      playHitSound(audio, chars[attacker], weapons[attacker]);
       fireGrunt(audio, i, "hurt");
     }
+
+    // 7. Death from weapon hit
     if (!prev.dead && curr.dead) {
+      const attacker = 1 - i;
+      playHitSound(audio, chars[attacker], weapons[attacker]);
       audio.play("ko_flatline");
       fireGrunt(audio, i, "ko");
     }
   }
+
+  // 8. Weapon clash
+  const clashTick0 = frame.p0?.lastClashTick ?? -9999;
+  const prevClash0 = prevAudioFrame.p0?.lastClashTick ?? -9999;
+  const clashTick1 = frame.p1?.lastClashTick ?? -9999;
+  const prevClash1 = prevAudioFrame.p1?.lastClashTick ?? -9999;
+  if (clashTick0 > prevClash0 || clashTick1 > prevClash1) {
+    audio.play("hit_sama_gpu_server_blade", { impact: true, playbackRate: 1.5 });
+  }
+
   if (prevAudioFrame.token && frame.token) {
     if (!prevAudioFrame.token.exists && frame.token.exists) {
       audio.play("proof_spawn");
@@ -1390,15 +1464,6 @@ function detectAudioEdges(frame) {
     }
   }
   prevAudioFrame = frame;
-}
-
-function fireGrunt(audio, side, kind) {
-  const char = audioCharKeys[side];
-  if (!char) return;
-  const now = performance.now();
-  if (kind !== "ko" && now - lastGruntMs[side] < GRUNT_THROTTLE_MS) return;
-  lastGruntMs[side] = now;
-  audio.play(`grunt_${char}_${kind}`);
 }
 
 function loop() {

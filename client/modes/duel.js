@@ -300,6 +300,33 @@ const WEAPON_CLASS = {
 
 let prevDuelAudioFrame = null;
 let lastDuelGruntMs = [0, 0];
+let lastDuelFootstepMs = [0, 0];
+let duelFootstepStep = [0, 0];
+
+function playHitSound(audio, char, weapon) {
+  const cue = `hit_${char}_${weapon}`;
+  if (audio.play(cue, { impact: true })) return;
+  const cls = WEAPON_CLASS[weapon] ?? "blade";
+  if (cls === "flail") audio.play("hit_sama_worldcoin_orb_flail", { impact: true });
+  else if (cls === "maul") audio.play("hit_sama_backpack_maul", { impact: true });
+  else if (cls === "greatsword") audio.play("hit_sama_heat_sink_greatsword", { impact: true });
+  else if (cls === "bat" || cls === "club") audio.play("hit_darrius_alignment_baton", { impact: true });
+  else if (cls === "pike") audio.play("hit_darrius_red_team_pike", { impact: true });
+  else if (cls === "axe") audio.play("hit_demis_folded_chess_axe", { impact: true });
+  else if (cls === "nunchucks") audio.play("hit_mark_controller_nunchucks", { impact: true });
+  else audio.play("hit_sama_gpu_server_blade", { impact: true });
+}
+
+function fireDuelGrunt(audio, side, char, kind) {
+  if (!char) return;
+  const now = performance.now();
+  if (kind !== "ko" && now - lastDuelGruntMs[side] < 400) return;
+  lastDuelGruntMs[side] = now;
+  const cue = `grunt_${char}_${kind}`;
+  if (!audio.play(cue)) {
+    audio.play(side === 0 ? `grunt_sama_${kind}` : `grunt_darrius_${kind}`);
+  }
+}
 
 function detectDuelAudioEdges(frame) {
   const audio = getAudio();
@@ -307,8 +334,9 @@ function detectDuelAudioEdges(frame) {
   if (!prevDuelAudioFrame) { prevDuelAudioFrame = frame; return; }
 
   const cosmetics = selectedCosmetics();
-  const chars = [cosmetics[0]?.body ?? "sama", cosmetics[1]?.body ?? "darrius"];
-  const weapons = [cosmetics[0]?.weapon ?? "gpu_server_blade", cosmetics[1]?.weapon ?? "alignment_baton"];
+  const chars = [frame.p0?.body ?? cosmetics[0]?.body ?? "sama", frame.p1?.body ?? cosmetics[1]?.body ?? "darrius"];
+  const weapons = [frame.p0?.weapon ?? cosmetics[0]?.weapon ?? "gpu_server_blade", frame.p1?.weapon ?? cosmetics[1]?.weapon ?? "alignment_baton"];
+  const now = performance.now();
 
   for (let i = 0; i < 2; i++) {
     const key = i === 0 ? "p0" : "p1";
@@ -316,29 +344,66 @@ function detectDuelAudioEdges(frame) {
     const curr = frame[key];
     if (!prev || !curr) continue;
 
-    if ((prev.swipeT ?? 0) <= 0 && (curr.swipeT ?? 0) > 0) {
+    // 1. Weapon swings: initial swing or mid-swing cancellation / restart
+    const startedSwipe = ((prev.swipeT ?? 0) <= 0 && (curr.swipeT ?? 0) > 0) ||
+      ((curr.swipeT ?? 0) > (prev.swipeT ?? 0) + 0.04);
+    if (startedSwipe) {
       const weapon = weapons[i];
       const cls = WEAPON_CLASS[weapon] ?? "blade";
       audio.play(`swipe_${cls}`);
       fireDuelGrunt(audio, i, chars[i], "effort");
     }
+
+    // 2. Dive lunge
     if ((prev.diveT ?? 0) <= 0 && (curr.diveT ?? 0) > 0) {
       audio.play("dive_lunge");
     }
-    if (prev.onGround && !curr.onGround && (curr.vy ?? 0) < -100 && (curr.diveT ?? 0) <= 0) {
+
+    // 3. Jumps and Wall jumps
+    const jumped = prev.onGround && !curr.onGround && (curr.vy ?? 0) < -100 && (curr.diveT ?? 0) <= 0;
+    const wallJumped = (prev.wall ?? 0) !== 0 && (curr.wall ?? 0) === 0 && (curr.vy ?? 0) < -100 && !curr.onGround;
+    if (jumped) {
       audio.play("jump_boing");
+    } else if (wallJumped) {
+      audio.play("jump_boing", { playbackRate: 1.25 });
     }
-    if ((prev.hp ?? curr.hp ?? 0) > (curr.hp ?? 0)) {
+
+    // 4. Platform / Ground landing
+    if (!prev.onGround && curr.onGround && (prev.vy ?? 0) > 150) {
+      audio.play("footstep_a", { impact: true, playbackRate: 0.85, volume: 0.7 });
+    }
+
+    // 5. Footsteps while running on ground
+    const isRunning = curr.onGround && Math.abs(curr.vx ?? 0) > 60 && (curr.swipeT ?? 0) <= 0 && (curr.diveT ?? 0) <= 0 && !curr.dead;
+    if (isRunning && now - lastDuelFootstepMs[i] > 180) {
+      lastDuelFootstepMs[i] = now;
+      const stepCue = (duelFootstepStep[i]++ % 2 === 0) ? "footstep_a" : "footstep_b";
+      audio.play(stepCue, { volume: 0.5 });
+    }
+
+    // 6. Stun / Non-lethal weapon hit
+    if ((prev.stun ?? 0) <= 0 && (curr.stun ?? 0) > 0 && !curr.dead) {
       const attacker = 1 - i;
-      const weapon = weapons[attacker];
-      const char = chars[attacker];
-      if (char && weapon) audio.play(`hit_${char}_${weapon}`, { impact: true });
+      playHitSound(audio, chars[attacker], weapons[attacker]);
       fireDuelGrunt(audio, i, chars[i], "hurt");
     }
+
+    // 7. Death from weapon hit
     if (!prev.dead && curr.dead) {
+      const attacker = 1 - i;
+      playHitSound(audio, chars[attacker], weapons[attacker]);
       audio.play("ko_flatline");
       fireDuelGrunt(audio, i, chars[i], "ko");
     }
+  }
+
+  // 8. Weapon clash
+  const clashTick0 = frame.p0?.lastClashTick ?? -9999;
+  const prevClash0 = prevDuelAudioFrame.p0?.lastClashTick ?? -9999;
+  const clashTick1 = frame.p1?.lastClashTick ?? -9999;
+  const prevClash1 = prevDuelAudioFrame.p1?.lastClashTick ?? -9999;
+  if (clashTick0 > prevClash0 || clashTick1 > prevClash1) {
+    audio.play("hit_sama_gpu_server_blade", { impact: true, playbackRate: 1.5 });
   }
 
   if (prevDuelAudioFrame.token && frame.token) {
@@ -361,14 +426,6 @@ function detectDuelAudioEdges(frame) {
   }
 
   prevDuelAudioFrame = frame;
-}
-
-function fireDuelGrunt(audio, side, char, kind) {
-  if (!char) return;
-  const now = performance.now();
-  if (kind !== "ko" && now - lastDuelGruntMs[side] < 400) return;
-  lastDuelGruntMs[side] = now;
-  audio.play(`grunt_${char}_${kind}`);
 }
 
 // --- module state ---
@@ -1264,6 +1321,11 @@ function bindControls() {
     refocusCanvas();
   });
   document.getElementById("duel-start")?.addEventListener("click", () => {
+    if (!getAudio().isEnabled() && localStorage.getItem("m3t4:audio:on") !== "off") {
+      getAudio().setEnabled(true);
+      const toggle = document.getElementById("duel-audio");
+      if (toggle) toggle.checked = true;
+    }
     startMatch();
     refocusCanvas();
   });

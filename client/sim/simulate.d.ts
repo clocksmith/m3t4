@@ -29,8 +29,16 @@ export declare function runBrainForWorld(w: World, brain: CompiledBrain, selfIdx
 export interface StepResult {
     matchWinner: -1 | 0 | 1;
     tick: number;
+    execution?: {
+        killer: 0 | 1;
+        victim: 0 | 1;
+        x: number;
+        y: number;
+    };
 }
-export declare function stepWorld(w: World, actA: Action, actB: Action): StepResult;
+export declare function stepWorld(w: World, actA: Action, actB: Action, options?: {
+    lethalSwings?: readonly [boolean, boolean];
+}): StepResult;
 /** Pull the current world state into a TraceFrame (for renderers). */
 export declare function worldToFrame(w: World): TraceFrame;
 export { STATS } from "./constants.js";

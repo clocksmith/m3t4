@@ -1065,9 +1065,12 @@ export function runBrainForWorld(w: World, brain: CompiledBrain, selfIdx: 0 | 1)
 export interface StepResult {
   matchWinner: -1 | 0 | 1;
   tick: number;
+  execution?: { killer: 0 | 1; victim: 0 | 1; x: number; y: number };
 }
 
-export function stepWorld(w: World, actA: Action, actB: Action): StepResult {
+// Explicit local sandbox option. Ranked simulation and network callers omit it.
+export function stepWorld(w: World, actA: Action, actB: Action,
+  options?: { lethalSwings?: readonly [boolean, boolean] }): StepResult {
   if (w.matchWinner !== -1) return { matchWinner: w.matchWinner, tick: w.tick };
   if (w.freeze > 0) {
     w.freeze -= STEP;
@@ -1108,11 +1111,24 @@ export function stepWorld(w: World, actA: Action, actB: Action): StepResult {
     return { matchWinner: w.matchWinner, tick: w.tick };
   }
   tickFighters(w, actA, actB);
-  resolveCombat(w);
+  let execution: StepResult['execution'];
+  const first = ((w.tick + Number(w.tickOrderFlip)) % 2) as 0 | 1;
+  for (const killer of [first, (1 - first) as 0 | 1]) {
+    const attacker = w.fighters[killer];
+    const victim = (1 - killer) as 0 | 1;
+    const target = w.fighters[victim];
+    if (options?.lethalSwings?.[killer] && !attacker.dead && !target.dead
+      && attacker.lastAttackStartTick === w.tick && attacker.swipeT > 0) {
+      execution = { killer, victim, x: target.x, y: target.y - STATS.bodyH * 0.28 };
+      killPlayer(w, victim, killer);
+      break;
+    }
+  }
+  if (!execution) resolveCombat(w);
   updateGold(w);
   updateRoundTimer(w);
   w.tick++;
-  return { matchWinner: w.matchWinner, tick: w.tick };
+  return { matchWinner: w.matchWinner, tick: w.tick, ...(execution ? { execution } : {}) };
 }
 
 function goalProgressFrame(w: World): { holdTicks?: number; holdRequiredTicks?: number } {

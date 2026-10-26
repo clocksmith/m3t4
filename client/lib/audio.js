@@ -158,7 +158,7 @@ function create() {
     next.loop = true;
     next.connect(nextGain);
     next.start();
-    nextGain.gain.linearRampToValueAtTime(0.45, now + CROSSFADE_S);
+    nextGain.gain.linearRampToValueAtTime(0.55, now + CROSSFADE_S);
     if (currentMusic) {
       const { source, gain } = currentMusic;
       gain.gain.linearRampToValueAtTime(0, now + CROSSFADE_S);

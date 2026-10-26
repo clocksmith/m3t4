@@ -91,7 +91,9 @@ function availableWeaponIds(body) {
 
 function defaultCosmetics(side) {
   const body = BODY_IDS[((side % BODY_IDS.length) + BODY_IDS.length) % BODY_IDS.length] ?? "sama";
-  return { body, weapon: availableWeaponIds(body)[0] };
+  const weapons = availableWeaponIds(body);
+  const weapon = weapons.length ? weapons[Math.floor(Math.random() * weapons.length)] : "gpu_server_blade";
+  return { body, weapon };
 }
 
 function normalizeCosmetics(value, side) {
@@ -150,7 +152,7 @@ function cycleFighterForSide(side) {
   const currentIndex = BODY_IDS.indexOf(current.body);
   const nextBody = BODY_IDS[((currentIndex + 1) % BODY_IDS.length + BODY_IDS.length) % BODY_IDS.length];
   const weapons = availableWeaponIds(nextBody);
-  const weapon = side === 1 && weapons.length > 1 ? weapons[1] : weapons[0];
+  const weapon = weapons.length ? weapons[Math.floor(Math.random() * weapons.length)] : "gpu_server_blade";
   state.cosmetics[side] = normalizeCosmetics({ body: nextBody, weapon }, side);
   state.world = null;
   state.spectating = false;
@@ -1303,7 +1305,9 @@ function bindCharacterSelect() {
 
     if (bodyButton) {
       const body = BODY_IDS.includes(bodyButton.dataset.body) ? bodyButton.dataset.body : defaultCosmetics(side).body;
-      state.cosmetics[side] = normalizeCosmetics({ body, weapon: availableWeaponIds(body)[0] }, side);
+      const weapons = availableWeaponIds(body);
+      const weapon = weapons.length ? weapons[Math.floor(Math.random() * weapons.length)] : "gpu_server_blade";
+      state.cosmetics[side] = normalizeCosmetics({ body, weapon }, side);
     } else if (weaponButton) {
       const current = normalizeCosmetics(state.cosmetics[side], side);
       const weapons = availableWeaponIds(current.body);

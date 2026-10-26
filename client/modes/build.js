@@ -67,7 +67,9 @@ function availableWeaponIds(body) {
 
 function defaultCosmetics(side) {
   const body = BODY_IDS[((side % BODY_IDS.length) + BODY_IDS.length) % BODY_IDS.length] ?? (side === 0 ? "sama" : "darrius");
-  return { body, weapon: availableWeaponIds(body)[0] };
+  const weapons = availableWeaponIds(body);
+  const weapon = weapons.length ? weapons[Math.floor(Math.random() * weapons.length)] : "worldcoin_orb_flail";
+  return { body, weapon };
 }
 
 function normalizeCosmetics(value, side) {
@@ -183,7 +185,7 @@ function cycleFighterForSlot(slot) {
   const currentIndex = BODY_IDS.indexOf(current.body);
   const nextBody = BODY_IDS[((currentIndex + 1) % BODY_IDS.length + BODY_IDS.length) % BODY_IDS.length];
   const weapons = availableWeaponIds(nextBody);
-  const weapon = weapons[0];
+  const weapon = weapons.length ? weapons[Math.floor(Math.random() * weapons.length)] : "worldcoin_orb_flail";
   slotCosmetics[slot] = normalizeCosmetics({ body: nextBody, weapon }, slot);
   if (slot === 0) {
     try { sessionStorage.setItem("m3t4:pendingCosmetics", JSON.stringify(slotCosmetics[0])); } catch {}
@@ -798,7 +800,9 @@ function wireSlot(root, slot) {
 
     if (bodyButton) {
       const body = BODY_IDS.includes(bodyButton.dataset.body) ? bodyButton.dataset.body : defaultCosmetics(slot).body;
-      slotCosmetics[slot] = normalizeCosmetics({ body, weapon: availableWeaponIds(body)[0] }, slot);
+      const weapons = availableWeaponIds(body);
+      const weapon = weapons.length ? weapons[Math.floor(Math.random() * weapons.length)] : "worldcoin_orb_flail";
+      slotCosmetics[slot] = normalizeCosmetics({ body, weapon }, slot);
     } else if (weaponButton) {
       const current = slotCosmetics[slot];
       const weapons = availableWeaponIds(current.body);

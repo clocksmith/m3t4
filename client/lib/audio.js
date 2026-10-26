@@ -19,6 +19,7 @@ const MUSIC_URL = (stage, variant) => `/assets/audio/stages/${stage}/${variant}/
 const IR_URL = (stage, variant) => `/assets/audio/stages/${stage}/${variant}/impact_ir.webm`;
 const CROSSFADE_S = 1.5;
 const ENABLED_KEY = "m3t4:audio:on";
+const MUSIC_GAIN = 0.825;
 
 const STAGE_VARIANT = {
   datacenter: "cold_aisle_chapel",
@@ -158,7 +159,7 @@ function create() {
     next.loop = true;
     next.connect(nextGain);
     next.start();
-    nextGain.gain.linearRampToValueAtTime(0.55, now + CROSSFADE_S);
+    nextGain.gain.linearRampToValueAtTime(MUSIC_GAIN, now + CROSSFADE_S);
     if (currentMusic) {
       const { source, gain } = currentMusic;
       gain.gain.linearRampToValueAtTime(0, now + CROSSFADE_S);

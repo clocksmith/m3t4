@@ -160,7 +160,7 @@ function create() {
     currentMusic = null;
   }
 
-  function play(cueId, { when = 0, impact = false, playbackRate = 1 } = {}) {
+  function play(cueId, { when = 0, impact = false, playbackRate = 1, volume = 1 } = {}) {
     if (!enabled || !sprite || !manifest) return null;
     const span = manifest[cueId];
     if (!span) return null;
@@ -171,6 +171,7 @@ function create() {
     src.buffer = sprite;
     src.playbackRate.value = Number.isFinite(playbackRate) ? Math.max(0.25, Math.min(2, playbackRate)) : 1;
     const gain = ctx.createGain();
+    if (Number.isFinite(volume) && volume >= 0) gain.gain.value = volume;
     src.connect(gain);
     const routeImpact = impact || cueId.startsWith("hit_");
     if (routeImpact) gain.connect(dry), gain.connect(wet);

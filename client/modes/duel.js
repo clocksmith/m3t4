@@ -29,7 +29,8 @@ import {
 } from "../sim/index.js";
 import { STAGES } from "../lib/public-sim.js";
 import { escapeHtml } from "../ui/html.js";
-import { buttonHtml } from "../ui/actions.js";
+import { getAudio, audioEnabledStored } from "../lib/audio.js";
+import { buttonHtml, toggleSwitchHtml } from "../ui/actions.js";
 import { contextCardHtml, pageHeaderHtml, disclosureHtml } from "../ui/shell.js";
 import presetRanking from "../data/preset-ranking.v1.json" with { type: "json" };
 import rosterCatalog from "../content/roster-catalog.v1.json" with { type: "json" };
@@ -289,11 +290,92 @@ function localOwnsStage() {
   return true;
 }
 
+const WEAPON_CLASS = {
+  worldcoin_orb_flail: "flail", backpack_maul: "maul", gpu_server_blade: "blade", heat_sink_greatsword: "greatsword",
+  rolled_constitution_bat: "bat", alignment_baton: "club", red_team_pike: "pike", guardrail_greatsword: "greatsword",
+  nobel_medal_flail: "flail", folded_chess_axe: "axe", go_board_maul: "maul", alphafold_blade: "blade",
+  sunscreen_bottle_club: "club", controller_nunchucks: "nunchucks", shareholder_sauce_club: "club", quest_flail: "flail",
+};
+
+let prevDuelAudioFrame = null;
+let lastDuelGruntMs = [0, 0];
+
+function detectDuelAudioEdges(frame) {
+  const audio = getAudio();
+  if (!audio.isEnabled() || !audio.ready) { prevDuelAudioFrame = frame; return; }
+  if (!prevDuelAudioFrame) { prevDuelAudioFrame = frame; return; }
+
+  const cosmetics = selectedCosmetics();
+  const chars = [cosmetics[0]?.body ?? "sama", cosmetics[1]?.body ?? "darrius"];
+  const weapons = [cosmetics[0]?.weapon ?? "gpu_server_blade", cosmetics[1]?.weapon ?? "alignment_baton"];
+
+  for (let i = 0; i < 2; i++) {
+    const key = i === 0 ? "p0" : "p1";
+    const prev = prevDuelAudioFrame[key];
+    const curr = frame[key];
+    if (!prev || !curr) continue;
+
+    if ((prev.swipeT ?? 0) <= 0 && (curr.swipeT ?? 0) > 0) {
+      const weapon = weapons[i];
+      const cls = WEAPON_CLASS[weapon] ?? "blade";
+      audio.play(`swipe_${cls}`);
+      fireDuelGrunt(audio, i, chars[i], "effort");
+    }
+    if ((prev.diveT ?? 0) <= 0 && (curr.diveT ?? 0) > 0) {
+      audio.play("dive_lunge");
+    }
+    if (prev.onGround && !curr.onGround && (curr.vy ?? 0) < -100 && (curr.diveT ?? 0) <= 0) {
+      audio.play("jump_boing");
+    }
+    if ((prev.hp ?? curr.hp ?? 0) > (curr.hp ?? 0)) {
+      const attacker = 1 - i;
+      const weapon = weapons[attacker];
+      const char = chars[attacker];
+      if (char && weapon) audio.play(`hit_${char}_${weapon}`, { impact: true });
+      fireDuelGrunt(audio, i, chars[i], "hurt");
+    }
+    if (!prev.dead && curr.dead) {
+      audio.play("ko_flatline");
+      fireDuelGrunt(audio, i, chars[i], "ko");
+    }
+  }
+
+  if (prevDuelAudioFrame.token && frame.token) {
+    if (!prevDuelAudioFrame.token.exists && frame.token.exists) {
+      audio.play("proof_spawn");
+    }
+    if (prevDuelAudioFrame.token.carrier === -1 && frame.token.carrier !== -1) {
+      audio.play("proof_acquired");
+    }
+  }
+  if (prevDuelAudioFrame.scoreboard && frame.scoreboard) {
+    if (frame.scoreboard[0] > prevDuelAudioFrame.scoreboard[0] || frame.scoreboard[1] > prevDuelAudioFrame.scoreboard[1]) {
+      audio.play("proof_delivered");
+    }
+  }
+  if (prevDuelAudioFrame.rounds && frame.rounds) {
+    if (frame.rounds[0] > prevDuelAudioFrame.rounds[0] || frame.rounds[1] > prevDuelAudioFrame.rounds[1]) {
+      audio.play("round_taken");
+    }
+  }
+
+  prevDuelAudioFrame = frame;
+}
+
+function fireDuelGrunt(audio, side, char, kind) {
+  if (!char) return;
+  const now = performance.now();
+  if (kind !== "ko" && now - lastDuelGruntMs[side] < 400) return;
+  lastDuelGruntMs[side] = now;
+  audio.play(`grunt_${char}_${kind}`);
+}
+
 // --- module state ---
 let state = null; // populated by mount()
 
 function freshState() {
   return {
+    matchEndFired: false,
     subMode: "vs-ai",
     stageId: STAGE_IDS.includes("datacenter") ? "datacenter" : STAGE_IDS[0],
     presetName: DEFAULT_PRESET,
@@ -476,6 +558,10 @@ function startMatch() {
   state.seed = freshSeed();
   state.matchWeaponMotionVersion=state.subMode==='p2p' ? (state.p2p?.weaponMotionVersion ?? 0) : 2;
   state.world = createStepperWorld({ stage, seed: state.seed, chars: selectedCharacters() });
+  state.matchEndFired = false;
+  const audio = getAudio();
+  audio.setStage(state.stageId ?? "datacenter");
+  audio.play("match_start");
   state.brainP2 = state.subMode === "vs-ai"
     ? compileBrain(STRATEGIES[state.presetName] ?? STRATEGIES[DEFAULT_PRESET])
     : null;
@@ -565,6 +651,12 @@ function step(nowMs) {
   if (state.accumMs > STEP_MS * MAX_CATCHUP_TICKS) {
     state.accumMs = STEP_MS * MAX_CATCHUP_TICKS;
   }
+  if (state.world.matchWinner !== -1 && !state.matchEndFired) {
+    state.matchEndFired = true;
+    const audio = getAudio();
+    audio.play("match_end_win");
+    audio.play("win_applause", { when: 0.25 });
+  }
   return worldToFrame(state.world);
 }
 
@@ -577,6 +669,7 @@ function loop() {
       : (step(performance.now()) ?? emptyFrame());
     maybePostSpectatorFrame(frame);
     state.renderer.drawFrame(stage, frame, labels());
+    detectDuelAudioEdges(frame);
     refreshHud(frame);
   }
   state.rafId = requestAnimationFrame(loop);
@@ -824,6 +917,7 @@ function controlsCardHtml() {
           opponent
           <select id="duel-preset">${presetOptions(state.presetName)}</select>
         </label>
+        <div class="watch-controls">${toggleSwitchHtml({ id: "duel-audio", label: "Audio", title: "Play sound effects and stage music", checked: audioEnabledStored() })}</div>
       </div>
 
       <div class="duel-row" id="duel-p2p-row" ${state.subMode === "p2p" ? "" : "hidden"}>
@@ -1035,6 +1129,7 @@ export function mount(root, ctx = {}) {
 }
 
 export function unmount() {
+  getAudio().stopMusic();
   removeEventListener("keydown", onKeyDown);
   removeEventListener("keyup", onKeyUp);
   removeEventListener("blur", onBlur);
@@ -1112,6 +1207,16 @@ function bindControls() {
     refocusCanvas();
     if (state.subMode === "p2p" && state.p2p?.linked && typeof state.p2p.broadcastStage === "function") {
       state.p2p.broadcastStage(state.stageId);
+    }
+    if (getAudio().isEnabled()) {
+      getAudio().setStage(state.stageId);
+    }
+  });
+  const audioToggle = document.getElementById("duel-audio");
+  audioToggle?.addEventListener("change", () => {
+    getAudio().setEnabled(audioToggle.checked);
+    if (audioToggle.checked) {
+      getAudio().setStage(state.stageId ?? "datacenter");
     }
   });
   const presetSel = document.getElementById("duel-preset");

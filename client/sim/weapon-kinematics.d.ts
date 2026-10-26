@@ -42,6 +42,7 @@ export interface WeaponSegment {
 }
 export declare function weaponProfile(f: Pick<KinematicPose, 'weapon' | 'weaponMotionVersion' | 'ch'>): WeaponProfile | undefined;
 export declare function attackDuration(f: Pick<KinematicPose, 'weapon' | 'weaponMotionVersion' | 'ch'>): number;
+export declare function attackCooldownLegacy(f: Pick<KinematicPose, 'weapon' | 'weaponMotionVersion' | 'ch'>): number;
 export declare function attackCooldown(f: Pick<KinematicPose, 'weapon' | 'weaponMotionVersion' | 'ch'>): number;
 export declare function attackProgress(f: KinematicPose): number;
 export declare function articulatedWeaponPose(f: KinematicPose): {

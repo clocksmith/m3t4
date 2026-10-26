@@ -10,7 +10,7 @@ import { PARAM_KEYS } from "./types.js";
 import { emptyFighterTelemetry } from "./types.js";
 import { swordHits, weaponHitSegments, weaponSegmentsClash } from "./combat-geometry.js";
 import { sweptCombatContact } from "./combat-sweep.js";
-import { attackDuration, attackCooldown } from "./weapon-kinematics.js";
+import { attackDuration, attackCooldown, attackCooldownLegacy } from "./weapon-kinematics.js";
 // ---------- Characters (body is visual; versioned weapon motion is explicit) ----------
 export const DEFAULT_CHARS = [
     { name: "Sama", label: "OpenAL", col: "#6ee7b7", trim: "#d1fae5", shadow: "#047857" },
@@ -185,7 +185,7 @@ function makeObs(self, opp, w) {
     };
 }
 // ---------- Fighter physics step ----------
-function startAttack(f, type, tick) {
+function startAttack(f, type, tick, w) {
     f.lastAttackStartTick = tick;
     if (type === "dive") {
         f.diveT = 0.28;
@@ -196,7 +196,7 @@ function startAttack(f, type, tick) {
     }
     else {
         f.swipeT = attackDuration(f);
-        f.swipeCD = attackCooldown(f);
+        f.swipeCD = w.rulesVersion < 2 ? attackCooldownLegacy(f) : attackCooldown(f);
         f.diveT = 0;
         if (!f.onGround)
             f.vy -= 60;
@@ -256,13 +256,14 @@ function tickFighter(f, opp, input, w) {
     if (!input.up && f.vy < -STATS.jump * STATS.jumpCut) {
         f.vy = -STATS.jump * STATS.jumpCut;
     }
-    // Attack state machine: committed animations finish before a new one
-    // can start. No mid-dive cancel via swipe, no re-swipe during swipe.
+    // Attack state machine: committed animations can be cancelled into a new
+    // swing halfway through. No mid-dive cancel via swipe.
     // Dive requires an explicit down-press while airborne — otherwise an
     // airborne attack is the upward aerial swipe.
-    if (input.action && f.stun <= 0 && f.diveT <= 0 && f.swipeT <= 0) {
-        if (!f.onGround && input.down && f.diveCD <= 0) {
-            startAttack(f, "dive", w.tick);
+    const canSwipe = w.rulesVersion < 2 ? f.swipeT <= 0 : f.swipeT <= attackDuration(f) * 0.5;
+    if (input.action && f.stun <= 0 && f.diveT <= 0) {
+        if (!f.onGround && input.down && f.diveCD <= 0 && f.swipeT <= 0) {
+            startAttack(f, "dive", w.tick, w);
             if (w.telemetry) {
                 const t = w.telemetry[f.id];
                 const m = w.brainStates[f.id].mode;
@@ -270,8 +271,8 @@ function tickFighter(f, opp, input, w) {
                 t.modeDives[m]++;
             }
         }
-        else if (f.swipeCD <= 0) {
-            startAttack(f, "swipe", w.tick);
+        else if (f.swipeCD <= 0 && canSwipe) {
+            startAttack(f, "swipe", w.tick, w);
             if (w.telemetry) {
                 const t = w.telemetry[f.id];
                 const m = w.brainStates[f.id].mode;

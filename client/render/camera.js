@@ -3,7 +3,7 @@ import { W, H } from './surface.js';
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 // Presentation only: fit both fighters and live objectives, then zoom up to
-// 25%. Derive framing from this frame so replay seeks need no camera history.
+// 15%. Derive framing from this frame so replay seeks need no camera history.
 export function arenaCamera(frame) {
   const bounds = [];
   for (const fighter of [frame?.p0, frame?.p1]) {
@@ -23,7 +23,7 @@ export function arenaCamera(frame) {
   const right = Math.max(...bounds.map(b => b.right));
   const top = Math.min(...bounds.map(b => b.top));
   const bottom = Math.max(...bounds.map(b => b.bottom));
-  const scale = Math.max(1, Math.min(1.25, (W - 32) / (right - left),
+  const scale = Math.max(1, Math.min(1.15, (W - 32) / (right - left),
     (H - 128) / (bottom - top)));
   // Bias subjects below the fixed HUD without exposing space outside the arena.
   const centerX = clamp((left + right) / 2, W / (2 * scale), W - W / (2 * scale));

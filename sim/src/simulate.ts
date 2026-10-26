@@ -52,7 +52,7 @@ import type {
 import { emptyFighterTelemetry } from "./types.js";
 import { swordHits, weaponHitSegments, weaponSegmentsClash } from "./combat-geometry.js";
 import { sweptCombatContact } from "./combat-sweep.js";
-import { attackDuration, attackCooldown } from "./weapon-kinematics.js";
+import { attackDuration, attackCooldown, attackCooldownLegacy } from "./weapon-kinematics.js";
 
 // ---------- Characters (body is visual; versioned weapon motion is explicit) ----------
 
@@ -265,7 +265,7 @@ function makeObs(self: Fighter, opp: Fighter, w: World): Observation {
 
 // ---------- Fighter physics step ----------
 
-function startAttack(f: Fighter, type: "swipe" | "dive", tick: number): void {
+function startAttack(f: Fighter, type: "dive" | "swipe", tick: number, w: World): void {
   f.lastAttackStartTick = tick;
   if (type === "dive") {
     f.diveT = 0.28;
@@ -275,7 +275,7 @@ function startAttack(f: Fighter, type: "swipe" | "dive", tick: number): void {
     f.vx *= STATS.diveDrift;
   } else {
     f.swipeT = attackDuration(f);
-    f.swipeCD = attackCooldown(f);
+    f.swipeCD = w.rulesVersion < 2 ? attackCooldownLegacy(f) : attackCooldown(f);
     f.diveT = 0;
     if (!f.onGround) f.vy -= 60;
   }
@@ -338,21 +338,22 @@ function tickFighter(f: Fighter, opp: Fighter, input: Action, w: World): void {
     f.vy = -STATS.jump * STATS.jumpCut;
   }
 
-  // Attack state machine: committed animations finish before a new one
-  // can start. No mid-dive cancel via swipe, no re-swipe during swipe.
+  // Attack state machine: committed animations can be cancelled into a new
+  // swing halfway through. No mid-dive cancel via swipe.
   // Dive requires an explicit down-press while airborne — otherwise an
   // airborne attack is the upward aerial swipe.
-  if (input.action && f.stun <= 0 && f.diveT <= 0 && f.swipeT <= 0) {
-    if (!f.onGround && input.down && f.diveCD <= 0) {
-      startAttack(f, "dive", w.tick);
+  const canSwipe = w.rulesVersion < 2 ? f.swipeT <= 0 : f.swipeT <= attackDuration(f) * 0.5;
+  if (input.action && f.stun <= 0 && f.diveT <= 0) {
+    if (!f.onGround && input.down && f.diveCD <= 0 && f.swipeT <= 0) {
+      startAttack(f, "dive", w.tick, w);
       if (w.telemetry) {
         const t = w.telemetry[f.id];
         const m = w.brainStates[f.id].mode;
         t.dives++;
         t.modeDives[m]++;
       }
-    } else if (f.swipeCD <= 0) {
-      startAttack(f, "swipe", w.tick);
+    } else if (f.swipeCD <= 0 && canSwipe) {
+      startAttack(f, "swipe", w.tick, w);
       if (w.telemetry) {
         const t = w.telemetry[f.id];
         const m = w.brainStates[f.id].mode;

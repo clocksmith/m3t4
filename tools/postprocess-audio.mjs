@@ -133,9 +133,23 @@ function processMusic(inputPath) {
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   const targetLUFS = doc.meta.format.targetLUFS.music;
   const peakCeil = doc.meta.format.peakCeilingDb;
+  // A dynamic normalizer changes gain through the song and can leave the two
+  // sides of a seamless loop at different levels. Measure once, then apply
+  // one constant gain to the entire score, bounded by its true peak.
+  const measured = spawnSync("ffmpeg", [
+    "-hide_banner", "-nostats", "-i", inputPath,
+    "-af", `loudnorm=I=${targetLUFS}:TP=${peakCeil}:LRA=11:print_format=json`,
+    "-f", "null", "-",
+  ], { encoding: "utf8" });
+  if (measured.status !== 0) fail(`music loudness measurement failed: ${inputPath}`);
+  const stats = JSON.parse(measured.stderr.match(/\{[^{}]*"input_i"[^{}]*\}/s)?.[0] ?? "{}");
+  const integrated = Number(stats.input_i);
+  const peak = Number(stats.input_tp);
+  if (!Number.isFinite(integrated) || !Number.isFinite(peak)) fail(`invalid music loudness: ${inputPath}`);
+  const gainDb = Math.min(targetLUFS - integrated, peakCeil - peak);
   run([
     "ffmpeg", "-y", "-loglevel", "error", "-i", inputPath,
-    "-af", `loudnorm=I=${targetLUFS}:TP=${peakCeil}:LRA=11`,
+    "-af", `volume=${gainDb}dB`,
     "-c:a", "libopus", "-b:a", "128k", "-ac", "2", "-ar", "48000",
     outPath,
   ]);

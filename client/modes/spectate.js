@@ -1413,7 +1413,8 @@ function detectAudioEdges(frame) {
     }
 
     // 5. Footsteps while running on ground
-    const isRunning = curr.onGround && Math.abs(curr.vx ?? 0) > 60 && (curr.swipeT ?? 0) <= 0 && (curr.diveT ?? 0) <= 0 && !curr.dead;
+    const moved = Math.abs((curr.x ?? 0) - (prev.x ?? 0)) > 0.1;
+    const isRunning = moved && curr.onGround && (curr.stun ?? 0) <= 0 && Math.abs(curr.vx ?? 0) > 60 && (curr.swipeT ?? 0) <= 0 && (curr.diveT ?? 0) <= 0 && !curr.dead;
     if (isRunning && now - lastFootstepMs[i] > 180) {
       lastFootstepMs[i] = now;
       const stepCue = (footstepStep[i]++ % 2 === 0) ? "footstep_a" : "footstep_b";

@@ -1,6 +1,6 @@
 {
   "meta": {
-    "version": "1.3.0",
+    "version": "1.4.0",
     "theme": "Post-Revenue Delivery Ritual",
     "audioTone": "dry boardroom apocalypse, underplayed cruelty, no wink-to-camera jokes. nothing cinematic, nothing anime, nothing triumphant. institutional ambience over music. impact over juice on sfx. vocal grunts are sparse and reluctant — nobody is performing effort for the camera.",
     "boundary": "Audio assets only: batched sfx prompts, stage music prompts, impact-IR prompts, sprite-pack layout, and post-process directives. No gameplay rules, runtime selection, or HUD copy.",
@@ -9,7 +9,7 @@
       "codec": "opus",
       "sampleRate": 48000,
       "channels": { "sfx": 1, "music": 2 },
-      "targetLUFS": { "sfx": -14, "music": -20 },
+      "targetLUFS": { "sfx": -14, "music": -23 },
       "peakCeilingDb": -1.0
     },
     "generationModel": "57 discrete sfx cues are produced by only 15 text-to-audio generations: each 'batch' prompt asks the model to render several related cues back-to-back in one wav file, separated by a fixed silence gap. The post-processor splits the raw wav on silence boundaries, then re-concats everything into the final single-file sprite in spritePack.order. Fewer model calls, higher tonal coherence across related cues, and a single reusable slice pipeline."
@@ -211,23 +211,23 @@
     "datacenter": {
       "cold_aisle_chapel": {
         "out": "assets/audio/stages/datacenter/cold_aisle_chapel/music.webm",
-        "durationSec": 48,
+        "durationSec": 120,
         "loop": true,
-        "prompt": "a 48-second seamless ambient loop for a server room rendered as a chapel. constant low blower drone around 55-80 Hz, a steady fluorescent ballast hum near 120 Hz that never varies, faint intermittent hard-drive chatter as micro-percussive texture (not rhythmic). no melody. no chord progression. no drums. no pad swells. stereo field narrow and cold. the first 500ms and last 500ms must share identical spectral content so the loop seam is inaudible; do not fade in or out, and do not place a transient near either boundary. mixed with substantial air (~-22 LUFS)."
+        "prompt": "120-second D minor loop at 96 BPM, 48 whole bars. Soft glassy bells, slow rounded bass, restrained electronic percussion and quiet sustained chords. Two-note phrases with deliberate rests; an eight-bar breakdown clears the lead and most drums. A sustained tonic bridges the loop without an attack at the seam. Background score at -23 LUFS; leave combat effects in front."
       }
     },
     "boardroom": {
       "fiduciary_basement": {
         "out": "assets/audio/stages/boardroom/fiduciary_basement/music.webm",
-        "durationSec": 56,
+        "durationSec": 128,
         "loop": true,
-        "prompt": "a 56-second seamless ambient loop for a basement-level corporate boardroom. foundation is an HVAC rumble around 40-60 Hz, a slow breathing low-frequency oscillation (one cycle every ~8 seconds) like a compressor cycling. no melody, no chord progression, no drums. add very sparse, slightly detuned long-held tones (cello or sine, 2-3 per loop, each 6-10 seconds, always dissonant to the last one by a minor second or tritone). stereo width narrow. boundaries: first 750ms matches last 750ms spectrally and phase-continuously; no transient near either end. target ~-22 LUFS."
+        "prompt": "128-second A minor loop at 90 BPM, 48 whole bars. Warm electric keys over a relaxed syncopated bass and soft brushed percussion. Three-note phrases use chord tones, leave every fourth bar empty, and pause during eight-bar breakdowns. No constant square-wave lead or sixteenth-note hats. A sustained tonic bridges the seam. Background score at -23 LUFS."
       }
     },
     "demoday": {
       "demo_day_afterparty": {
         "out": "assets/audio/stages/demoday/demo_day_afterparty/music.webm",
-        "durationSec": 64,
+        "durationSec": 128,
         "loop": true,
         "prompt": "a 64-second seamless loop for a stage whose art depicts the hour after a tech conference ends. the sound is muffled dance music bleeding through a closed door from two rooms away — heavily low-pass filtered (cutoff ~400 Hz), side-chained slightly so a ghost of the kick pattern is detectable but never fully audible. tempo around 122 BPM so it tiles the 64s window in an integer number of bars. over the bleed, add faint HVAC drone and distant intermittent voice murmurs (no intelligible words). feels like 'the party is ending and you are not in the room where it happened'. seam boundaries identical; integer bar count so the kick pulse is phase-continuous across the seam. target ~-22 LUFS."
       }

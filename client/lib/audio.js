@@ -55,9 +55,20 @@ function create() {
   let irCache = new Map();
   let currentMusic = null;     // { source, gain, key }
   let currentStage = null;
+  let stageRequest = 0;
   let enabled = audioEnabledStored();
   let bootPromise = null;
   const loopSources = new Map();
+
+  // A remembered "on" preference still needs a fresh browser gesture after
+  // reload. Resume the same context and load the sprite on that interaction.
+  function resumeOnGesture() {
+    if (!enabled || !ensureContext()) return;
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    boot();
+  }
+  window.addEventListener("pointerdown", resumeOnGesture, { capture: true, passive: true });
+  window.addEventListener("keydown", resumeOnGesture, { capture: true });
 
   function ensureContext() {
     if (ctx) return ctx;
@@ -99,10 +110,11 @@ function create() {
     enabled = !!on;
     try { localStorage.setItem(ENABLED_KEY, enabled ? "on" : "off"); } catch {}
     if (!enabled) {
+      stageRequest++;
       if (master) master.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
       return;
     }
-    ensureContext();
+    if (!ensureContext()) return;
     if (ctx.state === "suspended") ctx.resume().catch(() => {});
     master.gain.setTargetAtTime(1, ctx.currentTime, 0.05);
     boot();
@@ -113,6 +125,7 @@ function create() {
 
   async function setStage(stage) {
     currentStage = stage;
+    const request = ++stageRequest;
     if (!enabled || !ensureContext()) return;
     const variant = STAGE_VARIANT[stage];
     if (!variant) return;
@@ -120,7 +133,10 @@ function create() {
     const [musicBuf, irBuf] = await Promise.all([
       cacheGet(musicCache, key, () => fetchBuffer(MUSIC_URL(stage, variant), ctx)),
       cacheGet(irCache, key, () => fetchBuffer(IR_URL(stage, variant), ctx)),
+      boot(),
     ]);
+    // Slow downloads must not replace a newer stage or restart a stopped page.
+    if (request !== stageRequest || !enabled) return;
     if (irBuf) {
       convolver.buffer = irBuf;
       const wetDb = STAGE_WET_DB[stage] ?? -10;
@@ -142,7 +158,7 @@ function create() {
     next.loop = true;
     next.connect(nextGain);
     next.start();
-    nextGain.gain.linearRampToValueAtTime(0.6, now + CROSSFADE_S);
+    nextGain.gain.linearRampToValueAtTime(0.45, now + CROSSFADE_S);
     if (currentMusic) {
       const { source, gain } = currentMusic;
       gain.gain.linearRampToValueAtTime(0, now + CROSSFADE_S);
@@ -152,6 +168,8 @@ function create() {
   }
 
   function stopMusic() {
+    stageRequest++;
+    currentStage = null;
     if (!currentMusic || !ctx) return;
     const now = ctx.currentTime;
     const { source, gain } = currentMusic;

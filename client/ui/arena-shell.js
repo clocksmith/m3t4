@@ -74,7 +74,7 @@ export function mountArenaShell(root, { title, canvas, frame = null, actions = [
   frame ??= doc.createElement('div'); frame.classList.add('arena-frame');
   if (!frame.contains(canvas)) frame.append(canvas);
   const touch = page.querySelector('#duel-touch-controls');
-  if (touch) frame.append(touch);
+  if (touch) viewport.append(touch);
   page.querySelector('#duel-touch-setup')?.remove();
   const audioPrompt = doc.createElement('button');
   audioPrompt.type = 'button';

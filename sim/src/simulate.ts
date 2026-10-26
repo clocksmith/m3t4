@@ -275,7 +275,7 @@ function startAttack(f: Fighter, type: "dive" | "swipe", tick: number, w: World)
     f.vx *= STATS.diveDrift;
   } else {
     f.swipeT = attackDuration(f);
-    f.swipeCD = w.rulesVersion < 2 ? attackCooldownLegacy(f) : attackCooldown(f);
+    f.swipeCD = w.rulesVersion <= 2 ? attackCooldownLegacy(f) : attackCooldown(f);
     f.diveT = 0;
     if (!f.onGround) f.vy -= 60;
   }
@@ -342,7 +342,7 @@ function tickFighter(f: Fighter, opp: Fighter, input: Action, w: World): void {
   // swing halfway through. No mid-dive cancel via swipe.
   // Dive requires an explicit down-press while airborne — otherwise an
   // airborne attack is the upward aerial swipe.
-  const canSwipe = w.rulesVersion < 2 ? f.swipeT <= 0 : f.swipeT <= attackDuration(f) * 0.5;
+  const canSwipe = w.rulesVersion <= 2 ? f.swipeT <= 0 : f.swipeT <= attackDuration(f) * 0.5;
   if (input.action && f.stun <= 0 && f.diveT <= 0) {
     if (!f.onGround && input.down && f.diveCD <= 0 && f.swipeT <= 0) {
       startAttack(f, "dive", w.tick, w);
@@ -649,7 +649,7 @@ function killPlayer(w: World, vid: 0 | 1, kid: 0 | 1): void {
   if (w.gold.carrier === vid) {
     w.gold.carrier = kid;
     w.gold.dwellT = 0; // steal resets the dwell accumulator
-    if (w.rulesVersion === 2) w.gold.dwellTicks = 0;
+    if (w.rulesVersion >= 2) w.gold.dwellTicks = 0;
     if (w.goal) w.goal.timer = Math.min(GOAL_TIMER_START, w.goal.timer + 1.5);
   }
 }
@@ -716,11 +716,11 @@ function updateGold(w: World): void {
       }
     } else {
       w.gold.dwellT = 0;
-      if (w.rulesVersion === 2) w.gold.dwellTicks = 0;
+      if (w.rulesVersion >= 2) w.gold.dwellTicks = 0;
     }
   } else {
     w.gold.dwellT = 0;
-    if (w.rulesVersion === 2) w.gold.dwellTicks = 0;
+    if (w.rulesVersion >= 2) w.gold.dwellTicks = 0;
   }
 }
 

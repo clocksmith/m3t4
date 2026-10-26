@@ -36,7 +36,7 @@ export declare const ROUNDS_TO_WIN_MATCH = 2;
 export declare const TIMEOUT_TIEBREAK = "round-score-kills-v1";
 export declare const GOAL_TIMER_START = 10;
 export declare const ROUND_TIMER_MAX_TICKS: number;
-export declare const RULES_VERSION = 2;
+export declare const RULES_VERSION = 3;
 export declare const LEGACY_GOAL_DWELL_S = 0.12;
 export declare const GOAL_DWELL_TICKS = 120;
 export declare const GOAL_DWELL_S: number;

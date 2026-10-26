@@ -10,7 +10,7 @@ import { chromium } from "playwright";
 
 const root = fileURLToPath(new URL("../client/", import.meta.url));
 const output = await fs.mkdtemp(path.join(os.tmpdir(), "m3t4-ui-smoke-"));
-const mime = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".css": "text/css", ".png": "image/png", ".webp": "image/webp", ".svg": "image/svg+xml" };
+const mime = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".json": "application/json", ".css": "text/css", ".png": "image/png", ".webp": "image/webp", ".svg": "image/svg+xml" };
 const server = http.createServer(async (req, res) => {
   try {
     let file = decodeURIComponent(new URL(req.url, "http://local").pathname);
@@ -99,8 +99,8 @@ async function inspectSprites(page) {
       if (img.src?.endsWith("/sprite.png")) draws.push({ src: img.src, row: Math.floor(args[1] / 64), sourceX: args[0], sourceY: args[1], width: args[2], height: args[3], drawWidth: args[6], drawHeight: args[7], facing: Math.sign(ctx.getTransform().a), upright: ctx.getTransform().d > 0, smoothing: ctx.imageSmoothingEnabled });
       nativeDraw(img, ...args);
     };
-    const fighter = { x: 450, y: 420, vx: 0, vy: 0, onGround: true, wall: 0, facing: 1, stun: 0, swipeT: 0, diveT: 0, lastClashTick: -9999, dead: false };
-    const frame = { tick: 500, roundStartTick: 0, p0: { ...fighter }, p1: { ...fighter, x: 850, facing: -1 }, token: { exists: false, carrier: -1 }, goal: { exists: false }, scoreboard: [0, 0], rounds: [0, 0] };
+    const fighter = { x: 450, y: 420, vx: 0, vy: 0, onGround: true, wall: 0, facing: 1, stun: 0, swipeT: 0, diveT: 0, lastClashTick: -9999, dead: false, rig: false };
+    const frame = { tick: 0, roundStartTick: 0, p0: { ...fighter }, p1: { ...fighter, x: 850, facing: -1 }, token: { exists: false, carrier: -1 }, goal: { exists: false }, scoreboard: [0, 0], rounds: [0, 0] };
     try {
       for (const body of ["sama", "darrius", "demis", "mark"]) {
         const labels = { p1: body, p2: body, cosmetics: [{ body }, { body }] };
@@ -109,6 +109,7 @@ async function inspectSprites(page) {
           ["run", { onGround: true, wall: 0, vx: 100, vy: 0 }, 1, [1, -1]],
           ["wall-slide", { onGround: false, vx: 0, vy: 100 }, 4, [-1, 1]],
         ]) {
+          frame.tick = 0;
           Object.assign(frame.p0, patch, { facing: 1, wall: pose === "wall-slide" ? -1 : 0 });
           Object.assign(frame.p1, patch, { facing: -1, wall: pose === "wall-slide" ? 1 : 0 });
           for (let attempt = 0; attempt < 100; attempt++) {
@@ -118,7 +119,6 @@ async function inspectSprites(page) {
             await new Promise(resolve => setTimeout(resolve, 20));
           }
           rows.push({ body, pose, expectedRow: row, expectedFacing, draws });
-          frame.tick += 20;
         }
       }
     } finally { teardown(); panel.remove(); }
@@ -134,7 +134,7 @@ try {
     await page.addInitScript(() => {
       const nativeDraw = CanvasRenderingContext2D.prototype.drawImage;
       CanvasRenderingContext2D.prototype.drawImage = function (img, ...args) {
-        if (img.src?.endsWith("/sprite.png")) window.uiSmokeSpriteDraws = (window.uiSmokeSpriteDraws || 0) + 1;
+        if (img.src?.includes("/sprite.png") || img.src?.includes("/chars/rig-v1/")) window.uiSmokeSpriteDraws = (window.uiSmokeSpriteDraws || 0) + 1;
         return nativeDraw.call(this, img, ...args);
       };
       const nativeText = CanvasRenderingContext2D.prototype.fillText;
@@ -159,8 +159,9 @@ try {
     assert.equal(requests.some(url => /\/render\/(webgpu|webgl)\.js$|\/modes\/intro\.js$/.test(url)), false, "unused modes and renderers are lazy");
     const backing = await page.locator("canvas").evaluate(c => ({ width: c.width, height: c.height, cssWidth: c.getBoundingClientRect().width }));
     if (width === 390) assert.equal(backing.width * backing.height, 1280 * 720);
-    if (width === 390) await page.waitForFunction(() => performance.getEntriesByType("resource").some(r => r.name.endsWith("/layers/sky.png")));
     await page.screenshot({ path: path.join(output, `workshop-${width}.png`), fullPage: true });
+
+    await page.locator('#arena-settings').click();
 
     const advanced = page.locator('[data-knobs="0"] .knobs-advanced');
     await advanced.locator("summary").focus();
@@ -170,6 +171,7 @@ try {
     await trait.fill("23");
     await advanced.locator("summary").click();
     assert.equal(await trait.inputValue(), "23");
+    await page.locator('[data-dialog-close]').click();
     const seed = await page.locator("#build-stat-seed").textContent();
     await page.locator("#test-resim").click();
     assert.equal(await page.locator("#build-stat-seed").textContent(), seed, "retesting holds seed fixed");
@@ -177,6 +179,7 @@ try {
     assert.equal(await trait.inputValue(), "23", "home alias preserves editor state");
 
     // A controlled failed preset request must not overwrite the authored build.
+    await page.locator('#arena-settings').click();
     await page.locator('label[data-mode="preset"]').first().click();
     await page.waitForFunction(() => document.querySelector("#build-stat-server")?.textContent === "failed");
     await page.locator('label[data-mode="user"]').first().click();
@@ -215,8 +218,8 @@ try {
     const sprites = await inspectSprites(page);
     for (const row of sprites) {
       assert.equal(row.draws.length, 2, `${row.body} ${row.pose}: both sprites loaded`);
-      assert.deepEqual(row.draws.map(d => d.row), [row.expectedRow, row.expectedRow]);
-      assert.deepEqual(row.draws.map(d => d.facing), row.expectedFacing);
+      assert.deepEqual(row.draws.map(d => d.row), [row.expectedRow, row.expectedRow], `${row.body} ${row.pose}: row`);
+      assert.deepEqual(row.draws.map(d => d.facing), row.expectedFacing, `${row.body} ${row.pose}: facing actual=${JSON.stringify(row.draws.map(d => d.facing))} expected=${JSON.stringify(row.expectedFacing)}`);
       assert.ok(row.draws.every(d => d.upright && !d.smoothing && d.width === 62 && d.height === 62 && d.width === d.drawWidth && d.height === d.drawHeight && d.sourceX % 64 === 1 && d.sourceY % 64 === 1));
     }
     assert.deepEqual(errors, [], "browser page errors");

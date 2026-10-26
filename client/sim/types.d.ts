@@ -105,7 +105,7 @@ export interface Goal {
     label: string;
     timer: number;
 }
-export type RulesVersion = 0 | 1 | 2;
+export type RulesVersion = 0 | 1 | 2 | 3;
 export interface Gold {
     carrier: 0 | 1;
     x: number;

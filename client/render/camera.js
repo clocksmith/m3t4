@@ -71,7 +71,8 @@ export function createArenaCamera() {
         Object.assign(aim, desired);
         velocity.scale = velocity.cx = velocity.cy = 0;
       }
-      const dt = lastTime === null ? 0 : clamp((nowMs - lastTime) / 1000, 0, 0.05);
+      // Keep real elapsed time down to 10 FPS on phones; cap background gaps.
+      const dt = lastTime === null ? 0 : clamp((nowMs - lastTime) / 1000, 0, 0.1);
       lastTime = nowMs;
       // Ignore tiny target fluctuations instead of making the scenery breathe.
       for (const key of ['scale', 'cx', 'cy']) {

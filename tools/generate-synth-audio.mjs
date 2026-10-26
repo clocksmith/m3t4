@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Synthesizes retro N64 / SNES / Street Fighter style audio assets for m3t4:
 // - Batched SFX WAVs in generations/raw/audio/batches/
+// Use --music-only to keep the existing SFX and impact IRs unchanged.
 // - Stage music loops in generations/raw/audio/stages/<stage>/<variant>/music.wav
 // - Stage impact IRs in generations/raw/audio/stages/<stage>/<variant>/impact_ir.wav
 //
@@ -474,119 +475,127 @@ function assembleBatchWav(cueArrays) {
   return makeWav(combined, SAMPLE_RATE, 1);
 }
 
-// --- Multi-track 16-Bit SNES / N64 Music Synthesizer ---
+// --- Stage scores: restrained, bar-aligned arrangements with breathing room ---
+// Notes are rendered into a circular buffer, so releases crossing the boundary
+// continue at the start. A sustained tonic bridges the last and first bars.
+function synthMusicTrack({ stage, durationSec, bpm }) {
+  const samples = Math.round(durationSec * SAMPLE_RATE);
+  const stereo = new Float32Array(samples * 2);
+  const beatSec = 60 / bpm;
+  const bars = Math.round(durationSec / (beatSec * 4));
+  if (Math.abs(bars * beatSec * 4 - durationSec) > 1e-6) {
+    throw new Error(`Music must contain whole bars: ${stage}`);
+  }
+  const scores = {
+    datacenter: {
+      // D minor: glassy bells, slow bass, sparse electronic percussion.
+      chords: [[50, 53, 57], [46, 50, 53], [53, 57, 60], [48, 52, 55]],
+      voice: "bell", pan: -0.2, seed: 17,
+      motif: [[0, 0], [2.5, 2]],
+    },
+    boardroom: {
+      // A minor: warm electric keys and a relaxed, syncopated bass.
+      chords: [[57, 60, 64, 67], [53, 57, 60, 64], [48, 52, 55, 59], [55, 59, 62, 64]],
+      voice: "keys", pan: 0.15, seed: 31,
+      motif: [[0.5, 1], [2, 2], [3.5, 0]],
+    },
+    demoday: {
+      // E minor: rounded arcade plucks; a faster beat, without a constant lead.
+      chords: [[52, 55, 59], [48, 52, 55], [55, 59, 62], [50, 54, 57]],
+      voice: "pluck", pan: 0, seed: 53,
+      motif: [[0, 2], [1.5, 1], [3, 0]],
+    },
+  };
+  const score = scores[stage];
+  let noiseState = score.seed;
+  const noise = () => {
+    noiseState = (Math.imul(noiseState, 1664525) + 1013904223) >>> 0;
+    return (noiseState / 4294967296) * 2 - 1;
+  };
 
-// Composes a seamless, high-energy 16-bit arcade fighting game track
-function synthMusicTrack({ stage = "datacenter", durationSec = 48, bpm = 120 }) {
-  const numSamples = Math.round(durationSec * SAMPLE_RATE);
-  // Stereo interleaved samples: left, right, left, right...
-  const stereo = new Float32Array(numSamples * 2);
-
-  const secondsPerBeat = 60 / bpm;
-  const secondsPerBar = secondsPerBeat * 4;
-  const totalBars = Math.round(durationSec / secondsPerBar);
-
-  // Scales & Chords per stage
-  let chordProgression = [];
-  if (stage === "datacenter") {
-    // D minor arcade battle theme (Ryu/Ken style)
-    chordProgression = [
-      { bass: 73.42, root: 146.83, chord: [220, 261.63, 293.66] }, // Dm (D, F, A)
-      { bass: 58.27, root: 116.54, chord: [233.08, 293.66, 349.23] }, // Bb
-      { bass: 65.41, root: 130.81, chord: [261.63, 329.63, 392.00] }, // C
-      { bass: 55.00, root: 110.00, chord: [220, 261.63, 329.63] },   // Am
-    ];
-  } else if (stage === "boardroom") {
-    // A minor funk groove (Guile stage style)
-    chordProgression = [
-      { bass: 55.00, root: 110.00, chord: [220, 261.63, 329.63, 392] }, // Am7
-      { bass: 65.41, root: 130.81, chord: [261.63, 329.63, 392, 440] }, // Cmaj7
-      { bass: 73.42, root: 146.83, chord: [293.66, 349.23, 440, 523.25] }, // Dm7
-      { bass: 49.00, root: 98.00,  chord: [196, 246.94, 293.66, 349.23] }, // G7
-    ];
-  } else {
-    // E minor fast battle climax (Vega / Chun-Li style)
-    chordProgression = [
-      { bass: 82.41, root: 164.81, chord: [246.94, 329.63, 392.00] }, // Em
-      { bass: 65.41, root: 130.81, chord: [261.63, 329.63, 392.00] }, // C
-      { bass: 73.42, root: 146.83, chord: [293.66, 369.99, 440.00] }, // D
-      { bass: 61.74, root: 123.47, chord: [246.94, 293.66, 369.99] }, // Bm
-    ];
+  function addNote(startBeat, beats, midi, voice, level, pan = 0) {
+    const start = Math.round(startBeat * beatSec * SAMPLE_RATE);
+    const length = Math.round(beats * beatSec * SAMPLE_RATE);
+    // Quantized frequencies make the boundary-spanning pad phase-periodic.
+    const frequency = Math.round(440 * 2 ** ((midi - 69) / 12) * durationSec) / durationSec;
+    const left = Math.sqrt((1 - pan) / 2);
+    const right = Math.sqrt((1 + pan) / 2);
+    for (let j = 0; j < length; j++) {
+      const t = j / SAMPLE_RATE;
+      const phase = 2 * Math.PI * frequency * t;
+      const attack = Math.min(1, t / (voice === "pad" ? 0.3 : 0.012));
+      const release = Math.min(1, (length - 1 - j) / (SAMPLE_RATE * (voice === "pad" ? 0.4 : 0.06)));
+      let wave;
+      if (voice === "pad") wave = Math.sin(phase) + 0.12 * Math.sin(phase * 2);
+      else if (voice === "bass") wave = (Math.sin(phase) + 0.15 * Math.sin(phase * 2)) * Math.exp(-t * 2.2);
+      else if (voice === "bell") wave = (Math.sin(phase) + 0.22 * Math.sin(phase * 3) * Math.exp(-t * 5)) * Math.exp(-t * 3);
+      else if (voice === "keys") wave = (Math.sin(phase) + 0.24 * Math.sin(phase * 2) + 0.08 * Math.sin(phase * 4)) * Math.exp(-t * 2);
+      else wave = (Math.sin(phase) + 0.2 * Math.sin(phase * 3) + 0.06 * Math.sin(phase * 5)) * Math.exp(-t * 4);
+      const value = wave * attack * release * level;
+      const index = ((start + j) % samples + samples) % samples;
+      stereo[index * 2] += value * left;
+      stereo[index * 2 + 1] += value * right;
+    }
   }
 
-  // Pre-generate periodic loop
-  let leadPhase = 0;
-  let bassPhase = 0;
+  function drum(startBeat, kind, level) {
+    const seconds = kind === "kick" ? 0.22 : kind === "brush" ? 0.12 : 0.035;
+    const length = Math.round(seconds * SAMPLE_RATE);
+    const start = Math.round(startBeat * beatSec * SAMPLE_RATE);
+    for (let j = 0; j < length; j++) {
+      const t = j / SAMPLE_RATE;
+      const attack = Math.min(1, t / 0.002);
+      const release = Math.min(1, (length - 1 - j) / (SAMPLE_RATE * 0.01));
+      const wave = kind === "kick"
+        ? Math.sin(2 * Math.PI * (48 * t + 3 * (1 - Math.exp(-t * 28)))) * Math.exp(-t * 22)
+        : noise() * Math.exp(-t * (kind === "brush" ? 42 : 180));
+      const index = (start + j) % samples;
+      const value = wave * attack * release * level;
+      stereo[index * 2] += value * 0.707;
+      stereo[index * 2 + 1] += value * 0.707;
+    }
+  }
 
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / SAMPLE_RATE;
-    const barIndex = Math.floor(t / secondsPerBar) % chordProgression.length;
-    const currentChord = chordProgression[barIndex];
-    const beatTime = (t % secondsPerBeat) / secondsPerBeat;
-    const barTime = (t % secondsPerBar) / secondsPerBar;
-    const sixteenth = Math.floor((t % secondsPerBeat) * 4);
+  // One tonic chord bridges the seam. No attack or percussion at the join.
+  for (const note of score.chords[0]) {
+    addNote(bars * 4 - 2, 4, note + 12, "pad", 0.028, score.pan);
+  }
+  for (let bar = 0; bar < bars; bar++) {
+    const start = bar * 4;
+    const chord = score.chords[Math.floor(bar / 2) % score.chords.length];
+    const section = Math.floor(bar / 8);
+    const breakdown = section % 4 === 2;
+    const edge = bar === 0 || bar === bars - 1;
+    const padStart = bar === 0 ? 2 : 0;
+    const padBeats = edge ? 2 : 4;
+    for (let i = 0; i < chord.length; i++) {
+      addNote(start + padStart, padBeats, chord[i] + 12, "pad", 0.018, (i % 2 ? 0.35 : -0.35));
+    }
+    if (edge) continue;
 
-    // 1. Kick Drum (beats 0 and 2 of 4-beat bar)
-    const beatInBar = Math.floor(barTime * 4);
-    const kick = (beatInBar === 0 || beatInBar === 2)
-      ? Math.sin(2 * Math.PI * (130 * Math.exp(-beatTime * 18)) * t) * Math.exp(-beatTime * 14) * 0.65
-      : 0;
-
-    // 2. Snare Drum (beats 1 and 3 of 4-beat bar)
-    const snare = (beatInBar === 1 || beatInBar === 3)
-      ? (whiteNoise() * 0.45 + Math.sin(2 * Math.PI * 180 * t) * 0.3) * Math.exp(-beatTime * 10) * 0.6
-      : 0;
-
-    // 3. Hi-Hat (16th notes)
-    const hihatTime = (t % (secondsPerBeat / 4)) / (secondsPerBeat / 4);
-    const hihat = whiteNoise() * Math.exp(-hihatTime * 35) * 0.18;
-
-    // 4. Bass Line (driving 16th-note FM bass)
-    const bassOctave = (sixteenth % 2 === 1) ? 2 : 1;
-    const bassFreq = currentChord.bass * bassOctave;
-    bassPhase += (2 * Math.PI * bassFreq) / SAMPLE_RATE;
-    const bassEnv = Math.exp(-hihatTime * 12);
-    const bass = (Math.sin(bassPhase) + 0.3 * Math.sin(bassPhase * 2)) * bassEnv * 0.45;
-
-    // 5. Synth Chords (SNES Poly Pad)
-    let chords = 0;
-    for (let c = 0; c < currentChord.chord.length; c++) {
-      chords += Math.sin(2 * Math.PI * currentChord.chord[c] * t) * 0.08;
+    addNote(start, 1.3, chord[0] - 12, "bass", 0.14);
+    if (!breakdown) {
+      addNote(start + (stage === "boardroom" ? 2.5 : 2), 0.9, chord[0] - 12, "bass", 0.11);
+      drum(start, "kick", 0.12);
+      if (stage === "demoday" || bar % 2 === 0) drum(start + 2, "kick", 0.09);
+      drum(start + 1, "brush", stage === "boardroom" ? 0.045 : 0.06);
+      drum(start + 3, "brush", 0.045);
+      // Eighth-note ticks only on Demo Day; other stages have two per bar.
+      const ticks = stage === "demoday" ? [0.5, 1.5, 2.5, 3.5] : [1.5, 3.5];
+      for (const beat of ticks) drum(start + beat, "tick", 0.025);
     }
 
-    // 6. Melodic Arcade Lead (Square wave chiptune)
-    const leadNotes = [1, 1.25, 1.33, 1.5, 1.75, 2.0];
-    const leadNote = leadNotes[Math.floor((t * 2) % leadNotes.length)];
-    const leadFreq = currentChord.root * 2 * leadNote;
-    leadPhase += (2 * Math.PI * leadFreq) / SAMPLE_RATE;
-    const vibrato = Math.sin(2 * Math.PI * 6 * t) * 0.08;
-    const leadSq = (Math.sin(leadPhase + vibrato) > 0 ? 0.35 : -0.35) * (0.6 + 0.4 * Math.sin(barTime * Math.PI));
-
-    // Combine tracks
-    const monoMix = kick + snare + hihat + bass + chords + leadSq * 0.4;
-    // Panning (stereo widening)
-    const left = saturate(monoMix + chords * 0.2, 1.1) * 0.55;
-    const right = saturate(monoMix - chords * 0.2, 1.1) * 0.55;
-
-    stereo[i * 2] = left;
-    stereo[i * 2 + 1] = right;
+    // Melody rests every fourth bar and through the breakdown. Alternate
+    // eight-bar phrases change register and contour rather than stacking parts.
+    if (breakdown || bar % 4 === 3 || (section === 0 && bar < 4)) continue;
+    const reverse = section % 2 === 1;
+    for (const [beat, degree] of score.motif) {
+      const index = reverse ? chord.length - 1 - degree : degree;
+      const register = section % 3 === 1 ? 24 : 12;
+      addNote(start + beat, stage === "boardroom" ? 0.8 : 1.2,
+        chord[index % chord.length] + register, score.voice, 0.075, score.pan);
+    }
   }
-
-  // Crossfade boundary (first/last 200ms) to ensure 100% flawless seamless seam matching
-  const seamSamples = Math.round(0.3 * SAMPLE_RATE);
-  for (let s = 0; s < seamSamples; s++) {
-    const fade = s / seamSamples;
-    // Blend end of track into start of track
-    const tailIdx = (numSamples - seamSamples + s) * 2;
-    const headIdx = s * 2;
-    const blendL = stereo[headIdx] * fade + stereo[tailIdx] * (1 - fade);
-    const blendR = stereo[headIdx + 1] * fade + stereo[tailIdx + 1] * (1 - fade);
-    stereo[headIdx] = blendL;
-    stereo[headIdx + 1] = blendR;
-    stereo[tailIdx] = blendL;
-    stereo[tailIdx + 1] = blendR;
-  }
-
   return makeWav(stereo, SAMPLE_RATE, 2);
 }
 
@@ -615,9 +624,7 @@ function synthImpactIr(durationSec = 0.5, stage = "datacenter") {
 
 // --- Main Execution ---
 
-async function main() {
-  process.stdout.write("Generating retro N64/SNES audio assets...\n");
-
+function generateSfxBatches() {
   const batchesDir = path.join(rawRoot, "batches");
   fs.mkdirSync(batchesDir, { recursive: true });
 
@@ -717,11 +724,18 @@ async function main() {
   ];
   fs.writeFileSync(path.join(batchesDir, "match_end.wav"), assembleBatchWav(matchEnd));
 
+}
+
+async function main() {
+  process.stdout.write("Generating retro N64/SNES audio assets...\n");
+  const musicOnly = process.argv.includes("--music-only");
+  if (!musicOnly) generateSfxBatches();
+
   // 10. Music Loops & Impact IRs for each Stage
   const stages = [
-    { stage: "datacenter", variant: "cold_aisle_chapel", dur: 48, bpm: 120 },
-    { stage: "boardroom", variant: "fiduciary_basement", dur: 56, bpm: 120 },
-    { stage: "demoday", variant: "demo_day_afterparty", dur: 64, bpm: 120 },
+    { stage: "datacenter", variant: "cold_aisle_chapel", dur: 120, bpm: 96 },
+    { stage: "boardroom", variant: "fiduciary_basement", dur: 128, bpm: 90 },
+    { stage: "demoday", variant: "demo_day_afterparty", dur: 128, bpm: 120 },
   ];
 
   for (const s of stages) {
@@ -732,6 +746,7 @@ async function main() {
     const musicWav = synthMusicTrack({ stage: s.stage, durationSec: s.dur, bpm: s.bpm });
     fs.writeFileSync(path.join(stageDir, "music.wav"), musicWav);
 
+    if (musicOnly) continue;
     process.stdout.write(`Synthesizing impact IR for ${s.stage}/${s.variant}...\n`);
     const irWav = synthImpactIr(0.5, s.stage);
     fs.writeFileSync(path.join(stageDir, "impact_ir.wav"), irWav);

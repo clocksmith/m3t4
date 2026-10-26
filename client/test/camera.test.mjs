@@ -63,9 +63,9 @@ test('camera eases position and zoom after a sudden framing change', () => {
   assert.ok(Math.abs(settled.y-target.y)<1e-6);
 });
 
-test('camera response is consistent at 30, 60 and 144 frames per second', () => {
+test('camera response stays consistent from mobile 10 FPS through desktop 144 FPS', () => {
   const end=[];
-  for (const fps of [30,60,144]) {
+  for (const fps of [10,15,30,60,144]) {
     const camera=createArenaCamera();
     camera.update(frame({x:14,y:80},{x:1266,y:680}),null,0);
     for(let i=1;i<=fps;i++) {

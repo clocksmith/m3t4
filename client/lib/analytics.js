@@ -24,9 +24,17 @@ let _analytics = null;
 let _sdk = null;
 let _initPromise = null;
 let _queue = [];
+let _disabled = IS_LOCAL;
+const MAX_PENDING = 64;
+
+function enqueue(name, params) {
+  if (_disabled) return;
+  if (_queue.length === MAX_PENDING) _queue.shift();
+  _queue.push([name, params]);
+}
 
 function readConfig() {
-  const cfg = (typeof window !== "undefined" && window.__M3T4_FIREBASE_CONFIG__) || null;
+  const cfg = (typeof window !== "undefined" && (window.__M3T4_FIREBASE_CONFIG__ || window.__M3T4_FIREBASE__)) || null;
   if (!cfg || !cfg.measurementId) return null;
   return cfg;
 }
@@ -35,13 +43,16 @@ export async function initAnalytics() {
   if (_initPromise) return _initPromise;
   _initPromise = (async () => {
     const cfg = readConfig();
-    if (!cfg) return null;
-    if (IS_LOCAL) return null; // don't pollute analytics from dev machines
+    if (!cfg) { _disabled = true; _queue.length = 0; return null; }
+    if (IS_LOCAL) { _queue.length = 0; return null; } // don't pollute analytics from dev machines
     try {
       const [appSdk, analyticsSdk] = await Promise.all([
         import(`https://www.gstatic.com/firebasejs/${SDK_VERSION}/firebase-app.js`),
         import(`https://www.gstatic.com/firebasejs/${SDK_VERSION}/firebase-analytics.js`),
       ]);
+      if (!await analyticsSdk.isSupported()) {
+        _disabled = true; _queue.length = 0; return null;
+      }
       const app = appSdk.getApps().length ? appSdk.getApps()[0] : appSdk.initializeApp(cfg);
       _analytics = analyticsSdk.getAnalytics(app);
       _sdk = analyticsSdk;
@@ -50,6 +61,7 @@ export async function initAnalytics() {
       for (const [name, params] of pending) safeLog(name, params);
       return _analytics;
     } catch (e) {
+      _disabled = true; _queue.length = 0;
       console.warn("analytics init failed", e);
       return null;
     }
@@ -59,8 +71,15 @@ export async function initAnalytics() {
 
 function safeLog(name, params) {
   try {
-    if (!_analytics || !_sdk) { _queue.push([name, params]); return; }
-    _sdk.logEvent(_analytics, name, params || {});
+    if (_analytics && _sdk) {
+      _sdk.logEvent(_analytics, name, params || {});
+      return;
+    }
+    if (typeof window !== "undefined" && typeof window.gtag === "function") {
+      window.gtag("event", name, params || {});
+      return;
+    }
+    enqueue(name, params);
   } catch (e) {
     // swallow; never block the UI
   }
@@ -68,7 +87,6 @@ function safeLog(name, params) {
 
 export function track(name, params) {
   if (!name || typeof name !== "string") return;
-  if (!_analytics) { _queue.push([name, params]); return; }
   safeLog(name, params);
 }
 
@@ -76,6 +94,14 @@ export function track(name, params) {
 // named exports so the call sites read as intent, and so we can enforce
 // a schema (no PII, bounded param values) in one place.
 export function trackPageView(route) {
+  const path = typeof route === "string"
+    ? (route.startsWith("/") ? route : `/${route}`)
+    : (typeof location !== "undefined" ? location.pathname : "/");
+  track("page_view", {
+    page_path: path,
+    page_title: typeof document !== "undefined" ? document.title : "",
+    page_location: typeof location !== "undefined" ? location.href : "",
+  });
   track("page_view_custom", { route: String(route || "unknown").slice(0, 32) });
 }
 export function trackBuildSlotModeChange(slot, mode) {

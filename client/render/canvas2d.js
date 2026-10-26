@@ -1018,8 +1018,9 @@ export function hudAvatarSideAt(canvas, clientX, clientY) {
   if (!rect.width || !rect.height) return -1;
   const scaleX = W / rect.width;
   const scaleY = H / rect.height;
-  const vx = (clientX - rect.left) * scaleX;
-  const vy = (clientY - rect.top) * scaleY;
+  const rotated = canvas.closest?.('[data-arena-rotation="90"]');
+  const vx = rotated ? (clientY - rect.top) * W / rect.height : (clientX - rect.left) * scaleX;
+  const vy = rotated ? (rect.right - clientX) * H / rect.width : (clientY - rect.top) * scaleY;
 
   if (vy >= 10 && vy <= 105) {
     if (vx >= 12 && vx <= 260) return 0;

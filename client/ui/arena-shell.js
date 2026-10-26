@@ -76,13 +76,13 @@ export function mountArenaShell(root, { title, canvas, frame = null, actions = [
   audioPrompt.type = 'button';
   audioPrompt.id = 'arena-audio-prompt';
   audioPrompt.className = 'arena-audio-prompt';
-  audioPrompt.setAttribute('aria-label', 'Turn on sound');
-  audioPrompt.innerHTML = '<span class="arena-audio-prompt-dot" aria-hidden="true">&#9679;</span><span>Turn on sound</span>';
-  audioPrompt.addEventListener('click', (e) => {
-    e.stopPropagation();
-    try { getAudio().setEnabled(true); } catch {}
-    audioPrompt.classList.add('is-hidden');
-  });
+  const toggleAudio = () => {
+    const audio = getAudio();
+    // A suspended browser context needs an unlock gesture before it can play.
+    audio.setEnabled(!audio.isEnabled() || !audio.isUnlocked);
+    updateAudioButton();
+  };
+  audioPrompt.addEventListener('click', toggleAudio);
   frame.append(audioPrompt);
   viewport.append(frame);
   const dialog = doc.createElement('dialog');
@@ -91,6 +91,15 @@ export function mountArenaShell(root, { title, canvas, frame = null, actions = [
   const label = doc.createElement('h2'); label.id = 'arena-dialog-title'; label.textContent = title === 'Tune' ? 'Tune fighters' : `${title} settings`;
   const close = doc.createElement('button'); close.type = 'button'; close.dataset.dialogClose = ''; close.textContent = 'Done';
   header.append(label, close); dialog.append(header);
+  const navigation = doc.createElement('nav');
+  navigation.className = 'arena-navigation';
+  navigation.setAttribute('aria-label', 'Game navigation');
+  for (const [name, href] of [['Watch', '/watch'], ['Tune', '/tune'], ['Play', '/duel'], ['Home', '/']]) {
+    const link = doc.createElement('a'); link.textContent = name; link.href = href;
+    if (name === title) link.setAttribute('aria-current', 'page');
+    navigation.append(link);
+  }
+  dialog.append(navigation);
   if (note) { const p = doc.createElement('p'); p.className = 'arena-dialog-note'; p.textContent = note; dialog.append(p); }
   const content = doc.createElement('div'); content.className = 'arena-dialog-content';
   for (const node of controls) {
@@ -105,33 +114,46 @@ export function mountArenaShell(root, { title, canvas, frame = null, actions = [
   const modal = bindArenaDialog(dialog, opener, { onOpen, onClose });
   let raf = 0;
   const win = doc.defaultView;
-  const updateAudioPrompt = () => {
+  const updateAudioButton = () => {
     try {
       const audio = getAudio();
-      if (audio.isUnlocked || (audio.isEnabled?.() && audio.ready)) {
-        audioPrompt.classList.add('is-hidden');
-      }
-    } catch {}
+      const playing = audio.isUnlocked;
+      audioPrompt.textContent = playing ? 'Sound on' : 'Sound off';
+      audioPrompt.setAttribute('aria-pressed', String(playing));
+      audioPrompt.setAttribute('aria-label', playing ? 'Mute sound' : 'Turn on sound');
+      for (const toggle of dialog.querySelectorAll('input[id$="-audio"]')) toggle.checked = audio.isEnabled();
+    } catch {
+      audioPrompt.textContent = 'Sound off';
+      audioPrompt.setAttribute('aria-label', 'Turn on sound');
+    }
   };
-  win.addEventListener('pointerdown', () => setTimeout(updateAudioPrompt, 150), { capture: true, passive: true });
-  win.addEventListener('keydown', () => setTimeout(updateAudioPrompt, 150), { capture: true, passive: true });
-  updateAudioPrompt();
+  let audioTimer = 0;
+  const audioGesture = () => {
+    win.clearTimeout(audioTimer);
+    audioTimer = win.setTimeout(updateAudioButton, 150);
+  };
+  win.addEventListener('pointerdown', audioGesture, { capture: true, passive: true });
+  win.addEventListener('keydown', audioGesture, { capture: true });
+  win.addEventListener('m3t4:audiochange', updateAudioButton);
+  updateAudioButton();
   const resize = () => {
     raf = 0;
     // Use the layout viewport shared by all routes, not the transient visual
     // viewport height while initial canvas overflow or a modal keyboard settles.
     const isMobilePortrait = Boolean(win?.matchMedia?.('(max-width: 768px) and (orientation: portrait)').matches);
+    const isMobileLandscape = Boolean(win?.matchMedia?.('(max-height: 500px) and (orientation: landscape)').matches);
+    page.dataset.arenaRotation = isMobilePortrait ? '90' : '0';
     let availW, availH;
-    if (isMobilePortrait) {
-      availW = win.innerHeight;
-      availH = win.innerWidth;
-    } else {
-      const isMobileLandscape = Boolean(win?.matchMedia?.('(max-height: 500px) and (orientation: landscape)').matches);
-      const top = isMobileLandscape ? 0 : viewport.getBoundingClientRect().top;
-      const nav = doc.querySelector('#topnav nav');
-      const navHeight = !isMobileLandscape && nav && win.getComputedStyle(nav).position === 'fixed' ? nav.getBoundingClientRect().height : 0;
+    if (isMobilePortrait || isMobileLandscape) {
+      // Layout dimensions remain unrotated; CSS rotates the whole game and HUD.
       availW = viewport.clientWidth;
-      availH = Math.max(0, win.innerHeight - top - navHeight - (isMobileLandscape ? 0 : 8));
+      availH = viewport.clientHeight;
+    } else {
+      const top = viewport.getBoundingClientRect().top;
+      const nav = doc.querySelector('#topnav nav');
+      const navHeight = nav && win.getComputedStyle(nav).position === 'fixed' ? nav.getBoundingClientRect().height : 0;
+      availW = viewport.clientWidth;
+      availH = Math.max(0, win.innerHeight - top - navHeight - 8);
     }
     const size = fitArenaRect(availW, availH);
     frame.style.width = `${size.width}px`; frame.style.height = `${size.height}px`;
@@ -144,6 +166,11 @@ export function mountArenaShell(root, { title, canvas, frame = null, actions = [
   return { open: modal.open, close: modal.close, get isOpen() { return modal.isOpen; }, dialog, resize, destroy() {
     modal.destroy(); observer?.disconnect(); if (raf) win.cancelAnimationFrame(raf);
     win.removeEventListener('resize', schedule); win.visualViewport?.removeEventListener('resize', schedule);
+    win.removeEventListener('pointerdown', audioGesture, true);
+    win.removeEventListener('keydown', audioGesture, true);
+    win.removeEventListener('m3t4:audiochange', updateAudioButton);
+    win.clearTimeout(audioTimer);
+    audioPrompt.removeEventListener('click', toggleAudio);
     doc.removeEventListener('fullscreenchange', schedule); doc.body.classList.remove('arena-mounted');
   } };
 }

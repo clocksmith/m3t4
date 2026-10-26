@@ -14,7 +14,8 @@ export function setupCanvasSurface(canvas, { onResize = null } = {}) {
   function resize() {
     const parent = canvas.parentElement;
     const parentW = parent ? parentContentWidth(parent) : Infinity;
-    const viewportW = document.documentElement.clientWidth;
+    const arena = canvas.closest?.('.arena-frame');
+    const viewportW = arena ? parentW : document.documentElement.clientWidth;
     const size = canvasSurfaceSize(Math.min(parentW || viewportW, viewportW), devicePixelRatio);
     if (canvas.width !== size.width) canvas.width = size.width;
     if (canvas.height !== size.height) canvas.height = size.height;
@@ -50,14 +51,11 @@ export function replaceCanvasElement(canvas) {
 }
 
 function parentContentWidth(el) {
-  const rect = el.getBoundingClientRect();
   const style = getComputedStyle(el);
   const px = (value) => Number.parseFloat(value) || 0;
   return Math.max(0,
-    rect.width
+    el.clientWidth
     - px(style.paddingLeft)
-    - px(style.paddingRight)
-    - px(style.borderLeftWidth)
-    - px(style.borderRightWidth),
+    - px(style.paddingRight),
   );
 }

@@ -226,7 +226,7 @@ export function drawFrame(ctx, stage, frame, labels) {
   const p2 = fighterPalette(1);
   ctx.fillStyle = cssColor("--arena-bg");
   ctx.fillRect(0, 0, W, H);
-  const camera = arenaCamera(frame);
+  const camera = arenaCamera(frame, labels?.execution);
   ctx.save();
   ctx.translate(camera.x, camera.y);
   ctx.scale(camera.scale, camera.scale);

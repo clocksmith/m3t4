@@ -957,7 +957,8 @@ export function runBrainForWorld(w, brain, selfIdx) {
     const params = applyHallucinationNoise(evaluateParams(brain, obs), w.tick, selfIdx, w.noiseSeed);
     return runParamBrain(obs, params, w.brainStates[selfIdx]);
 }
-export function stepWorld(w, actA, actB) {
+// Explicit local sandbox option. Ranked simulation and network callers omit it.
+export function stepWorld(w, actA, actB, options) {
     if (w.matchWinner !== -1)
         return { matchWinner: w.matchWinner, tick: w.tick };
     if (w.freeze > 0) {
@@ -1000,11 +1001,25 @@ export function stepWorld(w, actA, actB) {
         return { matchWinner: w.matchWinner, tick: w.tick };
     }
     tickFighters(w, actA, actB);
-    resolveCombat(w);
+    let execution;
+    const first = ((w.tick + Number(w.tickOrderFlip)) % 2);
+    for (const killer of [first, (1 - first)]) {
+        const attacker = w.fighters[killer];
+        const victim = (1 - killer);
+        const target = w.fighters[victim];
+        if (options?.lethalSwings?.[killer] && !attacker.dead && !target.dead
+            && attacker.lastAttackStartTick === w.tick && attacker.swipeT > 0) {
+            execution = { killer, victim, x: target.x, y: target.y - STATS.bodyH * 0.28 };
+            killPlayer(w, victim, killer);
+            break;
+        }
+    }
+    if (!execution)
+        resolveCombat(w);
     updateGold(w);
     updateRoundTimer(w);
     w.tick++;
-    return { matchWinner: w.matchWinner, tick: w.tick };
+    return { matchWinner: w.matchWinner, tick: w.tick, ...(execution ? { execution } : {}) };
 }
 function goalProgressFrame(w) {
     if (w.rulesVersion < 2)

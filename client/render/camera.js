@@ -4,7 +4,7 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 // Presentation only: fit both fighters and live objectives, then zoom up to
 // 15%. Derive framing from this frame so replay seeks need no camera history.
-export function arenaCamera(frame) {
+export function arenaCamera(frame, execution = null) {
   const bounds = [];
   for (const fighter of [frame?.p0, frame?.p1]) {
     if (!Number.isFinite(fighter?.x) || !Number.isFinite(fighter?.y)) continue;
@@ -29,6 +29,13 @@ export function arenaCamera(frame) {
   const centerX = clamp((left + right) / 2, W / (2 * scale), W - W / (2 * scale));
   const centerY = clamp((top + bottom) / 2 - 56 / scale,
     H / (2 * scale), H - H / (2 * scale));
+  if (Number.isFinite(execution?.x) && Number.isFinite(execution?.y)) {
+    const strength = clamp(execution.strength ?? 0, 0, 1);
+    const zoom = scale + (1.9 - scale) * strength;
+    const focusX = clamp(centerX + (execution.x - centerX) * strength, W / (2 * zoom), W - W / (2 * zoom));
+    const focusY = clamp(centerY + (execution.y - centerY) * strength, H / (2 * zoom), H - H / (2 * zoom));
+    return { scale: zoom, x: W / 2 - focusX * zoom, y: H / 2 - focusY * zoom };
+  }
   return { scale, x: W / 2 - centerX * scale, y: H / 2 - centerY * scale };
 }
 

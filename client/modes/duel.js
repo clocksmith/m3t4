@@ -30,6 +30,7 @@ import {
 import { STAGES } from "../lib/public-sim.js";
 import { escapeHtml } from "../ui/html.js";
 import { getAudio, audioEnabledStored } from "../lib/audio.js";
+import { EXECUTION_STORAGE_KEY, lethalSwingStored, lethalSwingSides, executionPresentation } from "../lib/execution-strike.js";
 import { buttonHtml, toggleSwitchHtml } from "../ui/actions.js";
 import { contextCardHtml, pageHeaderHtml, disclosureHtml } from "../ui/shell.js";
 import presetRanking from "../data/preset-ranking.v1.json" with { type: "json" };
@@ -376,6 +377,9 @@ let state = null; // populated by mount()
 function freshState() {
   return {
     matchEndFired: false,
+    lethalSwing: lethalSwingStored(),
+    executionImpact: null,
+    executionWorld: null,
     subMode: "vs-ai",
     stageId: STAGE_IDS.includes("datacenter") ? "datacenter" : STAGE_IDS[0],
     presetName: DEFAULT_PRESET,
@@ -558,6 +562,9 @@ function startMatch() {
   state.seed = freshSeed();
   state.matchWeaponMotionVersion=state.subMode==='p2p' ? (state.p2p?.weaponMotionVersion ?? 0) : 2;
   state.world = createStepperWorld({ stage, seed: state.seed, chars: selectedCharacters() });
+  state.executionImpact = null;
+  state.executionWorld = null;
+  prevDuelAudioFrame = null;
   state.matchEndFired = false;
   const audio = getAudio();
   audio.setStage(state.stageId ?? "datacenter");
@@ -605,6 +612,7 @@ function actionFor(slot) {
 function step(nowMs) {
   if (!state.world) return null;
   if (state.subMode !== "p2p" && (state.paused || state.arenaShell?.dialog.open)) {
+    if (state.executionImpact) state.executionImpact.startedAt += Math.max(0, nowMs - state.playedAtMs);
     state.playedAtMs = nowMs;
     return worldToFrame(state.world);
   }
@@ -612,7 +620,9 @@ function step(nowMs) {
   let dt = nowMs - state.playedAtMs;
   state.playedAtMs = nowMs;
   if (!Number.isFinite(dt) || dt < 0) dt = 0;
-  state.accumMs += dt;
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const presentation = executionPresentation(state.executionWorld === state.world ? state.executionImpact : null, nowMs, reducedMotion);
+  state.accumMs += dt * presentation.timeScale;
   let steps = 0;
   while (
     state.accumMs >= STEP_MS &&
@@ -644,9 +654,19 @@ function step(nowMs) {
       actA = actionFor(0);
       actB = actionFor(1);
     }
-    stepWorld(state.world, actA, actB);
+    const result = stepWorld(state.world, actA, actB, {
+      lethalSwings: lethalSwingSides(state.lethalSwing, state.subMode),
+    });
     state.accumMs -= STEP_MS;
     steps++;
+    if (result.execution) {
+      state.executionImpact = { ...result.execution, startedAt: nowMs };
+      state.executionWorld = state.world;
+      getAudio().play('hit_sama_gpu_server_blade', { impact: true, playbackRate: 0.55 });
+      // Do not consume an accumulated backlog before the impact is rendered.
+      state.accumMs = 0;
+      break;
+    }
   }
   if (state.accumMs > STEP_MS * MAX_CATCHUP_TICKS) {
     state.accumMs = STEP_MS * MAX_CATCHUP_TICKS;
@@ -668,7 +688,9 @@ function loop() {
       ? (state.spectatorFrame ?? emptyFrame())
       : (step(performance.now()) ?? emptyFrame());
     maybePostSpectatorFrame(frame);
-    state.renderer.drawFrame(stage, frame, labels());
+    const presentation = executionPresentation(state.executionWorld === state.world ? state.executionImpact : null,
+      performance.now(), matchMedia('(prefers-reduced-motion: reduce)').matches);
+    state.renderer.drawFrame(stage, frame, { ...labels(), execution: presentation.camera });
     detectDuelAudioEdges(frame);
     refreshHud(frame);
   }
@@ -918,6 +940,7 @@ function controlsCardHtml() {
           <select id="duel-preset">${presetOptions(state.presetName)}</select>
         </label>
         <div class="watch-controls">${toggleSwitchHtml({ id: "duel-audio", label: "Audio", title: "Play sound effects and stage music", checked: audioEnabledStored() })}</div>
+        <div class="watch-controls">${toggleSwitchHtml({ id: "duel-lethal-swing", label: "Lethal Swing", title: "Local matches: every new human swing kills, with cinematic zoom and slow motion", checked: state.lethalSwing })}</div>
       </div>
 
       <div class="duel-row" id="duel-p2p-row" ${state.subMode === "p2p" ? "" : "hidden"}>
@@ -1220,6 +1243,14 @@ function bindControls() {
     }
   });
   const presetSel = document.getElementById("duel-preset");
+  const lethalToggle = document.getElementById('duel-lethal-swing');
+  lethalToggle?.addEventListener('change', () => {
+    state.lethalSwing = lethalToggle.checked;
+    state.executionImpact = null;
+    state.executionWorld = null;
+    try { localStorage.setItem(EXECUTION_STORAGE_KEY, state.lethalSwing ? 'on' : 'off'); } catch {}
+    refocusCanvas();
+  });
   presetSel?.addEventListener("change", () => {
     state.presetName = presetSel.value;
     state.world = null;
@@ -1871,6 +1902,11 @@ async function copyP2PLink(url) {
 function switchSubMode(value) {
   if (!SUB_MODES.includes(value)) return;
   state.subMode = value;
+  const lethalToggle = document.getElementById('duel-lethal-swing');
+  if (lethalToggle) {
+    lethalToggle.disabled = value === 'p2p';
+    lethalToggle.checked = value !== 'p2p' && state.lethalSwing;
+  }
   document.querySelectorAll(".duel-mode-row .mode-pill").forEach((p) => {
     p.classList.toggle("is-active", p.dataset.submode === value);
   });

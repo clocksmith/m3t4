@@ -55,7 +55,7 @@ body.arena-mounted #bottom { display: none; }
   .arena-actions { gap: 4px; }
   .arena-actions button { padding-inline: 8px; font-size: 12px; }
   .arena-dialog .duel-character-select { grid-template-columns: 1fr; }
-  .arena-viewport > .duel-touch-controls .duel-touch-control { font-size: 10px; }
+  .arena-viewport > .duel-touch-controls .duel-touch-control { font-size: 12px; }
 }
 
 

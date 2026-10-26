@@ -905,7 +905,7 @@ function controlCardHtml({ role, owner, keyboard, touch = false, remote = false 
       <b>${escapeHtml(role)}</b>
       <span>${escapeHtml(owner)}</span>
       <span>${escapeHtml(keyboard)}</span>
-      ${touch ? `<span class="duel-touch-hint">drag joystick + strike</span>` : ""}
+      ${touch ? `<span class="duel-touch-hint">joystick + strike + jump</span>` : ""}
     </span>`;
 }
 
@@ -958,6 +958,7 @@ function touchControlsHtml() {
       </div>
       <div class="duel-touch-actions" aria-label="actions">
         <button type="button" class="duel-touch-control is-action" data-touch-action="action" aria-label="strike">STRIKE</button>
+        <button type="button" class="duel-touch-control is-action" data-touch-action="up" aria-label="jump">JUMP</button>
       </div>
     </div>
     <button type="button" class="duel-touch-setup" id="duel-touch-setup">setup</button>`;

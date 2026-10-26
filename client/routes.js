@@ -17,7 +17,7 @@ export const MODE_LOADERS = {
   roster: () => import("./modes/profile.js"),
   compute: () => import("./modes/compute.js"),
   rules: loadRules,
-  about: loadRules,
+  about: () => import("./modes/about.js"),
   duel: () => import("./modes/duel.js"),
 };
 

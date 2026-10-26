@@ -101,7 +101,7 @@ export function mountArenaShell(root, { title, canvas, frame = null, actions = [
   const navigation = doc.createElement('nav');
   navigation.className = 'arena-navigation';
   navigation.setAttribute('aria-label', 'Game navigation');
-  for (const [name, href] of [['Watch', '/watch'], ['Tune', '/tune'], ['Play', '/duel'], ['Home', '/']]) {
+  for (const [name, href] of [['Watch', '/watch'], ['Tune', '/tune'], ['Play', '/duel'], ['About', '/about'], ['Home', '/']]) {
     const link = doc.createElement('a'); link.textContent = name; link.href = href;
     if (name === title) link.setAttribute('aria-current', 'page');
     navigation.append(link);

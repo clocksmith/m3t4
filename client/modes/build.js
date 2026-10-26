@@ -36,7 +36,10 @@ import {
 } from "../sim/index.js";
 import { renderSliderEditor } from "../lib/slider-editor.js";
 import { escapeHtml } from "../ui/html.js";
-import { buttonHtml } from "../ui/actions.js";
+import { buttonHtml, toggleSwitchHtml } from "../ui/actions.js";
+import { getAudio, audioEnabledStored } from "../lib/audio.js";
+import { createArenaAudioTracker } from "../lib/arena-audio.js";
+import { randomizeWeapons } from "../lib/random-weapons.js";
 import { navigateTo } from "../navigate.js";
 import { contextCardHtml, workshopHeaderHtml, disclosureHtml } from "../ui/shell.js";
 import { statListHtml } from "../ui/stats.js";
@@ -76,6 +79,7 @@ function normalizeCosmetics(value, side) {
 }
 
 const slotCosmetics = [defaultCosmetics(0), defaultCosmetics(1)];
+const previewAudio = createArenaAudioTracker({ getCosmetics: () => slotCosmetics });
 
 function bodyCopy(body) {
   const variant = BODY_VARIANTS[body];
@@ -434,6 +438,7 @@ export function buildPageHtml() {
               ${stagePickerHtml()}
               <div class="build-preview-actions">
                 ${buttonHtml({ id: "test-reset", text: "New seed", attrs: { title: "Start again with a new random seed" } })}
+                ${toggleSwitchHtml({ id: "build-audio", label: "Audio", title: "Play sound effects and stage music", checked: audioEnabledStored() })}
                 ${buttonHtml({ id: "test-resim", variant: "primary", text: "Test changes", attrs: { title: "Test the current fighters using the same seed" } })}
               </div>
             </div>
@@ -470,6 +475,7 @@ export function buildPageHtml() {
 
 export function mount(root, { setStatus }) {
   setStatus("tune");
+  previewAudio.reset();
   root.innerHTML = buildPageHtml();
 
   const rendererId = ++rendererMountId;
@@ -541,6 +547,8 @@ export function mount(root, { setStatus }) {
 }
 
 export function unmount() {
+  previewAudio.reset();
+  getAudio().stopMusic();
   arenaShell?.destroy(); arenaShell = null; manuallyPaused = false; previewPausedAt = null;
   rendererMountId++;
   testRunning = false;
@@ -710,6 +718,11 @@ function refreshFoldBadge(slot) {
 // ==================== WIRING ====================
 
 function wireMatchBar(root) {
+  const audioToggle = root.querySelector("#build-audio");
+  audioToggle.addEventListener("change", () => {
+    getAudio().setEnabled(audioToggle.checked);
+    if (audioToggle.checked) getAudio().setStage(stageId);
+  });
   const refocus = refocusCanvas;
   const setStage = (nextStageId) => {
     if (!STAGE_IDS.includes(nextStageId) || nextStageId === stageId) return;
@@ -1005,8 +1018,7 @@ function teardownLocalWorld() {
   localBrains[1] = null;
 }
 
-function startLocalWorld({ newSeed = false } = {}) {
-  const seed = newSeed ? freshLocalSeed() : (previewResult?.seed ?? freshLocalSeed());
+function startLocalWorld({ seed }) {
   const stage = SIM_STAGES[stageId] ?? SIM_STAGES.datacenter;
   localBrains[0] = slotIsHuman(0) ? null : compileBrain(brainConfigForSlot(0));
   localBrains[1] = slotIsHuman(1) ? null : compileBrain(brainConfigForSlot(1));
@@ -1064,11 +1076,21 @@ function markPreviewDirty() {
 async function requestPreview({ newSeed = false } = {}) {
   // Bump request id so any in-flight server response is ignored.
   const requestId = ++previewRequestId;
+  previewAudio.reset();
+  getAudio().setStage(stageId);
   const requestEditVersion = previewEditVersion;
+  const seed = newSeed ? freshLocalSeed() : (previewResult?.seed ?? freshLocalSeed());
+  if (newSeed) {
+    const randomized = randomizeWeapons(slotCosmetics, availableWeaponIds, seed);
+    for (let side = 0; side < 2; side++) {
+      slotCosmetics[side] = randomized[side];
+      syncSlotCosmeticsUi(side);
+    }
+  }
 
   if (usesLocalPreview()) {
     try {
-      startLocalWorld({ newSeed });
+      startLocalWorld({ seed });
     } catch (e) {
       teardownLocalWorld();
       previewLoading = false;
@@ -1087,7 +1109,7 @@ async function requestPreview({ newSeed = false } = {}) {
   try {
     const response = await simulateBuildPreview({
       stageId,
-      seed: newSeed ? undefined : previewResult?.seed,
+      seed,
       frameStride: 2,
       a: sidePayload(0),
       b: sidePayload(1),
@@ -1140,6 +1162,7 @@ function loopTest() {
     } else {
       frame = currentPreviewFrame();
     }
+    if (frame && previewPausedAt === null && !previewLoading) previewAudio.update(frame);
     testRenderer.drawFrame(previewStage, frame ?? emptyFrame(), previewLabels);
     updatePreviewHud(frame);
   }

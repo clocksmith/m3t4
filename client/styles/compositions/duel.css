@@ -521,7 +521,7 @@
 }
 
 .duel-touch-controls {
-  --duel-touch-size: 112px;
+  --duel-touch-size: 140px;
   width: 100%;
   max-width: 720px;
   margin-inline: auto;
@@ -541,7 +541,7 @@
   pointer-events: auto; opacity: .75;
 }
 .duel-joystick-thumb {
-  width: 46px; height: 46px; border-radius: 50%; pointer-events: none;
+  width: 58px; height: 58px; border-radius: 50%; pointer-events: none;
   background: var(--ui-text-soft); opacity: .7; will-change: transform;
 }
 .duel-joystick.is-active { opacity: 1; border-color: var(--ui-accent); }
@@ -551,6 +551,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 12px;
 }
 
 .duel-touch-control {
@@ -574,6 +575,7 @@
 }
 
 .duel-touch-control.is-action {
+  flex: 0 0 var(--duel-touch-size);
   width: var(--duel-touch-size);
   height: var(--duel-touch-size);
   border-radius: 999px;

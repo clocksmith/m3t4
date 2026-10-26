@@ -386,3 +386,6 @@ h1 span { font-weight: 400; }
     border-bottom-color: LinkText;
   }
 }
+
+.home-header h1 a { color: inherit; text-decoration: none; }
+.home-header h1 a:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 8px; }

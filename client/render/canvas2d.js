@@ -7,7 +7,7 @@ import { DOUBLE_KO_RESPAWN_S } from "../sim/constants.js";
 import { bodyFramePlacement, WEAPON_ART, weaponArtTransform } from "./fighter-art.js";
 import { weaponBodyFrame, weaponHandPoints, FIGHTER_ARM_PALETTE, WEAPON_MOTION } from "./weapon-motion.js";
 import {articulatedWeaponPose,attackDuration} from "../sim/weapon-kinematics.js";
-import { arenaCamera } from "./camera.js";
+import { createArenaCamera } from "./camera.js";
 import {drawRigFighter,drawRigGrips} from './fighter-rig.js';
 // Shared canvas renderer. Takes a TraceFrame (from sim) + stage and draws
 // the scene. Used by both Spectate (server frames) and Practice (local).
@@ -213,7 +213,7 @@ export function setupCanvas(canvas) {
 export function drawFrame(ctx, stage, frame, labels) {
   let state = renderStateByContext.get(ctx);
   if (!state) {
-    state = { sprites: createSpriteState(), portraits: [hudPortraitInitialState(), hudPortraitInitialState()] };
+    state = { sprites: createSpriteState(), portraits: [hudPortraitInitialState(), hudPortraitInitialState()], camera: createArenaCamera() };
     renderStateByContext.set(ctx, state);
   }
   spriteState = state.sprites;
@@ -226,7 +226,8 @@ export function drawFrame(ctx, stage, frame, labels) {
   const p2 = fighterPalette(1);
   ctx.fillStyle = cssColor("--arena-bg");
   ctx.fillRect(0, 0, W, H);
-  const camera = arenaCamera(frame, labels?.execution);
+  const reducedMotion = labels?.reducedMotion ?? (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const camera = state.camera.update(frame, labels?.execution, performance.now(), reducedMotion);
   ctx.save();
   ctx.translate(camera.x, camera.y);
   ctx.scale(camera.scale, camera.scale);

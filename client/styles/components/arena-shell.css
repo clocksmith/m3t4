@@ -34,6 +34,46 @@ body.arena-mounted #bottom { display: none; }
 .arena-frame .duel-touch-pad { grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(2, 44px); }
 .arena-frame .duel-touch-control.is-action { width: 72px; height: 72px; }
 .arena-frame canvas:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; }
+
+/* Floating audio prompt that disappears into settings once enabled */
+.arena-audio-prompt {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font: 700 12px ui-monospace, Menlo, monospace;
+  color: var(--ui-text);
+  background: var(--ui-paint-rgba-15-23-42-0-9);
+  border: 1px solid var(--ui-accent);
+  border-radius: 9999px;
+  box-shadow: 0 4px 16px var(--ui-paint-rgba-0-0-0-0-5);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.arena-audio-prompt:hover {
+  background: var(--ui-accent);
+  color: var(--ui-bg);
+}
+.arena-audio-prompt-dot {
+  color: var(--ui-accent);
+  font-size: 10px;
+}
+.arena-audio-prompt:hover .arena-audio-prompt-dot {
+  color: var(--ui-bg);
+}
+.arena-audio-prompt.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.9);
+  display: none;
+}
+
 @media (max-width: 640px) {
   .arena-toolbar { gap: 6px; }
   .arena-heading .page-subtitle { display: none; }
@@ -43,6 +83,101 @@ body.arena-mounted #bottom { display: none; }
   .arena-dialog .duel-character-select { grid-template-columns: 1fr; }
   .arena-frame .duel-touch-control.is-action { width: 60px; height: 60px; }
   .arena-frame .duel-touch-control { font-size: 10px; }
+  .arena-audio-prompt { top: 8px; right: 8px; padding: 6px 10px; font-size: 11px; }
+}
+
+/* Mobile fill screen: portrait rotates 90deg to landscape so holding phone sideways fills display */
+@media (max-width: 768px) and (orientation: portrait) {
+  body.arena-mounted {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  body.arena-mounted #topnav {
+    display: none;
+  }
+  body.arena-mounted #app {
+    padding: 0;
+    margin: 0;
+    width: 100vw;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  body.arena-mounted .arena-page {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  body.arena-mounted .arena-toolbar {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    height: 38px;
+    z-index: 6;
+    pointer-events: none;
+  }
+  body.arena-mounted .arena-heading {
+    display: none;
+  }
+  body.arena-mounted .arena-actions {
+    margin-left: auto;
+    pointer-events: auto;
+  }
+  body.arena-mounted .arena-viewport {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100dvh;
+    height: 100vw;
+    transform: translate(-50%, -50%) rotate(90deg);
+    transform-origin: center center;
+    align-items: center;
+    justify-content: center;
+  }
+  .arena-dialog {
+    width: min(90dvh, 640px);
+    max-height: min(85vw, 360px);
+    transform: rotate(90deg);
+    transform-origin: center center;
+  }
+}
+
+/* Mobile landscape fill screen */
+@media (max-height: 500px) and (orientation: landscape) {
+  body.arena-mounted #topnav {
+    display: none;
+  }
+  body.arena-mounted #app {
+    padding: 0;
+    margin: 0;
+    width: 100vw;
+    height: 100dvh;
+  }
+  body.arena-mounted .arena-toolbar {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    right: 6px;
+    height: 34px;
+    z-index: 6;
+    pointer-events: none;
+  }
+  body.arena-mounted .arena-heading {
+    display: none;
+  }
+  body.arena-mounted .arena-actions {
+    margin-left: auto;
+    pointer-events: auto;
+  }
+  body.arena-mounted .arena-viewport {
+    height: 100dvh;
+    align-items: center;
+  }
 }
 
 /* Keep Tune focused on editable values; explanations remain on slider tooltips. */

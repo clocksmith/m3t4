@@ -40,7 +40,7 @@ export function getAudio() {
 }
 
 export function audioEnabledStored() {
-  try { return localStorage.getItem(ENABLED_KEY) === "on"; } catch { return false; }
+  try { return localStorage.getItem(ENABLED_KEY) !== "off"; } catch { return true; }
 }
 
 function create() {
@@ -67,9 +67,11 @@ function create() {
     if (!enabled || !ensureContext()) return;
     if (ctx.state === "suspended") ctx.resume().catch(() => {});
     boot();
+    if (currentStage) setStage(currentStage);
   }
   window.addEventListener("pointerdown", resumeOnGesture, { capture: true, passive: true });
   window.addEventListener("keydown", resumeOnGesture, { capture: true });
+  window.addEventListener("touchstart", resumeOnGesture, { capture: true, passive: true });
 
   function ensureContext() {
     if (ctx) return ctx;
@@ -233,6 +235,7 @@ function create() {
   return {
     setEnabled, isEnabled, setStage, play, startLoop, stopLoop, stopMusic,
     get ready() { return !!(sprite && manifest); },
+    get isUnlocked() { return Boolean(ctx && ctx.state === "running" && enabled); },
   };
 }
 

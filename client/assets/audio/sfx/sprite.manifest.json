@@ -1,0 +1,234 @@
+{
+  "swipe_flail": [
+    0,
+    280
+  ],
+  "swipe_maul": [
+    300,
+    640
+  ],
+  "swipe_blade": [
+    660,
+    860
+  ],
+  "swipe_greatsword": [
+    880,
+    1280
+  ],
+  "swipe_bat": [
+    1300,
+    1550
+  ],
+  "swipe_club": [
+    1570,
+    1790
+  ],
+  "swipe_pike": [
+    1810,
+    2110
+  ],
+  "swipe_axe": [
+    2130,
+    2450
+  ],
+  "swipe_nunchucks": [
+    2470,
+    2790
+  ],
+  "hit_sama_worldcoin_orb_flail": [
+    2810,
+    3030
+  ],
+  "hit_sama_backpack_maul": [
+    3050,
+    3290
+  ],
+  "hit_sama_gpu_server_blade": [
+    3310,
+    3510
+  ],
+  "hit_sama_heat_sink_greatsword": [
+    3530,
+    3790
+  ],
+  "hit_darrius_rolled_constitution_bat": [
+    3810,
+    4030
+  ],
+  "hit_darrius_alignment_baton": [
+    4050,
+    4250
+  ],
+  "hit_darrius_red_team_pike": [
+    4270,
+    4500
+  ],
+  "hit_darrius_guardrail_greatsword": [
+    4520,
+    4800
+  ],
+  "hit_demis_nobel_medal_flail": [
+    4820,
+    5040
+  ],
+  "hit_demis_folded_chess_axe": [
+    5060,
+    5300
+  ],
+  "hit_demis_go_board_maul": [
+    5320,
+    5580
+  ],
+  "hit_demis_alphafold_blade": [
+    5600,
+    5800
+  ],
+  "hit_mark_sunscreen_bottle_club": [
+    5820,
+    6030
+  ],
+  "hit_mark_controller_nunchucks": [
+    6050,
+    6270
+  ],
+  "hit_mark_shareholder_sauce_club": [
+    6290,
+    6510
+  ],
+  "hit_mark_quest_flail": [
+    6530,
+    6760
+  ],
+  "grunt_sama_effort": [
+    6780,
+    7000
+  ],
+  "grunt_sama_hurt": [
+    7020,
+    7270
+  ],
+  "grunt_sama_ko": [
+    7290,
+    7840
+  ],
+  "grunt_darrius_effort": [
+    7860,
+    8080
+  ],
+  "grunt_darrius_hurt": [
+    8100,
+    8360
+  ],
+  "grunt_darrius_ko": [
+    8380,
+    8980
+  ],
+  "grunt_demis_effort": [
+    9000,
+    9200
+  ],
+  "grunt_demis_hurt": [
+    9220,
+    9460
+  ],
+  "grunt_demis_ko": [
+    9480,
+    10030
+  ],
+  "grunt_mark_effort": [
+    10050,
+    10270
+  ],
+  "grunt_mark_hurt": [
+    10290,
+    10550
+  ],
+  "grunt_mark_ko": [
+    10570,
+    11170
+  ],
+  "dive_lunge": [
+    11190,
+    11510
+  ],
+  "jump_boing": [
+    11530,
+    11880
+  ],
+  "spawn_enter": [
+    11900,
+    12250
+  ],
+  "footstep_a": [
+    12270,
+    12370
+  ],
+  "footstep_b": [
+    12390,
+    12490
+  ],
+  "ko_flatline": [
+    12510,
+    13060
+  ],
+  "proof_spawn": [
+    13080,
+    13400
+  ],
+  "proof_acquired": [
+    13420,
+    13700
+  ],
+  "proof_carrying_loop_fragment": [
+    13720,
+    14220
+  ],
+  "proof_delivered": [
+    14240,
+    14690
+  ],
+  "goal_spawn": [
+    14710,
+    15010
+  ],
+  "goal_tick": [
+    15030,
+    15130
+  ],
+  "goal_urgent_tick": [
+    15150,
+    15290
+  ],
+  "goal_expire": [
+    15310,
+    15710
+  ],
+  "match_start": [
+    15730,
+    16180
+  ],
+  "round_start": [
+    16200,
+    16500
+  ],
+  "round_end": [
+    16520,
+    16870
+  ],
+  "round_taken": [
+    16890,
+    17440
+  ],
+  "match_end_win": [
+    17460,
+    18110
+  ],
+  "match_end_draw": [
+    18130,
+    18730
+  ],
+  "win_applause": [
+    18750,
+    21150
+  ]
+}

@@ -35,6 +35,7 @@
       "grunt_mark_effort", "grunt_mark_hurt", "grunt_mark_ko",
 
       "dive_lunge",
+      "jump_boing",
       "spawn_enter",
       "footstep_a", "footstep_b",
       "ko_flatline",
@@ -102,7 +103,7 @@
     },
 
     "movement": {
-      "cuesOrder": ["dive_lunge", "spawn_enter", "footstep_a", "footstep_b", "ko_flatline"],
+      "cuesOrder": ["dive_lunge", "jump_boing", "spawn_enter", "footstep_a", "footstep_b", "ko_flatline"],
       "prompt": "Tone: dry boardroom apocalypse, underplayed cruelty. Five movement/body cues, shared across all characters, recorded in the SAME dry carpeted-office space for tonal coherence. Mono, 48 kHz. Render IN ONE WAV with EXACTLY 1000ms of silence between each, 500ms after last. In order:\n\n1) dive_lunge (~280ms) — a short rush of displaced air with a hint of fabric tension (suit jacket shoved forward quickly); mild low-mid whump at start from body weight, thin trailing hiss that ends abruptly. No anime air-slice, no synth dash.\n\n2) spawn_enter (~300ms) — a fighter steps into the arena at round start; soft floor-contact thud (shoe on carpet over concrete) layered with a brief fabric-rustle of jacket settling. Stepping into a meeting, not dropping from the sky.\n\n3) footstep_a (~80ms) — a single footstep; dull shoe-on-industrial-carpet contact, slight scuff texture, no heel-click, no resonance, MARGINALLY higher mid-frequency center than footstep_b.\n\n4) footstep_b (~80ms) — the counterpart; same carpeted-shoe contact with slightly LOWER mid-frequency center and a faint co-occurring heel-scuff. When alternated with footstep_a at ~250ms cadence the pair sounds like one person walking, not a loop.\n\n5) ko_flatline (~470ms) — non-vocal defeat cue meant to layer under a character's ko grunt; one low thud against carpeted concrete followed by a flat unresolved tone decaying in ~400ms, like an HVAC chime that never completes its phrase.\n\n1000ms pure silence between. Mono."
     },
 
@@ -180,6 +181,7 @@
     "grunt_mark_ko":                       { "durationSec": 0.60, "batch": "grunts_mark" },
 
     "dive_lunge":                          { "durationSec": 0.32, "batch": "movement" },
+    "jump_boing":                          { "durationSec": 0.35, "batch": "movement" },
     "spawn_enter":                         { "durationSec": 0.35, "batch": "movement" },
     "footstep_a":                          { "durationSec": 0.10, "batch": "movement" },
     "footstep_b":                          { "durationSec": 0.10, "batch": "movement" },
@@ -275,6 +277,7 @@
       "grunt_{char}_hurt": "fire with the hit cue on the victim's edge. same 400ms throttle.",
       "grunt_{char}_ko": "fire with ko_flatline on fighter.dead false -> true. ko_flatline is the non-vocal layer; the per-character grunt is the vocal layer. play both simultaneously.",
       "dive_lunge": "fire when fighter.diveT transitions 0 -> positive.",
+      "jump_boing": "fire when fighter transitions onGround true -> false with upward velocity (vy < 0).",
       "spawn_enter": "fire once per fighter at round start. stagger per-fighter firings by 80ms.",
       "footstep_a / footstep_b": "per-fighter step-phase timer driven by horizontal velocity while grounded. alternate A/B each step. suppress during dead/dive/swipe/hit-stun. target ~4 steps/sec at top walk speed. mix -18 dB vs hits.",
       "round_taken": "fire when a fighter's delivery count reaches POINTS_TO_WIN_ROUND. suppresses round_end on the same transition.",

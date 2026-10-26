@@ -395,6 +395,7 @@ function applyDashState(state) {
 }
 
 export function unmount() {
+  getAudio().stopMusic();
   arenaShell?.destroy(); arenaShell = null;
   rendererMountId++;
   running = false;
@@ -1355,6 +1356,9 @@ function detectAudioEdges(frame) {
     if ((prev.diveT ?? 0) <= 0 && (curr.diveT ?? 0) > 0) {
       audio.play("dive_lunge");
     }
+    if (prev.onGround && !curr.onGround && (curr.vy ?? 0) < -100 && (curr.diveT ?? 0) <= 0) {
+      audio.play("jump_boing");
+    }
     if ((prev.hp ?? curr.hp ?? 0) > (curr.hp ?? 0)) {
       const attacker = 1 - i;
       const weapon = audioWeaponKeys[attacker];
@@ -1365,6 +1369,24 @@ function detectAudioEdges(frame) {
     if (!prev.dead && curr.dead) {
       audio.play("ko_flatline");
       fireGrunt(audio, i, "ko");
+    }
+  }
+  if (prevAudioFrame.token && frame.token) {
+    if (!prevAudioFrame.token.exists && frame.token.exists) {
+      audio.play("proof_spawn");
+    }
+    if (prevAudioFrame.token.carrier === -1 && frame.token.carrier !== -1) {
+      audio.play("proof_acquired");
+    }
+  }
+  if (prevAudioFrame.scoreboard && frame.scoreboard) {
+    if (frame.scoreboard[0] > prevAudioFrame.scoreboard[0] || frame.scoreboard[1] > prevAudioFrame.scoreboard[1]) {
+      audio.play("proof_delivered");
+    }
+  }
+  if (prevAudioFrame.rounds && frame.rounds) {
+    if (frame.rounds[0] > prevAudioFrame.rounds[0] || frame.rounds[1] > prevAudioFrame.rounds[1]) {
+      audio.play("round_taken");
     }
   }
   prevAudioFrame = frame;

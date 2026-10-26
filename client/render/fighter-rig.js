@@ -10,7 +10,7 @@ export const FIGHTER_RIGS = {
 for(const body of ['darrius','demis','mark','jensen','elon']) FIGHTER_RIGS[body]={...FIGHTER_RIGS.sama,url:`assets/chars/rig-v1/${body}.png`};
 FIGHTER_RIGS.darrius.headScale=1.1;
 // Hosting caches PNGs for an hour; revised art must not reuse the old URL.
-FIGHTER_RIGS.darrius.url+='?v=appearance-20261023b';
+FIGHTER_RIGS.darrius.url+='?v=appearance-20261026a';
 for(const body of ['jensen','elon'])FIGHTER_RIGS[body].url+='?v=appearance-20261023c';
 const images=new Map();
 const stateFor=(body)=>{const spec=FIGHTER_RIGS[body];if(!spec)return null;let state=images.get(body);if(!state){state=imageState(spec.url);images.set(body,state);}return {spec,img:loadImage(state)};};

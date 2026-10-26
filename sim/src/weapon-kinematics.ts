@@ -69,11 +69,15 @@ export function weaponProfile(f: Pick<KinematicPose,'weapon'|'weaponMotionVersio
 export function attackDuration(f: Pick<KinematicPose,'weapon'|'weaponMotionVersion'|'ch'>): number {
   return weaponProfile(f)?.duration ?? .12;
 }
-// Recovery cooldown is independent of the faster swing: retain V1 cadence.
-export function attackCooldown(f: Pick<KinematicPose,'weapon'|'weaponMotionVersion'|'ch'>): number {
+// Legacy recovery cooldown for archived replay rules (< rulesVersion 2).
+export function attackCooldownLegacy(f: Pick<KinematicPose,'weapon'|'weaponMotionVersion'|'ch'>): number {
   const old=WEAPON_PROFILES_V1[f.weapon ?? f.ch?.weapon ?? ''];
   return ((f.weaponMotionVersion ?? f.ch?.weaponMotionVersion)===2 && old
     ? old.duration : attackDuration(f)) * 1.6;
+}
+// Cooldown between swings: zero cooldown to allow rapid continuous swinging.
+export function attackCooldown(f: Pick<KinematicPose,'weapon'|'weaponMotionVersion'|'ch'>): number {
+  return 0;
 }
 export function attackProgress(f: KinematicPose): number {return clamp(1-f.swipeT/attackDuration(f));}
 export function articulatedWeaponPose(f: KinematicPose) {

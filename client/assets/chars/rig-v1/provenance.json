@@ -18,15 +18,15 @@
     {
       "fighter": "darrius",
       "file": "darrius.png",
-      "sha256": "3963389da64625d5f11c5790d0562e27016e6bfd5b5903e8ac20077fdcde91fa",
+      "sha256": "6cd0f0959172432d266e63fd64365934ea472e46425fab8987a51953d2daf132",
       "source_dimensions": [
         1254,
         1254
       ],
       "identity_reference": "assets/chars/darrius/legal_department_midnight/sprite.png",
       "style_reference": "assets/chars/rig-v1/sama.png",
-      "prior_sha256": "96144ae7287ae7b4316bc3ce6a9963111358fb0e7c83a858736375f841b7a64e",
-      "appearance_revision": "appearance-20261023b"
+      "prior_sha256": "3963389da64625d5f11c5790d0562e27016e6bfd5b5903e8ac20077fdcde91fa",
+      "appearance_revision": "appearance-20261026a"
     },
     {
       "fighter": "demis",

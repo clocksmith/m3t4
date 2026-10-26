@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { WEAPON_PROFILES_V1, WEAPON_PROFILES_V2, attackDuration, attackCooldown, articulatedWeaponPose } from '../weapon-kinematics.js';
+import { WEAPON_PROFILES_V1, WEAPON_PROFILES_V2, attackDuration, attackCooldown, attackCooldownLegacy, articulatedWeaponPose } from '../weapon-kinematics.js';
 import { swordHits } from '../combat-geometry.js';
 import { sweptSwordHits, sweptCombatContact } from '../combat-sweep.js';
 import { STEP } from '../constants.js';
@@ -22,7 +22,7 @@ test('all 24 swings take exactly half the old duration, retain cooldown/reach, a
     assert.equal(WEAPON_PROFILES_V1[weapon].duration,oldDuration);
     assert.equal(WEAPON_PROFILES_V2[weapon].duration,oldDuration/2);
     assert.equal(attackDuration(old),oldDuration);assert.equal(attackDuration(fast),oldDuration/2);
-    assert.equal(attackCooldown(fast),attackCooldown(old));assert.equal(attackCooldown(fast),oldDuration*1.6);
+    assert.equal(attackCooldown(fast),0);assert.equal(attackCooldownLegacy(fast),oldDuration*1.6);
     assert.equal(WEAPON_PROFILES_V2[weapon].reach,WEAPON_PROFILES_V1[weapon].reach);
     for(const p of [.1,.3,.5,.8]){
       const sample=(version:number,progress:number)=>articulatedWeaponPose({...base,weapon,weaponMotionVersion:version,swipeT:attackDuration({...base,weapon,weaponMotionVersion:version})*(1-progress)})!;
@@ -56,15 +56,32 @@ test('swept collision respects active windows and flexible head-only damage',()=
   assert.equal(sweptCombatContact([active,victim],[{...active,swipeT:active.swipeT-STEP},victim],STEP).hitA,true);
 });
 
-test('new-world attack state uses fast duration and old cooldown at the same 120 Hz',()=>{
+test('new-world attack state uses fast duration and zero cooldown at the same 120 Hz',()=>{
   for(const [weapon,oldDuration] of Object.entries(previousDurations)){
     const world=createStepperWorld({stage:STAGES.datacenter,seed:1729,chars:[{...DEFAULT_CHARS[0],weapon,weaponMotionVersion:2},DEFAULT_CHARS[1]]});
     world.fighters[0].invuln=0;world.fighters[1].invuln=0;
     stepWorld(world,{...none,action:true},none);
     close(world.fighters[0].swipeT,oldDuration/2-STEP);
-    close(world.fighters[0].swipeCD,oldDuration*1.6);
+    close(world.fighters[0].swipeCD,0);
     assert.equal(world.tick,1);assert.equal(worldToFrame(world).p0.weaponMotionVersion,2);
   }
+});
+
+test('a new swing can start halfway through the middle of an existing swing', () => {
+  const world = createStepperWorld({ stage: STAGES.datacenter, seed: 42, chars: DEFAULT_CHARS });
+  const f = world.fighters[0];
+  f.invuln = 0;
+  stepWorld(world, { ...none, action: true }, none);
+  const duration = attackDuration(f);
+  close(f.swipeT, duration - STEP);
+  // Before halfway: action cannot restart swing
+  f.swipeT = duration * 0.75;
+  stepWorld(world, { ...none, action: true }, none);
+  close(f.swipeT, duration * 0.75 - STEP);
+  // At or past halfway: action can restart swing
+  f.swipeT = duration * 0.5;
+  stepWorld(world, { ...none, action: true }, none);
+  close(f.swipeT, duration - STEP);
 });
 
 test('fixed-step results are independent of display batching and repeat exactly with V2 identities',()=>{

@@ -16,7 +16,7 @@ function constantsHashFor(behaviorVersion, rulesVersion) {
         DOUBLE_KO_RESPAWN_S, RESPAWN_INVULN_S,
         ARENA_L, ARENA_R, ARENA_T, FLOOR_Y,
         BEHAVIOR_VERSION: behaviorVersion,
-        ...(rulesVersion === 2 ? { RULES_VERSION: rulesVersion } : {}),
+        ...(rulesVersion >= 2 ? { RULES_VERSION: rulesVersion } : {}),
     };
     return replayHashJson(table);
 }
@@ -25,6 +25,7 @@ const ARCHIVED_RULES = new Map([
     [constantsHashFor(23, 0), 0],
     [constantsHashFor(24, 1), 1],
     [constantsHashFor(25, 1), 1],
+    [constantsHashFor(26, 2), 2],
 ]);
 /** Select physics from persisted metadata, never from the currently loaded brain.
  * Unknown archives fail closed instead of silently gaining the latest rules. */
@@ -36,7 +37,7 @@ export function replayRulesVersion(sim, allowConstantsMismatch = false) {
     }
     const explicit = sim.rulesVersion;
     if (explicit !== undefined) {
-        if (explicit !== 0 && explicit !== 1 && explicit !== 2)
+        if (explicit !== 0 && explicit !== 1 && explicit !== 2 && explicit !== 3)
             throw new Error(`unsupported replay rulesVersion: ${explicit}`);
         if (pinned !== undefined && explicit !== pinned)
             throw new Error("replay rulesVersion conflicts with constantsHash");
@@ -49,7 +50,7 @@ export function replayRulesVersion(sim, allowConstantsMismatch = false) {
     if (sim.behaviorVersion === 24 || sim.behaviorVersion === 25)
         return 1;
     if (sim.behaviorVersion === 26)
-        return 2;
+        return explicit ?? (sim.constantsHash === "4682ad88" ? 2 : RULES_VERSION);
     throw new Error("replay has no supported rules binding");
 }
 // Build a trust label with sane defaults. Caller provides the tier and

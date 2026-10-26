@@ -98,7 +98,7 @@
         "destination": "/history/index.html"
       },
       {
-        "source": "/{rules,intro,tune,live,duel,roster,about,compute,build,profile,spectate}",
+        "source": "/{rules,intro,tune,live,watch,duel,roster,about,compute,build,profile,spectate}",
         "destination": "/history/index.html"
       },
       {

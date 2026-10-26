@@ -404,7 +404,7 @@ function drawSpriteFighter(ctx, f, side, frame) {
   const state = spriteState[side];
   if (!state) return false;
   const selectedBody = sideCosmetics[side]?.body ?? DEFAULT_BODIES[side] ?? DEFAULT_BODIES[0];
-  if(drawRigFighter(ctx,{...f,weapon:f.weapon??sideCosmetics[side]?.weapon},selectedBody,frame)) {
+  if(f.rig !== false && drawRigFighter(ctx,{...f,weapon:f.weapon??sideCosmetics[side]?.weapon},selectedBody,frame)) {
     state.pose={animName:chooseSpriteAnim(f,side,frame),frameIdx:0,renderFacing:f.facing,rig:true};
     return true;
   }

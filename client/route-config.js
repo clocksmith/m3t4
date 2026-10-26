@@ -22,6 +22,7 @@ export const LEGACY_HASH = {
   lore: "intro",
   rules: "about",
   spectate: "live",
+  watch: "live",
   build: "tune",
   profile: "roster",
 };

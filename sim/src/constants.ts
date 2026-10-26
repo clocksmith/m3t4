@@ -44,7 +44,7 @@ export const GOAL_TIMER_START = 10;
 export const ROUND_TIMER_MAX_TICKS = 60 * 120; // safety cap: 60 s per round
 // Rules v2 requires a continuous one-second hold by the living gold carrier.
 // Keep v1's floating accumulation intact when replaying archived action logs.
-export const RULES_VERSION = 2;
+export const RULES_VERSION = 3;
 export const LEGACY_GOAL_DWELL_S = 0.12;
 export const GOAL_DWELL_TICKS = 120;
 export const GOAL_DWELL_S = GOAL_DWELL_TICKS * STEP;

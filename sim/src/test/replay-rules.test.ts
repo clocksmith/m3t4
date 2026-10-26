@@ -54,12 +54,33 @@ test("replay metadata routes known rules and rejects unknown or conflicting phys
   assert.equal(replayRulesVersion({ behaviorVersion: 23, constantsHash: "9eeceb29" }), 0);
   assert.equal(replayRulesVersion({ behaviorVersion: 24, constantsHash: "7de44c64" }), 1);
   assert.equal(replayRulesVersion({ behaviorVersion: 25, constantsHash: "63332fa3" }), 1);
-  assert.equal(replayRulesVersion({ constantsHash: REPLAY_CONSTANTS_HASH }), 2);
+  assert.equal(replayRulesVersion({ behaviorVersion: 26, constantsHash: "4682ad88" }), 2);
+  assert.equal(replayRulesVersion({ constantsHash: REPLAY_CONSTANTS_HASH }), 3);
   assert.throws(() => replayRulesVersion({}), /rules binding/);
   assert.throws(() => replayRulesVersion({ behaviorVersion: 999 }), /rules binding/);
   assert.throws(() => replayRulesVersion({ rulesVersion: 9 }), /rulesVersion/);
   assert.throws(() => replayRulesVersion({ rulesVersion: 2, constantsHash: "9eeceb29" }), /conflicts/);
   assert.throws(() => replayRulesVersion({ rulesVersion: 2, constantsHash: "unknown" }), /constantsHash/);
+});
+
+test("all static featured archive matches replay with exact results and zero early log terminations", () => {
+  const index = json("../../../client/matches/index.json");
+  for (const m of index.matches) {
+    const doc = json(`../../../client/matches/${m.matchId}.json`);
+    const rulesVersion = replayRulesVersion(doc.sim);
+    const stage = stageForRules(doc.stageId, rulesVersion)!;
+    const out = framesFromActionLog({
+      stage,
+      rulesVersion,
+      seed: doc.seed,
+      chars: doc.chars,
+      actionLog: Buffer.from(doc.actionLog, "base64"),
+      maxTicks: doc.result.ticks,
+    });
+    assert.equal(out.ok, true, `match ${m.matchId} replay failed: ${out.reason}`);
+    const { seed: _seed, ...expected } = doc.result;
+    assert.deepEqual(out.result, expected, `match ${m.matchId} result mismatch`);
+  }
 });
 
 test("new action logs replay identically including pauses and exact goal progress", () => {

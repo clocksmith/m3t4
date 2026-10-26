@@ -176,7 +176,7 @@ export interface Goal {
 }
 
 // 0: archived v23, 1: v24/v25 walls + short dwell, 2: one-second hold.
-export type RulesVersion = 0 | 1 | 2;
+export type RulesVersion = 0 | 1 | 2 | 3;
 
 export interface Gold {
   carrier: 0 | 1;

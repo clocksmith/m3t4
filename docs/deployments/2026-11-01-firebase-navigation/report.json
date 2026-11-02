@@ -1,0 +1,115 @@
+{
+  "initialProbe": [
+    {
+      "url": "https://m3t4.ai/",
+      "status": 200,
+      "type": "text/html; charset=utf-8",
+      "matches": true
+    },
+    {
+      "url": "https://m3t4.ai/archive/",
+      "status": 200,
+      "type": "text/html; charset=utf-8",
+      "matches": true
+    },
+    {
+      "url": "https://m3t4.ai/config.js",
+      "status": 200,
+      "type": "text/javascript; charset=utf-8",
+      "matches": true
+    },
+    {
+      "url": "https://m3t4.ai/muzil/runtime-sources.json",
+      "status": 200,
+      "type": "application/json",
+      "matches": true
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "errors": []
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "errors": []
+    },
+    {
+      "path": "/duel",
+      "status": 200,
+      "title": "Meta Duel \u2014 m3t4.ai",
+      "errors": []
+    }
+  ],
+  "initialProbeLimitation": "The watch route kept network activity active; networkidle was an unsuitable readiness condition.",
+  "routes": [
+    {
+      "path": "/duel",
+      "status": 200,
+      "title": "Meta Duel \u2014 m3t4.ai",
+      "errors": []
+    },
+    {
+      "path": "/watch",
+      "status": 200,
+      "title": "Meta Duel \u2014 m3t4.ai",
+      "errors": []
+    },
+    {
+      "path": "/about",
+      "status": 200,
+      "title": "Meta Duel \u2014 m3t4.ai",
+      "errors": []
+    },
+    {
+      "path": "/muzil/",
+      "status": 200,
+      "title": "Meta Muzil \u2014 remember why.",
+      "errors": []
+    },
+    {
+      "path": "/mandate-2038/",
+      "status": 200,
+      "title": "Mandate 2038",
+      "errors": []
+    }
+  ],
+  "pass": true,
+  "schema": "m3t4.hosting-deployment-verification/v1",
+  "sourceCommit": "129662c",
+  "hostingVersion": "projects/m3ta-ai/sites/m3ta-ai/versions/33fcbe6cd39e579c",
+  "productionUrl": "https://m3t4.ai",
+  "intent": "preserved",
+  "runtimeSources": {
+    "schema": "muzil.local-runtimes/v1",
+    "libraries": {
+      "reploid": {
+        "revision": "61d3a2e3b14573a5fa8cadf78a9a0ef2ff3b7ee2",
+        "sourceDirty": false,
+        "entry": "packages/reploid/src/transport/assignment.js",
+        "files": 48,
+        "digest": "fdc413c2651549e19a102c96d55ca3e3f13369d57cfe5d13faaa55af1017daaf"
+      },
+      "doppler": {
+        "revision": "e969a17dd3d53be3b500b86a13fbc33cc9c5119f",
+        "sourceDirty": false,
+        "entry": "src/index.js",
+        "files": 1807,
+        "digest": "a48407de1c510b698ea1707259f1cbd2ea96be1e44a2b57eb78bc806fd8941f6"
+      }
+    }
+  },
+  "focusedTests": {
+    "files": [
+      "client/test/firebase-hosting.test.mjs",
+      "client/test/router.test.mjs",
+      "client/test/route-config.test.mjs"
+    ],
+    "passed": 9
+  },
+  "configurationChanged": false
+}

@@ -2,15 +2,21 @@
 
 ## Mission & Thesis
 
+m3t4.ai is fighter-first. Meta Duel is the homepage primary, with Play at
+`/duel` and Watch at `/watch`, and `/live` as the alternate spectator route.
+Meta Duel is a current game, not only a historical one; `/history` preserves
+the old arena entry and its established routes.
+
 Meta Muzil is a competitive simulated-phone game about completing an intention.
 People teach a stand-in through demonstrations and inspect its actual decisions.
 Doppler executes model decisions; Reploid makes authorized peer execution and
 agent portability meaningful capabilities. Removing those integrations removes
 agent-controlled play and assistance, while human play remains usable.
 
-The root links Meta Duel at `/watch`, Mandate 2038 at `/mandate-2038/`, and
-writing at `https://256.one`. Meta Muzil remains at `/muzil/`. Gamma owns
-Mandate game source and rules.
+The root links Meta Duel at `/duel` and `/watch`, and the archive at
+`/archive/`. Meta Muzil remains at `/muzil/` and Mandate 2038 remains at
+`/mandate-2038/`, both via the archive. Writing is at `https://256.one`
+as a secondary author link. Gamma owns Mandate game source and rules.
 
 ## Desired outcomes
 

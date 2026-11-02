@@ -4,16 +4,19 @@ Applies to the whole `m3t4` repo unless a nested `AGENTS.md` overrides it.
 
 ## Current Product Direction
 
-The home page links Meta Duel at `/watch`, Mandate 2038 at `/mandate-2038/`,
-and writing at `https://256.one`. Meta Muzil remains available at `/muzil/`.
+The home page is fighter-first: Play at `/duel` and Watch at `/watch`,
+with `/live` as the alternate spectator route. The archive at `/archive/`
+links Meta Muzil at `/muzil/` and Mandate 2038 at `/mandate-2038/`, and
+writing at `https://256.one` is a secondary author link.
 Gamma owns Mandate sources; `tools/sync-mandate.mjs` packages its public
 allowlist. `client/muzil/` owns the simulated phone and controllers;
 `client/history/index.html` preserves the old arena entry.
 `tools/sync-muzil-runtime.mjs` copies sibling Reploid/Doppler sources into
 ignored `client/vendor/`, without model weights. `docs/meta-muzil.md` holds
-implemented and target integration boundaries. Meta Muzil is the product
-intent; historical ranked-arena and sidecar rules below still govern those
-surfaces, whose evidence must not extend into broad mesh claims.
+implemented and target integration boundaries. Meta Muzil is an archived
+game, not the homepage primary; historical ranked-arena and sidecar rules
+below still govern those surfaces, whose evidence must not extend into
+broad mesh claims.
 
 ## Project Shape
 

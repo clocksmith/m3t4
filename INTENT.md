@@ -1,5 +1,9 @@
 # INTENT: m3t4
 
+Homepage direction: m3t4.ai is fighter-first. Meta Duel is the homepage
+primary, with Play at `/duel` and Watch at `/watch`. Meta Muzil and Mandate
+2038 remain available via `/archive/` and are not the homepage primary.
+The INTENT below describes Meta Muzil as a game, not as the homepage primary.
 Parent: none
 
 ## Need

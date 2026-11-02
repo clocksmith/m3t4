@@ -1,10 +1,12 @@
 # m3t4.ai
 
-Three games: Meta Muzil, Meta Duel, and Mandate 2038.
+m3t4.ai is fighter-first. Meta Duel is the homepage game, with Play at
+`/duel` and Watch at `/watch`, and `/live` as the alternate spectator route.
 
 Meta Muzil at `/muzil/` is a simulated-phone game about finishing what you opened your phone to do.
 It contains working apps, outcome-based tasks, demonstrations,
-replay, paired races, and opt-in model controllers. The previous arena remains
+replay, paired races, and opt-in model controllers. Meta Muzil and Mandate
+2038 remain available via `/archive/`. The old arena entry remains
 at `/history` and its original routes.
 
 ```sh

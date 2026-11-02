@@ -15,6 +15,17 @@ export function mount(root, { setStatus }) {
     <section class="rules-about-copy" aria-label="Meta Duel lore">
       ${paragraphs.map(text => `<p>${escapeHtml(text)}</p>`).join('')}
     </section>
+    <nav aria-label="Related">
+      <a href="/duel">Play</a>
+      <a href="/watch">Watch</a>
+      <a href="/live">Watch live</a>
+      <a href="/tune">Tune</a>
+      <a href="/roster">Roster</a>
+      <a href="/rules">Rules</a>
+      <a href="/archive">Archive</a>
+      <a href="https://simulatte.world/">Simulatte</a>
+      <a href="https://d4da.com">D4DA</a>
+    </nav>
   </div>`;
 }
 

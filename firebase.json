@@ -102,6 +102,14 @@
         "destination": "/history/index.html"
       },
       {
+        "source": "/archive",
+        "destination": "/archive/index.html"
+      },
+      {
+        "source": "/archive/",
+        "destination": "/archive/index.html"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

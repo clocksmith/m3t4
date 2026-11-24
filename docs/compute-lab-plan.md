@@ -1,3 +1,5 @@
+> Historical, 2026-11-24: the project portal labels this the historical compute-lab plan. The current direction is [docs/meta-muzil.md](meta-muzil.md). The body below is retained as the historical record; do not read "This is the current compute plan" as current direction.
+
 # Firebase Browser Compute Plan
 
 This is the current compute plan for m3t4. The production path is Firebase

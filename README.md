@@ -231,4 +231,4 @@ private operational data and must not be committed. See the
 ## Game entry points
 
 The minimal [m3t4.ai](https://m3t4.ai/) home links to [Meta Muzil](https://m3t4.ai/muzil/), [Meta Duel](https://m3t4.ai/history), and [Mandate 2038](https://m3t4.ai/mandate-2038/).
-Mandate is packaged from `../gamma/games/2038` by `npm run sync:mandate`; its public-playtest allowlist remains Gamma-owned.
+Mandate is packaged from `../gamma/apps/mandate-2038` by `npm run sync:mandate`; its public-playtest allowlist remains Gamma-owned.

@@ -1,9 +1,13 @@
 // Gamma owns game sources and the public deployment allowlist; m3t4 owns hosting.
 import { execFileSync } from 'node:child_process';
-import { cpSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-const source = fileURLToPath(new URL('../../gamma/games/2038/', import.meta.url));
+const gamma = new URL('../../gamma/', import.meta.url);
+const source = ['apps/mandate-2038', 'apps/games/2038', 'games/2038']
+  .map(directory => fileURLToPath(new URL(`${directory}/`, gamma)))
+  .find(directory => existsSync(join(directory, 'package.json')));
+if (!source) throw new Error('Mandate source is missing from the adjacent Gamma checkout');
 const destination = fileURLToPath(new URL('../client/mandate-2038/', import.meta.url));
 execFileSync('npm', ['run', 'publish:firebase:build'], { cwd: source, stdio: 'inherit' });
 const published = join(source, 'dist/firebase/public');
